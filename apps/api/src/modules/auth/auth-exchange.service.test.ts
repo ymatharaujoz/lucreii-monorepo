@@ -64,6 +64,24 @@ describe("AuthExchangeService", () => {
         userId: "user_123",
       }),
     );
+    expect(insertValues.mock.calls[0]?.[0]).not.toHaveProperty("organizationId");
+  });
+
+  it("includes organizationId in the insert only when an organization exists", async () => {
+    const { insertValues, service } = createService();
+
+    await service.createTicket({
+      organizationId: "550e8400-e29b-41d4-a716-446655440000",
+      remoteSessionToken: "remote_session_token_123",
+      sessionId: "session_123",
+      userId: "user_123",
+    });
+
+    expect(insertValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "550e8400-e29b-41d4-a716-446655440000",
+      }),
+    );
   });
 
   it("consumes valid ticket once and returns mirrored auth payload", async () => {

@@ -45,18 +45,19 @@ export class AuthExchangeService {
   }) {
     const ticket = randomBytes(32).toString("base64url");
     const ticketHash = this.hashTicket(ticket);
-
-    await this.db.insert(authExchangeTickets).values({
+    const insertValues = {
       expiresAt: new Date(Date.now() + EXCHANGE_TICKET_TTL_MS),
-      organizationId: input.organizationId ?? null,
       remoteSessionToken: input.remoteSessionToken,
       sessionId: input.sessionId,
       ticketHash,
       userId: input.userId,
-    });
+      ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+    };
+
+    await this.db.insert(authExchangeTickets).values(insertValues);
 
     console.info("[marginflow/api] Auth exchange ticket created.", {
-      organizationId: input.organizationId ?? null,
+      hasOrganizationId: Boolean(input.organizationId),
       sessionId: input.sessionId,
       userId: input.userId,
     });
