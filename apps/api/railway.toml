@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "corepack enable && corepack pnpm install --frozen-lockfile"
+buildCommand = "corepack enable && corepack pnpm install --frozen-lockfile && corepack pnpm --filter @marginflow/api build"
 
 [deploy]
 startCommand = "corepack pnpm --filter @marginflow/api start"
