@@ -1,0 +1,51 @@
+import { describe, expect, it } from "vitest";
+import type { AuthState } from "@marginflow/types";
+import {
+  buildRemoteAuthCookieHeader,
+  createSignedWebAuthSession,
+  readSignedWebAuthSession,
+} from "./web-auth-session";
+
+const authState: AuthState = {
+  onboardingStatus: "complete",
+  organization: {
+    id: "org_123",
+    name: "MarginFlow",
+    role: "owner",
+    slug: "marginflow",
+  },
+  session: {
+    expiresAt: "2026-12-31T00:00:00.000Z",
+    id: "session_123",
+  },
+  user: {
+    email: "owner@marginflow.local",
+    emailVerified: true,
+    id: "user_123",
+    image: null,
+    name: "Mateus",
+  },
+};
+
+describe("web auth session", () => {
+  it("round-trips signed web auth session payload", () => {
+    const value = createSignedWebAuthSession(
+      {
+        authState,
+        remoteSessionToken: "remote_session_token_123",
+      },
+      "web-session-secret",
+    );
+
+    expect(readSignedWebAuthSession(value, "web-session-secret")).toEqual({
+      authState,
+      remoteSessionToken: "remote_session_token_123",
+    });
+  });
+
+  it("builds the remote Better Auth cookie header from mirrored session token", () => {
+    expect(buildRemoteAuthCookieHeader("remote_session_token_123")).toBe(
+      "better-auth.session_token=remote_session_token_123",
+    );
+  });
+});

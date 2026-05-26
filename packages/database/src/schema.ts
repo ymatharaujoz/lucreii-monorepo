@@ -60,6 +60,33 @@ export const sessions = pgTable(
   ],
 );
 
+export const authExchangeTickets = pgTable(
+  "auth_exchange_ticket",
+  {
+    id: id(),
+    ticketHash: varchar("ticket_hash", { length: 128 }).notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id, { onDelete: "cascade" }),
+    organizationId: uuid("organization_id").references(() => organizations.id, {
+      onDelete: "set null",
+    }),
+    remoteSessionToken: text("remote_session_token").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("auth_exchange_ticket_hash_key").on(table.ticketHash),
+    index("auth_exchange_ticket_session_id_idx").on(table.sessionId),
+    index("auth_exchange_ticket_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
 export const accounts = pgTable(
   "account",
   {
@@ -641,6 +668,7 @@ export const productMetrics = pgTable(
 );
 
 export const usersRelations = relations(users, ({ many }) => ({
+  authExchangeTickets: many(authExchangeTickets),
   organizationMembers: many(organizationMembers),
   companies: many(companies),
   fixedCosts: many(fixedCosts),
@@ -649,9 +677,25 @@ export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
 }));
 
-export const sessionsRelations = relations(sessions, ({ one }) => ({
+export const sessionsRelations = relations(sessions, ({ many, one }) => ({
+  authExchangeTickets: many(authExchangeTickets),
   user: one(users, {
     fields: [sessions.userId],
+    references: [users.id],
+  }),
+}));
+
+export const authExchangeTicketsRelations = relations(authExchangeTickets, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [authExchangeTickets.organizationId],
+    references: [organizations.id],
+  }),
+  session: one(sessions, {
+    fields: [authExchangeTickets.sessionId],
+    references: [sessions.id],
+  }),
+  user: one(users, {
+    fields: [authExchangeTickets.userId],
     references: [users.id],
   }),
 }));

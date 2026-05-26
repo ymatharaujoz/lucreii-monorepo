@@ -25,7 +25,7 @@ describe("buildBetterAuth", () => {
     betterAuthSpy.mockReturnValue({ handler: vi.fn() });
   });
 
-  it("enables trusted proxy headers and preserves trusted origins", async () => {
+  it("keeps direct Railway Better Auth base url and preserves trusted origins", async () => {
     const { buildBetterAuth } = await import("./better-auth.provider");
     const env = {
       API_DB_POOL_MAX: 10,
@@ -34,7 +34,7 @@ describe("buildBetterAuth", () => {
       API_PUBLIC_BASE_URL: "https://marginflow-production.up.railway.app",
       AUTH_TRUSTED_ORIGINS: "https://marginflow-web.vercel.app",
       BETTER_AUTH_SECRET: "secret",
-      BETTER_AUTH_URL: "https://marginflow-web.vercel.app/api/auth",
+      BETTER_AUTH_URL: "https://marginflow-production.up.railway.app/auth",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/marginflow",
       GOOGLE_CLIENT_ID: "google-client-id",
       GOOGLE_CLIENT_SECRET: "google-client-secret",
@@ -55,7 +55,7 @@ describe("buildBetterAuth", () => {
           trustedProxyHeaders: true,
         },
         basePath: "/auth",
-        baseURL: "https://marginflow-web.vercel.app/api/auth",
+        baseURL: "https://marginflow-production.up.railway.app/auth",
         trustedOrigins: ["https://marginflow-web.vercel.app"],
       }),
     );

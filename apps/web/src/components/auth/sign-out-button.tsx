@@ -11,14 +11,11 @@ export function SignOutButton() {
 
   async function handleSignOut() {
     setIsSubmitting(true);
-    const result = await authClient.signOut();
-
-    if (result.error) {
-      setIsSubmitting(false);
-      return;
-    }
-
-    router.push("/");
+    await authClient.signOut().catch(() => undefined);
+    await fetch("/auth/logout", {
+      method: "POST",
+    }).catch(() => undefined);
+    router.push("/sign-in");
     router.refresh();
   }
 

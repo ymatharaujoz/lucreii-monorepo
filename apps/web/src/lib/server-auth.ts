@@ -1,8 +1,8 @@
-import { headers } from "next/headers";
 import type { AuthState } from "@marginflow/types";
 import { authStateApiResponseSchema } from "@marginflow/validation";
 import { getWebEnv } from "@/lib/env";
 import { parseApiContract } from "@/lib/api/contract";
+import { buildRemoteAuthHeaders, readServerWebAuthSession } from "@/lib/server-session";
 
 export type ServerAuthState = AuthState;
 type ReadServerAuthStateOptions = {
@@ -29,17 +29,17 @@ export async function readServerAuthState(
   options: ReadServerAuthStateOptions = {},
 ): Promise<ServerAuthState | null> {
   const mode = options.mode ?? "strict";
-  const headerStore = await headers();
-  const cookie = headerStore.get("cookie");
+  const webSession = await readServerWebAuthSession();
+
+  if (!webSession) {
+    return null;
+  }
+
   const endpoint = `${getWebEnv().NEXT_PUBLIC_API_BASE_URL}/auth-state/me`;
 
   const response = await fetch(endpoint, {
     cache: "no-store",
-    headers: cookie
-      ? {
-          cookie,
-        }
-      : undefined,
+    headers: buildRemoteAuthHeaders(webSession.remoteSessionToken),
   });
 
   if (response.status === 401) {
@@ -60,7 +60,7 @@ export async function readServerAuthState(
         error,
         status: response.status,
       });
-      return null;
+      return webSession.authState;
     }
 
     throw error;
@@ -78,7 +78,7 @@ export async function readServerAuthState(
         error,
         status: response.status,
       });
-      return null;
+      return webSession.authState;
     }
 
     throw error;

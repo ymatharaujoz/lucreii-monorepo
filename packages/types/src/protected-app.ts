@@ -23,6 +23,11 @@ export type AuthState = {
   onboardingStatus: OnboardingStatus;
 };
 
+export type ExchangeAuthTicketResponse = {
+  authState: AuthState;
+  remoteSessionToken: string;
+};
+
 export type BillingStateStatus =
   | "active"
   | "inactive"

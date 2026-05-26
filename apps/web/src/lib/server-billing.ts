@@ -1,8 +1,8 @@
-import { headers } from "next/headers";
 import type { BillingState } from "@marginflow/types";
 import { billingStateApiResponseSchema } from "@marginflow/validation";
 import { getWebEnv } from "@/lib/env";
 import { parseApiContract } from "@/lib/api/contract";
+import { buildRemoteAuthHeaders, readServerWebAuthSession } from "@/lib/server-session";
 
 export type ServerBillingState = BillingState;
 
@@ -11,15 +11,14 @@ export type ServerBillingState = BillingState;
  * a assinatura real, sem fallback local na área protegida.
  */
 export async function readServerBillingState(): Promise<ServerBillingState | null> {
-  const headerStore = await headers();
-  const cookie = headerStore.get("cookie");
+  const webSession = await readServerWebAuthSession();
+  if (!webSession) {
+    return null;
+  }
+
   const response = await fetch(`${getWebEnv().NEXT_PUBLIC_API_BASE_URL}/billing/subscription`, {
     cache: "no-store",
-    headers: cookie
-      ? {
-          cookie,
-        }
-      : undefined,
+    headers: buildRemoteAuthHeaders(webSession.remoteSessionToken),
   });
 
   if (response.status === 401) {

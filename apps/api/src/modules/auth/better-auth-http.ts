@@ -25,6 +25,39 @@ function getSetCookieHeaders(response: Response) {
   return singleValue ? [singleValue] : [];
 }
 
+export function readBetterAuthSessionTokenFromSetCookie(setCookieHeaders: string[]) {
+  for (const header of setCookieHeaders) {
+    const match = header.match(/(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=([^;]+)/i);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
+}
+
+export function buildAuthCompleteRedirectUrl({
+  callbackLocation,
+  ticket,
+  webAppOrigin,
+}: {
+  callbackLocation: string;
+  ticket: string;
+  webAppOrigin: string;
+}) {
+  const webUrl = new URL(webAppOrigin);
+  const callbackUrl = new URL(callbackLocation, webUrl);
+  const nextPath =
+    callbackUrl.origin === webUrl.origin && callbackUrl.pathname.startsWith("/")
+      ? `${callbackUrl.pathname}${callbackUrl.search}`
+      : "/app";
+  const redirectUrl = new URL("/auth/complete", webUrl);
+
+  redirectUrl.searchParams.set("ticket", ticket);
+  redirectUrl.searchParams.set("next", nextPath || "/app");
+  return redirectUrl.toString();
+}
+
 export function buildAbsoluteRequestUrl(request: FastifyRequest) {
   const host = readHeaderValue(request.headers["x-forwarded-host"]) ?? request.headers.host ?? "localhost";
   const protocol =

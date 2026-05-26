@@ -53,7 +53,7 @@ describe("readPublicEnv", () => {
     const env = readPublicEnv({});
 
     expect(env.NEXT_PUBLIC_APP_URL).toBe("https://marginflow-web.vercel.app");
-    expect(env.NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-web.vercel.app/api");
+    expect(env.NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-production.up.railway.app");
   });
 
   it("reads process-like sources through helper", () => {
@@ -69,12 +69,12 @@ describe("readPublicEnv", () => {
   it("reads client public env from direct NEXT_PUBLIC process access", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://marginflow-web-qn8b.vercel.app");
-    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://marginflow-web-qn8b.vercel.app/api");
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "https://marginflow-production.up.railway.app");
 
     const env = getClientPublicEnv();
 
     expect(env.NEXT_PUBLIC_APP_URL).toBe("https://marginflow-web-qn8b.vercel.app");
-    expect(env.NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-web-qn8b.vercel.app/api");
+    expect(env.NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-production.up.railway.app");
   });
 
   it("accepts optional whatsapp demo url", () => {
@@ -107,7 +107,7 @@ describe("readPublicEnv", () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     expect(readPublicEnv({}).NEXT_PUBLIC_APP_URL).toBe("https://marginflow-web.vercel.app");
-    expect(readPublicEnv({}).NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-web.vercel.app/api");
+    expect(readPublicEnv({}).NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-production.up.railway.app");
 
     expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
     expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -132,16 +132,16 @@ describe("readPublicEnv", () => {
     });
 
     expect(env.NEXT_PUBLIC_APP_URL).toBe("https://marginflow-web-custom.vercel.app");
-    expect(env.NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-web-custom.vercel.app/api");
+    expect(env.NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-production.up.railway.app");
   });
 
-  it("accepts a public api base url with a /api path segment", () => {
+  it("accepts a direct Railway public api base url", () => {
     vi.stubEnv("NODE_ENV", "production");
     const env = readPublicEnv({
       NEXT_PUBLIC_APP_URL: "https://marginflow-web.vercel.app",
-      NEXT_PUBLIC_API_BASE_URL: "https://marginflow-web.vercel.app/api",
+      NEXT_PUBLIC_API_BASE_URL: "https://marginflow-production.up.railway.app",
     });
 
-    expect(env.NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-web.vercel.app/api");
+    expect(env.NEXT_PUBLIC_API_BASE_URL).toBe("https://marginflow-production.up.railway.app");
   });
 });

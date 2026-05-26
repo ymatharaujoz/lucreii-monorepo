@@ -1,19 +1,18 @@
-import { headers } from "next/headers";
 import type { Company } from "@marginflow/types";
 import { companiesApiResponseSchema } from "@marginflow/validation";
 import { getWebEnv } from "@/lib/env";
 import { parseApiContract } from "@/lib/api/contract";
+import { buildRemoteAuthHeaders, readServerWebAuthSession } from "@/lib/server-session";
 
 export async function readServerCompanies(): Promise<Company[]> {
-  const headerStore = await headers();
-  const cookie = headerStore.get("cookie");
+  const webSession = await readServerWebAuthSession();
+  if (!webSession) {
+    return [];
+  }
+
   const response = await fetch(`${getWebEnv().NEXT_PUBLIC_API_BASE_URL}/companies`, {
     cache: "no-store",
-    headers: cookie
-      ? {
-          cookie,
-        }
-      : undefined,
+    headers: buildRemoteAuthHeaders(webSession.remoteSessionToken),
   });
 
   if (response.status === 401) {

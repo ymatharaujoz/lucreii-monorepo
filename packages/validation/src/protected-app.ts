@@ -458,6 +458,13 @@ export const dashboardSummaryApiResponseSchema = createApiSuccessResponseSchema(
   dashboardSummaryResponseSchema,
 );
 export const authStateApiResponseSchema = createApiSuccessResponseSchema(authStateSchema);
+export const exchangeAuthTicketResponseSchema = z.object({
+  authState: authStateSchema,
+  remoteSessionToken: z.string().trim().min(1),
+});
+export const exchangeAuthTicketApiResponseSchema = createApiSuccessResponseSchema(
+  exchangeAuthTicketResponseSchema,
+);
 export const billingStateApiResponseSchema = createApiSuccessResponseSchema(billingStateSchema);
 export const dashboardChartsApiResponseSchema = createApiSuccessResponseSchema(
   dashboardChartsResponseSchema,
@@ -477,6 +484,7 @@ export const completeOnboardingApiResponseSchema = createApiSuccessResponseSchem
 export const companiesApiResponseSchema = createApiSuccessResponseSchema(z.array(companyRecordSchema));
 
 export type AuthStateInput = z.infer<typeof authStateSchema>;
+export type ExchangeAuthTicketResponseInput = z.infer<typeof exchangeAuthTicketResponseSchema>;
 export type BillingStateInput = z.infer<typeof billingStateSchema>;
 export type DashboardSummaryResponseInput = z.infer<typeof dashboardSummaryResponseSchema>;
 export type DashboardChartsResponseInput = z.infer<typeof dashboardChartsResponseSchema>;

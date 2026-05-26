@@ -1,9 +1,41 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createSignedWebAuthSession } from "./web-auth-session";
 import { readServerBillingState } from "./server-billing";
 
+const cookiesMock = vi.hoisted(() => vi.fn());
+
 vi.mock("next/headers", () => ({
-  headers: vi.fn(async () => new Headers({ cookie: "better-auth.session_token=token" })),
+  cookies: cookiesMock,
 }));
+
+function buildCookieValue() {
+  return createSignedWebAuthSession(
+    {
+      authState: {
+        onboardingStatus: "complete",
+        organization: {
+          id: "org_123",
+          name: "MarginFlow",
+          role: "owner",
+          slug: "marginflow",
+        },
+        session: {
+          expiresAt: "2026-04-22T00:00:00.000Z",
+          id: "session_123",
+        },
+        user: {
+          email: "owner@marginflow.local",
+          emailVerified: true,
+          id: "user_123",
+          image: null,
+          name: "Mateus",
+        },
+      },
+      remoteSessionToken: "remote_session_token_123",
+    },
+    "marginflow-web-session-dev-secret",
+  );
+}
 
 describe("readServerBillingState", () => {
   const originalFetch = global.fetch;
@@ -22,20 +54,24 @@ describe("readServerBillingState", () => {
     } else {
       delete process.env.NEXT_PUBLIC_API_BASE_URL;
     }
+    cookiesMock.mockReset();
     vi.restoreAllMocks();
   });
 
-  it("returns null on 401", async () => {
-    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
-    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:3000/api";
-    global.fetch = vi.fn(async () => new Response(null, { status: 401 })) as typeof fetch;
+  it("returns null when mirrored web session is missing", async () => {
+    cookiesMock.mockResolvedValue({
+      get: vi.fn(() => undefined),
+    });
 
     await expect(readServerBillingState()).resolves.toBeNull();
   });
 
-  it("parses billing snapshot payload", async () => {
+  it("parses billing snapshot payload from Railway", async () => {
     process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
-    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:3000/api";
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:4000";
+    cookiesMock.mockResolvedValue({
+      get: vi.fn(() => ({ value: buildCookieValue() })),
+    });
     global.fetch = vi.fn(
       async () =>
         new Response(
@@ -91,20 +127,13 @@ describe("readServerBillingState", () => {
         status: "inactive",
       },
     });
-  });
-
-  it("requests billing state through the proxied /api base on the web origin", async () => {
-    process.env.NEXT_PUBLIC_APP_URL = "https://marginflow-web.vercel.app";
-    process.env.NEXT_PUBLIC_API_BASE_URL = "https://marginflow-web.vercel.app/api";
-    const fetchSpy = vi.fn(async () => new Response(null, { status: 401 })) as typeof fetch;
-    global.fetch = fetchSpy;
-
-    await readServerBillingState();
-
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "https://marginflow-web.vercel.app/api/billing/subscription",
+    expect(global.fetch).toHaveBeenCalledWith(
+      "http://localhost:4000/billing/subscription",
       expect.objectContaining({
         cache: "no-store",
+        headers: {
+          cookie: "better-auth.session_token=remote_session_token_123",
+        },
       }),
     );
   });

@@ -65,7 +65,7 @@ Optional local/testing helper:
 - `SYNC_RELAX_GUARDS`
 
 `DATABASE_URL` should target pooled/runtime Postgres credentials. `DATABASE_MIGRATION_URL` should target direct or migration-safe credentials for Drizzle tooling.
-`BETTER_AUTH_URL` should point at the public Better Auth surface. When the web app proxies auth through Vercel, this becomes `https://<web>.vercel.app/api/auth`. `API_PUBLIC_BASE_URL` should remain the raw public backend base, such as the Railway URL.
+`BETTER_AUTH_URL` should point at the direct public Better Auth surface on Railway, such as `https://marginflow-production.up.railway.app/auth`. `API_PUBLIC_BASE_URL` should remain the raw public backend base, such as the same Railway URL without `/auth`.
 
 ## Docs
 

@@ -14,9 +14,13 @@ import { ZodValidationPipe } from "@/common/pipes/zod-validation.pipe";
 import { AUTH_INSTANCE } from "@/common/tokens";
 import {
   buildAbsoluteRequestUrl,
+  buildAuthCompleteRedirectUrl,
   proxyBetterAuthResponse,
+  readBetterAuthSessionTokenFromSetCookie,
   startBetterAuthSocialSignIn,
 } from "@/modules/auth/better-auth-http";
+import { AuthExchangeService } from "@/modules/auth/auth-exchange.service";
+import { AuthService } from "@/modules/auth/auth.service";
 
 export async function buildApp(
   env: ApiRuntimeEnv = readApiEnv(),
@@ -48,6 +52,8 @@ export async function buildApp(
   const auth = app.get(AUTH_INSTANCE) as {
     handler: (request: Request) => Promise<Response>;
   };
+  const authExchangeService = app.get(AuthExchangeService);
+  const authService = app.get(AuthService);
 
   fastify.route({
     method: "GET",
@@ -84,6 +90,47 @@ export async function buildApp(
         ...(request.body !== undefined ? { body: JSON.stringify(request.body) } : {}),
       });
       const response = await auth.handler(authRequest);
+
+      if (
+        request.method === "GET" &&
+        url.pathname.startsWith("/auth/callback/") &&
+        response.headers.get("location")
+      ) {
+        const setCookieHeaders = (response.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ??
+          (() => {
+            const header = response.headers.get("set-cookie");
+            return header ? [header] : [];
+          })();
+        const sessionToken = readBetterAuthSessionTokenFromSetCookie(setCookieHeaders);
+
+        if (sessionToken) {
+          const authContext = await authService.resolveRequestContext({
+            headers: new Headers({
+              cookie: `better-auth.session_token=${sessionToken}`,
+            }),
+          });
+
+          if (authContext) {
+            const ticket = await authExchangeService.createTicket({
+              organizationId: authContext.organization?.id ?? null,
+              remoteSessionToken: sessionToken,
+              sessionId: authContext.session.id,
+              userId: authContext.user.id,
+            });
+            const redirectUrl = buildAuthCompleteRedirectUrl({
+              callbackLocation: response.headers.get("location")!,
+              ticket,
+              webAppOrigin: env.WEB_APP_ORIGIN,
+            });
+
+            reply.raw.setHeader("set-cookie", setCookieHeaders);
+            reply.status(302);
+            reply.header("location", redirectUrl);
+            return reply.send();
+          }
+        }
+      }
+
       return proxyBetterAuthResponse(reply, response);
     },
   });

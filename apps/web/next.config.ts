@@ -7,7 +7,6 @@ import type { NextConfig } from "next";
 const webRoot = dirname(fileURLToPath(import.meta.url));
 const monorepoRoot = resolve(webRoot, "..", "..");
 const requiredPublicEnvKeys = ["NEXT_PUBLIC_APP_URL", "NEXT_PUBLIC_API_BASE_URL"] as const;
-const defaultProductionProxyTargetUrl = "https://marginflow-production.up.railway.app";
 
 function loadIfExists(filePath: string, override: boolean) {
   if (existsSync(filePath)) {
@@ -15,7 +14,6 @@ function loadIfExists(filePath: string, override: boolean) {
   }
 }
 
-// Next only auto-loads `.env*` under `apps/web`. Repo secrets live at the monorepo root (same as the API).
 loadIfExists(resolve(monorepoRoot, ".env"), false);
 loadIfExists(resolve(monorepoRoot, ".env.local"), true);
 const nodeEnv = process.env.NODE_ENV ?? "development";
@@ -47,17 +45,6 @@ if (nodeEnv === "production") {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  async rewrites() {
-    const proxyTargetUrl =
-      process.env.API_PUBLIC_BASE_URL?.trim() || defaultProductionProxyTargetUrl;
-
-    return [
-      {
-        destination: `${proxyTargetUrl.replace(/\/+$/, "")}/:path*`,
-        source: "/api/:path*",
-      },
-    ];
-  },
 };
 
 export default nextConfig;

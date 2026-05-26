@@ -122,7 +122,7 @@ describe("readApiEnv", () => {
       API_PUBLIC_BASE_URL: "https://marginflow-production.up.railway.app",
       DATABASE_URL: runtimeUrl,
       BETTER_AUTH_SECRET: "secret",
-      BETTER_AUTH_URL: "https://marginflow-web.vercel.app/api/auth",
+      BETTER_AUTH_URL: "https://marginflow-production.up.railway.app/auth",
       GOOGLE_CLIENT_ID: "google-client-id",
       GOOGLE_CLIENT_SECRET: "google-client-secret",
       STRIPE_SECRET_KEY: "stripe",
@@ -134,7 +134,7 @@ describe("readApiEnv", () => {
     });
 
     expect(env.API_PUBLIC_BASE_URL).toBe("https://marginflow-production.up.railway.app");
-    expect(env.BETTER_AUTH_URL).toBe("https://marginflow-web.vercel.app/api/auth");
+    expect(env.BETTER_AUTH_URL).toBe("https://marginflow-production.up.railway.app/auth");
   });
 
   it("parses SYNC_RELAX_GUARDS", () => {

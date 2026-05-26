@@ -3,6 +3,7 @@ import type { DatabaseClient } from "@marginflow/database";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { AUTH_INSTANCE, DATABASE_CLIENT } from "@/common/tokens";
 import { AuthStateController } from "./auth.controller";
+import { AuthExchangeService } from "./auth-exchange.service";
 import { AuthGuard } from "./auth.guard";
 import { AuthService } from "./auth.service";
 import { buildBetterAuth } from "./better-auth.provider";
@@ -23,9 +24,16 @@ export class AuthModule {
         },
         OrganizationProvisioningService,
         AuthService,
+        AuthExchangeService,
         AuthGuard,
       ],
-      exports: [AUTH_INSTANCE, AuthGuard, AuthService, OrganizationProvisioningService],
+      exports: [
+        AUTH_INSTANCE,
+        AuthExchangeService,
+        AuthGuard,
+        AuthService,
+        OrganizationProvisioningService,
+      ],
     };
   }
 }

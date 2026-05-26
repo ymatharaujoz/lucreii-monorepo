@@ -4,6 +4,7 @@ import { validateClientEnv } from "@marginflow/validation/env";
 const DEFAULT_PUBLIC_APP_URL = "http://localhost:3000";
 const DEFAULT_PUBLIC_API_BASE_URL = "http://localhost:4000";
 const DEFAULT_PRODUCTION_PUBLIC_APP_URL = "https://marginflow-web.vercel.app";
+const DEFAULT_PRODUCTION_PUBLIC_API_BASE_URL = "https://marginflow-production.up.railway.app";
 const REQUIRED_PUBLIC_ENV_KEYS = ["NEXT_PUBLIC_APP_URL", "NEXT_PUBLIC_API_BASE_URL"] as const;
 let hasLoggedProductionEnvDiagnostic = false;
 
@@ -36,7 +37,7 @@ function resolveProductionApiBaseUrl(source: Record<string, string | undefined>)
     return explicitApiBaseUrl;
   }
 
-  return `${resolveProductionAppUrl(source).replace(/\/+$/, "")}/api`;
+  return DEFAULT_PRODUCTION_PUBLIC_API_BASE_URL;
 }
 
 function extractMissingRequiredPublicEnv(error: unknown): string[] {
