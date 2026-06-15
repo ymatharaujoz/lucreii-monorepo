@@ -21,8 +21,6 @@ describe("auth guard", () => {
       BETTER_AUTH_SECRET: "secret",
       BETTER_AUTH_URL: "http://localhost:4000",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/lucreii",
-      GOOGLE_CLIENT_ID: "google-client-id",
-      GOOGLE_CLIENT_SECRET: "google-client-secret",
       STRIPE_SECRET_KEY: "stripe",
       STRIPE_WEBHOOK_SECRET: "webhook",
       STRIPE_PRICE_MONTHLY: "price_monthly",

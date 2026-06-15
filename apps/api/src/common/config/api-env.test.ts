@@ -21,7 +21,7 @@ describe("readApiEnv", () => {
     ).toThrow();
   });
 
-  it("parses required internal auth runtime configuration without Google or Better Auth", () => {
+  it("parses required internal auth runtime configuration without Better Auth", () => {
     const env = readApiEnv({
       API_HOST: "127.0.0.1",
       API_PORT: "4000",
@@ -41,10 +41,9 @@ describe("readApiEnv", () => {
     expect(env.API_DB_POOL_MAX).toBe(12);
     expect(env.AUTH_SESSION_SECRET).toBeUndefined();
     expect(env.BETTER_AUTH_URL).toBeUndefined();
-    expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
   });
 
-  it("accepts optional legacy Better Auth and Google config without requiring it", () => {
+  it("accepts optional legacy Better Auth config without requiring it", () => {
     const env = readApiEnv({
       API_HOST: "127.0.0.1",
       API_PORT: "4000",
@@ -52,8 +51,6 @@ describe("readApiEnv", () => {
       DATABASE_URL: runtimeUrl,
       BETTER_AUTH_SECRET: "secret",
       BETTER_AUTH_URL: "http://localhost:4000/auth",
-      GOOGLE_CLIENT_ID: "google-client-id",
-      GOOGLE_CLIENT_SECRET: "google-client-secret",
       STRIPE_SECRET_KEY: "stripe",
       STRIPE_WEBHOOK_SECRET: "webhook",
       STRIPE_PRICE_MONTHLY: "price_monthly",
@@ -64,7 +61,6 @@ describe("readApiEnv", () => {
 
     expect(env.BETTER_AUTH_SECRET).toBe("secret");
     expect(env.BETTER_AUTH_URL).toBe("http://localhost:4000/auth");
-    expect(env.GOOGLE_CLIENT_ID).toBe("google-client-id");
   });
 
   it("accepts optional Mercado Livre oauth configuration", () => {

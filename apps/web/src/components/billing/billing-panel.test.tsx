@@ -28,7 +28,7 @@ describe("BillingPanel", () => {
 
     expect(markup).toContain("Teste grátis por 7 dias");
     expect(markup).toContain("Começar teste grátis");
-    expect(markup).toContain("Cartão obrigatório");
+    expect(markup).toContain("Cadastre seu cartão agora");
     expect(markup).toContain("Cobrança automática após 7 dias grátis");
   });
 

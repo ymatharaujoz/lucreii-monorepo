@@ -91,7 +91,6 @@ Environment variables are split per project. Each app owns its `.env` and `.env.
 - `WEB_APP_ORIGIN` — public origin of the web app (the API no longer falls back to `NEXT_PUBLIC_APP_URL`)
 - `AUTH_TRUSTED_ORIGINS` — additional trusted browser origins for auth/CORS
 - `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_API_KEY` — Better Auth configuration
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — OAuth configuration
 - `DATABASE_URL` — runtime DB URL
 - `DATABASE_MIGRATION_URL` — preferred DB URL for Drizzle migrations, seed, and Studio
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL` — billing

@@ -14,8 +14,6 @@ describe("MercadoLivreProvider", () => {
       BETTER_AUTH_SECRET: "secret",
       BETTER_AUTH_URL: "http://localhost:4000",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/lucreii",
-      GOOGLE_CLIENT_ID: "google-client-id",
-      GOOGLE_CLIENT_SECRET: "google-client-secret",
       MERCADOLIVRE_CLIENT_ID: "ml-client-id",
       MERCADOLIVRE_CLIENT_SECRET: "ml-client-secret",
       MERCADOLIVRE_REDIRECT_URI:
@@ -53,8 +51,6 @@ describe("MercadoLivreProvider", () => {
       BETTER_AUTH_SECRET: "secret",
       BETTER_AUTH_URL: "http://localhost:4000",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/lucreii",
-      GOOGLE_CLIENT_ID: "google-client-id",
-      GOOGLE_CLIENT_SECRET: "google-client-secret",
       MERCADOLIVRE_CLIENT_ID: "ml-client-id",
       MERCADOLIVRE_CLIENT_SECRET: "ml-client-secret",
       MERCADOLIVRE_REDIRECT_URI:
@@ -88,8 +84,6 @@ describe("MercadoLivreProvider", () => {
       BETTER_AUTH_SECRET: "secret",
       BETTER_AUTH_URL: "http://localhost:4000",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/lucreii",
-      GOOGLE_CLIENT_ID: "google-client-id",
-      GOOGLE_CLIENT_SECRET: "google-client-secret",
       MERCADOLIVRE_CLIENT_ID: "ml-client-id",
       MERCADOLIVRE_CLIENT_SECRET: "ml-client-secret",
       MERCADOLIVRE_REDIRECT_URI:
@@ -161,8 +155,6 @@ describe("MercadoLivreProvider", () => {
       BETTER_AUTH_SECRET: "secret",
       BETTER_AUTH_URL: "http://localhost:4000",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/lucreii",
-      GOOGLE_CLIENT_ID: "google-client-id",
-      GOOGLE_CLIENT_SECRET: "google-client-secret",
       MERCADOLIVRE_CLIENT_ID: "ml-client-id",
       MERCADOLIVRE_CLIENT_SECRET: "ml-client-secret",
       MERCADOLIVRE_REDIRECT_URI:
@@ -235,8 +227,6 @@ describe("MercadoLivreProvider", () => {
       BETTER_AUTH_SECRET: "secret",
       BETTER_AUTH_URL: "http://localhost:4000",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/lucreii",
-      GOOGLE_CLIENT_ID: "google-client-id",
-      GOOGLE_CLIENT_SECRET: "google-client-secret",
       MERCADOLIVRE_CLIENT_ID: "ml-client-id",
       MERCADOLIVRE_CLIENT_SECRET: "ml-client-secret",
       MERCADOLIVRE_REDIRECT_URI:

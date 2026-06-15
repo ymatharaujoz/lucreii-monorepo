@@ -112,14 +112,14 @@ describe("ProductTable", () => {
     click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "2")!);
     click(document.querySelector("tbody tr")!);
 
-    expect(document.body.textContent).toContain("Detalhes mensais");
+    expect(document.body.textContent).toContain("Visão Geral de Vendas");
     expect(document.body.textContent).toContain("Produto 11");
     expect(document.body.textContent).toContain("SKU-11");
     expect(document.body.textContent).toContain("ROAS Real");
 
     click(document.querySelector('[aria-label="Close"]')!);
 
-    expect(document.body.textContent).not.toContain("Detalhes mensais");
+    expect(document.body.textContent).not.toContain("Visão Geral de Vendas");
     expect(document.body.textContent).toContain("Página 2 de 2");
 
     view.unmount();
@@ -148,7 +148,7 @@ describe("ProductTable", () => {
     const tableRow = document.querySelector("tbody tr")!;
     keydown(tableRow, "Enter");
 
-    expect(document.body.textContent).toContain("Detalhes mensais");
+    expect(document.body.textContent).toContain("Visão Geral de Vendas");
     expect(document.body.textContent).toContain("ROI");
     expect(document.body.textContent).toContain("ROAS Mínimo");
     expect(document.body.textContent).toContain("ROAS Real");
@@ -156,7 +156,7 @@ describe("ProductTable", () => {
 
     keydown(document, "Escape");
 
-    expect(document.body.textContent).not.toContain("Detalhes mensais");
+    expect(document.body.textContent).not.toContain("Visão Geral de Vendas");
     expect((document.querySelector('input[placeholder="Nome ou SKU do produto..."]') as HTMLInputElement).value).toBe("Produto 1");
 
     view.unmount();

@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+function emptyToUndef(value: unknown): unknown {
+  if (typeof value === "string" && value.trim() === "") return undefined;
+  return value;
+}
+
 function parseEnvBool(value: unknown): boolean {
   if (value === undefined || value === null || value === "") {
     return false;
@@ -18,17 +23,15 @@ const apiEnvSchema = z.object({
   AUTH_SESSION_SECRET: z.string().min(1).optional(),
   BETTER_AUTH_SECRET: z.string().min(1).optional(),
   BETTER_AUTH_URL: z.string().url().optional(),
-  BETTER_AUTH_API_KEY: z.string().min(1).optional(),
-  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
-  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
-  MERCADOLIVRE_CLIENT_ID: z.string().min(1).optional(),
-  MERCADOLIVRE_CLIENT_SECRET: z.string().min(1).optional(),
-  MERCADOLIVRE_REDIRECT_URI: z.string().url().optional(),
+  BETTER_AUTH_API_KEY: z.preprocess(emptyToUndef, z.string().min(1).optional()),
+  MERCADOLIVRE_CLIENT_ID: z.preprocess(emptyToUndef, z.string().min(1).optional()),
+  MERCADOLIVRE_CLIENT_SECRET: z.preprocess(emptyToUndef, z.string().min(1).optional()),
+  MERCADOLIVRE_REDIRECT_URI: z.preprocess(emptyToUndef, z.string().url().optional()),
   MERCADOLIVRE_USE_PKCE: z.preprocess(parseEnvBool, z.boolean()).optional(),
-  SHOPEE_PARTNER_ID: z.coerce.number().int().positive().optional(),
-  SHOPEE_PARTNER_KEY: z.string().min(1).optional(),
-  SHOPEE_REDIRECT_URI: z.string().url().optional(),
-  SHOPEE_WEBHOOK_URL: z.string().url().optional(),
+  SHOPEE_PARTNER_ID: z.preprocess(emptyToUndef, z.coerce.number().int().positive().optional()),
+  SHOPEE_PARTNER_KEY: z.preprocess(emptyToUndef, z.string().min(1).optional()),
+  SHOPEE_REDIRECT_URI: z.preprocess(emptyToUndef, z.string().url().optional()),
+  SHOPEE_WEBHOOK_URL: z.preprocess(emptyToUndef, z.string().url().optional()),
   WEB_APP_ORIGIN: z.string().url().default("http://localhost:3000"),
   AUTH_TRUSTED_ORIGINS: z.string().optional(),
   STRIPE_SECRET_KEY: z.string().min(1),
@@ -58,8 +61,6 @@ export function readApiEnv(
     BETTER_AUTH_SECRET: source.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: source.BETTER_AUTH_URL,
     BETTER_AUTH_API_KEY: source.BETTER_AUTH_API_KEY,
-    GOOGLE_CLIENT_ID: source.GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET: source.GOOGLE_CLIENT_SECRET,
     MERCADOLIVRE_CLIENT_ID: source.MERCADOLIVRE_CLIENT_ID,
     MERCADOLIVRE_CLIENT_SECRET: source.MERCADOLIVRE_CLIENT_SECRET,
     MERCADOLIVRE_REDIRECT_URI: source.MERCADOLIVRE_REDIRECT_URI,

@@ -23,8 +23,6 @@ describe("dashboard controller", () => {
       BETTER_AUTH_SECRET: "secret",
       BETTER_AUTH_URL: "http://localhost:4000",
       DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/lucreii",
-      GOOGLE_CLIENT_ID: "google-client-id",
-      GOOGLE_CLIENT_SECRET: "google-client-secret",
       NODE_ENV: "test",
       STRIPE_PRICE_ANNUAL: "price_annual",
       STRIPE_PRICE_MONTHLY: "price_monthly",

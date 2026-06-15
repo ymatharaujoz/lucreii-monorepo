@@ -7,7 +7,7 @@ Arquitetura atual:
 - `apps/web` deploy na Vercel
 - `apps/api` deploy no Railway
 - browser e SSR do web chamam API Railway direto
-- Railway e dono de Better Auth + Google OAuth
+- Railway e dono de Better Auth
 - Vercel mantem apenas sessao SSR espelhada first-party
 - cada app tem seu proprio `.env` e `.env.example`; envs nao sao mais compartilhadas pela raiz
 
@@ -25,18 +25,12 @@ Arquitetura atual:
 
 > A API nao usa `NEXT_PUBLIC_APP_URL` como fallback. Configure `WEB_APP_ORIGIN` explicitamente no Railway.
 
-Google OAuth:
-
-- Authorized redirect URI:
-  - `https://marginflow-production.up.railway.app/auth/callback/google`
-
 ## Fluxo de auth
 
 1. usuario abre `https://marginflow-web.vercel.app/sign-in`
-2. web redireciona para `https://marginflow-production.up.railway.app/auth/start/google`
-3. Google volta para `https://marginflow-production.up.railway.app/auth/callback/google`
-4. Railway cria ticket one-time e redireciona para `https://marginflow-web.vercel.app/auth/complete?...`
-5. web troca ticket por payload autenticado, cria sessao SSR local e segue para `/app`
+2. usuario faz sign-in com credenciais (email/senha)
+3. API cria sessao e retorna dados autenticados
+4. web cria sessao SSR local e segue para `/app`
 
 ## Variaveis obrigatorias
 
@@ -48,8 +42,6 @@ Configure diretamente no servico `apps/api` do Railway:
 - `BETTER_AUTH_SECRET`
 - `BETTER_AUTH_URL`
 - `API_PUBLIC_BASE_URL`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
 - `WEB_APP_ORIGIN`
 - `AUTH_TRUSTED_ORIGINS`
 - `STRIPE_SECRET_KEY`
@@ -96,17 +88,15 @@ Opcional:
 
 1. configurar envs do Railway
 2. deploy API no Railway
-3. configurar callback Google para Railway `/auth/callback/google`
-4. configurar envs do Vercel
-5. deploy web na Vercel
-6. validar login completo
+3. configurar envs do Vercel
+4. deploy web na Vercel
+5. validar login completo
 
 ## Validacao manual
 
 - abrir `/sign-in` na Vercel
-- confirmar redirect para Railway `/auth/start/google`
-- confirmar callback Google em Railway `/auth/callback/google`
-- confirmar redirect final para Vercel `/auth/complete`
+- confirmar login com email/senha funciona
+- confirmar redirect final para Vercel `/app`
 - confirmar `/app` autenticado no SSR
 - confirmar logout limpa sessao local do web
 
@@ -119,7 +109,6 @@ Verificar:
 - `NEXT_PUBLIC_API_BASE_URL` aponta para Railway
 - `BETTER_AUTH_URL` aponta para Railway `/auth`
 - `WEB_APP_ORIGIN` bate com dominio Vercel
-- Google callback URI bate exatamente com Railway `/auth/callback/google`
 
 ### `/auth/complete` falha
 
@@ -135,4 +124,4 @@ Verificar:
 
 - cookie local `lucreii.web_session` esta sendo criado
 - payload trocado inclui `remoteSessionToken`
-- chamadas SSR do web para Railway enviam `better-auth.session_token`
+- chamadas SSR do web para Railway enviam cookie de sessao

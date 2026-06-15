@@ -54,7 +54,6 @@ describe("SignInPanel", () => {
     expect(document.body.textContent).toContain("Entrar");
     expect(document.body.textContent).toContain("E-mail");
     expect(document.body.textContent).toContain("Senha");
-    expect(document.body.textContent).not.toContain("Continuar com Google");
     expect(document.body.textContent).toContain("Criar conta");
     expect(document.querySelector('[aria-label="Mostrar senha"]')).not.toBeNull();
 

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
 const webRoot = dirname(fileURLToPath(import.meta.url));
+const nodeEnv = process.env.NODE_ENV ?? "development";
 const requiredPublicEnvKeys = [
   "NEXT_PUBLIC_APP_URL",
   "NEXT_PUBLIC_API_BASE_URL",

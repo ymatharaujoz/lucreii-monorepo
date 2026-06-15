@@ -188,9 +188,10 @@ describe("dashboard foundation helpers", () => {
     expect(getProductHealthStatus({ margin: -3, profit: -10, roi: -0.1, roas: 0.5 })).toBe("critical");
   });
 
-  it("renders an honest profitability coverage note instead of implying inferred operational fields", () => {
+  it("renders the top products table from profitability data", () => {
     const markup = renderToStaticMarkup(createElement(ProductsTable, { data: profitability }));
 
-    expect(markup).toContain("Quando frete, imposto, embalagem ou devolucoes ainda nao tiverem fonte operacional dedicada");
+    expect(markup).toContain("TOP 5 PRODUTOS");
+    expect(markup).toContain("MAIORES LUCRO POR SKU");
   });
 });

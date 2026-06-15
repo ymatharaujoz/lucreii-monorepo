@@ -4,8 +4,6 @@ export const serverEnvSchema = z.object({
   DATABASE_URL: z.string().url(),
   DATABASE_MIGRATION_URL: z.string().url().optional(),
   BETTER_AUTH_SECRET: z.string().min(1),
-  GOOGLE_CLIENT_ID: z.string().min(1),
-  GOOGLE_CLIENT_SECRET: z.string().min(1),
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
   STRIPE_PRICE_MONTHLY: z.string().min(1),
