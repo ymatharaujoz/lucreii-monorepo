@@ -1750,7 +1750,12 @@ export function ProductsShell({
           open={marketplaceImportResult !== null}
           title="Resultado da importação"
         >
-          {marketplaceImportResult ? (
+          {marketplaceImportResult ? (() => {
+            const hasIssues =
+              marketplaceImportResult.conflicts.length > 0 ||
+              marketplaceImportResult.errors.length > 0;
+
+            return (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1764,8 +1769,7 @@ export function ProductsShell({
                 transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 className={cn(
                   "relative overflow-hidden rounded-[var(--radius-2xl)] border p-8 text-center",
-                  marketplaceImportResult.conflicts.length > 0 ||
-                    marketplaceImportResult.errors.length > 0
+                  hasIssues
                     ? "border-warning/30 bg-gradient-to-br from-warning-soft/20 via-surface/60 to-background"
                     : "border-success/30 bg-gradient-to-br from-success-soft/20 via-surface/60 to-background",
                 )}
@@ -1781,14 +1785,12 @@ export function ProductsShell({
                   }}
                   className={cn(
                     "mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full ring-2",
-                    marketplaceImportResult.conflicts.length > 0 ||
-                      marketplaceImportResult.errors.length > 0
+                    hasIssues
                       ? "bg-warning/10 ring-warning/20"
                       : "bg-success/10 ring-success/20",
                   )}
                 >
-                  {marketplaceImportResult.conflicts.length > 0 ||
-                  marketplaceImportResult.errors.length > 0 ? (
+                  {hasIssues ? (
                     <AlertTriangle
                       className="h-8 w-8 text-warning"
                       strokeWidth={1.5}
@@ -1808,8 +1810,7 @@ export function ProductsShell({
                   transition={{ delay: 0.2, duration: 0.3 }}
                   className="text-xl font-semibold tracking-tight text-foreground"
                 >
-                  {marketplaceImportResult.conflicts.length > 0 ||
-                  marketplaceImportResult.errors.length > 0
+                  {hasIssues
                     ? "Importação com ressalvas"
                     : "Importação concluída"}
                 </motion.h3>
@@ -1977,7 +1978,8 @@ export function ProductsShell({
                 </Button>
               </motion.div>
             </motion.div>
-          ) : null}
+            );
+          })() : null}
         </Modal>
 
         <Modal
