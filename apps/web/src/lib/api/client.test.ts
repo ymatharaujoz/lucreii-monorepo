@@ -21,6 +21,41 @@ describe("createApiClient", () => {
     );
   });
 
+  it("adds selected company header from browser cookie", async () => {
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: {
+        cookie: "lucreii_selected_company_id=company_123",
+      },
+    });
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    const client = createApiClient({
+      baseUrl: "http://localhost:4000",
+      fetchFn,
+    });
+
+    await client.get("/dashboard/summary");
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "http://localhost:4000/dashboard/summary",
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    );
+    const [, init] = fetchFn.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit];
+    const headers = new Headers(init.headers);
+    expect(headers.get("x-lucreii-company-id")).toBe("company_123");
+
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+    });
+  });
+
   it("reads nested Nest error.message from API JSON errors", async () => {
     const client = createApiClient({
       baseUrl: "http://localhost:4000",

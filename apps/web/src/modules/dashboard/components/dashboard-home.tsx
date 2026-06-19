@@ -20,7 +20,7 @@ import { useDashboardConnectionStatuses } from "../hooks/use-dashboard-connectio
 
 interface DashboardHomeProps {
   activeCompany: Company | null;
-  organizationName: string;
+  companyName: string;
 }
 
 function LoadingDashboard() {
@@ -47,12 +47,12 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
           <AlertCircle className="h-6 w-6 text-error" />
         </div>
         <h3 className="mb-2 text-lg font-semibold text-foreground">
-          {isUnauthorized ? "Sessao expirada" : "Erro ao carregar dados"}
+          {isUnauthorized ? "Sessão expirada" : "Erro ao carregar dados"}
         </h3>
         <p className="mb-6 text-sm text-muted-foreground">
           {isUnauthorized
-            ? "Sua sessao expirou. Por favor, faca login novamente para continuar."
-            : "Nao foi possivel carregar os dados do dashboard. Tente novamente."}
+            ? "Sua sessão expirou. Por favor, faça login novamente para continuar."
+            : "Não foi possível carregar os dados do dashboard. Tente novamente."}
         </p>
         {isUnauthorized ? (
           <Button asChild>
@@ -69,7 +69,7 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
   );
 }
 
-export function DashboardHome({ activeCompany, organizationName }: DashboardHomeProps) {
+export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps) {
   const [providerFilter, setProviderFilter] = useState<IntegrationProviderSlug | null>(null);
   const {
     summaryQuery,
@@ -94,7 +94,7 @@ export function DashboardHome({ activeCompany, organizationName }: DashboardHome
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-5">
       <DashboardHeader
-        organizationName={organizationName}
+        companyName={companyName}
         businessStatus={businessStatus}
       />
 
@@ -153,11 +153,11 @@ export function DashboardHome({ activeCompany, organizationName }: DashboardHome
       {financialState === "insufficient" && (
         <motion.div variants={fadeInVariants} initial="hidden" animate="visible">
           <EmptyState
-            title="Dados insuficientes para analise completa"
-            description="Sua sincronizacao ja trouxe base inicial, mas ainda faltam sinais suficientes para montar rentabilidade por produto."
+            title="Dados insuficientes para análise completa"
+            description="Sua sincronização já trouxe a base inicial, mas ainda faltam sinais suficientes para montar a rentabilidade por produto."
             action={
               <Button asChild variant="secondary">
-                <Link href="/app/products">Revisar catalogo</Link>
+                <Link href="/app/products">Revisar catálogo</Link>
               </Button>
             }
           />

@@ -113,6 +113,34 @@
       "when": 1781744400000,
       "tag": "0015_company_legal_identity_repair",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1781780400000,
+      "tag": "0016_products_unique_normalized_sku",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1781866800000,
+      "tag": "0017_marketplace_connections_company_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1781953200000,
+      "tag": "0018_company_cnpj_global_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1782039600000,
+      "tag": "0019_product_catalog_company_scope",
+      "breakpoints": true
     }
   ]
 }

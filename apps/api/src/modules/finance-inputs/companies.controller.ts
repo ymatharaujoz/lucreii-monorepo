@@ -19,6 +19,7 @@ export class CompaniesController {
     return {
       data: await this.financeInputsService.listCompanies({
         organizationId: authContext.organization!.id,
+        selectedCompanyId: authContext.selectedCompanyId ?? null,
         userId: authContext.user.id,
       }),
       error: null,
@@ -34,6 +35,7 @@ export class CompaniesController {
       data: await this.financeInputsService.createCompany(
         {
           organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
           userId: authContext.user.id,
         },
         body,
@@ -52,10 +54,29 @@ export class CompaniesController {
       data: await this.financeInputsService.updateCompany(
         {
           organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
           userId: authContext.user.id,
         },
         companyId,
         body,
+      ),
+      error: null,
+    };
+  }
+
+  @Patch(":id/select")
+  async selectCompany(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Param("id") companyId: string,
+  ) {
+    return {
+      data: await this.financeInputsService.selectCompany(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        companyId,
       ),
       error: null,
     };

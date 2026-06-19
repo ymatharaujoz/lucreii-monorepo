@@ -26,6 +26,7 @@ const updatedAt = () =>
     .notNull()
     .$onUpdate(() => new Date());
 const organizationId = () => uuid("organization_id").notNull();
+const companyId = () => uuid("company_id").notNull();
 
 export const users = pgTable(
   "user",
@@ -224,7 +225,7 @@ export const companies = pgTable(
       table.organizationId,
       table.isActive,
     ),
-    uniqueIndex("companies_org_cnpj_key").on(table.organizationId, table.cnpj),
+    uniqueIndex("companies_cnpj_key").on(table.cnpj),
     uniqueIndex("companies_org_code_key").on(table.organizationId, table.code),
   ],
 );
@@ -555,6 +556,9 @@ export const marketplaceConnections = pgTable(
     organizationId: organizationId().references(() => organizations.id, {
       onDelete: "cascade",
     }),
+    companyId: companyId().references(() => companies.id, {
+      onDelete: "cascade",
+    }),
     provider: varchar("provider", { length: 32 }).notNull(),
     status: varchar("status", { length: 32 }).default("disconnected").notNull(),
     externalAccountId: varchar("external_account_id", { length: 255 }),
@@ -573,12 +577,15 @@ export const marketplaceConnections = pgTable(
     index("marketplace_connections_organization_id_idx").on(
       table.organizationId,
     ),
+    index("marketplace_connections_company_id_idx").on(table.companyId),
     index("marketplace_connections_org_provider_idx").on(
       table.organizationId,
+      table.companyId,
       table.provider,
     ),
     uniqueIndex("marketplace_connections_org_provider_key").on(
       table.organizationId,
+      table.companyId,
       table.provider,
     ),
   ],
@@ -589,6 +596,9 @@ export const syncRuns = pgTable(
   {
     id: id(),
     organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    companyId: companyId().references(() => companies.id, {
       onDelete: "cascade",
     }),
     marketplaceConnectionId: uuid("marketplace_connection_id"),
@@ -607,8 +617,10 @@ export const syncRuns = pgTable(
   },
   (table) => [
     index("sync_runs_organization_id_idx").on(table.organizationId),
+    index("sync_runs_company_id_idx").on(table.companyId),
     index("sync_runs_org_provider_created_idx").on(
       table.organizationId,
+      table.companyId,
       table.provider,
       table.createdAt,
     ),
@@ -625,6 +637,9 @@ export const externalProducts = pgTable(
   {
     id: id(),
     organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    companyId: companyId().references(() => companies.id, {
       onDelete: "cascade",
     }),
     marketplaceConnectionId: uuid("marketplace_connection_id"),
@@ -649,9 +664,11 @@ export const externalProducts = pgTable(
   },
   (table) => [
     index("external_products_organization_id_idx").on(table.organizationId),
+    index("external_products_company_id_idx").on(table.companyId),
     index("external_products_linked_product_id_idx").on(table.linkedProductId),
     uniqueIndex("external_products_org_provider_external_key").on(
       table.organizationId,
+      table.companyId,
       table.provider,
       table.externalProductId,
     ),
@@ -668,6 +685,9 @@ export const externalOrders = pgTable(
   {
     id: id(),
     organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    companyId: companyId().references(() => companies.id, {
       onDelete: "cascade",
     }),
     marketplaceConnectionId: uuid("marketplace_connection_id"),
@@ -691,8 +711,10 @@ export const externalOrders = pgTable(
   },
   (table) => [
     index("external_orders_organization_id_idx").on(table.organizationId),
+    index("external_orders_company_id_idx").on(table.companyId),
     uniqueIndex("external_orders_org_provider_external_key").on(
       table.organizationId,
+      table.companyId,
       table.provider,
       table.externalOrderId,
     ),
@@ -775,6 +797,9 @@ export const products = pgTable(
     organizationId: organizationId().references(() => organizations.id, {
       onDelete: "cascade",
     }),
+    companyId: companyId().references(() => companies.id, {
+      onDelete: "cascade",
+    }),
     name: varchar("name", { length: 255 }).notNull(),
     sku: varchar("sku", { length: 128 }),
     sellingPrice: numeric("selling_price", { precision: 14, scale: 2 })
@@ -786,9 +811,10 @@ export const products = pgTable(
   },
   (table) => [
     index("products_organization_id_idx").on(table.organizationId),
+    index("products_company_id_idx").on(table.companyId),
     index("products_org_active_idx").on(table.organizationId, table.isActive),
-    uniqueIndex("products_org_normalized_sku_key")
-      .on(table.organizationId, sql`upper(trim(${table.sku}))`)
+    uniqueIndex("products_company_normalized_sku_key")
+      .on(table.companyId, sql`upper(trim(${table.sku}))`)
       .where(
         sql`${table.sku} is not null and char_length(trim(${table.sku})) > 0`,
       ),
@@ -860,6 +886,9 @@ export const productCosts = pgTable(
     organizationId: organizationId().references(() => organizations.id, {
       onDelete: "cascade",
     }),
+    companyId: companyId().references(() => companies.id, {
+      onDelete: "cascade",
+    }),
     productId: uuid("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
@@ -875,6 +904,7 @@ export const productCosts = pgTable(
   },
   (table) => [
     index("product_costs_organization_id_idx").on(table.organizationId),
+    index("product_costs_company_id_idx").on(table.companyId),
   ],
 );
 
@@ -883,6 +913,9 @@ export const adCosts = pgTable(
   {
     id: id(),
     organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    companyId: companyId().references(() => companies.id, {
       onDelete: "cascade",
     }),
     productId: uuid("product_id").references(() => products.id, {
@@ -898,7 +931,10 @@ export const adCosts = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (table) => [index("ad_costs_organization_id_idx").on(table.organizationId)],
+  (table) => [
+    index("ad_costs_organization_id_idx").on(table.organizationId),
+    index("ad_costs_company_id_idx").on(table.companyId),
+  ],
 );
 
 export const manualExpenses = pgTable(
@@ -906,6 +942,9 @@ export const manualExpenses = pgTable(
   {
     id: id(),
     organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    companyId: companyId().references(() => companies.id, {
       onDelete: "cascade",
     }),
     category: varchar("category", { length: 64 }).default("general").notNull(),
@@ -920,6 +959,7 @@ export const manualExpenses = pgTable(
   },
   (table) => [
     index("manual_expenses_organization_id_idx").on(table.organizationId),
+    index("manual_expenses_company_id_idx").on(table.companyId),
   ],
 );
 
@@ -1070,6 +1110,10 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
   }),
   fixedCosts: many(fixedCosts),
   performanceRows: many(productMonthlyPerformance),
+  marketplaceConnections: many(marketplaceConnections),
+  syncRuns: many(syncRuns),
+  externalProducts: many(externalProducts),
+  externalOrders: many(externalOrders),
 }));
 
 export const organizationMembersRelations = relations(
@@ -1154,6 +1198,10 @@ export const marketplaceConnectionsRelations = relations(
       fields: [marketplaceConnections.organizationId],
       references: [organizations.id],
     }),
+    company: one(companies, {
+      fields: [marketplaceConnections.companyId],
+      references: [companies.id],
+    }),
     syncRuns: many(syncRuns),
     externalProducts: many(externalProducts),
     externalOrders: many(externalOrders),
@@ -1164,6 +1212,10 @@ export const syncRunsRelations = relations(syncRuns, ({ one, many }) => ({
   organization: one(organizations, {
     fields: [syncRuns.organizationId],
     references: [organizations.id],
+  }),
+  company: one(companies, {
+    fields: [syncRuns.companyId],
+    references: [companies.id],
   }),
   marketplaceConnection: one(marketplaceConnections, {
     fields: [syncRuns.marketplaceConnectionId],
@@ -1178,6 +1230,10 @@ export const externalProductsRelations = relations(
     organization: one(organizations, {
       fields: [externalProducts.organizationId],
       references: [organizations.id],
+    }),
+    company: one(companies, {
+      fields: [externalProducts.companyId],
+      references: [companies.id],
     }),
     marketplaceConnection: one(marketplaceConnections, {
       fields: [externalProducts.marketplaceConnectionId],
@@ -1197,6 +1253,10 @@ export const externalOrdersRelations = relations(
     organization: one(organizations, {
       fields: [externalOrders.organizationId],
       references: [organizations.id],
+    }),
+    company: one(companies, {
+      fields: [externalOrders.companyId],
+      references: [companies.id],
     }),
     marketplaceConnection: one(marketplaceConnections, {
       fields: [externalOrders.marketplaceConnectionId],
@@ -1245,6 +1305,10 @@ export const productsRelations = relations(products, ({ one, many }) => ({
     fields: [products.organizationId],
     references: [organizations.id],
   }),
+  company: one(companies, {
+    fields: [products.companyId],
+    references: [companies.id],
+  }),
   financeDefaults: one(productFinanceDefaults, {
     fields: [products.id],
     references: [productFinanceDefaults.productId],
@@ -1282,6 +1346,10 @@ export const productCostsRelations = relations(productCosts, ({ one }) => ({
     fields: [productCosts.organizationId],
     references: [organizations.id],
   }),
+  company: one(companies, {
+    fields: [productCosts.companyId],
+    references: [companies.id],
+  }),
   product: one(products, {
     fields: [productCosts.productId],
     references: [products.id],
@@ -1293,6 +1361,10 @@ export const adCostsRelations = relations(adCosts, ({ one }) => ({
     fields: [adCosts.organizationId],
     references: [organizations.id],
   }),
+  company: one(companies, {
+    fields: [adCosts.companyId],
+    references: [companies.id],
+  }),
   product: one(products, {
     fields: [adCosts.productId],
     references: [products.id],
@@ -1303,6 +1375,10 @@ export const manualExpensesRelations = relations(manualExpenses, ({ one }) => ({
   organization: one(organizations, {
     fields: [manualExpenses.organizationId],
     references: [organizations.id],
+  }),
+  company: one(companies, {
+    fields: [manualExpenses.companyId],
+    references: [companies.id],
   }),
 }));
 

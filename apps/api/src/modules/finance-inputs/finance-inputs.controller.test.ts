@@ -86,6 +86,7 @@ describe("finance inputs controllers", () => {
         fixedCostDefault: "1500.00",
         id: "company_1",
         isActive: true,
+        isSelected: true,
         razaoSocial: "Mercado Livre LTDA",
         taxRateDefault: "0.120000",
         updatedAt: "2026-05-09T10:00:00.000Z",
@@ -119,6 +120,7 @@ describe("finance inputs controllers", () => {
       fixedCostDefault: "1500.00",
       id: "company_1",
       isActive: true,
+      isSelected: true,
       razaoSocial: "Mercado Livre LTDA",
       taxRateDefault: "0.120000",
       updatedAt: "2026-05-09T10:00:00.000Z",
@@ -164,6 +166,7 @@ describe("finance inputs controllers", () => {
       fixedCostDefault: "1750.00",
       id: "company_1",
       isActive: false,
+      isSelected: false,
       razaoSocial: "Mercado Livre LTDA",
       taxRateDefault: "0.090000",
       updatedAt: "2026-05-09T12:00:00.000Z",
@@ -185,7 +188,43 @@ describe("finance inputs controllers", () => {
         fixedCostDefault: "1750.00",
         id: "company_1",
         isActive: false,
+        isSelected: false,
         taxRateDefault: "0.090000",
+      }),
+    );
+  });
+
+  it("selects a company for authenticated requests", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce(createAuthContext());
+    vi.spyOn(entitlementsService, "requireActiveEntitlement").mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(financeInputsService, "selectCompany").mockResolvedValueOnce({
+      code: "MELI",
+      cnpj: "12345678000195",
+      createdAt: "2026-05-09T10:00:00.000Z",
+      fixedCostDefault: "1750.00",
+      id: "company_1",
+      isActive: true,
+      isSelected: true,
+      razaoSocial: "Mercado Livre LTDA",
+      taxRateDefault: "0.090000",
+      updatedAt: "2026-05-09T12:00:00.000Z",
+    });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/companies/company_1/select",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual(
+      expect.objectContaining({
+        id: "company_1",
+        isSelected: true,
       }),
     );
   });

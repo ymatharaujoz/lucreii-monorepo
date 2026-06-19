@@ -10,7 +10,7 @@ import {
   buildProductAnalyticsMetrics,
   type FinancialMonthlyPerformanceInput,
 } from "@lucreii/domain";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { read, utils } from "xlsx";
 import type { ProductCatalogFinanceUpdateInput } from "@lucreii/validation";
 import { productImportRowSchema } from "@lucreii/validation";
@@ -50,6 +50,7 @@ import type {
   ProductListItem,
   ProductMonthlyPerformanceDisplayRow,
   ProductRecord,
+  SyncedProductRecord,
 } from "@lucreii/types";
 import { DATABASE_CLIENT } from "@/common/tokens";
 import { FinanceService } from "@/modules/finance/finance.service";
@@ -63,6 +64,7 @@ type ManualExpenseUpdateInput = Partial<ManualExpenseFormValues>;
 type TenantContext = {
   organizationId: string;
   userId: string;
+  selectedCompanyId?: string | null;
 };
 type AnalyticsQueryInput = {
   companyId?: string;
@@ -94,7 +96,23 @@ function normalizeComparableSku(value: string | null | undefined) {
   return normalized.length > 0 ? normalized : null;
 }
 
-const PRODUCT_SKU_UNIQUE_INDEX = "products_org_normalized_sku_key";
+const PRODUCT_SKU_UNIQUE_INDEX = "products_company_normalized_sku_key";
+
+type MercadoLivreCatalogGroup = {
+  childProductIds: string[];
+  groupKey: string;
+  parentProductId: string;
+  variationLabelByProductId: Map<string, string | null>;
+};
+
+function toCatalogGroupKey(itemId: string) {
+  return `mercadolivre:${itemId}`;
+}
+
+function extractMercadoLivreItemId(externalProductId: string) {
+  const [itemId] = externalProductId.split(":");
+  return itemId?.trim() ? itemId.trim() : null;
+}
 
 @Injectable()
 export class ProductsService {
@@ -107,11 +125,91 @@ export class ProductsService {
     private readonly syncService: SyncService,
   ) {}
 
-  async listProducts(organizationId: string): Promise<ProductListItem[]> {
-    const [productRows, productCostRows] = await Promise.all([
+  private isTenantContext(
+    value: TenantContext | string,
+  ): value is TenantContext {
+    return typeof value !== "string";
+  }
+
+  private async requireScopedCompanyContext(context: TenantContext) {
+    const companyRows =
+      await this.db.query.companies.findMany({
+      columns: {
+        id: true,
+        isActive: true,
+      },
+      where: (table) =>
+        context.userId
+          ? and(
+              eq(table.organizationId, context.organizationId),
+              eq(table.userId, context.userId),
+            )
+          : eq(table.organizationId, context.organizationId),
+    });
+    const companyId = context.selectedCompanyId?.trim();
+
+    if (companyId) {
+      if (!companyRows) {
+        return {
+          ...context,
+          companyId,
+        };
+      }
+
+      const selectedCompany = companyRows.find(
+        (row) => row.id === companyId && row.isActive,
+      );
+
+      if (!selectedCompany) {
+        throw new NotFoundException("Company not found.");
+      }
+
+      return {
+        ...context,
+        companyId: selectedCompany.id,
+      };
+    }
+
+    if (!companyRows) {
+      return {
+        ...context,
+        companyId: "legacy-company-scope",
+      };
+    }
+
+    const activeCompany = companyRows.find((row) => row.isActive);
+
+    if (!activeCompany) {
+      throw new BadRequestException(
+        "Cadastre uma empresa ativa em /app antes de criar ou importar produtos.",
+      );
+    }
+
+    return {
+      ...context,
+      companyId: activeCompany.id,
+    };
+  }
+
+  async listProducts(
+    contextOrOrganizationId: TenantContext | string,
+  ): Promise<ProductListItem[]> {
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
+    const [productRows, productCostRows, externalProductRows] = await Promise.all([
       this.db.query.products.findMany({
         orderBy: (table) => [desc(table.createdAt)],
-        where: (table) => eq(table.organizationId, organizationId),
+        where: (table) =>
+          scopedContext
+            ? and(
+                eq(table.organizationId, organizationId),
+                eq(table.companyId, scopedContext.companyId),
+              )
+            : eq(table.organizationId, organizationId),
         with: {
           financeDefaults: true,
           images: {
@@ -121,7 +219,22 @@ export class ProductsService {
       }),
       this.db.query.productCosts.findMany({
         orderBy: (table) => [desc(table.effectiveFrom), desc(table.createdAt)],
-        where: (table) => eq(table.organizationId, organizationId),
+        where: (table) =>
+          scopedContext
+            ? and(
+                eq(table.organizationId, organizationId),
+                eq(table.companyId, scopedContext.companyId),
+              )
+            : eq(table.organizationId, organizationId),
+      }),
+      this.db.query.externalProducts.findMany({
+        where: (table) =>
+          scopedContext
+            ? and(
+                eq(table.organizationId, organizationId),
+                eq(table.companyId, scopedContext.companyId),
+              )
+            : eq(table.organizationId, organizationId),
       }),
     ]);
 
@@ -133,32 +246,68 @@ export class ProductsService {
       }
     }
 
+    const providerByProductId = new Map<string, "mercadolivre">();
+
+    for (const externalProduct of externalProductRows) {
+      if (externalProduct.linkedProductId && !providerByProductId.has(externalProduct.linkedProductId)) {
+        providerByProductId.set(externalProduct.linkedProductId, externalProduct.provider as "mercadolivre");
+      }
+    }
+
     return productRows.map((productRow) => ({
+      catalogGroupKey: null,
+      catalogRole: "standalone",
+      children: [],
+      derivedFromProvider: providerByProductId.get(productRow.id) ?? null,
       ...this.toProductRecord(productRow, productRow.images),
       latestCost: latestCosts.get(productRow.id) ?? null,
       financeDefaults: productRow.financeDefaults
         ? this.toProductFinanceDefaultsRecord(productRow.financeDefaults)
         : null,
+      parentProductId: null,
+      variationLabel: null,
     }));
   }
 
   async createProduct(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     input: ProductFormValues,
   ): Promise<ProductRecord> {
-    const normalizedSku = await this.assertSkuIsUnique(
-      organizationId,
-      input.sku,
-    );
+    if (!this.isTenantContext(contextOrOrganizationId)) {
+      const normalizedSku = await this.assertSkuIsUnique(
+        contextOrOrganizationId,
+        input.sku,
+      );
+      const [created] = await this.withSkuConflictHandling(
+        normalizedSku,
+        async () =>
+          this.db
+            .insert(products)
+            .values({
+              isActive: input.isActive,
+              name: input.name,
+              organizationId: contextOrOrganizationId,
+              sellingPrice: input.sellingPrice,
+              sku: normalizedSku,
+            })
+            .returning(),
+      );
+
+      return this.toProductRecord(created, []);
+    }
+
+    const context = await this.requireScopedCompanyContext(contextOrOrganizationId);
+    const normalizedSku = await this.assertSkuIsUnique(context.companyId, input.sku);
     const [created] = await this.withSkuConflictHandling(
       normalizedSku,
       async () =>
         this.db
           .insert(products)
           .values({
+            companyId: context.companyId,
             isActive: input.isActive,
             name: input.name,
-            organizationId,
+            organizationId: context.organizationId,
             sellingPrice: input.sellingPrice,
             sku: normalizedSku,
           })
@@ -179,17 +328,18 @@ export class ProductsService {
         "SKU is required for manual product creation.",
       );
     }
-    await this.assertSkuIsUnique(context.organizationId, normalizedSku);
-    await this.resolveSingleActiveCompanyTaxRate(context);
+    const scopedContext = await this.requireScopedCompanyContext(context);
+    await this.assertSkuIsUnique(scopedContext.companyId, normalizedSku);
 
     const result = await this.withSkuConflictHandling(normalizedSku, () =>
       this.db.transaction(async (tx) => {
         const [createdProduct] = await tx
           .insert(products)
           .values({
+            companyId: scopedContext.companyId,
             isActive: input.product.isActive,
             name: input.product.name,
-            organizationId: context.organizationId,
+            organizationId: scopedContext.organizationId,
             sellingPrice: input.product.sellingPrice,
             sku: normalizedSku,
           })
@@ -199,11 +349,12 @@ export class ProductsService {
           .insert(productCosts)
           .values({
             amount: input.initialFinance.unitCost,
+            companyId: scopedContext.companyId,
             costType: "base",
             currency: "BRL",
             effectiveFrom: null,
             notes: "Cadastro manual inicial",
-            organizationId: context.organizationId,
+            organizationId: scopedContext.organizationId,
             productId: createdProduct.id,
           })
           .returning();
@@ -225,7 +376,8 @@ export class ProductsService {
     );
 
     await this.financeService.materializeOrganizationMetrics(
-      context.organizationId,
+      scopedContext.organizationId,
+      scopedContext.companyId,
     );
 
     return {
@@ -244,6 +396,7 @@ export class ProductsService {
     imported: number;
     errors: Array<{ row: number; message: string }>;
   }> {
+    const scopedContext = await this.requireScopedCompanyContext(context);
     const wb = read(fileBuffer, { type: "buffer" });
     const ws = wb.Sheets[wb.SheetNames[0]];
 
@@ -296,8 +449,8 @@ export class ProductsService {
       );
     }
 
-    const existingSkus = await this.getOrganizationNormalizedSkuSet(
-      context.organizationId,
+    const existingSkus = await this.getCompanyNormalizedSkuSet(
+      scopedContext.companyId,
     );
 
     const errors: Array<{ row: number; message: string }> = [];
@@ -370,7 +523,7 @@ export class ProductsService {
     }
 
     for (const row of validRows) {
-      await this.createManualProduct(context, row);
+      await this.createManualProduct(scopedContext, row);
     }
 
     return { errors, imported: validRows.length };
@@ -399,27 +552,31 @@ export class ProductsService {
       );
     }
 
-    if (activeCompanies.length > 1) {
-      throw new BadRequestException(
-        "Mantenha apenas uma empresa ativa em /app antes de criar ou importar produtos.",
+    if (context.selectedCompanyId) {
+      const selectedCompany = activeCompanies.find(
+        (company) => company.id === context.selectedCompanyId,
       );
+
+      if (selectedCompany) {
+        return String(selectedCompany.taxRateDefault ?? "0");
+      }
     }
 
     return String(activeCompanies[0]?.taxRateDefault ?? "0");
   }
 
-  private async listOrganizationProductSkus(organizationId: string) {
+  private async listCompanyProductSkus(companyId: string) {
     return this.db.query.products.findMany({
       columns: {
         id: true,
         sku: true,
       },
-      where: (table) => eq(table.organizationId, organizationId),
+      where: (table) => eq(table.companyId, companyId),
     });
   }
 
-  private async getOrganizationNormalizedSkuSet(organizationId: string) {
-    const productRows = await this.listOrganizationProductSkus(organizationId);
+  private async getCompanyNormalizedSkuSet(companyId: string) {
+    const productRows = await this.listCompanyProductSkus(companyId);
 
     return new Set(
       productRows
@@ -429,7 +586,7 @@ export class ProductsService {
   }
 
   private async assertSkuIsUnique(
-    organizationId: string,
+    companyId: string,
     sku: string | null | undefined,
     excludedProductId?: string,
   ) {
@@ -439,7 +596,7 @@ export class ProductsService {
       return null;
     }
 
-    const productRows = await this.listOrganizationProductSkus(organizationId);
+    const productRows = await this.listCompanyProductSkus(companyId);
     const conflictingProduct = productRows.find(
       (product) =>
         product.id !== excludedProductId &&
@@ -504,15 +661,21 @@ export class ProductsService {
   }
 
   async updateProduct(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     productId: string,
     input: ProductUpdateInput,
   ): Promise<ProductRecord> {
-    await this.ensureProductAccess(organizationId, productId);
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
+    await this.ensureProductAccess(organizationId, productId, scopedContext?.companyId);
     const normalizedSku =
       input.sku !== undefined
         ? await this.assertSkuIsUnique(
-            organizationId,
+            scopedContext?.companyId ?? "",
             input.sku,
             productId,
           )
@@ -534,6 +697,7 @@ export class ProductsService {
             and(
               eq(products.id, productId),
               eq(products.organizationId, organizationId),
+              ...(scopedContext ? [eq(products.companyId, scopedContext.companyId)] : []),
             ),
           )
           .returning(),
@@ -543,11 +707,23 @@ export class ProductsService {
   }
 
   async updateCatalogFinance(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     productId: string,
     input: ProductCatalogFinanceUpdateInput,
   ): Promise<ProductListItem> {
-    await this.ensureProductAccess(organizationId, productId);
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
+    await this.ensureProductAccess(organizationId, productId, scopedContext?.companyId);
+    return this.updateCatalogFinanceForGroup(
+      organizationId,
+      scopedContext?.companyId,
+      productId,
+      input,
+    );
 
     const [existingProduct, existingCost] = await Promise.all([
       this.db.query.products.findFirst({
@@ -570,6 +746,7 @@ export class ProductsService {
     if (!existingProduct) {
       throw new NotFoundException("Product not found.");
     }
+    const ensuredExistingProduct = existingProduct!;
 
     await this.db.transaction(async (tx) => {
       if (existingCost) {
@@ -604,14 +781,17 @@ export class ProductsService {
           .returning();
       }
 
-      if (existingProduct.financeDefaults) {
+      if (ensuredExistingProduct.financeDefaults) {
         await tx
           .update(productFinanceDefaults)
           .set({
             packagingCost: input.packagingCost,
           })
           .where(
-            eq(productFinanceDefaults.id, existingProduct.financeDefaults.id),
+            eq(
+              productFinanceDefaults.id,
+              ensuredExistingProduct.financeDefaults.id,
+            ),
           )
           .returning();
       } else {
@@ -626,16 +806,29 @@ export class ProductsService {
       }
     });
 
-    await this.financeService.materializeOrganizationMetrics(organizationId);
+    await this.financeService.materializeOrganizationMetrics(
+      organizationId,
+      ensuredExistingProduct.companyId,
+    );
 
-    return this.getProductListItem(organizationId, productId);
+    return this.getProductListItem(
+      organizationId,
+      productId,
+      ensuredExistingProduct.companyId,
+    );
   }
 
   async deleteProduct(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     productId: string,
   ): Promise<{ id: string }> {
-    await this.ensureProductAccess(organizationId, productId);
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
+    await this.ensureProductAccess(organizationId, productId, scopedContext?.companyId);
 
     await this.db
       .delete(products)
@@ -643,38 +836,78 @@ export class ProductsService {
         and(
           eq(products.id, productId),
           eq(products.organizationId, organizationId),
+          ...(scopedContext ? [eq(products.companyId, scopedContext.companyId)] : []),
         ),
       );
 
-    await this.financeService.materializeOrganizationMetrics(organizationId);
+    if (scopedContext) {
+      await this.financeService.materializeOrganizationMetrics(
+        organizationId,
+        scopedContext.companyId,
+      );
+    }
 
     return { id: productId };
   }
 
-  async listProductCosts(organizationId: string): Promise<ProductCostRecord[]> {
+  async listProductCosts(
+    contextOrOrganizationId: TenantContext | string,
+  ): Promise<ProductCostRecord[]> {
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
     const rows = await this.db.query.productCosts.findMany({
       orderBy: (table) => [desc(table.effectiveFrom), desc(table.createdAt)],
-      where: (table) => eq(table.organizationId, organizationId),
+      where: (table) =>
+        scopedContext
+          ? and(
+              eq(table.organizationId, organizationId),
+              eq(table.companyId, scopedContext.companyId),
+            )
+          : eq(table.organizationId, organizationId),
     });
 
     return rows.map((row) => this.toProductCostRecord(row));
   }
 
   async createProductCost(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     input: ProductCostFormValues,
   ): Promise<ProductCostRecord> {
-    await this.ensureProductAccess(organizationId, input.productId);
+    if (!this.isTenantContext(contextOrOrganizationId)) {
+      await this.ensureProductAccess(contextOrOrganizationId, input.productId);
+
+      const [created] = await this.db
+        .insert(productCosts)
+        .values({
+          amount: input.amount,
+          costType: input.costType,
+          currency: input.currency,
+          effectiveFrom: input.effectiveFrom,
+          notes: input.notes,
+          organizationId: contextOrOrganizationId,
+          productId: input.productId,
+        })
+        .returning();
+
+      return this.toProductCostRecord(created);
+    }
+    const context = await this.requireScopedCompanyContext(contextOrOrganizationId);
+    await this.ensureProductAccess(context.organizationId, input.productId, context.companyId);
 
     const [created] = await this.db
       .insert(productCosts)
       .values({
         amount: input.amount,
+        companyId: context.companyId,
         costType: input.costType,
         currency: input.currency,
         effectiveFrom: input.effectiveFrom,
         notes: input.notes,
-        organizationId,
+        organizationId: context.organizationId,
         productId: input.productId,
       })
       .returning();
@@ -683,14 +916,28 @@ export class ProductsService {
   }
 
   async updateProductCost(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     costId: string,
     input: ProductCostUpdateInput,
   ): Promise<ProductCostRecord> {
-    const existing = await this.ensureProductCostAccess(organizationId, costId);
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
+    const existing = await this.ensureProductCostAccess(
+      organizationId,
+      costId,
+      scopedContext?.companyId,
+    );
 
     if (input.productId) {
-      await this.ensureProductAccess(organizationId, input.productId);
+      await this.ensureProductAccess(
+        organizationId,
+        input.productId,
+        scopedContext?.companyId,
+      );
     }
 
     const [updated] = await this.db
@@ -711,6 +958,7 @@ export class ProductsService {
         and(
           eq(productCosts.id, existing.id),
           eq(productCosts.organizationId, organizationId),
+          ...(scopedContext ? [eq(productCosts.companyId, scopedContext.companyId)] : []),
         ),
       )
       .returning();
@@ -718,21 +966,39 @@ export class ProductsService {
     return this.toProductCostRecord(updated);
   }
 
-  async listAdCosts(organizationId: string): Promise<AdCostRecord[]> {
+  async listAdCosts(
+    contextOrOrganizationId: TenantContext | string,
+  ): Promise<AdCostRecord[]> {
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
     const rows = await this.db.query.adCosts.findMany({
       orderBy: (table) => [desc(table.spentAt), desc(table.createdAt)],
-      where: (table) => eq(table.organizationId, organizationId),
+      where: (table) =>
+        scopedContext
+          ? and(
+              eq(table.organizationId, organizationId),
+              eq(table.companyId, scopedContext.companyId),
+            )
+          : eq(table.organizationId, organizationId),
     });
 
     return rows.map((row) => this.toAdCostRecord(row));
   }
 
   async createAdCost(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     input: AdCostFormValues,
   ): Promise<AdCostRecord> {
+    if (!this.isTenantContext(contextOrOrganizationId)) {
+      throw new BadRequestException("Selected company required.");
+    }
+    const context = await this.requireScopedCompanyContext(contextOrOrganizationId);
     if (input.productId) {
-      await this.ensureProductAccess(organizationId, input.productId);
+      await this.ensureProductAccess(context.organizationId, input.productId, context.companyId);
     }
 
     const [created] = await this.db
@@ -740,9 +1006,10 @@ export class ProductsService {
       .values({
         amount: input.amount,
         channel: input.channel,
+        companyId: context.companyId,
         currency: input.currency,
         notes: input.notes,
-        organizationId,
+        organizationId: context.organizationId,
         productId: input.productId,
         spentAt: input.spentAt,
       })
@@ -752,14 +1019,28 @@ export class ProductsService {
   }
 
   async updateAdCost(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     adCostId: string,
     input: AdCostUpdateInput,
   ): Promise<AdCostRecord> {
-    const existing = await this.ensureAdCostAccess(organizationId, adCostId);
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
+    const existing = await this.ensureAdCostAccess(
+      organizationId,
+      adCostId,
+      scopedContext?.companyId,
+    );
 
     if (input.productId) {
-      await this.ensureProductAccess(organizationId, input.productId);
+      await this.ensureProductAccess(
+        organizationId,
+        input.productId,
+        scopedContext?.companyId,
+      );
     }
 
     const [updated] = await this.db
@@ -778,6 +1059,7 @@ export class ProductsService {
         and(
           eq(adCosts.id, existing.id),
           eq(adCosts.organizationId, organizationId),
+          ...(scopedContext ? [eq(adCosts.companyId, scopedContext.companyId)] : []),
         ),
       )
       .returning();
@@ -786,29 +1068,46 @@ export class ProductsService {
   }
 
   async listManualExpenses(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
   ): Promise<ManualExpenseRecord[]> {
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
     const rows = await this.db.query.manualExpenses.findMany({
       orderBy: (table) => [desc(table.incurredAt), desc(table.createdAt)],
-      where: (table) => eq(table.organizationId, organizationId),
+      where: (table) =>
+        scopedContext
+          ? and(
+              eq(table.organizationId, organizationId),
+              eq(table.companyId, scopedContext.companyId),
+            )
+          : eq(table.organizationId, organizationId),
     });
 
     return rows.map((row) => this.toManualExpenseRecord(row));
   }
 
   async createManualExpense(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     input: ManualExpenseFormValues,
   ): Promise<ManualExpenseRecord> {
+    if (!this.isTenantContext(contextOrOrganizationId)) {
+      throw new BadRequestException("Selected company required.");
+    }
+    const context = await this.requireScopedCompanyContext(contextOrOrganizationId);
     const [created] = await this.db
       .insert(manualExpenses)
       .values({
         amount: input.amount,
         category: input.category,
+        companyId: context.companyId,
         currency: input.currency,
         incurredAt: input.incurredAt,
         notes: input.notes,
-        organizationId,
+        organizationId: context.organizationId,
       })
       .returning();
 
@@ -816,13 +1115,20 @@ export class ProductsService {
   }
 
   async updateManualExpense(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
     expenseId: string,
     input: ManualExpenseUpdateInput,
   ): Promise<ManualExpenseRecord> {
+    const scopedContext = this.isTenantContext(contextOrOrganizationId)
+      ? await this.requireScopedCompanyContext(contextOrOrganizationId)
+      : null;
+    const organizationId = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId.organizationId
+      : contextOrOrganizationId;
     const existing = await this.ensureManualExpenseAccess(
       organizationId,
       expenseId,
+      scopedContext?.companyId,
     );
 
     const [updated] = await this.db
@@ -840,6 +1146,7 @@ export class ProductsService {
         and(
           eq(manualExpenses.id, existing.id),
           eq(manualExpenses.organizationId, organizationId),
+          ...(scopedContext ? [eq(manualExpenses.companyId, scopedContext.companyId)] : []),
         ),
       )
       .returning();
@@ -848,14 +1155,20 @@ export class ProductsService {
   }
 
   async getCatalogSnapshot(
-    organizationId: string,
+    contextOrOrganizationId: TenantContext | string,
   ): Promise<ProductCatalogSnapshot> {
+    const context = this.isTenantContext(contextOrOrganizationId)
+      ? contextOrOrganizationId
+      : {
+          organizationId: contextOrOrganizationId,
+          userId: "",
+        };
     const [productsList, costRows, adCostRows, expenseRows] = await Promise.all(
       [
-        this.listProducts(organizationId),
-        this.listProductCosts(organizationId),
-        this.listAdCosts(organizationId),
-        this.listManualExpenses(organizationId),
+        this.listProducts(context),
+        this.listProductCosts(context),
+        this.listAdCosts(context),
+        this.listManualExpenses(context),
       ],
     );
 
@@ -873,6 +1186,14 @@ export class ProductsService {
     query: AnalyticsQueryInput = {},
   ): Promise<ProductAnalyticsSnapshot> {
     const scope = await this.resolveAnalyticsScope(context, query);
+    const scopedContext =
+      scope.companyId !== null
+        ? {
+            ...context,
+            selectedCompanyId: scope.companyId,
+            companyId: scope.companyId,
+          }
+        : null;
     const [
       productsList,
       costRows,
@@ -882,16 +1203,50 @@ export class ProductsService {
       financeSnapshot,
       mercadoLivreSyncStatus,
     ] = await Promise.all([
-      this.listProducts(context.organizationId),
-      this.listProductCosts(context.organizationId),
-      this.listAdCosts(context.organizationId),
-      this.listManualExpenses(context.organizationId),
+      this.listProducts(scopedContext ?? context.organizationId),
+      this.listProductCosts(scopedContext ?? context.organizationId),
+      this.listAdCosts(scopedContext ?? context.organizationId),
+      this.listManualExpenses(scopedContext ?? context.organizationId),
       this.db.query.products.findMany({
         orderBy: (table) => [desc(table.createdAt)],
-        where: (table) => eq(table.organizationId, context.organizationId),
+        where: (table) =>
+          scopedContext
+            ? and(
+                eq(table.organizationId, context.organizationId),
+                eq(table.companyId, scopedContext.companyId),
+              )
+            : eq(table.organizationId, context.organizationId),
       }),
-      this.financeService.buildFinanceSnapshot(context.organizationId),
-      this.syncService.getStatus(context.organizationId, "mercadolivre"),
+      scopedContext
+        ? this.financeService.buildFinanceSnapshot(
+            context.organizationId,
+            scopedContext.companyId,
+          )
+        : this.financeService.buildFinanceSnapshot(
+            context.organizationId,
+            context.organizationId,
+          ),
+      scopedContext
+        ? this.syncService.getStatus(
+            context.organizationId,
+            scopedContext.companyId,
+            "mercadolivre",
+          )
+        : Promise.resolve({
+            activeRun: null,
+            availability: {
+              canRun: false,
+              currentWindowKey: null,
+              currentWindowLabel: null,
+              currentWindowSlot: null,
+              lastSuccessfulSyncAt: null,
+              message: "Selected company required.",
+              nextAvailableAt: null,
+              provider: "mercadolivre",
+              reason: "provider_disconnected",
+            },
+            lastCompletedRun: null,
+          }),
     ]);
     const monthlyPerformanceRows =
       await this.readMonthlyPerformanceForAnalytics(context, scope);
@@ -913,6 +1268,7 @@ export class ProductsService {
       await Promise.all(
         (["mercadolivre", "shopee"] as const).map((providerSlug) =>
           listSyncedProductsReadModel({
+            companyId: scope.companyId ?? undefined,
             db: this.db,
             organizationId: context.organizationId,
             productsList: rawProductRows,
@@ -992,7 +1348,7 @@ export class ProductsService {
       monthlyPerformanceRows: monthlyPerformanceDisplayRows,
       productCosts: costRows,
       productRows,
-      products: productsList,
+      products: this.buildCatalogProducts(productsList, syncedProducts),
       scope,
       syncedProducts,
     };
@@ -1096,13 +1452,20 @@ export class ProductsService {
     const activeCompanyCount = companies.filter(
       (company) => company.isActive,
     ).length;
-    const activeCompany = companies.find((company) => company.isActive);
+    const selectedCompany =
+      (context.selectedCompanyId
+        ? companies.find(
+            (company) =>
+              company.id === context.selectedCompanyId && company.isActive,
+          )
+        : null) ??
+      companies.find((company) => company.isActive);
 
     return {
-      companyId: null,
+      companyId: selectedCompany?.id ?? null,
       companyRequired: activeCompanyCount === 0,
       referenceMonth,
-      taxRateDefault: String(activeCompany?.taxRateDefault ?? "0"),
+      taxRateDefault: String(selectedCompany?.taxRateDefault ?? "0"),
     };
   }
 
@@ -1199,7 +1562,440 @@ export class ProductsService {
     };
   }
 
-  private async ensureProductAccess(organizationId: string, productId: string) {
+  private async updateCatalogFinanceForGroup(
+    organizationId: string,
+    companyId: string | undefined,
+    productId: string,
+    input: ProductCatalogFinanceUpdateInput,
+  ): Promise<ProductListItem> {
+    const rawProducts = await this.db.query.products.findMany({
+      orderBy: (table) => [desc(table.createdAt)],
+      where: (table) =>
+        and(
+          eq(table.organizationId, organizationId),
+          ...(companyId ? [eq(table.companyId, companyId)] : []),
+        ),
+    });
+    const syncedProducts = await listSyncedProductsReadModel({
+      db: this.db,
+      companyId,
+      organizationId,
+      productsList: rawProducts,
+      providerSlug: "mercadolivre",
+    });
+    const catalogGroups = this.buildMercadoLivreCatalogGroups(syncedProducts);
+    const targetGroup = [...catalogGroups.values()].find(
+      (group) =>
+        group.parentProductId === productId ||
+        group.childProductIds.includes(productId),
+    );
+    if (!targetGroup) {
+      const [existingProduct, existingCost] = await Promise.all([
+        this.db.query.products.findFirst({
+          where: (table) =>
+            and(
+              eq(table.id, productId),
+              eq(table.organizationId, organizationId),
+              ...(companyId ? [eq(table.companyId, companyId)] : []),
+            ),
+          with: {
+            financeDefaults: true,
+          },
+        }),
+        this.db.query.productCosts.findFirst({
+          orderBy: (table) => [desc(table.effectiveFrom), desc(table.createdAt)],
+          where: (table) =>
+            and(
+              eq(table.organizationId, organizationId),
+              ...(companyId ? [eq(table.companyId, companyId)] : []),
+              eq(table.productId, productId),
+            ),
+        }),
+      ]);
+
+      if (!existingProduct) {
+        throw new NotFoundException("Product not found.");
+      }
+
+      await this.db.transaction(async (tx) => {
+        if (existingCost) {
+          await tx
+            .update(productCosts)
+            .set({
+              amount: input.unitCost,
+              costType: existingCost.costType,
+              currency: existingCost.currency,
+              effectiveFrom: existingCost.effectiveFrom,
+              notes: "Atualizado pelo catálogo",
+            })
+            .where(
+              and(
+                eq(productCosts.id, existingCost.id),
+                eq(productCosts.organizationId, organizationId),
+                ...(companyId ? [eq(productCosts.companyId, companyId)] : []),
+              ),
+            )
+            .returning();
+        } else {
+          await tx
+            .insert(productCosts)
+            .values({
+              amount: input.unitCost,
+              companyId: existingProduct.companyId,
+              costType: "base",
+              currency: "BRL",
+              effectiveFrom: null,
+              notes: "Atualizado pelo catálogo",
+              organizationId,
+              productId,
+            })
+            .returning();
+        }
+
+        if (existingProduct.financeDefaults) {
+          await tx
+            .update(productFinanceDefaults)
+            .set({
+              packagingCost: input.packagingCost,
+            })
+            .where(
+              eq(productFinanceDefaults.id, existingProduct.financeDefaults.id),
+            )
+            .returning();
+        } else {
+          await tx
+            .insert(productFinanceDefaults)
+            .values({
+              advertisingCost: "0",
+              packagingCost: input.packagingCost,
+              productId,
+            })
+            .returning();
+        }
+      });
+
+      if (companyId) {
+        await this.financeService.materializeOrganizationMetrics(
+          organizationId,
+          companyId,
+        );
+      }
+
+      return this.getProductListItem(organizationId, productId, companyId);
+    }
+    const targetProductIds = Array.from(
+      new Set([targetGroup.parentProductId, ...targetGroup.childProductIds]),
+    );
+
+    const [existingProducts, existingCosts] = await Promise.all([
+      this.db.query.products.findMany({
+        where: (table) =>
+          and(
+            eq(table.organizationId, organizationId),
+            ...(companyId ? [eq(table.companyId, companyId)] : []),
+            inArray(table.id, targetProductIds),
+          ),
+        with: {
+          financeDefaults: true,
+        },
+      }),
+      this.db.query.productCosts.findMany({
+        orderBy: (table) => [desc(table.effectiveFrom), desc(table.createdAt)],
+        where: (table) =>
+          and(
+            eq(table.organizationId, organizationId),
+            ...(companyId ? [eq(table.companyId, companyId)] : []),
+            inArray(table.productId, targetProductIds),
+          ),
+      }),
+    ]);
+    const existingProductById = new Map(
+      (existingProducts ?? []).map((product) => [product.id, product] as const),
+    );
+    const existingCostByProductId = new Map<string, ProductCost>();
+
+    for (const cost of existingCosts ?? []) {
+      if (!existingCostByProductId.has(cost.productId)) {
+        existingCostByProductId.set(cost.productId, cost);
+      }
+    }
+
+    await this.db.transaction(async (tx) => {
+      for (const targetId of targetProductIds) {
+        const existingProduct = existingProductById.get(targetId);
+        if (!existingProduct) {
+          continue;
+        }
+
+        const existingCost = existingCostByProductId.get(targetId) ?? null;
+        if (existingCost) {
+          await tx
+            .update(productCosts)
+            .set({
+              amount: input.unitCost,
+              costType: existingCost.costType,
+              currency: existingCost.currency,
+              effectiveFrom: existingCost.effectiveFrom,
+              notes: "Atualizado pelo catálogo",
+            })
+            .where(
+              and(
+                eq(productCosts.id, existingCost.id),
+                eq(productCosts.organizationId, organizationId),
+                ...(companyId ? [eq(productCosts.companyId, companyId)] : []),
+              ),
+            )
+            .returning();
+        } else {
+          await tx
+            .insert(productCosts)
+            .values({
+              amount: input.unitCost,
+              companyId: existingProduct.companyId,
+              costType: "base",
+              currency: "BRL",
+              effectiveFrom: null,
+              notes: "Atualizado pelo catálogo",
+              organizationId,
+              productId: targetId,
+            })
+            .returning();
+        }
+
+        if (existingProduct.financeDefaults) {
+          await tx
+            .update(productFinanceDefaults)
+            .set({
+              packagingCost: input.packagingCost,
+            })
+            .where(
+              eq(productFinanceDefaults.id, existingProduct.financeDefaults.id),
+            )
+            .returning();
+        } else {
+          await tx
+            .insert(productFinanceDefaults)
+            .values({
+              advertisingCost: "0",
+              packagingCost: input.packagingCost,
+              productId: targetId,
+            })
+            .returning();
+        }
+      }
+    });
+
+    if (companyId) {
+      await this.financeService.materializeOrganizationMetrics(
+        organizationId,
+        companyId,
+      );
+    }
+
+    const updatedProducts = await this.listProducts(
+      companyId
+        ? {
+            organizationId,
+            selectedCompanyId: companyId,
+            userId: "",
+          }
+        : organizationId,
+    );
+    const updatedRawProducts = await this.db.query.products.findMany({
+      orderBy: (table) => [desc(table.createdAt)],
+      where: (table) =>
+        and(
+          eq(table.organizationId, organizationId),
+          ...(companyId ? [eq(table.companyId, companyId)] : []),
+        ),
+    });
+    const updatedSyncedProducts = await listSyncedProductsReadModel({
+      db: this.db,
+      companyId,
+      organizationId,
+      productsList: updatedRawProducts,
+      providerSlug: "mercadolivre",
+    });
+    const groupedProducts = this.buildCatalogProducts(
+      updatedProducts,
+      updatedSyncedProducts.length > 0 ? updatedSyncedProducts : syncedProducts,
+    );
+    const result = groupedProducts.find(
+      (product) => product.id === (targetGroup?.parentProductId ?? productId),
+    );
+
+    if (!result) {
+      throw new NotFoundException("Product not found.");
+    }
+
+    return result;
+  }
+
+  private buildMercadoLivreCatalogGroups(
+    syncedProducts: SyncedProductRecord[],
+  ): Map<string, MercadoLivreCatalogGroup> {
+    const groupedEntries = new Map<
+      string,
+      Array<{
+        externalProductId: string;
+        productId: string;
+        variationLabel: string | null;
+      }>
+    >();
+
+    for (const syncedProduct of syncedProducts) {
+      const productId = syncedProduct.linkedProduct?.id ?? null;
+      if (syncedProduct.provider !== "mercadolivre" || !productId) {
+        continue;
+      }
+
+      const itemId = extractMercadoLivreItemId(syncedProduct.externalProductId);
+      if (!itemId) {
+        continue;
+      }
+
+      const entries = groupedEntries.get(itemId) ?? [];
+      entries.push({
+        externalProductId: syncedProduct.externalProductId,
+        productId,
+        variationLabel: syncedProduct.externalProductId.includes(":")
+          ? syncedProduct.title?.trim() || null
+          : null,
+      });
+      groupedEntries.set(itemId, entries);
+    }
+
+    const groups = new Map<string, MercadoLivreCatalogGroup>();
+
+    for (const [itemId, entries] of groupedEntries.entries()) {
+      const dedupedEntries = entries.filter(
+        (entry, index, allEntries) =>
+          allEntries.findIndex(
+            (candidate) => candidate.productId === entry.productId,
+          ) === index,
+      );
+
+      if (dedupedEntries.length < 2) {
+        continue;
+      }
+
+      const explicitParent =
+        dedupedEntries.find((entry) => !entry.externalProductId.includes(":")) ??
+        dedupedEntries[0];
+      const childEntries = dedupedEntries.filter(
+        (entry) => entry.productId !== explicitParent!.productId,
+      );
+      const variationLabelByProductId = new Map<string, string | null>();
+
+      for (const entry of dedupedEntries) {
+        variationLabelByProductId.set(entry.productId, entry.variationLabel);
+      }
+
+      groups.set(toCatalogGroupKey(itemId), {
+        childProductIds: childEntries.map((entry) => entry.productId),
+        groupKey: toCatalogGroupKey(itemId),
+        parentProductId: explicitParent!.productId,
+        variationLabelByProductId,
+      });
+    }
+
+    return groups;
+  }
+
+  private toCatalogProductListItem(input: {
+    base: ProductListItem;
+    catalogGroupKey?: string | null;
+    catalogRole: ProductListItem["catalogRole"];
+    children?: ProductListItem[];
+    derivedFromProvider?: ProductListItem["derivedFromProvider"];
+    parentProductId?: string | null;
+    variationLabel?: string | null;
+  }): ProductListItem {
+    return {
+      ...input.base,
+      catalogGroupKey: input.catalogGroupKey ?? null,
+      catalogRole: input.catalogRole,
+      children: input.children ?? [],
+      derivedFromProvider: input.derivedFromProvider ?? null,
+      parentProductId:
+        input.parentProductId === undefined ? null : input.parentProductId,
+      variationLabel:
+        input.variationLabel === undefined ? null : input.variationLabel,
+    };
+  }
+
+  private buildCatalogProducts(
+    productsList: ProductListItem[],
+    syncedProducts: SyncedProductRecord[],
+  ): ProductListItem[] {
+    const groups = this.buildMercadoLivreCatalogGroups(syncedProducts);
+    const parentGroupByProductId = new Map<string, MercadoLivreCatalogGroup>();
+    const groupedProductIds = new Set<string>();
+
+    for (const group of groups.values()) {
+      parentGroupByProductId.set(group.parentProductId, group);
+      for (const childProductId of group.childProductIds) {
+        groupedProductIds.add(childProductId);
+      }
+    }
+
+    const productById = new Map(
+      productsList.map((product) => [product.id, product] as const),
+    );
+
+    return productsList.flatMap((product) => {
+      const group = parentGroupByProductId.get(product.id);
+
+      if (group) {
+        const children = group.childProductIds
+          .map((childProductId) => productById.get(childProductId) ?? null)
+          .filter((childProduct): childProduct is ProductListItem => childProduct !== null)
+          .map((childProduct) =>
+            this.toCatalogProductListItem({
+              base: childProduct,
+              catalogGroupKey: group.groupKey,
+              catalogRole: "child",
+              children: [],
+              derivedFromProvider: "mercadolivre",
+              parentProductId: group.parentProductId,
+              variationLabel:
+                group.variationLabelByProductId.get(childProduct.id) ?? null,
+            }),
+          );
+
+        return [
+          this.toCatalogProductListItem({
+            base: product,
+            catalogGroupKey: group.groupKey,
+            catalogRole: "parent",
+            children,
+            derivedFromProvider: "mercadolivre",
+            parentProductId: null,
+            variationLabel: null,
+          }),
+        ];
+      }
+
+      if (groupedProductIds.has(product.id)) {
+        return [];
+      }
+
+      return [
+        this.toCatalogProductListItem({
+          base: product,
+          catalogRole: "standalone",
+          children: [],
+          derivedFromProvider: product.derivedFromProvider,
+        }),
+      ];
+    });
+  }
+
+  private async ensureProductAccess(
+    organizationId: string,
+    productId: string,
+    companyId?: string,
+  ) {
     const product = await this.db.query.products.findFirst({
       where: (table) => eq(table.id, productId),
     });
@@ -1208,7 +2004,10 @@ export class ProductsService {
       throw new NotFoundException("Product not found.");
     }
 
-    if (product.organizationId !== organizationId) {
+    if (
+      product.organizationId !== organizationId ||
+      (companyId && product.companyId !== companyId)
+    ) {
       throw new ForbiddenException(
         "You cannot access products from another organization.",
       );
@@ -1220,6 +2019,7 @@ export class ProductsService {
   private async ensureProductCostAccess(
     organizationId: string,
     costId: string,
+    companyId?: string,
   ) {
     const cost = await this.db.query.productCosts.findFirst({
       where: (table) => eq(table.id, costId),
@@ -1229,7 +2029,10 @@ export class ProductsService {
       throw new NotFoundException("Product cost not found.");
     }
 
-    if (cost.organizationId !== organizationId) {
+    if (
+      cost.organizationId !== organizationId ||
+      (companyId && cost.companyId !== companyId)
+    ) {
       throw new ForbiddenException(
         "You cannot access product costs from another organization.",
       );
@@ -1238,7 +2041,11 @@ export class ProductsService {
     return cost;
   }
 
-  private async ensureAdCostAccess(organizationId: string, adCostId: string) {
+  private async ensureAdCostAccess(
+    organizationId: string,
+    adCostId: string,
+    companyId?: string,
+  ) {
     const adCost = await this.db.query.adCosts.findFirst({
       where: (table) => eq(table.id, adCostId),
     });
@@ -1247,7 +2054,10 @@ export class ProductsService {
       throw new NotFoundException("Ad cost not found.");
     }
 
-    if (adCost.organizationId !== organizationId) {
+    if (
+      adCost.organizationId !== organizationId ||
+      (companyId && adCost.companyId !== companyId)
+    ) {
       throw new ForbiddenException(
         "You cannot access ad costs from another organization.",
       );
@@ -1259,6 +2069,7 @@ export class ProductsService {
   private async ensureManualExpenseAccess(
     organizationId: string,
     expenseId: string,
+    companyId?: string,
   ) {
     const expense = await this.db.query.manualExpenses.findFirst({
       where: (table) => eq(table.id, expenseId),
@@ -1268,7 +2079,10 @@ export class ProductsService {
       throw new NotFoundException("Manual expense not found.");
     }
 
-    if (expense.organizationId !== organizationId) {
+    if (
+      expense.organizationId !== organizationId ||
+      (companyId && expense.companyId !== companyId)
+    ) {
       throw new ForbiddenException(
         "You cannot access expenses from another organization.",
       );
@@ -1280,11 +2094,16 @@ export class ProductsService {
   private async getProductListItem(
     organizationId: string,
     productId: string,
+    companyId?: string,
   ): Promise<ProductListItem> {
-    const [productRow, productCostRows] = await Promise.all([
+    const [productRow, productCostRows, externalProductRows] = await Promise.all([
       this.db.query.products.findFirst({
         where: (table) =>
-          and(eq(table.id, productId), eq(table.organizationId, organizationId)),
+          and(
+            eq(table.id, productId),
+            eq(table.organizationId, organizationId),
+            ...(companyId ? [eq(table.companyId, companyId)] : []),
+          ),
         with: {
           financeDefaults: true,
           images: {
@@ -1297,7 +2116,16 @@ export class ProductsService {
         where: (table) =>
           and(
             eq(table.organizationId, organizationId),
+            ...(companyId ? [eq(table.companyId, companyId)] : []),
             eq(table.productId, productId),
+          ),
+      }),
+      this.db.query.externalProducts.findMany({
+        where: (table) =>
+          and(
+            eq(table.organizationId, organizationId),
+            ...(companyId ? [eq(table.companyId, companyId)] : []),
+            eq(table.linkedProductId, productId),
           ),
       }),
     ]);
@@ -1306,8 +2134,17 @@ export class ProductsService {
       throw new NotFoundException("Product not found.");
     }
 
+    const derivedFromProvider =
+      externalProductRows.length > 0
+        ? (externalProductRows[0].provider as "mercadolivre")
+        : null;
+
     return {
+      catalogGroupKey: null,
+      catalogRole: "standalone",
+      children: [],
       ...this.toProductRecord(productRow, productRow.images),
+      derivedFromProvider,
       latestCost:
         productCostRows.length > 0
           ? this.toProductCostRecord(productCostRows[0]!)
@@ -1315,6 +2152,8 @@ export class ProductsService {
       financeDefaults: productRow.financeDefaults
         ? this.toProductFinanceDefaultsRecord(productRow.financeDefaults)
         : null,
+      parentProductId: null,
+      variationLabel: null,
     };
   }
 
@@ -1339,6 +2178,7 @@ export class ProductsService {
       createdAt: row.createdAt.toISOString(),
       id: row.id,
       images,
+      companyId: row.companyId,
       isActive: row.isActive,
       name: row.name,
       organizationId: row.organizationId,
@@ -1355,6 +2195,7 @@ export class ProductsService {
       createdAt: row.createdAt.toISOString(),
       currency: row.currency,
       effectiveFrom: row.effectiveFrom,
+      companyId: row.companyId,
       id: row.id,
       notes: row.notes,
       organizationId: row.organizationId,
@@ -1380,6 +2221,7 @@ export class ProductsService {
       channel: row.channel,
       createdAt: row.createdAt.toISOString(),
       currency: row.currency,
+      companyId: row.companyId,
       id: row.id,
       notes: row.notes,
       organizationId: row.organizationId,
@@ -1393,6 +2235,7 @@ export class ProductsService {
     return {
       amount: String(row.amount),
       category: row.category,
+      companyId: row.companyId,
       createdAt: row.createdAt.toISOString(),
       currency: row.currency,
       id: row.id,

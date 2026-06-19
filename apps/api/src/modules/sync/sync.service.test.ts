@@ -106,6 +106,7 @@ describe("SyncService", () => {
       id: "conn_123",
       lastSyncedAt: new Date("2026-05-01T12:05:00.000Z"),
       metadata: {},
+      companyId: "company_123",
       organizationId: "org_123",
       provider: "mercadolivre",
       refreshToken: "refresh",
@@ -122,6 +123,7 @@ describe("SyncService", () => {
         id: "sync_123",
         marketplaceConnectionId: "conn_123",
         metadata: {},
+        companyId: "company_123",
         organizationId: "org_123",
         provider: "mercadolivre",
         startedAt: new Date("2026-05-01T12:01:00.000Z"),
@@ -130,7 +132,7 @@ describe("SyncService", () => {
         windowKey: "2026-05-01:morning",
       });
 
-    const status = await service.getStatus("org_123", "mercadolivre");
+    const status = await service.getStatus("org_123", "company_123", "mercadolivre");
 
     expect(status.availability.canRun).toBe(true);
     expect(status.availability.reason).toBe("available");
@@ -160,6 +162,7 @@ describe("SyncService", () => {
       id: "conn_123",
       lastSyncedAt: new Date("2026-05-01T12:05:00.000Z"),
       metadata: {},
+      companyId: "company_123",
       organizationId: "org_123",
       provider: "shopee",
       refreshToken: "refresh",
@@ -176,6 +179,7 @@ describe("SyncService", () => {
         id: "sync_123",
         marketplaceConnectionId: "conn_123",
         metadata: {},
+        companyId: "company_123",
         organizationId: "org_123",
         provider: "shopee",
         startedAt: new Date("2026-05-01T12:01:00.000Z"),
@@ -184,7 +188,7 @@ describe("SyncService", () => {
         windowKey: "2026-05-01:morning",
       });
 
-    const status = await service.getStatus("org_123", "shopee");
+    const status = await service.getStatus("org_123", "company_123", "shopee");
 
     expect(status.availability.canRun).toBe(true);
     expect(status.availability.reason).toBe("available");
@@ -213,6 +217,7 @@ describe("SyncService", () => {
       id: "conn_123",
       lastSyncedAt: new Date("2026-05-01T12:05:00.000Z"),
       metadata: {},
+      companyId: "company_123",
       organizationId: "org_123",
       provider: "shopee",
       refreshToken: "refresh",
@@ -229,6 +234,7 @@ describe("SyncService", () => {
         id: "sync_123",
         marketplaceConnectionId: "conn_123",
         metadata: {},
+        companyId: "company_123",
         organizationId: "org_123",
         provider: "shopee",
         startedAt: new Date("2026-05-01T12:01:00.000Z"),
@@ -237,7 +243,7 @@ describe("SyncService", () => {
         windowKey: "2026-05-01:morning",
       });
 
-    const status = await service.getStatus("org_123", "shopee");
+    const status = await service.getStatus("org_123", "company_123", "shopee");
 
     expect(status.availability.canRun).toBe(true);
     expect(status.availability.reason).toBe("available");
@@ -315,6 +321,7 @@ describe("SyncService", () => {
       id: "conn_123",
       lastSyncedAt: null,
       metadata: {},
+      companyId: "company_123",
       organizationId: "org_123",
       provider: "mercadolivre",
       refreshToken: "refresh",
@@ -333,6 +340,7 @@ describe("SyncService", () => {
         finishedAt: new Date("2026-05-01T12:35:00.000Z"),
         id: "sync_123",
         marketplaceConnectionId: "conn_123",
+        companyId: "company_123",
         metadata: {
           importCounts: {
             fees: 1,
@@ -360,6 +368,7 @@ describe("SyncService", () => {
           id: "sync_123",
           marketplaceConnectionId: "conn_123",
           metadata: {},
+          companyId: "company_123",
           organizationId: "org_123",
           provider: "mercadolivre",
           startedAt: null,
@@ -375,6 +384,7 @@ describe("SyncService", () => {
       finishedAt: new Date("2026-05-01T12:35:00.000Z"),
       id: "sync_123",
       marketplaceConnectionId: "conn_123",
+      companyId: "company_123",
       metadata: {
         importCounts: {
           fees: 1,
@@ -391,16 +401,20 @@ describe("SyncService", () => {
       windowKey: null,
     });
 
-    const response = await service.runSync("org_123", "user_123", "mercadolivre");
+    const response = await service.runSync("org_123", "company_123", "user_123", "mercadolivre");
 
     expect(provider.syncOrders).toHaveBeenCalledTimes(1);
     expect(syncPerformanceMaterializer.materializeForSync).toHaveBeenCalledWith({
+      companyId: "company_123",
       organizationId: "org_123",
       providerSlug: "mercadolivre",
       syncRunId: "sync_123",
       userId: "user_123",
     });
-    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledWith("org_123");
+    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledWith(
+      "org_123",
+      "company_123",
+    );
     expect(response.run.counts.orders).toBe(1);
     expect(response.run.origin).toBe("manual");
     expect(response.availability.reason).toBe("available");
@@ -429,6 +443,7 @@ describe("SyncService", () => {
       id: "conn_1",
       lastSyncedAt: null,
       metadata: {},
+      companyId: "company_123",
       organizationId: "org_123",
       provider: "shopee",
       refreshToken: "refresh-token",
@@ -438,7 +453,7 @@ describe("SyncService", () => {
     });
     db.query.syncRuns.findFirst.mockResolvedValue(null);
 
-    const status = await service.getStatus("org_123", "shopee");
+    const status = await service.getStatus("org_123", "company_123", "shopee");
 
     expect(status.availability.canRun).toBe(true);
     expect(status.availability.reason).toBe("available");
@@ -484,6 +499,7 @@ describe("SyncService", () => {
       id: "conn_123",
       lastSyncedAt: null,
       metadata: {},
+      companyId: "company_123",
       organizationId: "org_123",
       provider: "mercadolivre",
       refreshToken: "refresh",
@@ -501,6 +517,7 @@ describe("SyncService", () => {
           id: "sync_123",
           marketplaceConnectionId: "conn_123",
           metadata: {},
+          companyId: "company_123",
           organizationId: "org_123",
           provider: "mercadolivre",
           startedAt: null,
@@ -517,6 +534,7 @@ describe("SyncService", () => {
       id: "sync_123",
       marketplaceConnectionId: "conn_123",
       metadata: {},
+      companyId: "company_123",
       organizationId: "org_123",
       provider: "mercadolivre",
       startedAt: new Date("2026-05-01T12:31:00.000Z"),
@@ -525,7 +543,9 @@ describe("SyncService", () => {
       windowKey: "2026-05-01:morning",
     });
 
-    await expect(service.runSync("org_123", "user_123", "mercadolivre")).rejects.toBeInstanceOf(
+    await expect(
+      service.runSync("org_123", "company_123", "user_123", "mercadolivre"),
+    ).rejects.toBeInstanceOf(
       BadRequestException,
     );
     expect(financeService.materializeOrganizationMetrics).not.toHaveBeenCalled();
@@ -558,6 +578,7 @@ describe("SyncService", () => {
         id: "conn_123",
         lastSyncedAt: null,
         metadata: {},
+        companyId: "company_123",
         organizationId: "org_123",
         provider: "mercadolivre",
         refreshToken: "refresh",
@@ -572,6 +593,7 @@ describe("SyncService", () => {
         id: "conn_123",
         lastSyncedAt: null,
         metadata: {},
+        companyId: "company_123",
         organizationId: "org_123",
         provider: "mercadolivre",
         refreshToken: "refresh",
@@ -586,6 +608,7 @@ describe("SyncService", () => {
       id: "sync_processing",
       marketplaceConnectionId: "conn_123",
       metadata: {},
+      companyId: "company_123",
       organizationId: "org_123",
       provider: "mercadolivre",
       startedAt: new Date("2026-05-01T12:01:00.000Z"),
@@ -613,5 +636,245 @@ describe("SyncService", () => {
     );
 
     expect(db.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("links variant order items to matching external products during persistence", async () => {
+    const { db, service } = createService();
+    const insertedOrderItems: Array<Record<string, unknown>> = [];
+    const externalProductRows = [{ id: "ext_prod_variant" }];
+    const externalOrderRows = [{ id: "ext_order_1" }];
+
+    db.insert = vi.fn().mockImplementation(() => ({
+      values: vi.fn().mockImplementation((value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalProductId" in value &&
+          (value as { externalProductId?: unknown }).externalProductId === "MLB123:456"
+        ) {
+          return {
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue(externalProductRows),
+            }),
+          };
+        }
+
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalOrderId" in value &&
+          (value as { externalOrderId?: unknown }).externalOrderId === "order_1"
+        ) {
+          return {
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue(externalOrderRows),
+            }),
+          };
+        }
+
+        insertedOrderItems.push(value as Record<string, unknown>);
+        return {
+          returning: vi.fn().mockResolvedValue([]),
+        };
+      }),
+    }));
+
+    await (
+      service as unknown as {
+        persistSyncResult: (input: {
+          companyId: string;
+          connection: { id: string };
+          organizationId: string;
+          providerSlug: "mercadolivre";
+          syncResult: {
+            orders: Array<{
+              currency: string;
+              externalOrderId: string;
+              fees: unknown[];
+              items: Array<{
+                externalProductId: string;
+                metadata: { variationId: string };
+                quantity: number;
+                totalPrice: string;
+                unitPrice: string;
+                variationId: string;
+              }>;
+              metadata: {};
+              orderedAt: string;
+              status: string;
+              totalAmount: string;
+            }>;
+            products: Array<{
+              externalProductId: string;
+              metadata: { itemId: string; variationId: string };
+              sku: string;
+              title: string;
+            }>;
+          };
+          syncRunId: string;
+        }) => Promise<unknown>;
+      }
+    ).persistSyncResult({
+      companyId: "company_1",
+      connection: { id: "conn_1" },
+      organizationId: "org_1",
+      providerSlug: "mercadolivre",
+      syncResult: {
+        orders: [
+          {
+            currency: "BRL",
+            externalOrderId: "order_1",
+            fees: [],
+            items: [
+              {
+                externalProductId: "MLB123:456",
+                metadata: { variationId: "456" },
+                quantity: 1,
+                totalPrice: "100.00",
+                unitPrice: "100.00",
+                variationId: "456",
+              },
+            ],
+            metadata: {},
+            orderedAt: "2026-05-01T10:00:00.000Z",
+            status: "paid",
+            totalAmount: "100.00",
+          },
+        ],
+        products: [
+          {
+            externalProductId: "MLB123:456",
+            metadata: { itemId: "MLB123", variationId: "456" },
+            sku: "SKU-RED",
+            title: "Camiseta Vermelha",
+          },
+        ],
+      },
+      syncRunId: "sync_1",
+    });
+
+    expect(insertedOrderItems).toEqual([
+      expect.objectContaining({
+        externalOrderId: "ext_order_1",
+        externalProductId: "ext_prod_variant",
+        quantity: 1,
+      }),
+    ]);
+  });
+
+  it("preserves previously imported fallback sku when order sync payload has null sku", async () => {
+    const { db, service } = createService();
+    let externalProductConflictSet: Record<string, unknown> | null = null;
+
+    db.insert = vi.fn().mockImplementation(() => ({
+      values: vi.fn().mockImplementation((value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalProductId" in value &&
+          (value as { externalProductId?: unknown }).externalProductId === "MLB123:456"
+        ) {
+          return {
+            onConflictDoUpdate: vi.fn().mockImplementation((payload) => {
+              externalProductConflictSet = (payload as { set: Record<string, unknown> }).set;
+              return {
+                returning: vi.fn().mockResolvedValue([{ id: "ext_prod_variant" }]),
+              };
+            }),
+          };
+        }
+
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalOrderId" in value &&
+          (value as { externalOrderId?: unknown }).externalOrderId === "order_1"
+        ) {
+          return {
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: "ext_order_1" }]),
+            }),
+          };
+        }
+
+        return {
+          returning: vi.fn().mockResolvedValue([]),
+        };
+      }),
+    }));
+
+    await (
+      service as unknown as {
+        persistSyncResult: (input: {
+          companyId: string;
+          connection: { id: string };
+          organizationId: string;
+          providerSlug: "mercadolivre";
+          syncResult: {
+            orders: Array<{
+              currency: string;
+              externalOrderId: string;
+              fees: unknown[];
+              items: Array<{
+                externalProductId: string;
+                quantity: number;
+                totalPrice: string;
+                unitPrice: string;
+              }>;
+              metadata: {};
+              orderedAt: string;
+              status: string;
+              totalAmount: string;
+            }>;
+            products: Array<{
+              externalProductId: string;
+              metadata: { itemId: string; variationId: string };
+              sku: null;
+              title: null;
+            }>;
+          };
+          syncRunId: string;
+        }) => Promise<unknown>;
+      }
+    ).persistSyncResult({
+      companyId: "company_1",
+      connection: { id: "conn_1" },
+      organizationId: "org_1",
+      providerSlug: "mercadolivre",
+      syncResult: {
+        orders: [
+          {
+            currency: "BRL",
+            externalOrderId: "order_1",
+            fees: [],
+            items: [
+              {
+                externalProductId: "MLB123:456",
+                quantity: 1,
+                totalPrice: "100.00",
+                unitPrice: "100.00",
+              },
+            ],
+            metadata: {},
+            orderedAt: "2026-05-01T10:00:00.000Z",
+            status: "paid",
+            totalAmount: "100.00",
+          },
+        ],
+        products: [
+          {
+            externalProductId: "MLB123:456",
+            metadata: { itemId: "MLB123", variationId: "456" },
+            sku: null,
+            title: null,
+          },
+        ],
+      },
+      syncRunId: "sync_1",
+    });
+
+    expect(externalProductConflictSet).not.toBeNull();
+    expect(externalProductConflictSet).not.toHaveProperty("sku");
+    expect(externalProductConflictSet).not.toHaveProperty("title");
   });
 });

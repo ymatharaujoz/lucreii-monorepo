@@ -53,6 +53,9 @@ function createService({
 } = {}) {
   const db = {
     query: {
+      companies: {
+        findFirst: vi.fn(),
+      },
       sessions: {
         findFirst: vi.fn().mockResolvedValue(persistedSession ?? null),
       },
@@ -106,6 +109,7 @@ describe("AuthService", () => {
     expect(organizationProvisioningService.findDefaultOrganization).toHaveBeenCalledWith(
       "user_123",
     );
+    expect(db.query.companies.findFirst).not.toHaveBeenCalled();
     expect(context).toEqual({
       organization: {
         id: "org_123",
@@ -113,6 +117,7 @@ describe("AuthService", () => {
         role: "owner",
         slug: "existing-org",
       },
+      selectedCompanyId: null,
       session: {
         expiresAt: new Date("2099-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -151,6 +156,7 @@ describe("AuthService", () => {
 
     expect(context).toEqual({
       organization: null,
+      selectedCompanyId: null,
       session: {
         expiresAt: new Date("2099-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -163,5 +169,60 @@ describe("AuthService", () => {
         name: "Mateus",
       },
     });
+  });
+
+  it("hydrates selected company from the internal company header when the user has access", async () => {
+    const { db, service } = createService({
+      persistedSession: {
+        expiresAt: "2099-04-22T00:00:00.000Z",
+        id: "session_123",
+        user: {
+          email: "owner@lucreii.local",
+          emailVerified: true,
+          id: "user_123",
+          image: null,
+          name: "Mateus",
+        },
+      },
+    });
+    db.query.companies.findFirst.mockResolvedValue({
+      id: "company_123",
+    });
+
+    const context = await service.resolveRequestContext({
+      headers: new Headers({
+        cookie: "lucreii_api_session=session_token_123",
+        "x-lucreii-company-id": " company_123 ",
+      }),
+    });
+
+    expect(db.query.companies.findFirst).toHaveBeenCalled();
+    expect(context?.selectedCompanyId).toBe("company_123");
+  });
+
+  it("ignores selected company header when the company is not accessible", async () => {
+    const { db, service } = createService({
+      persistedSession: {
+        expiresAt: "2099-04-22T00:00:00.000Z",
+        id: "session_123",
+        user: {
+          email: "owner@lucreii.local",
+          emailVerified: true,
+          id: "user_123",
+          image: null,
+          name: "Mateus",
+        },
+      },
+    });
+    db.query.companies.findFirst.mockResolvedValue(null);
+
+    const context = await service.resolveRequestContext({
+      headers: {
+        cookie: "lucreii_api_session=session_token_123",
+        "x-lucreii-company-id": "company_missing",
+      },
+    });
+
+    expect(context?.selectedCompanyId).toBeNull();
   });
 });

@@ -18,6 +18,7 @@ function createService() {
   const db = {
     query: {
       companies: {
+        findFirst: vi.fn(),
         findMany: vi.fn(),
       },
       externalOrders: {
@@ -341,6 +342,176 @@ describe("SyncPerformanceMaterializerService", () => {
         shippingFee: "0.00",
       }),
     );
+  });
+
+  it("applies return markers per item variation before falling back to order-level markers", async () => {
+    const { db, service } = createService();
+    const insertedRows: Array<Record<string, unknown>> = [];
+
+    db.query.companies.findMany.mockResolvedValue([{ id: "company_1" }]);
+    db.query.products.findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        financeDefaults: null,
+        id: "product_red",
+        isActive: true,
+        name: "Camiseta Vermelha",
+        organizationId: "org_1",
+        productCosts: [],
+        sellingPrice: "120.00",
+        sku: "SKU-RED",
+        updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+      },
+      {
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        financeDefaults: null,
+        id: "product_blue",
+        isActive: true,
+        name: "Camiseta Azul",
+        organizationId: "org_1",
+        productCosts: [],
+        sellingPrice: "120.00",
+        sku: "SKU-BLUE",
+        updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+      },
+    ]);
+    db.query.externalOrders.findMany.mockResolvedValue([
+      {
+        fees: [],
+        items: [
+          {
+            externalProduct: { sku: "SKU-RED" },
+            metadata: { returnQuantity: 1 },
+            quantity: 1,
+            totalPrice: "100.00",
+          },
+          {
+            externalProduct: { sku: "SKU-BLUE" },
+            metadata: {},
+            quantity: 1,
+            totalPrice: "120.00",
+          },
+        ],
+        metadata: {
+          tags: [],
+        },
+        orderedAt: "2026-05-16T12:00:00.000Z",
+        status: "paid",
+      },
+    ]);
+    db.transaction.mockImplementation(
+      async (callback: (tx: { insert: ReturnType<typeof createTxInsertMock> }) => Promise<unknown>) =>
+        callback({
+          insert: createTxInsertMock(insertedRows),
+        }),
+    );
+
+    await service.materializeForSync({
+      organizationId: "org_1",
+      providerSlug: "mercadolivre",
+      syncRunId: "sync_1",
+      userId: "user_1",
+    });
+
+    expect(insertedRows).toHaveLength(2);
+    expect(insertedRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          returnsQuantity: 1,
+          salesQuantity: 1,
+          sku: "SKU-RED",
+        }),
+        expect.objectContaining({
+          returnsQuantity: 0,
+          salesQuantity: 1,
+          sku: "SKU-BLUE",
+        }),
+      ]),
+    );
+  });
+
+  it("materializes by linked product when order item sku is missing", async () => {
+    const { db, service } = createService();
+    const insertedRows: Array<Record<string, unknown>> = [];
+
+    db.query.companies.findFirst.mockResolvedValue({
+      id: "company_1",
+      isActive: true,
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+    db.query.products.findMany.mockResolvedValue([
+      {
+        companyId: "company_1",
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        financeDefaults: null,
+        id: "product_blue",
+        isActive: true,
+        name: "Camiseta Azul",
+        organizationId: "org_1",
+        productCosts: [],
+        sellingPrice: "120.00",
+        sku: "SKU-BLUE",
+        updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+      },
+      {
+        companyId: "company_2",
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        financeDefaults: null,
+        id: "product_other_company",
+        isActive: true,
+        name: "Camiseta Azul Outra Empresa",
+        organizationId: "org_1",
+        productCosts: [],
+        sellingPrice: "120.00",
+        sku: "SKU-BLUE",
+        updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+      },
+    ]);
+    db.query.externalOrders.findMany.mockResolvedValue([
+      {
+        fees: [],
+        items: [
+          {
+            externalProduct: {
+              linkedProductId: "product_blue",
+              sku: null,
+            },
+            metadata: {},
+            quantity: 1,
+            totalPrice: "120.00",
+          },
+        ],
+        metadata: {
+          tags: [],
+        },
+        orderedAt: "2026-05-16T12:00:00.000Z",
+        status: "paid",
+      },
+    ]);
+    db.transaction.mockImplementation(
+      async (callback: (tx: { insert: ReturnType<typeof createTxInsertMock> }) => Promise<unknown>) =>
+        callback({
+          insert: createTxInsertMock(insertedRows),
+        }),
+    );
+
+    await service.materializeForSync({
+      companyId: "company_1",
+      organizationId: "org_1",
+      providerSlug: "mercadolivre",
+      syncRunId: "sync_1",
+      userId: "user_1",
+    });
+
+    expect(insertedRows).toEqual([
+      expect.objectContaining({
+        companyId: "company_1",
+        productName: "Camiseta Azul",
+        salesQuantity: 1,
+        sku: "SKU-BLUE",
+      }),
+    ]);
   });
 
   it("does not materialize unpaid Shopee orders as sales", async () => {

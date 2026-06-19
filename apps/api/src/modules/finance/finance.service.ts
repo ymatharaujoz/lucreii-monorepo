@@ -108,12 +108,17 @@ export class FinanceService {
 
   async buildFinanceSnapshot(
     organizationId: string,
+    companyId: string,
     provider?: IntegrationProviderSlug,
   ): Promise<FinanceSnapshot> {
     const [productRows, orderRows, adCostRows, expenseRows, externalProductRows] = await Promise.all([
       this.db.query.products.findMany({
         orderBy: (table) => [desc(table.createdAt)],
-        where: (table) => eq(table.organizationId, organizationId),
+        where: (table) =>
+          and(
+            eq(table.organizationId, organizationId),
+            eq(table.companyId, companyId),
+          ),
         with: {
           productCosts: {
             orderBy: (table) => [desc(table.effectiveFrom), desc(table.createdAt)],
@@ -124,8 +129,15 @@ export class FinanceService {
         orderBy: (table) => [desc(table.orderedAt), desc(table.createdAt)],
         where: (table) =>
           provider
-            ? and(eq(table.organizationId, organizationId), eq(table.provider, provider))
-            : eq(table.organizationId, organizationId),
+            ? and(
+                eq(table.organizationId, organizationId),
+                eq(table.companyId, companyId),
+                eq(table.provider, provider),
+              )
+            : and(
+                eq(table.organizationId, organizationId),
+                eq(table.companyId, companyId),
+              ),
         with: {
           fees: true,
           items: true,
@@ -135,14 +147,25 @@ export class FinanceService {
         orderBy: (table) => [desc(table.spentAt), desc(table.createdAt)],
         where: (table) =>
           provider
-            ? and(eq(table.organizationId, organizationId), eq(table.channel, provider))
-            : eq(table.organizationId, organizationId),
+            ? and(
+                eq(table.organizationId, organizationId),
+                eq(table.companyId, companyId),
+                eq(table.channel, provider),
+              )
+            : and(
+                eq(table.organizationId, organizationId),
+                eq(table.companyId, companyId),
+              ),
       }),
       this.db.query.manualExpenses.findMany({
         orderBy: (table) => [desc(table.incurredAt), desc(table.createdAt)],
-        where: (table) => eq(table.organizationId, organizationId),
+        where: (table) =>
+          and(
+            eq(table.organizationId, organizationId),
+            eq(table.companyId, companyId),
+          ),
       }),
-      this.readExternalProductsForFinance(organizationId),
+      this.readExternalProductsForFinance(organizationId, companyId),
     ]);
 
     const products = productRows.map((row) => this.toFinancialProduct(row));
@@ -179,9 +202,14 @@ export class FinanceService {
 
   async buildDashboardReadModel(
     organizationId: string,
+    companyId: string,
     provider?: IntegrationProviderSlug,
   ): Promise<DashboardReadModel> {
-    const snapshot = await this.buildFinanceSnapshot(organizationId, provider);
+    const snapshot = await this.buildFinanceSnapshot(
+      organizationId,
+      companyId,
+      provider,
+    );
     const overview = buildFinanceOverview(snapshot);
     const productProfitability = buildProductProfitabilityMetrics(snapshot);
 
@@ -230,29 +258,40 @@ export class FinanceService {
 
   async readSummaryMetrics(
     organizationId: string,
+    companyId: string,
     provider?: IntegrationProviderSlug,
   ): Promise<DashboardSummaryMetrics> {
-    return (await this.buildDashboardReadModel(organizationId, provider)).summary;
+    return (await this.buildDashboardReadModel(organizationId, companyId, provider))
+      .summary;
   }
 
-  async readDailyMetrics(organizationId: string): Promise<DashboardDailyMetricPoint[]> {
-    return (await this.buildDashboardReadModel(organizationId)).daily;
+  async readDailyMetrics(
+    organizationId: string,
+    companyId: string,
+  ): Promise<DashboardDailyMetricPoint[]> {
+    return (await this.buildDashboardReadModel(organizationId, companyId)).daily;
   }
 
   async readProductProfitability(
     organizationId: string,
+    companyId: string,
   ): Promise<DashboardProductProfitabilityRow[]> {
-    return (await this.buildDashboardReadModel(organizationId)).productProfitability;
+    return (await this.buildDashboardReadModel(organizationId, companyId))
+      .productProfitability;
   }
 
   async readChannelProfitability(
     organizationId: string,
+    companyId: string,
   ): Promise<DashboardChannelProfitabilityRow[]> {
-    return (await this.buildDashboardReadModel(organizationId)).channels;
+    return (await this.buildDashboardReadModel(organizationId, companyId)).channels;
   }
 
-  async materializeOrganizationMetrics(organizationId: string): Promise<DashboardReadModel> {
-    const readModel = await this.buildDashboardReadModel(organizationId);
+  async materializeOrganizationMetrics(
+    organizationId: string,
+    companyId: string,
+  ): Promise<DashboardReadModel> {
+    const readModel = await this.buildDashboardReadModel(organizationId, companyId);
 
     await this.db.transaction(async (tx) => {
       await tx.delete(dailyMetrics).where(eq(dailyMetrics.organizationId, organizationId));
@@ -324,6 +363,7 @@ export class FinanceService {
 
   private async readExternalProductsForFinance(
     organizationId: string,
+    companyId: string,
   ): Promise<SnapshotExternalProductRow[]> {
     try {
       return await this.db
@@ -333,7 +373,12 @@ export class FinanceService {
           sku: externalProducts.sku,
         })
         .from(externalProducts)
-        .where(eq(externalProducts.organizationId, organizationId));
+        .where(
+          and(
+            eq(externalProducts.organizationId, organizationId),
+            eq(externalProducts.companyId, companyId),
+          ),
+        );
     } catch (error) {
       if (!isMissingExternalProductReviewColumns(error)) {
         throw error;
@@ -345,7 +390,12 @@ export class FinanceService {
           sku: externalProducts.sku,
         })
         .from(externalProducts)
-        .where(eq(externalProducts.organizationId, organizationId));
+        .where(
+          and(
+            eq(externalProducts.organizationId, organizationId),
+            eq(externalProducts.companyId, companyId),
+          ),
+        );
 
       return legacyRows.map((row) => ({
         ...row,

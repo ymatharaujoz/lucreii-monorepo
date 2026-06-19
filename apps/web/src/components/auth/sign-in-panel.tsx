@@ -219,7 +219,7 @@ export function SignInPanel({ initialErrorMessage = null }: SignInPanelProps) {
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex gap-3 rounded-xl border border-error/20 bg-error-soft px-4 py-3 text-left text-sm text-error"
+              className="flex items-center gap-3 rounded-xl border border-error/20 bg-error-soft px-4 py-3 text-sm text-error"
               role="alert"
             >
               <svg
@@ -236,7 +236,7 @@ export function SignInPanel({ initialErrorMessage = null }: SignInPanelProps) {
                   d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                 />
               </svg>
-              <span>{authErrorMessage}</span>
+              <span className="flex-1 text-center">{authErrorMessage}</span>
             </motion.div>
           )}
 

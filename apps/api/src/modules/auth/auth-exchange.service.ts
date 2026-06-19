@@ -135,16 +135,17 @@ export class AuthExchangeService {
             expiresAt: toDate(persistedSession.expiresAt),
             id: persistedSession.id,
           },
-          user: {
-            email: persistedSession.user.email,
-            emailVerified: persistedSession.user.emailVerified,
-            id: persistedSession.user.id,
-            image: persistedSession.user.image,
-            name: persistedSession.user.name,
-          },
-        }),
-        remoteSessionToken: record.remoteSessionToken,
-      };
+      user: {
+        email: persistedSession.user.email,
+        emailVerified: persistedSession.user.emailVerified,
+        id: persistedSession.user.id,
+        image: persistedSession.user.image,
+        name: persistedSession.user.name,
+      },
+      selectedCompanyId: null,
+    }),
+    remoteSessionToken: record.remoteSessionToken,
+  };
     });
   }
 
@@ -156,6 +157,7 @@ export class AuthExchangeService {
     return {
       onboardingStatus: authContext.organization ? "complete" : "organization_missing",
       organization: authContext.organization,
+      selectedCompanyId: authContext.selectedCompanyId ?? null,
       session: {
         expiresAt: authContext.session.expiresAt.toISOString(),
         id: authContext.session.id,

@@ -30,6 +30,7 @@ describe("GET /auth/complete", () => {
                   role: "owner",
                   slug: "lucreii",
                 },
+                selectedCompanyId: "company_123",
                 session: {
                   expiresAt: "2026-12-31T00:00:00.000Z",
                   id: "session_123",
@@ -70,6 +71,7 @@ describe("GET /auth/complete", () => {
     expect(createSignedWebAuthSessionMock).toHaveBeenCalledWith(
       {
         authState: expect.objectContaining({
+          selectedCompanyId: "company_123",
           session: {
             expiresAt: "2026-12-31T00:00:00.000Z",
             id: "session_123",

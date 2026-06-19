@@ -9,7 +9,7 @@ import type { DashboardBusinessStatus } from "../types/dashboard";
 import { getGreeting } from "../utils/formatters";
 
 interface DashboardHeaderProps {
-  organizationName: string;
+  companyName: string;
   businessStatus?: DashboardBusinessStatus;
 }
 
@@ -29,7 +29,7 @@ const statusConfig = {
 };
 
 export function DashboardHeader({
-  organizationName,
+  companyName,
   businessStatus = "healthy",
 }: DashboardHeaderProps) {
   const greeting = useMemo(() => getGreeting(), []);
@@ -41,12 +41,12 @@ export function DashboardHeader({
         <div className="space-y-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold leading-none tracking-tight text-foreground sm:text-3xl">
-              {greeting}, {organizationName}
+              {greeting}, {companyName}
             </h1>
             <StatusBadge status={currentStatus.badge.status} label={currentStatus.badge.label} />
           </div>
           <p className="text-sm text-muted-foreground">
-            Visão consolidada do seu negócio.
+            Visão consolidada do seu negócio nos principais marketplaces.
           </p>
         </div>
       </div>

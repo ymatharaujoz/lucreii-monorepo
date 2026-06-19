@@ -27,6 +27,7 @@ export default async function ProductsLayout({
 
   const companies = await readServerCompanies();
   const activeCompanyCount = companies.filter((company) => company.isActive).length;
+  const selectedCompany = companies.find((company) => company.isActive && company.isSelected);
 
   if (!hasActiveCompany(companies)) {
     redirect("/app/onboarding");
@@ -35,6 +36,7 @@ export default async function ProductsLayout({
   return (
     <ProductsShell
       activeCompanyCount={activeCompanyCount}
+      selectedCompanyId={selectedCompany?.id ?? null}
       organizationName={authState.organization?.name ?? authState.user.name}
     >
       {children}

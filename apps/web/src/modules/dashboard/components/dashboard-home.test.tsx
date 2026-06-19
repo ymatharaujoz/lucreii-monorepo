@@ -154,7 +154,7 @@ describe("DashboardHome", () => {
     });
 
     const view = mount(
-      <DashboardHome activeCompany={null} organizationName="Lucreii" />,
+      <DashboardHome activeCompany={null} companyName="Lucreii" />,
     );
 
     click(

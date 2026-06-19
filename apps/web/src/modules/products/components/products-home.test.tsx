@@ -48,8 +48,42 @@ vi.mock("../hooks/use-product-data", () => ({
     data: {
       products: [
         {
+          catalogGroupKey: "meli:MLB123",
+          catalogRole: "parent",
           coverImageUrl: "https://example.com/product.png",
           createdAt: "2026-06-17T10:00:00.000Z",
+          children: [
+            {
+              catalogGroupKey: "meli:MLB123",
+              catalogRole: "child",
+              coverImageUrl: "https://example.com/product-variation.png",
+              createdAt: "2026-06-17T10:00:00.000Z",
+              children: [],
+              derivedFromProvider: "mercadolivre",
+              financeDefaults: null,
+              id: "product_2",
+              images: [
+                {
+                  externalIdentifier: null,
+                  id: "image_2",
+                  position: 0,
+                  productId: "product_2",
+                  source: "manual",
+                  url: "https://example.com/product-variation.png",
+                },
+              ],
+              isActive: true,
+              latestCost: null,
+              name: "Kit Mercado Livre - Azul",
+              organizationId: "org_1",
+              parentProductId: "product_1",
+              sellingPrice: "149.90",
+              sku: "ML-001-AZ",
+              updatedAt: "2026-06-17T10:00:00.000Z",
+              variationLabel: "Cor: Azul",
+            },
+          ],
+          derivedFromProvider: "mercadolivre",
           financeDefaults: null,
           id: "product_1",
           images: [
@@ -66,9 +100,11 @@ vi.mock("../hooks/use-product-data", () => ({
           latestCost: null,
           name: "Kit Mercado Livre",
           organizationId: "org_1",
+          parentProductId: null,
           sellingPrice: "149.90",
           sku: "ML-001",
           updatedAt: "2026-06-17T10:00:00.000Z",
+          variationLabel: null,
         },
       ],
       scope: {
@@ -160,7 +196,7 @@ function renderProductsHome() {
 
   return mount(
     <QueryClientProvider client={queryClient}>
-      <ProductsHome organizationName="Org" view="catalog" />
+      <ProductsHome view="catalog" />
     </QueryClientProvider>,
   );
 }
@@ -183,6 +219,7 @@ describe("ProductsHome catalog modal", () => {
 
     expect(document.body.textContent).toContain("Produtos do cat");
     expect(document.body.textContent).toContain("Kit Mercado Livre");
+    expect(document.body.textContent).not.toContain("Kit Mercado Livre - Azul");
     expect(
       document.querySelector('[aria-label="Produto sem custos cadastrados"]'),
     ).not.toBeNull();
@@ -255,6 +292,52 @@ describe("ProductsHome catalog modal", () => {
 
     expect(globalThis.confirm).toHaveBeenCalled();
     expect(apiClientMocks.delete).toHaveBeenCalledWith("/products/product_1");
+
+    view.unmount();
+  });
+
+  it("expands parent rows to show child variations and routes child edits back to parent", async () => {
+    const view = renderProductsHome();
+
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.getAttribute("aria-label")?.includes("Expandir"),
+      )!,
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(document.body.textContent).toContain("Kit Mercado Livre - Azul");
+
+    click(document.querySelector('[data-testid="child-product-row"]')!);
+
+    expect(document.body.textContent).toContain("Informações Financeiras");
+    expect(document.body.textContent).toContain(
+      "Edite custo e embalagem no produto principal",
+    );
+
+    const unitCostInput = document.querySelector('input[name="unitCost"]') as HTMLInputElement;
+    const packagingInput = document.querySelector('input[name="packagingCost"]') as HTMLInputElement;
+    expect(unitCostInput.disabled).toBe(true);
+    expect(packagingInput.disabled).toBe(true);
+
+    expect(
+      Array.from(document.querySelectorAll("button")).some((button) =>
+        button.textContent?.includes("Excluir produto"),
+      ),
+    ).toBe(false);
+
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Ir para produto principal"),
+      )!,
+    );
+
+    expect(document.body.textContent).toContain(
+      "Salvar aqui sobrescreve custo e embalagem de todas as varia",
+    );
 
     view.unmount();
   });

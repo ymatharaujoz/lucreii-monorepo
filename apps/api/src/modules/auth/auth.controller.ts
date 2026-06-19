@@ -28,6 +28,7 @@ export class AuthStateController {
       data: {
         ...authContext,
         onboardingStatus: authContext.organization ? "complete" : "organization_missing",
+        selectedCompanyId: authContext.selectedCompanyId ?? null,
         session: {
           ...authContext.session,
           expiresAt: authContext.session.expiresAt.toISOString(),

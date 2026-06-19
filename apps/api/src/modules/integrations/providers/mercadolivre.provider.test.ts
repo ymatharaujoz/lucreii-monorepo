@@ -280,6 +280,7 @@ describe("MercadoLivreProvider", () => {
                     },
                     quantity: 1,
                     sale_fee: 12,
+                    variation_id: 456,
                     unit_price: 100,
                   },
                 ],
@@ -332,6 +333,7 @@ describe("MercadoLivreProvider", () => {
     const result = await provider.syncOrders({
       connection: {
         accessToken: "token_123",
+        companyId: "company_1",
         createdAt: new Date("2026-05-14T10:00:00.000Z"),
         externalAccountId: "123456",
         id: "conn_1",
@@ -355,6 +357,14 @@ describe("MercadoLivreProvider", () => {
       }),
       expect.objectContaining({ amount: "3.00", feeType: "fixed_fee" }),
       expect.objectContaining({ amount: "9.00", feeType: "shipping_cost" }),
+    ]);
+    expect(result.orders[0]?.items).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB123:456",
+        quantity: 1,
+        sku: "SKU-1",
+        variationId: "456",
+      }),
     ]);
   });
 
@@ -524,13 +534,25 @@ describe("MercadoLivreProvider", () => {
 
     expect(result).toEqual([
       {
+        externalProductId: "MLB1",
+        images: [
+          "https://http2.mlstatic.com/red.jpg",
+          "https://http2.mlstatic.com/blue.jpg",
+        ],
+        isActive: true,
+        metadata: { itemId: "MLB1", variationId: null },
+        sellingPrice: "59.90",
+        sku: "SKU-001",
+        title: "Camiseta",
+      },
+      {
         externalProductId: "MLB1:101",
         images: ["https://http2.mlstatic.com/red.jpg"],
         isActive: true,
         metadata: { itemId: "MLB1", variationId: "101" },
         sellingPrice: "64.90",
         sku: "SKU-001-RED-M",
-        title: "Camiseta - Cor: Vermelho, Tamanho: M",
+        title: "Cor: Vermelho, Tamanho: M",
       },
       {
         externalProductId: "MLB1:102",
@@ -539,7 +561,7 @@ describe("MercadoLivreProvider", () => {
         metadata: { itemId: "MLB1", variationId: "102" },
         sellingPrice: "69.90",
         sku: "ML-MLB1-102",
-        title: "Camiseta - Cor: Azul",
+        title: "Cor: Azul",
       },
       {
         externalProductId: "MLB2",

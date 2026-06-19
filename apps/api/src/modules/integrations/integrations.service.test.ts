@@ -106,7 +106,7 @@ describe("IntegrationsService", () => {
       },
     ]);
 
-    await expect(service.listConnections("org_1")).resolves.toEqual([
+    await expect(service.listConnections("org_1", "company_1")).resolves.toEqual([
       expect.objectContaining({
         connectedAccountLabel: "SELLER123",
         displayName: "Mercado Livre",
@@ -195,6 +195,7 @@ describe("IntegrationsService", () => {
 
     await expect(
       service.importMercadoLivreCatalog({
+        companyId: "company-1",
         organizationId: "org-1",
         userId: "user-1",
       }),
@@ -207,6 +208,7 @@ describe("IntegrationsService", () => {
       updated: 0,
     });
     expect(productsService.assertCatalogImportAllowed).toHaveBeenCalledWith({
+      companyId: "company-1",
       organizationId: "org-1",
       userId: "user-1",
     });
@@ -245,6 +247,7 @@ describe("IntegrationsService", () => {
     db.query.productImages.findMany.mockResolvedValue([]);
 
     const result = await service.importMercadoLivreCatalog({
+      companyId: "company-1",
       organizationId: "org-1",
       userId: "user-1",
     });
@@ -324,6 +327,7 @@ describe("IntegrationsService", () => {
     );
 
     const result = await service.importMercadoLivreCatalog({
+      companyId: "company-1",
       organizationId: "org-1",
       userId: "user-1",
     });
@@ -339,7 +343,7 @@ describe("IntegrationsService", () => {
     const { service } = createService();
 
     await expect(
-      service.createConnectUrl("org_1", "mercadolivre"),
+      service.createConnectUrl("org_1", "company_1", "mercadolivre"),
     ).resolves.toEqual(
       expect.objectContaining({
         authorizationUrl: expect.stringContaining(
@@ -356,6 +360,7 @@ describe("IntegrationsService", () => {
 
     const expiredOrMissingVerifierState = createSignedIntegrationState(
       {
+        companyId: "company_1",
         organizationId: "org_1",
         provider: "mercadolivre",
       },
@@ -492,7 +497,7 @@ describe("IntegrationsService", () => {
     ]);
 
     await expect(
-      service.listSyncedProducts("org_1", "mercadolivre"),
+      service.listSyncedProducts("org_1", "company_1", "mercadolivre"),
     ).resolves.toEqual([
       expect.objectContaining({
         externalProductId: "MLB-1",
@@ -512,6 +517,56 @@ describe("IntegrationsService", () => {
       }),
     ]);
     expect(db.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not auto-link synced products to products from another company", async () => {
+    const { db, service } = createService();
+    db.update = createUpdateMock();
+
+    db.select
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockResolvedValue([
+              {
+                createdAt: new Date("2026-05-01T10:00:00.000Z"),
+                externalProductId: "MLB-1",
+                id: "external_1",
+                linkedProductId: null,
+                marketplaceConnectionId: "conn_1",
+                metadata: {},
+                organizationId: "org_1",
+                companyId: "company_1",
+                provider: "mercadolivre",
+                reviewStatus: "unreviewed",
+                sku: "SKU-42",
+                title: "Kit Mercado Livre",
+                updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+              },
+            ]),
+          }),
+        }),
+      })
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          leftJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+    db.query.products.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.listSyncedProducts("org_1", "company_1", "mercadolivre"),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB-1",
+        linkedProduct: null,
+        reviewStatus: "unreviewed",
+      }),
+    ]);
+    expect(db.query.products.findMany).toHaveBeenCalledOnce();
+    expect(db.update).not.toHaveBeenCalled();
   });
 
   it("keeps synced products in review when more than one internal product shares the same SKU", async () => {
@@ -572,7 +627,7 @@ describe("IntegrationsService", () => {
     ]);
 
     await expect(
-      service.listSyncedProducts("org_1", "mercadolivre"),
+      service.listSyncedProducts("org_1", "company_1", "mercadolivre"),
     ).resolves.toEqual([
       expect.objectContaining({
         externalProductId: "MLB-2",
@@ -623,8 +678,61 @@ describe("IntegrationsService", () => {
     });
 
     await expect(
-      service.importSyncedProduct("org_1", "mercadolivre", "MLB-1"),
+      service.importSyncedProduct("org_1", "company_1", "mercadolivre", "MLB-1"),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("creates synced products with the selected company scope", async () => {
+    const { db, productsService, service } = createService();
+
+    db.query.externalProducts.findFirst.mockResolvedValue({
+      createdAt: new Date("2026-05-01T10:00:00.000Z"),
+      externalProductId: "MLB-2",
+      id: "external_2",
+      linkedProductId: null,
+      marketplaceConnectionId: "conn_1",
+      metadata: {},
+      orderItems: [],
+      organizationId: "org_1",
+      provider: "mercadolivre",
+      reviewStatus: "unreviewed",
+      sku: "SKU-99",
+      title: "Produto novo",
+      updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+    });
+    productsService.createProduct.mockResolvedValue({
+      id: "product_2",
+    });
+    vi.spyOn(service as never, "buildSyncedProductActionResult").mockResolvedValue({
+      message: "Produto sincronizado importado para o catálogo",
+    } as never);
+    db.update = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+
+    await expect(
+      service.importSyncedProduct("org_1", "company_1", "mercadolivre", "MLB-2"),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        message: "Produto sincronizado importado para o catálogo",
+      }),
+    );
+    expect(productsService.createProduct).toHaveBeenCalledWith(
+      {
+        companyId: "company_1",
+        organizationId: "org_1",
+        selectedCompanyId: "company_1",
+        userId: "",
+      },
+      {
+        isActive: true,
+        name: "Produto novo",
+        sellingPrice: "0.00",
+        sku: "SKU-99",
+      },
+    );
   });
 
   it("disconnects and normalizes the updated provider card", async () => {
@@ -675,7 +783,7 @@ describe("IntegrationsService", () => {
       .mockImplementationOnce(createUpdateMock());
 
     await expect(
-      service.disconnectProvider("org_1", "mercadolivre"),
+      service.disconnectProvider("org_1", "company_1", "mercadolivre"),
     ).resolves.toEqual(
       expect.objectContaining({
         disconnectAvailable: false,

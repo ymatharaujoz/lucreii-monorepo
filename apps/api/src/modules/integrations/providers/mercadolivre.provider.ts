@@ -120,7 +120,10 @@ type MercadoLivreOrderItemResponse = {
     seller_sku?: string;
     title?: string;
   };
+  quantity_cancelled?: number;
+  quantity_refunded?: number;
   quantity?: number;
+  variation_id?: number | string;
   sale_fee?: number;
   unit_price?: number;
 };
@@ -201,6 +204,44 @@ function readMercadoLivreAttributeSku(
   }
 
   return null;
+}
+
+function buildMercadoLivreVariationLabel(
+  attributeCombinations: Array<{
+    name?: string;
+    value_name?: string;
+  }> | undefined,
+) {
+  const labels = (attributeCombinations ?? [])
+    .map((attribute) => {
+      const name = attribute.name?.trim();
+      const value = attribute.value_name?.trim();
+      return name && value ? `${name}: ${value}` : null;
+    })
+    .filter((value): value is string => value !== null);
+
+  return labels.length > 0 ? labels.join(", ") : null;
+}
+
+function toOptionalString(value: number | string | null | undefined) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function resolveMercadoLivreReturnQuantity(item: MercadoLivreOrderItemResponse) {
+  const candidates = [item.quantity_refunded, item.quantity_cancelled];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "number" && Number.isFinite(candidate) && candidate > 0) {
+      return Math.max(0, Math.trunc(candidate));
+    }
+  }
+
+  return 0;
 }
 
 export class MercadoLivreProvider implements IntegrationProvider {
@@ -450,6 +491,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
             externalProductId: item.externalProductId ?? "",
             metadata: {
               source: "mercadolivre-order-item",
+              variationId: item.variationId ?? null,
             },
             sku: item.sku ?? null,
             title: item.title ?? null,
@@ -575,68 +617,62 @@ export class MercadoLivreProvider implements IntegrationProvider {
       itemImages.map((picture) => [picture.id, picture.url] as const),
     );
     const variations = item.variations ?? [];
+    const itemTitle = item.title?.trim() || `Produto Mercado Livre ${itemId}`;
+
+    const products: IntegrationCatalogProduct[] = [
+      {
+        externalProductId: itemId,
+        images: itemImages.map((picture) => picture.url),
+        isActive: item.status === "active",
+        metadata: { itemId, variationId: null },
+        sellingPrice: toDecimalString(item.price),
+        sku: this.resolveCatalogSku({
+          fallbackSku: `ML-${itemId}`,
+          attributes: item.attributes,
+          sellerCustomField: item.seller_custom_field,
+          sellerSku: item.seller_sku,
+        }),
+        title: itemTitle,
+      },
+    ];
 
     if (variations.length === 0) {
-      return [
-        {
-          externalProductId: itemId,
-          images: itemImages.map((picture) => picture.url),
-          isActive: item.status === "active",
-          metadata: { itemId, variationId: null },
-          sellingPrice: toDecimalString(item.price),
-          sku: this.resolveCatalogSku({
-            fallbackSku: `ML-${itemId}`,
-            attributes: item.attributes,
-            sellerCustomField: item.seller_custom_field,
-            sellerSku: item.seller_sku,
-          }),
-          title: item.title?.trim() || `Produto Mercado Livre ${itemId}`,
-        },
-      ];
+      return products;
     }
 
-    return variations.flatMap((variation) => {
+    for (const variation of variations) {
       if (variation.id === undefined || variation.id === null) {
-        return [];
+        continue;
       }
 
       const variationId = String(variation.id);
-      const attributes = (variation.attribute_combinations ?? [])
-        .map((attribute) => {
-          const name = attribute.name?.trim();
-          const value = attribute.value_name?.trim();
-          return name && value ? `${name}: ${value}` : null;
-        })
-        .filter((value): value is string => value !== null);
+      const variationLabel = buildMercadoLivreVariationLabel(
+        variation.attribute_combinations,
+      );
       const images = (variation.picture_ids ?? [])
         .map((pictureId) => itemImageById.get(pictureId))
         .filter((url): url is string => Boolean(url));
 
-      return [
-        {
-          externalProductId: `${itemId}:${variationId}`,
-          images:
-            images.length > 0
-              ? images
-              : itemImages.map((picture) => picture.url),
-          isActive: item.status === "active",
-          metadata: { itemId, variationId },
-          sellingPrice: toDecimalString(variation.price ?? item.price),
-          sku: this.resolveCatalogSku({
-            fallbackSku: `ML-${itemId}-${variationId}`,
-            attributes: variation.attributes,
-            sellerCustomField: variation.seller_custom_field,
-            sellerSku: variation.seller_sku,
-          }),
-          title: [
-            item.title?.trim() || `Produto Mercado Livre ${itemId}`,
-            attributes.length > 0 ? attributes.join(", ") : null,
-          ]
-            .filter(Boolean)
-            .join(" - "),
-        },
-      ];
-    });
+      products.push({
+        externalProductId: `${itemId}:${variationId}`,
+        images:
+          images.length > 0
+            ? images
+            : itemImages.map((picture) => picture.url),
+        isActive: item.status === "active",
+        metadata: { itemId, variationId },
+        sellingPrice: toDecimalString(variation.price ?? item.price),
+        sku: this.resolveCatalogSku({
+          fallbackSku: `ML-${itemId}-${variationId}`,
+          attributes: variation.attributes,
+          sellerCustomField: variation.seller_custom_field,
+          sellerSku: variation.seller_sku,
+        }),
+        title: variationLabel ?? itemTitle,
+      });
+    }
+
+    return products;
   }
 
   private resolveCatalogSku(input: {
@@ -739,16 +775,26 @@ export class MercadoLivreProvider implements IntegrationProvider {
   ): Promise<IntegrationSyncOrder> {
     const skuByExternalProductId: Record<string, string | null> = {};
     const titleByExternalProductId: Record<string, string | null> = {};
+    const returnQuantityBySku: Record<string, number> = {};
 
     const items = (order.order_items ?? []).map<IntegrationSyncOrderItem>(
       (item) => {
-        const externalProductId = item.item?.id ? String(item.item.id) : null;
+        const itemId = toOptionalString(item.item?.id);
+        const variationId = toOptionalString(item.variation_id);
+        const externalProductId =
+          itemId && variationId ? `${itemId}:${variationId}` : itemId;
+        const sku = item.item?.seller_sku ?? null;
 
         if (externalProductId) {
-          skuByExternalProductId[externalProductId] =
-            item.item?.seller_sku ?? null;
+          skuByExternalProductId[externalProductId] = sku;
           titleByExternalProductId[externalProductId] =
             item.item?.title ?? null;
+        }
+
+        const returnedQuantity = resolveMercadoLivreReturnQuantity(item);
+
+        if (sku && returnedQuantity > 0) {
+          returnQuantityBySku[sku] = (returnQuantityBySku[sku] ?? 0) + returnedQuantity;
         }
 
         const quantity =
@@ -759,11 +805,18 @@ export class MercadoLivreProvider implements IntegrationProvider {
 
         return {
           externalProductId,
+          metadata:
+            returnedQuantity > 0
+              ? {
+                  returnQuantity: returnedQuantity,
+                }
+              : {},
           quantity,
-          sku: item.item?.seller_sku ?? null,
+          sku,
           totalPrice: toDecimalString((Number(unitPrice) || 0) * quantity),
           title: item.item?.title ?? null,
           unitPrice,
+          variationId,
         };
       },
     );
@@ -837,6 +890,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
       fees,
       items,
       metadata: {
+        returnQuantityBySku,
         skuByExternalProductId,
         tags: order.tags ?? [],
         titleByExternalProductId,

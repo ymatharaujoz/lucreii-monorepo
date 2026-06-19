@@ -16,6 +16,7 @@ const mirroredAuthState = {
     role: "owner",
     slug: "org",
   },
+  selectedCompanyId: "company_123",
   session: {
     expiresAt: "2026-04-22T00:00:00.000Z",
     id: "session_123",
@@ -127,6 +128,7 @@ describe("readServerAuthState", () => {
         cache: "no-store",
         headers: {
           cookie: "lucreii_api_session=remote_session_token_123",
+          "x-lucreii-company-id": "company_123",
         },
       }),
     );

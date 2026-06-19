@@ -27,12 +27,13 @@ import type {
   UpdateFixedCostInput,
   UpdateProductMonthlyPerformanceInput,
 } from "@lucreii/types";
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 
 type TenantContext = {
   organizationId: string;
   userId: string;
+  selectedCompanyId?: string | null;
 };
 
 type PerformanceFilters = {
@@ -61,13 +62,20 @@ export class FinanceInputsService {
         and(eq(table.organizationId, context.organizationId), eq(table.userId, context.userId)),
     });
 
-    return rows.map((row) => this.toCompanyRecord(row));
+    const selectedCompanyId =
+      context.selectedCompanyId ??
+      rows.find((row) => row.isActive)?.id ??
+      rows[0]?.id ??
+      null;
+
+    return rows.map((row) => this.toCompanyRecord(row, selectedCompanyId));
   }
 
   async createCompany(context: TenantContext, input: CreateCompanyInput): Promise<Company> {
-    await this.ensureCompanyLimitAllowsCreate(context);
     const normalizedCnpj = this.normalizeCnpj(input.cnpj);
     const razaoSocial = input.razaoSocial.trim();
+    await this.ensureCompanyCnpjIsAvailable(normalizedCnpj);
+    await this.ensureCompanyLimitAllowsCreate(context);
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       try {
@@ -85,17 +93,14 @@ export class FinanceInputsService {
           })
           .returning();
 
-        return this.toCompanyRecord(created);
+        return this.toCompanyRecord(created, context.selectedCompanyId ?? created.id);
       } catch (error) {
-        const code = this.readPostgresErrorCode(error);
-        const constraint = this.readPostgresConstraint(error);
-
-        if (code === "23505" && constraint === "companies_org_code_key") {
+        if (this.isUniqueCompanyCodeConflict(error)) {
           continue;
         }
 
-        if (code === "23505" && constraint === "companies_org_cnpj_key") {
-          throw new ConflictException("CNPJ already registered for this organization.");
+        if (this.isUniqueCompanyCnpjConflict(error)) {
+          throw new ConflictException("Já existe uma empresa cadastrada com este CNPJ.");
         }
 
         throw error;
@@ -111,26 +116,45 @@ export class FinanceInputsService {
     input: UpdateCompanyInput,
   ): Promise<Company> {
     await this.ensureCompanyAccess(context, companyId);
+    const cnpj = input.cnpj !== undefined ? this.normalizeCnpj(input.cnpj) : undefined;
 
-    const [updated] = await this.db
-      .update(companies)
-      .set({
-        ...(input.cnpj !== undefined ? { cnpj: this.normalizeCnpj(input.cnpj) } : {}),
-        ...(input.fixedCostDefault !== undefined ? { fixedCostDefault: input.fixedCostDefault } : {}),
-        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-        ...(input.razaoSocial !== undefined ? { razaoSocial: input.razaoSocial.trim() } : {}),
-        ...(input.taxRateDefault !== undefined ? { taxRateDefault: input.taxRateDefault } : {}),
-      })
-      .where(
-        and(
-          eq(companies.id, companyId),
-          eq(companies.organizationId, context.organizationId),
-          eq(companies.userId, context.userId),
-        ),
-      )
-      .returning();
+    if (cnpj !== undefined) {
+      await this.ensureCompanyCnpjIsAvailable(cnpj, companyId);
+    }
 
-    return this.toCompanyRecord(updated);
+    try {
+      const [updated] = await this.db
+        .update(companies)
+        .set({
+          ...(cnpj !== undefined ? { cnpj } : {}),
+          ...(input.fixedCostDefault !== undefined ? { fixedCostDefault: input.fixedCostDefault } : {}),
+          ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+          ...(input.razaoSocial !== undefined ? { razaoSocial: input.razaoSocial.trim() } : {}),
+          ...(input.taxRateDefault !== undefined ? { taxRateDefault: input.taxRateDefault } : {}),
+        })
+        .where(
+          and(
+            eq(companies.id, companyId),
+            eq(companies.organizationId, context.organizationId),
+            eq(companies.userId, context.userId),
+          ),
+        )
+        .returning();
+
+      return this.toCompanyRecord(updated, context.selectedCompanyId);
+    } catch (error) {
+      if (this.isUniqueCompanyCnpjConflict(error)) {
+        throw new ConflictException("Já existe uma empresa cadastrada com este CNPJ.");
+      }
+
+      throw error;
+    }
+  }
+
+  async selectCompany(context: TenantContext, companyId: string): Promise<Company> {
+    const company = await this.ensureCompanyAccess(context, companyId);
+
+    return this.toCompanyRecord(company, company.id);
   }
 
   async listPerformance(
@@ -387,6 +411,20 @@ export class FinanceInputsService {
     }
   }
 
+  private async ensureCompanyCnpjIsAvailable(cnpj: string, excludedCompanyId?: string) {
+    const existing = await this.db.query.companies.findFirst({
+      where: (table) =>
+        and(
+          eq(table.cnpj, cnpj),
+          ...(excludedCompanyId ? [ne(table.id, excludedCompanyId)] : []),
+        ),
+    });
+
+    if (existing) {
+      throw new ConflictException("Já existe uma empresa cadastrada com este CNPJ.");
+    }
+  }
+
   private async ensurePerformanceAccess(context: TenantContext, performanceId: string) {
     const row = await this.db.query.productMonthlyPerformance.findFirst({
       where: (table) =>
@@ -421,7 +459,7 @@ export class FinanceInputsService {
     return row;
   }
 
-  private toCompanyRecord(row: CompanyRow): Company {
+  private toCompanyRecord(row: CompanyRow, selectedCompanyId?: string | null): Company {
     return {
       cnpj: row.cnpj,
       code: row.code,
@@ -429,6 +467,7 @@ export class FinanceInputsService {
       fixedCostDefault: String(row.fixedCostDefault),
       id: row.id,
       isActive: row.isActive,
+      isSelected: row.id === (selectedCompanyId ?? null),
       razaoSocial: row.razaoSocial,
       taxRateDefault: String(row.taxRateDefault),
       updatedAt: row.updatedAt.toISOString(),
@@ -437,6 +476,23 @@ export class FinanceInputsService {
 
   private normalizeCnpj(value: string) {
     return value.replace(/\D/g, "");
+  }
+
+  private isUniqueCompanyCodeConflict(error: unknown) {
+    const code = this.readPostgresErrorCode(error);
+    const constraint = this.readPostgresConstraint(error);
+
+    return code === "23505" && constraint === "companies_org_code_key";
+  }
+
+  private isUniqueCompanyCnpjConflict(error: unknown) {
+    const code = this.readPostgresErrorCode(error);
+    const constraint = this.readPostgresConstraint(error);
+
+    return (
+      code === "23505" &&
+      (constraint === "companies_cnpj_key" || constraint === "companies_org_cnpj_key")
+    );
   }
 
   private generateCompanyCode() {

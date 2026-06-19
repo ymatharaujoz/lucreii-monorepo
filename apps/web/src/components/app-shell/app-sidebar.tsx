@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, X, ChevronDown } from "lucide-react";
-import { Avatar } from "@lucreii/ui";
 import { BrandLogo } from "@/components/brand-logo";
 import { BrandName } from "@/components/brand-name";
+import { CompanySwitcher } from "./company-switcher";
+import type { Company } from "@lucreii/types";
 
 const DashboardIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -93,11 +94,14 @@ export function AppSidebar({
   collapsed,
   onToggle,
   user,
+  companies,
   organization,
+  planLimit,
   isMobile = false,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  companies: Company[];
   user: {
     email: string;
     image: string | null;
@@ -106,11 +110,18 @@ export function AppSidebar({
   organization: {
     name: string;
   };
+  planLimit: number;
   isMobile?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (collapsed) {
+      setExpandedMenu(null);
+    }
+  }, [collapsed]);
 
   function isActive(href: string) {
     if (href === "/app") return pathname === "/app";
@@ -398,46 +409,14 @@ export function AppSidebar({
       )}
 
       {/* User Section */}
-      <div
-        className={cn(
-          "border-t border-border p-3",
-          collapsed ? "flex justify-center" : ""
-        )}
-      >
-        <div
-          className={cn(
-            "flex items-center gap-3",
-            collapsed && "justify-center"
-          )}
-        >
-          <div className="relative">
-            <Avatar
-              fallback={user.name}
-              size="sm"
-              src={user.image || undefined}
-              alt={user.name}
-            />
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface-strong bg-success" />
-          </div>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "auto" }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.2 }}
-                className="min-w-0 flex-1"
-              >
-                <p className="truncate text-[13px] font-medium text-foreground">
-                  {user.name}
-                </p>
-                <p className="truncate text-[11px] text-muted-foreground">
-                  {organization.name}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+      <div className={cn("border-t border-border", collapsed ? "p-2" : "p-3")}>
+        <CompanySwitcher
+          collapsed={collapsed}
+          companies={companies}
+          organizationName={organization.name}
+          planLimit={planLimit}
+          user={user}
+        />
       </div>
     </aside>
   );

@@ -255,7 +255,7 @@ describe("FinanceService", () => {
         updatedAt: new Date("2026-04-29T10:00:00.000Z"),
       },
     ]);
-    const readModel = await service.buildDashboardReadModel("org_123");
+    const readModel = await service.buildDashboardReadModel("org_123", "company_123");
 
     expect(readModel.summary).toEqual(
       expect.objectContaining({
@@ -328,7 +328,11 @@ describe("FinanceService", () => {
       allAdCostRows.filter((adCost: { channel: string }) => adCost.channel === "shopee"),
     );
 
-    const shopeeReadModel = await service.buildDashboardReadModel("org_123", "shopee");
+    const shopeeReadModel = await service.buildDashboardReadModel(
+      "org_123",
+      "company_123",
+      "shopee",
+    );
 
     expect(shopeeReadModel.summary).toEqual(
       expect.objectContaining({
@@ -413,7 +417,7 @@ describe("FinanceService", () => {
     db.query.adCosts.findMany.mockResolvedValue([]);
     db.query.manualExpenses.findMany.mockResolvedValue([]);
 
-    const readModel = await service.buildDashboardReadModel("org_123");
+    const readModel = await service.buildDashboardReadModel("org_123", "company_123");
 
     expect(readModel.summary.grossRevenue).toBe("100.00");
     expect(db.select).toHaveBeenCalledTimes(2);
@@ -502,8 +506,8 @@ describe("FinanceService", () => {
       },
     });
 
-    await service.materializeOrganizationMetrics("org_123");
-    await service.materializeOrganizationMetrics("org_123");
+    await service.materializeOrganizationMetrics("org_123", "company_123");
+    await service.materializeOrganizationMetrics("org_123", "company_123");
 
     expect(db.transaction).toHaveBeenCalledTimes(2);
     expect(tx.delete).toHaveBeenCalledTimes(4);

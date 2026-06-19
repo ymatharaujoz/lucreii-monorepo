@@ -25,7 +25,11 @@ export class ProductsController {
   @Get()
   async listProducts(@CurrentAuthContext() authContext: AuthenticatedRequestContext) {
     return {
-      data: await this.productsService.listProducts(authContext.organization!.id),
+      data: await this.productsService.listProducts({
+        organizationId: authContext.organization!.id,
+        selectedCompanyId: authContext.selectedCompanyId ?? null,
+        userId: authContext.user.id,
+      }),
       error: null,
     };
   }
@@ -39,6 +43,7 @@ export class ProductsController {
       data: await this.productsService.getAnalyticsSnapshot(
         {
           organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
           userId: authContext.user.id,
         },
         query,
@@ -53,7 +58,14 @@ export class ProductsController {
     @Body() body: CreateProductRequestDto,
   ) {
     return {
-      data: await this.productsService.createProduct(authContext.organization!.id, body),
+      data: await this.productsService.createProduct(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        body,
+      ),
       error: null,
     };
   }
@@ -82,6 +94,7 @@ export class ProductsController {
       data: await this.productsService.importProducts(
         {
           organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
           userId: authContext.user.id,
         },
         buffer,
@@ -99,6 +112,7 @@ export class ProductsController {
       data: await this.productsService.createManualProduct(
         {
           organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
           userId: authContext.user.id,
         },
         body,
@@ -114,7 +128,15 @@ export class ProductsController {
     @Body() body: UpdateProductRequestDto,
   ) {
     return {
-      data: await this.productsService.updateProduct(authContext.organization!.id, productId, body),
+      data: await this.productsService.updateProduct(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        productId,
+        body,
+      ),
       error: null,
     };
   }
@@ -127,7 +149,11 @@ export class ProductsController {
   ) {
     return {
       data: await this.productsService.updateCatalogFinance(
-        authContext.organization!.id,
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
         productId,
         body,
       ),
@@ -142,7 +168,11 @@ export class ProductsController {
   ) {
     return {
       data: await this.productsService.deleteProduct(
-        authContext.organization!.id,
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
         productId,
       ),
       error: null,

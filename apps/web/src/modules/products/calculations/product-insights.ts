@@ -1,6 +1,7 @@
 import type {
   ProductAnalyticsRow,
   ProductFinancialState,
+  ProductListItem,
   ProductMonthlyPerformanceDisplayRow,
 } from "@lucreii/types";
 import { parseProtectedNumber } from "@/lib/protected-numbers";
@@ -87,6 +88,36 @@ function deriveRowFinancials(row: ProductMonthlyPerformanceDisplayRow, taxRateDe
 
 function getProductId(row: { name: string; sku: string | null }): string {
   return row.sku?.trim() ? row.sku : row.name;
+}
+
+function extractVariationLabel(title: string | null): string | null {
+  if (!title) {
+    return null;
+  }
+
+  const parts = title
+    .split(" - ")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length < 2) {
+    return null;
+  }
+
+  return parts[parts.length - 1] ?? null;
+}
+
+function resolveProductDisplayName(productName: string, variationLabel: string | null): string {
+  if (!variationLabel) {
+    return productName;
+  }
+
+  const suffix = ` - ${variationLabel}`;
+  if (productName.endsWith(suffix)) {
+    return productName.slice(0, -suffix.length);
+  }
+
+  return productName;
 }
 
 function resolveMinimumRoas(row: ProductAnalyticsRow): number | null {
@@ -339,13 +370,60 @@ function formatMoney(value: number): string {
   });
 }
 
+function buildProductLookupMaps(products: ProductListItem[]) {
+  const bySku = new Map<string, ProductListItem>();
+  const byId = new Map<string, ProductListItem>();
+
+  function traverse(product: ProductListItem) {
+    if (product.sku) {
+      bySku.set(product.sku, product);
+    }
+    byId.set(product.id, product);
+    for (const child of product.children) {
+      traverse(child);
+    }
+  }
+
+  for (const product of products) {
+    traverse(product);
+  }
+
+  return { byId, bySku };
+}
+
 export function buildProductTableRows(data: ProductCatalogData): ProductTableRow[] {
+  const { byId, bySku } = buildProductLookupMaps(data.products);
+
   return data.monthlyPerformanceRows.map((row) => {
     const taxPct = toNumber(data.scope.taxRateDefault) * 100;
     const taxRateDefault = taxPct / 100;
-    const financials = deriveRowFinancials(row, taxRateDefault);
-    const sellingPrice = toNumber(row.salePrice);
-    const product = data.products.find((p) => p.sku === row.sku);
+
+    const product = bySku.get(row.sku);
+    const isChild = product?.catalogRole === "child";
+
+    let effectiveRow = row;
+
+    if (isChild && product?.parentProductId) {
+      const parentProduct = byId.get(product.parentProductId);
+      if (parentProduct?.sku) {
+        const parentRow = data.monthlyPerformanceRows.find(
+          (r) => r.sku === parentProduct.sku,
+        );
+        if (parentRow) {
+          effectiveRow = {
+            ...row,
+            salePrice: parentRow.salePrice,
+            unitCost: parentRow.unitCost,
+            packagingCost: parentRow.packagingCost,
+          };
+        }
+      }
+    }
+
+    const financials = deriveRowFinancials(effectiveRow, taxRateDefault);
+    const sellingPrice = toNumber(effectiveRow.salePrice);
+    const variationLabel = product?.variationLabel ?? extractVariationLabel(row.productName);
+    const displayName = resolveProductDisplayName(row.productName, variationLabel);
 
     return {
       ...financials,
@@ -356,10 +434,11 @@ export function buildProductTableRows(data: ProductCatalogData): ProductTableRow
         ? (toNumber(row.marketplaceCommission ?? "0") / sellingPrice) * 100
         : 0,
       coverImageUrl: product?.coverImageUrl ?? null,
+      displayName,
       id: `${row.referenceMonth}:${row.channel}:${row.sku}`,
       isActive: product?.isActive ?? true,
       name: row.productName,
-      packagingCost: toNumber(row.packagingCost),
+      packagingCost: toNumber(effectiveRow.packagingCost),
       performanceId: row.id,
       referenceMonth: row.referenceMonth,
       returns: row.returnsQuantity,
@@ -371,7 +450,8 @@ export function buildProductTableRows(data: ProductCatalogData): ProductTableRow
       totalCommission: financials.totalCommission,
       totalPackagingCost: financials.totalPackagingCost,
       totalProductCost: financials.totalProductCost,
-      unitCost: toNumber(row.unitCost),
+      unitCost: toNumber(effectiveRow.unitCost),
+      variationLabel,
     };
   });
 }

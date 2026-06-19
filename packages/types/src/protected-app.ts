@@ -21,6 +21,7 @@ export type AuthState = {
   };
   organization: AuthenticatedOrganization | null;
   onboardingStatus: OnboardingStatus;
+  selectedCompanyId: string | null;
 };
 
 export type ExchangeAuthTicketResponse = {

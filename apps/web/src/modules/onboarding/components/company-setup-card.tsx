@@ -10,6 +10,10 @@ interface CompanySetupCardProps {
   organizationName: string;
   isSubmitting: boolean;
   message: string | null;
+  submitLabel?: string;
+  submitLoadingLabel?: string;
+  title?: string;
+  description?: string;
   onSubmit: (data: { cnpj: string; isActive: true; razaoSocial: string }) => void;
 }
 
@@ -34,6 +38,10 @@ export function CompanySetupCard({
   organizationName,
   isSubmitting,
   message,
+  submitLabel = "Criar empresa e entrar",
+  submitLoadingLabel = "Criando empresa...",
+  title = "Primeira empresa",
+  description = "Cadastre sua primeira empresa que será usada nas importações, custos, impostos e filtros mensais.",
   onSubmit,
 }: CompanySetupCardProps) {
   const [razaoSocial, setRazaoSocial] = useState("");
@@ -70,10 +78,8 @@ export function CompanySetupCard({
               <Building2 className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-semibold text-foreground">Primeira empresa</h3>
-              <p className="text-xs text-muted-foreground">
-                Cadastre sua primeira empresa que será usada nas importações, custos, impostos e filtros mensais.
-              </p>
+              <h3 className="font-semibold text-foreground">{title}</h3>
+              <p className="text-xs text-muted-foreground">{description}</p>
             </div>
           </div>
         </div>
@@ -160,10 +166,10 @@ export function CompanySetupCard({
               type="submit"
             >
               {isSubmitting ? (
-                <>Criando empresa...</>
+                <>{submitLoadingLabel}</>
               ) : (
                 <>
-                  Criar empresa e entrar
+                  {submitLabel}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}

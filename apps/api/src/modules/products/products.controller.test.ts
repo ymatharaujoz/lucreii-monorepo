@@ -57,6 +57,7 @@ describe("products controller", () => {
         role: "owner",
         slug: "org",
       },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -80,8 +81,13 @@ describe("products controller", () => {
     });
     vi.spyOn(productsService, "listProducts").mockResolvedValueOnce([
       {
+        catalogGroupKey: null,
+        catalogRole: "standalone",
         coverImageUrl: null,
         createdAt: "2026-04-28T10:00:00.000Z",
+        children: [],
+        companyId: "company_123",
+        derivedFromProvider: null,
         financeDefaults: null,
         id: "product_1",
         images: [],
@@ -89,9 +95,11 @@ describe("products controller", () => {
         latestCost: null,
         name: "Notebook",
         organizationId: "org_123",
+        parentProductId: null,
         sellingPrice: "120.00",
         sku: "NB-1",
         updatedAt: "2026-04-28T10:00:00.000Z",
+        variationLabel: null,
       },
     ]);
 
@@ -101,6 +109,11 @@ describe("products controller", () => {
     });
 
     expect(response.statusCode).toBe(200);
+    expect(productsService.listProducts).toHaveBeenCalledWith({
+      organizationId: "org_123",
+      selectedCompanyId: "company_123",
+      userId: "user_123",
+    });
     expect(response.json()).toEqual({
       data: [
         expect.objectContaining({
@@ -121,6 +134,7 @@ describe("products controller", () => {
         role: "owner",
         slug: "org",
       },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -144,6 +158,7 @@ describe("products controller", () => {
     });
     vi.spyOn(productsService, "createProduct").mockResolvedValueOnce({
       coverImageUrl: null,
+      companyId: "company_123",
       createdAt: "2026-04-28T10:00:00.000Z",
       id: "product_1",
       images: [],
@@ -167,6 +182,19 @@ describe("products controller", () => {
     });
 
     expect(response.statusCode).toBe(201);
+    expect(productsService.createProduct).toHaveBeenCalledWith(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        isActive: true,
+        name: "Notebook",
+        sellingPrice: "120.00",
+        sku: "NB-1",
+      },
+    );
     expect(response.json()).toEqual({
       data: expect.objectContaining({
         id: "product_1",
@@ -215,6 +243,7 @@ describe("products controller", () => {
         updatedAt: "2026-05-14T10:00:00.000Z",
       },
       product: {
+        companyId: "company_123",
         coverImageUrl: null,
         createdAt: "2026-05-14T10:00:00.000Z",
         id: "product_1",
@@ -228,6 +257,7 @@ describe("products controller", () => {
       },
       productCost: {
         amount: "80.00",
+        companyId: "company_123",
         costType: "base",
         createdAt: "2026-05-14T10:00:00.000Z",
         currency: "BRL",

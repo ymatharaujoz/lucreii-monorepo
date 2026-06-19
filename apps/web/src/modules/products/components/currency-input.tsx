@@ -21,6 +21,7 @@ export function CurrencyInput({
   required,
   id,
   name,
+  disabled,
 }: {
   value: string;
   onChange: (val: string) => void;
@@ -28,6 +29,7 @@ export function CurrencyInput({
   required?: boolean;
   id?: string;
   name?: string;
+  disabled?: boolean;
 }) {
   const [text, setText] = useState(() =>
     value
@@ -70,6 +72,7 @@ export function CurrencyInput({
       <input
         id={id}
         name={name}
+        disabled={disabled}
         className="h-10 w-full rounded-[var(--radius-md)] border border-border bg-surface-strong pl-9 pr-3.5 text-sm text-foreground transition-all duration-[var(--transition-fast)] placeholder:text-muted hover:border-border-strong focus:border-border-focus focus:outline-2 focus:outline-accent/20 disabled:cursor-not-allowed disabled:opacity-50"
         inputMode="decimal"
         onBlur={handleBlur}

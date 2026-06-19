@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import type { Company, CompleteOnboardingResponse } from "@lucreii/types";
+import type { CompleteOnboardingResponse } from "@lucreii/types";
 import { ApiClientError, apiClient } from "@/lib/api/client";
+import { createCompanyAndSelect } from "@/lib/company-creation";
 import { containerVariants } from "@/lib/animations";
 import {
   CompanySetupCard,
@@ -67,9 +68,7 @@ export function OnboardingPanel({
     setMessage(null);
 
     try {
-      await apiClient.post<{ data: Company; error: null }>("/companies", {
-        body: data,
-      });
+      await createCompanyAndSelect(data);
       router.replace("/app");
       router.refresh();
     } catch (error) {
@@ -89,7 +88,7 @@ export function OnboardingPanel({
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="mx-auto max-w-4xl space-y-8"
+      className="mx-auto max-w-4xl space-y-8 pt-6"
     >
       <SetupHeader organizationName={organizationName} stage={stage} userName={userName} />
       <SetupProgress currentStep={stage} />

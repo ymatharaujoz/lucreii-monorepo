@@ -39,7 +39,10 @@ export async function readServerAuthState(
 
   const response = await fetch(endpoint, {
     cache: "no-store",
-    headers: buildRemoteAuthHeaders(webSession.remoteSessionToken),
+    headers: buildRemoteAuthHeaders(
+      webSession.remoteSessionToken,
+      webSession.authState.selectedCompanyId,
+    ),
   });
 
   if (response.status === 401) {

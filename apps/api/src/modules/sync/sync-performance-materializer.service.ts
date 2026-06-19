@@ -16,11 +16,6 @@ import { and, eq } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 import { normalizeSku, selectLatestProductCost } from "@/modules/finance/finance.service";
 
-type TenantContext = {
-  organizationId: string;
-  userId: string | null;
-};
-
 type ProductRowWithFinance = Product & {
   financeDefaults: ProductFinanceDefaults | null;
   productCosts: ProductCost[];
@@ -30,7 +25,8 @@ type ExternalOrderRow = ExternalOrder & {
   fees: ExternalFee[];
   items: Array<
     ExternalOrderItem & {
-      externalProduct: Pick<ExternalProduct, "sku"> | null;
+      externalProduct: Pick<ExternalProduct, "linkedProductId" | "sku"> | null;
+      metadata?: Record<string, unknown>;
     }
   >;
 };
@@ -158,8 +154,92 @@ function sumFeeAmounts(fees: ExternalFee[], feeType: string) {
       return sum;
     }
 
-    return sum + parseMoney(String(fee.amount));
+  return sum + parseMoney(String(fee.amount));
   }, 0n);
+}
+
+function readItemReturnQuantity(
+  order: Pick<ExternalOrder, "metadata">,
+  item: Pick<ExternalOrderItem, "quantity"> & {
+    externalProduct: Pick<ExternalProduct, "linkedProductId" | "sku"> | null;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  const directReturnQuantity =
+    item.metadata &&
+    typeof item.metadata === "object" &&
+    "returnQuantity" in item.metadata &&
+    typeof item.metadata.returnQuantity === "number" &&
+    Number.isFinite(item.metadata.returnQuantity)
+      ? Math.max(0, Math.min(item.quantity, Math.trunc(item.metadata.returnQuantity)))
+      : 0;
+
+  if (directReturnQuantity > 0) {
+    return directReturnQuantity;
+  }
+
+  if (!order.metadata || typeof order.metadata !== "object") {
+    return 0;
+  }
+
+  const normalizedSku = normalizeSku(item.externalProduct?.sku);
+
+  if (!normalizedSku) {
+    return 0;
+  }
+
+  const rawMap =
+    "returnQuantityBySku" in order.metadata &&
+    order.metadata.returnQuantityBySku &&
+    typeof order.metadata.returnQuantityBySku === "object"
+      ? order.metadata.returnQuantityBySku
+      : null;
+
+  if (!rawMap) {
+    return 0;
+  }
+
+  const matchedEntry = Object.entries(rawMap).find(
+    ([sku]) => normalizeSku(sku) === normalizedSku,
+  );
+
+  if (!matchedEntry) {
+    return 0;
+  }
+
+  const [, rawQuantity] = matchedEntry;
+
+  if (typeof rawQuantity !== "number" || !Number.isFinite(rawQuantity)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(item.quantity, Math.trunc(rawQuantity)));
+}
+
+function resolveMatchedProduct(input: {
+  item: Pick<ExternalOrderItem, "quantity"> & {
+    externalProduct: Pick<ExternalProduct, "linkedProductId" | "sku"> | null;
+  };
+  productsById: Map<string, ProductRowWithFinance>;
+  productsBySku: Map<string, ProductRowWithFinance>;
+}) {
+  const linkedProductId = input.item.externalProduct?.linkedProductId ?? null;
+
+  if (linkedProductId) {
+    const linkedProduct = input.productsById.get(linkedProductId);
+
+    if (linkedProduct) {
+      return linkedProduct;
+    }
+  }
+
+  const normalizedSku = normalizeSku(input.item.externalProduct?.sku);
+
+  if (!normalizedSku) {
+    return null;
+  }
+
+  return input.productsBySku.get(normalizedSku) ?? null;
 }
 
 @Injectable()
@@ -170,20 +250,25 @@ export class SyncPerformanceMaterializerService {
   ) {}
 
   async materializeForSync(input: {
+    companyId?: string;
     organizationId: string;
     providerSlug: string;
     syncRunId: string;
     userId: string | null;
   }) {
-    const activeCompany = await this.resolveActiveCompany({
-      organizationId: input.organizationId,
-      userId: input.userId,
-    });
-    const materializationUserId = input.userId ?? activeCompany.userId;
+    const targetCompany =
+      input.companyId
+        ? await this.requireCompany(input.organizationId, input.companyId)
+        : await this.resolveActiveCompany({
+            organizationId: input.organizationId,
+            userId: input.userId,
+          });
+    const materializationUserId = input.userId ?? targetCompany.userId;
     const [orders, productsList] = await Promise.all([
-      this.readOrdersForProvider(input.organizationId, input.providerSlug),
-      this.readProductsForOrganization(input.organizationId),
+      this.readOrdersForProvider(input.organizationId, targetCompany.id, input.providerSlug),
+      this.readProductsForCompany(input.organizationId, targetCompany.id),
     ]);
+    const productsById = new Map(productsList.map((product) => [product.id, product] as const));
     const productsBySku = new Map(
       productsList
         .map((product) => [normalizeSku(product.sku), product] as const)
@@ -212,13 +297,11 @@ export class SyncPerformanceMaterializerService {
 
       for (let index = 0; index < order.items.length; index += 1) {
         const item = order.items[index];
-        const normalizedSku = normalizeSku(item.externalProduct?.sku);
-
-        if (!normalizedSku) {
-          continue;
-        }
-
-        const matchedProduct = productsBySku.get(normalizedSku);
+        const matchedProduct = resolveMatchedProduct({
+          item,
+          productsById,
+          productsBySku,
+        });
 
         if (!matchedProduct) {
           continue;
@@ -233,8 +316,15 @@ export class SyncPerformanceMaterializerService {
         aggregates.set(key, aggregate);
         aggregate.salesQuantity += item.quantity;
 
-        if (isReturnLike) {
+        const itemReturnQuantity = readItemReturnQuantity(order, item);
+
+        if (itemReturnQuantity > 0) {
+          aggregate.returnsQuantity += itemReturnQuantity;
+        } else if (isReturnLike) {
           aggregate.returnsQuantity += item.quantity;
+        }
+
+        if (itemReturnQuantity > 0 || isReturnLike) {
           continue;
         }
 
@@ -271,7 +361,7 @@ export class SyncPerformanceMaterializerService {
             advertisingCost: aggregate.product.financeDefaults?.advertisingCost ?? "0",
             channel,
             commissionRate,
-            companyId: activeCompany.id,
+            companyId: targetCompany.id,
             notes: null,
             organizationId: input.organizationId,
             packagingCost: aggregate.product.financeDefaults?.packagingCost ?? "0",
@@ -313,7 +403,27 @@ export class SyncPerformanceMaterializerService {
     });
   }
 
-  private async resolveActiveCompany(context: TenantContext): Promise<Company> {
+  private async requireCompany(organizationId: string, companyId: string): Promise<Company> {
+    const company = await this.db.query.companies.findFirst({
+      where: (table) =>
+        and(
+          eq(table.organizationId, organizationId),
+          eq(table.id, companyId),
+          eq(table.isActive, true),
+        ),
+    });
+
+    if (!company) {
+      throw new BadRequestException("Sync performance materialization requires a valid company.");
+    }
+
+    return company;
+  }
+
+  private async resolveActiveCompany(context: {
+    organizationId: string;
+    userId: string | null;
+  }): Promise<Company> {
     const activeCompanies = await this.db.query.companies.findMany({
       orderBy: (table) => [table.createdAt],
       where: (table) =>
@@ -327,12 +437,8 @@ export class SyncPerformanceMaterializerService {
     if (activeCompanies.length !== 1) {
       throw new BadRequestException(
         activeCompanies.length === 0
-          ? context.userId
-            ? "Sync performance materialization requires exactly one active company for the authenticated user."
-            : "Sync performance materialization requires exactly one active company for the organization during automatic sync."
-          : context.userId
-            ? "Sync performance materialization could not resolve a single active company for the authenticated user."
-            : "Sync performance materialization could not resolve a single active company for the organization during automatic sync.",
+          ? "Sync performance materialization requires exactly one active company."
+          : "Sync performance materialization could not resolve a single active company.",
       );
     }
 
@@ -341,12 +447,14 @@ export class SyncPerformanceMaterializerService {
 
   private async readOrdersForProvider(
     organizationId: string,
+    companyId: string,
     providerSlug: string,
   ): Promise<ExternalOrderRow[]> {
     return this.db.query.externalOrders.findMany({
       where: (table) =>
         and(
           eq(table.organizationId, organizationId),
+          eq(table.companyId, companyId),
           eq(table.provider, providerSlug),
         ),
       with: {
@@ -355,6 +463,7 @@ export class SyncPerformanceMaterializerService {
           with: {
             externalProduct: {
               columns: {
+                linkedProductId: true,
                 sku: true,
               },
             },
@@ -364,11 +473,13 @@ export class SyncPerformanceMaterializerService {
     });
   }
 
-  private async readProductsForOrganization(
+  private async readProductsForCompany(
     organizationId: string,
+    companyId: string,
   ): Promise<ProductRowWithFinance[]> {
     return this.db.query.products.findMany({
-      where: (table) => eq(table.organizationId, organizationId),
+      where: (table) =>
+        and(eq(table.organizationId, organizationId), eq(table.companyId, companyId)),
       with: {
         financeDefaults: true,
         productCosts: {

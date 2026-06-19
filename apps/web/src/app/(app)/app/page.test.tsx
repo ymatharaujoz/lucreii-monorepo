@@ -1,6 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import AppHomePage from "./page";
 
 const redirectMock = vi.hoisted(() => vi.fn());
@@ -31,7 +31,22 @@ vi.mock("@/lib/server-companies", () => ({
   hasActiveCompany: hasActiveCompanyMock,
 }));
 
+const activeCompanyFixture = {
+  code: "MELI",
+  createdAt: "2026-05-09T10:00:00.000Z",
+  fixedCostDefault: "1500.00",
+  id: "company_1",
+  isActive: true,
+  name: "Mercado Livre",
+  taxRateDefault: "0.120000",
+  updatedAt: "2026-05-09T10:00:00.000Z",
+};
+
 describe("AppHomePage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders the dashboard for entitled authenticated users", async () => {
     readServerAuthStateMock.mockResolvedValueOnce({
       organization: {
@@ -40,6 +55,7 @@ describe("AppHomePage", () => {
         role: "owner",
         slug: "lucreii",
       },
+      selectedCompanyId: "company_1",
       user: {
         name: "Mateus",
       },
@@ -48,18 +64,7 @@ describe("AppHomePage", () => {
       entitled: true,
       status: "active",
     });
-    readServerCompaniesMock.mockResolvedValueOnce([
-      {
-        code: "MELI",
-        createdAt: "2026-05-09T10:00:00.000Z",
-        fixedCostDefault: "1500.00",
-        id: "company_1",
-        isActive: true,
-        name: "Mercado Livre",
-        taxRateDefault: "0.120000",
-        updatedAt: "2026-05-09T10:00:00.000Z",
-      },
-    ]);
+    readServerCompaniesMock.mockResolvedValueOnce([activeCompanyFixture]);
     hasActiveCompanyMock.mockReturnValueOnce(true);
 
     const result = await AppHomePage();
@@ -74,7 +79,7 @@ describe("AppHomePage", () => {
           id: "company_1",
           taxRateDefault: "0.120000",
         }),
-        organizationName: "Lucreii",
+        companyName: "Lucreii",
       }),
       undefined,
     );
@@ -102,5 +107,32 @@ describe("AppHomePage", () => {
     await AppHomePage();
 
     expect(redirectMock).toHaveBeenCalledWith("/app/billing");
+  });
+
+  it("redirects to auto-select-company route when no company is selected", async () => {
+    readServerAuthStateMock.mockResolvedValueOnce({
+      organization: {
+        id: "org_123",
+        name: "Lucreii",
+        role: "owner",
+        slug: "lucreii",
+      },
+      selectedCompanyId: null,
+      user: {
+        name: "Mateus",
+      },
+    });
+    readServerBillingStateMock.mockResolvedValueOnce({
+      entitled: true,
+      status: "active",
+    });
+    readServerCompaniesMock.mockResolvedValueOnce([activeCompanyFixture]);
+    hasActiveCompanyMock.mockReturnValueOnce(true);
+
+    await AppHomePage();
+
+    expect(redirectMock).toHaveBeenCalledWith(
+      "/auth/auto-select-company?companyId=company_1",
+    );
   });
 });

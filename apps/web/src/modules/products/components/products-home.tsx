@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -17,7 +17,13 @@ import {
   BarChart3,
   Sparkles,
   ArrowRight,
+  ArrowUpDown,
   ChevronDown,
+  ChevronUp,
+  Filter,
+  Search,
+  Store,
+  X,
 } from "lucide-react";
 import {
   Card,
@@ -34,6 +40,7 @@ import { CurrencyInput } from "./currency-input";
 import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, fadeInVariants } from "@/lib/animations";
 import { SkeletonGrid } from "@/components/ui-premium/skeleton-grid";
+import { Pagination } from "@/components/ui-premium/pagination";
 import { ProductHeader } from "./product-header";
 import { ProductFinancialIndicators } from "./product-financial-indicators";
 
@@ -47,7 +54,6 @@ import { formatMoney } from "../utils/formatters";
 import type { CatalogStats, ProductMarketplaceNotice } from "../types/products";
 
 interface ProductsHomeProps {
-  organizationName: string;
   view?: "catalog" | "performance";
   onAddProduct?: (context: {
     companyId: string | null;
@@ -189,7 +195,7 @@ function EmptyCatalogState({
           </div>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Sparkles className="h-3 w-3 text-accent" />
-            Leva menos de 5 minutos
+            Leva menos de 5 minutos.
           </p>
         </div>
       </Card>
@@ -358,12 +364,16 @@ function ProductImagePreview({
 function CatalogProductDetailsModal({
   onClose,
   onDeleted,
+  onOpenParent,
   onSaved,
+  parentProduct,
   product,
 }: {
   onClose: () => void;
   onDeleted: () => Promise<unknown> | unknown;
+  onOpenParent: (product: ProductListItem) => void;
   onSaved: () => Promise<unknown> | unknown;
+  parentProduct: ProductListItem | null;
   product: ProductListItem | null;
 }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -371,28 +381,27 @@ function CatalogProductDetailsModal({
     packagingCost: "",
     unitCost: "",
   });
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [heroFailed, setHeroFailed] = useState(false);
 
   useEffect(() => {
     if (!product) {
       setForm({ packagingCost: "", unitCost: "" });
       setErrorMessage(null);
-      setSelectedImageIndex(0);
       return;
     }
 
     setForm(buildCatalogFinanceForm(product));
     setErrorMessage(null);
-    setSelectedImageIndex(0);
   }, [product]);
 
   const images = product?.images ?? [];
-  const currentImage = images[selectedImageIndex] ?? null;
+  const firstImage = images[0] ?? null;
 
   useEffect(() => {
     setHeroFailed(false);
-  }, [currentImage?.url]);
+  }, [firstImage?.url]);
+
+  const isChildRedirect = product?.catalogRole === "child" && parentProduct !== null;
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -490,22 +499,26 @@ function CatalogProductDetailsModal({
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (isChildRedirect) {
+                onOpenParent(parentProduct);
+                return;
+              }
               if (saveMutation.isPending || deleteMutation.isPending) return;
               saveMutation.mutate();
             }}
             className="flex flex-col gap-6"
           >
-            {/* Imagem hero + miniaturas — centralizado */}
+            {/* Imagem hero — centralizado */}
             <div className="mx-auto w-full max-w-[320px]">
               <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-[var(--radius-xl)] border border-border/60 bg-gradient-to-br from-surface-strong via-surface to-background shadow-[var(--shadow-md)]">
-                {currentImage && !heroFailed ? (
+                {firstImage && !heroFailed ? (
                   <Image
                     alt={product.name}
                     className="object-cover"
                     fill
                     onError={() => setHeroFailed(true)}
                     sizes="320px"
-                    src={currentImage.url}
+                    src={firstImage.url}
                   />
                 ) : (
                   <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
@@ -514,31 +527,6 @@ function CatalogProductDetailsModal({
                   </div>
                 )}
               </div>
-              {images.length > 1 && (
-                <div className="flex flex-wrap justify-center gap-3">
-                  {images.map((image, index) => (
-                    <button
-                      key={image.id}
-                      onClick={() => setSelectedImageIndex(index)}
-                      type="button"
-                      className={cn(
-                        "relative h-16 w-16 shrink-0 overflow-hidden rounded-[var(--radius-lg)] border-2 transition-all",
-                        index === selectedImageIndex
-                          ? "border-accent ring-2 ring-accent/20"
-                          : "border-border/40 opacity-50 hover:opacity-100",
-                      )}
-                    >
-                      <Image
-                        alt=""
-                        className="object-cover"
-                        fill
-                        sizes="64px"
-                        src={image.url}
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Seção financeira */}
@@ -552,7 +540,11 @@ function CatalogProductDetailsModal({
                     Informações Financeiras
                   </h3>
                   <p className="text-[11px] text-muted-foreground/70">
-                    Preencha os custos do produto
+                    {isChildRedirect
+                      ? "Edite custo e embalagem no produto principal"
+                      : product.catalogRole === "parent"
+                        ? "Salvar aqui sobrescreve custo e embalagem de todas as variações"
+                        : "Preencha os custos do produto"}
                   </p>
                 </div>
               </div>
@@ -568,6 +560,7 @@ function CatalogProductDetailsModal({
                     <CurrencyInput
                       id="catalog-unit-cost"
                       name="unitCost"
+                      disabled={isChildRedirect}
                       onChange={(val) =>
                         setForm((curr) => ({ ...curr, unitCost: val }))
                       }
@@ -588,6 +581,7 @@ function CatalogProductDetailsModal({
                     <CurrencyInput
                       id="catalog-packaging-cost"
                       name="packagingCost"
+                      disabled={isChildRedirect}
                       onChange={(val) =>
                         setForm((curr) => ({ ...curr, packagingCost: val }))
                       }
@@ -597,13 +591,23 @@ function CatalogProductDetailsModal({
                     />
                   </div>
                 </div>
-                <div className="sm:col-span-2 pt-1">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Preço de venda
-                  </p>
-                  <p className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground">
-                    {formatMoney(product.sellingPrice)}
-                  </p>
+                <div className="sm:col-span-2">
+                  <label
+                    className="text-xs font-medium text-muted-foreground"
+                    htmlFor="catalog-selling-price"
+                  >
+                    PDV
+                  </label>
+                  <div className="mt-2">
+                    <CurrencyInput
+                      id="catalog-selling-price"
+                      name="sellingPrice"
+                      disabled
+                      onChange={() => {}}
+                      placeholder="0,00"
+                      value={String(product.sellingPrice ?? "")}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -616,24 +620,28 @@ function CatalogProductDetailsModal({
 
             {/* Barra de ações */}
             <div className="mt-2 flex items-center justify-between gap-3 border-t border-border/30 pt-6">
-              <Button
-                onClick={() => {
-                  if (!window.confirm("Excluir este produto do catálogo?")) {
-                    return;
-                  }
-                  deleteMutation.mutate();
-                }}
-                type="button"
-                variant="ghost"
-                className="border border-error/20 text-error hover:bg-error/5 hover:text-error"
-              >
-                Excluir produto
-              </Button>
+              {!isChildRedirect ? (
+                <Button
+                  onClick={() => {
+                    if (!window.confirm("Excluir este produto do catálogo?")) {
+                      return;
+                    }
+                    deleteMutation.mutate();
+                  }}
+                  type="button"
+                  variant="ghost"
+                  className="border border-error/20 text-error hover:bg-error/5 hover:text-error"
+                >
+                  Excluir produto
+                </Button>
+              ) : (
+                <div />
+              )}
               <Button
                 type="submit"
                 className="px-6"
               >
-                Salvar
+                {isChildRedirect ? "Ir para produto principal" : "Salvar"}
               </Button>
             </div>
           </form>
@@ -666,8 +674,8 @@ function CatalogProductsTable({
 
   return (
     <>
-      <Card padding="lg">
-        <div className="mb-4">
+      <Card padding="lg" className="flex h-full flex-col overflow-hidden">
+        <div className="mb-4 shrink-0">
           <h3 className="text-sm font-semibold text-foreground">
             Produtos do catálogo
           </h3>
@@ -676,33 +684,34 @@ function CatalogProductsTable({
           </p>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-separate border-spacing-0">
-            <thead>
-              <tr className="border-b border-border bg-surface-strong/95">
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Produto
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  SKU
-                </th>
-                <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Preço de venda
-                </th>
-                <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Custo unitário
-                </th>
-                <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Embalagem
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Status
-                </th>
-                <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Criado em
-                </th>
-              </tr>
-            </thead>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="overflow-auto h-full">
+            <table className="w-full min-w-[1100px] border-separate border-spacing-0">
+              <thead>
+                <tr className="border-b border-border bg-surface-strong/95">
+                  <th className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Produto
+                  </th>
+                  <th className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    SKU
+                  </th>
+                  <th className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    PDV
+                  </th>
+                  <th className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Custo unitário
+                  </th>
+                  <th className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Embalagem
+                  </th>
+                  <th className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Status
+                  </th>
+                  <th className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Criado em
+                  </th>
+                </tr>
+              </thead>
             <tbody>
               {products.map((product) => (
                 <tr
@@ -765,12 +774,625 @@ function CatalogProductsTable({
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </Card>
       <CatalogProductDetailsModal
         onDeleted={onRefresh}
         onClose={() => setSelectedProduct(null)}
+        onOpenParent={() => {}}
         onSaved={onRefresh}
+        parentProduct={null}
+        product={selectedProduct}
+      />
+    </>
+  );
+}
+
+const CATALOG_PAGE_SIZE = 10;
+
+type CatalogSortKey =
+  | "name"
+  | "sku"
+  | "sellingPrice"
+  | "unitCost"
+  | "packagingCost"
+  | "isActive"
+  | "createdAt"
+  | "channel";
+
+type CatalogSortDirection = "asc" | "desc" | null;
+
+const catalogMarketplaceOptions = [
+  { value: "mercadolivre", label: "MELI" },
+];
+
+function getChannelBadge(channel: string | null) {
+  const normalized = (channel ?? "manual").trim().toLowerCase();
+
+  if (normalized === "mercadolivre") {
+    return (
+      <Badge
+        className="border-transparent"
+        style={{ backgroundColor: "#ffe600", color: "#000000" }}
+      >
+        MELI
+      </Badge>
+    );
+  }
+
+  if (normalized === "shopee") {
+    return (
+      <Badge
+        className="border-transparent"
+        style={{ backgroundColor: "#fa5230", color: "#ffffff" }}
+      >
+        Shopee
+      </Badge>
+    );
+  }
+
+  return <Badge variant="neutral">Manual</Badge>;
+}
+
+function getCatalogSortValue(
+  product: ProductListItem,
+  key: CatalogSortKey,
+): string | number | boolean | null {
+  switch (key) {
+    case "name":
+      return product.name;
+    case "sku":
+      return product.sku ?? null;
+    case "sellingPrice":
+      return Number(product.sellingPrice);
+    case "unitCost":
+      return product.latestCost ? Number(product.latestCost.amount) : null;
+    case "packagingCost":
+      return product.financeDefaults ? Number(product.financeDefaults.packagingCost) : null;
+    case "isActive":
+      return product.isActive;
+    case "createdAt":
+      return product.createdAt;
+    case "channel":
+      return product.derivedFromProvider ?? "manual";
+    default:
+      return null;
+  }
+}
+
+function compareCatalogSortValues(
+  a: string | number | boolean | null,
+  b: string | number | boolean | null,
+  direction: "asc" | "desc",
+): number {
+  const aNull = a === null || a === undefined || (typeof a === "number" && !Number.isFinite(a));
+  const bNull = b === null || b === undefined || (typeof b === "number" && !Number.isFinite(b));
+  if (aNull && bNull) return 0;
+  if (aNull) return 1;
+  if (bNull) return -1;
+  if (typeof a === "boolean" && typeof b === "boolean") {
+    return direction === "asc" ? (a === b ? 0 : a ? -1 : 1) : (a === b ? 0 : a ? 1 : -1);
+  }
+  if (typeof a === "string" && typeof b === "string") {
+    return direction === "asc" ? a.localeCompare(b) : b.localeCompare(a);
+  }
+  const an = Number(a);
+  const bn = Number(b);
+  return direction === "asc" ? an - bn : bn - an;
+}
+
+function CatalogProductsHierarchyTable({
+  onRefresh,
+  products,
+}: {
+  onRefresh: () => Promise<unknown> | unknown;
+  products: ReturnType<typeof useProductData>["products"];
+}) {
+  const [expandedParentIds, setExpandedParentIds] = useState<string[]>([]);
+  const [selectedParentProduct, setSelectedParentProduct] =
+    useState<ProductListItem | null>(null);
+  const [selectedProduct, setSelectedProduct] =
+    useState<ProductListItem | null>(null);
+
+  const [sortConfig, setSortConfig] = useState<{
+    key: CatalogSortKey;
+    direction: CatalogSortDirection;
+  } | null>(null);
+  const [searchFilter, setSearchFilter] = useState("");
+  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const handleSort = (key: CatalogSortKey) => {
+    let direction: CatalogSortDirection = "asc";
+    if (sortConfig?.key === key && sortConfig.direction === "asc") {
+      direction = "desc";
+    } else if (sortConfig?.key === key && sortConfig.direction === "desc") {
+      direction = null;
+    }
+    setSortConfig(direction ? { key, direction } : null);
+    setCurrentPage(1);
+  };
+
+  const filteredParents = useMemo(() => {
+    let result = [...products];
+
+    if (searchFilter.trim()) {
+      const search = searchFilter.toLowerCase().trim();
+      result = result.filter(
+        (product) =>
+          product.name.toLowerCase().includes(search) ||
+          (product.sku?.toLowerCase().includes(search) ?? false),
+      );
+    }
+
+    if (selectedMarketplaces.length > 0) {
+      result = result.filter((product) =>
+        selectedMarketplaces.includes(product.derivedFromProvider ?? ""),
+      );
+    }
+
+    if (sortConfig) {
+      const { direction, key } = sortConfig;
+      result.sort((a, b) =>
+        compareCatalogSortValues(
+          getCatalogSortValue(a, key),
+          getCatalogSortValue(b, key),
+          direction ?? "asc",
+        ),
+      );
+    }
+
+    return result;
+  }, [products, searchFilter, selectedMarketplaces, sortConfig]);
+
+  const filteredTotalPages = Math.max(
+    1,
+    Math.ceil(filteredParents.length / CATALOG_PAGE_SIZE),
+  );
+  const safeCurrentPage = Math.min(currentPage, filteredTotalPages);
+
+  const visibleParents = useMemo(() => {
+    const start = (safeCurrentPage - 1) * CATALOG_PAGE_SIZE;
+    const end = start + CATALOG_PAGE_SIZE;
+    return filteredParents.slice(start, end);
+  }, [filteredParents, safeCurrentPage]);
+
+  const hasActiveFilters = searchFilter.trim() || selectedMarketplaces.length > 0;
+
+  const clearAllFilters = () => {
+    setSearchFilter("");
+    setSelectedMarketplaces([]);
+    setCurrentPage(1);
+  };
+
+  const SortIcon = ({ column }: { column: CatalogSortKey }) => {
+    if (sortConfig?.key !== column) {
+      return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/50" />;
+    }
+    return sortConfig.direction === "asc" ? (
+      <ChevronUp className="h-3.5 w-3.5 text-accent" />
+    ) : (
+      <ChevronDown className="h-3.5 w-3.5 text-accent" />
+    );
+  };
+
+  if (products.length === 0) {
+    return (
+      <Card padding="lg">
+        <EmptyState
+          title="Nenhum produto cadastrado"
+          description="Cadastre um produto manual para iniciar seu catálogo."
+          icon={<Package className="h-6 w-6" />}
+        />
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card padding="lg" className="min-w-0 flex flex-1 flex-col overflow-hidden min-h-0">
+        <div className="mb-4 flex items-center justify-between shrink-0">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Produtos do catálogo
+            </h3>
+            <p className="text-xs text-muted-foreground/70">
+              Itens cadastrados manualmente ou importados
+            </p>
+          </div>
+
+          <button
+            onClick={() => setShowFilters((value) => !value)}
+            className={`inline-flex items-center gap-1.5 rounded-[var(--radius-md)] px-3 py-1.5 text-xs font-medium transition-all duration-[var(--transition-fast)] ${
+              showFilters || hasActiveFilters
+                ? "bg-accent text-accent-foreground shadow-sm"
+                : "border border-border bg-surface-strong text-muted-foreground hover:border-border-strong hover:text-foreground"
+            }`}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Filtros
+          </button>
+        </div>
+
+        {showFilters ? (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-5 rounded-[var(--radius-lg)] border border-border bg-surface-strong/50 p-4 shrink-0"
+          >
+            <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-start">
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Search className="h-3.5 w-3.5 text-accent" />
+                  Buscar produto
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchFilter}
+                    onChange={(event) => {
+                      setSearchFilter(event.target.value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder="Nome ou SKU do produto..."
+                    className="h-9 w-full rounded-[var(--radius-md)] border border-border bg-background px-3 pr-8 text-sm text-foreground placeholder:text-muted-foreground/60 transition-all duration-[var(--transition-fast)] hover:border-border-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
+                  />
+                  {searchFilter ? (
+                    <button
+                      onClick={() => {
+                        setSearchFilter("");
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : (
+                    <Search className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Store className="h-3.5 w-3.5 text-accent" />
+                  Marketplace
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {catalogMarketplaceOptions.map((option) => {
+                    const isSelected = selectedMarketplaces.includes(option.value);
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() =>
+                          setSelectedMarketplaces((previous) =>
+                            isSelected
+                              ? previous.filter((value) => value !== option.value)
+                              : [...previous, option.value],
+                          )
+                        }
+                        className={`inline-flex items-center gap-1.5 rounded-[var(--radius-md)] px-3 py-1.5 text-xs font-medium transition-all duration-[var(--transition-fast)] ${
+                          isSelected
+                            ? "bg-accent text-accent-foreground shadow-sm"
+                            : "border border-border bg-background text-muted-foreground hover:border-border-strong hover:text-foreground"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {hasActiveFilters ? (
+              <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/60 pt-4">
+                <p className="text-xs text-muted-foreground">
+                  {filteredParents.length} resultado{filteredParents.length === 1 ? "" : "s"} encontrado
+                  {filteredParents.length === 1 ? "" : "s"}.
+                </p>
+                <button
+                  onClick={clearAllFilters}
+                  className="text-xs font-medium text-accent transition-colors hover:text-accent/80"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            ) : null}
+          </motion.div>
+        ) : null}
+
+        <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[1100px] border-separate border-spacing-0">
+            <thead>
+              <tr className="border-b border-border bg-surface-strong/95">
+                <th
+                  onClick={() => handleSort("channel")}
+                  className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                >
+                  <div className="flex items-center gap-1">
+                    Canal
+                    <SortIcon column="channel" />
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("name")}
+                  className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                >
+                  <div className="flex items-center gap-1">
+                    Produto
+                    <SortIcon column="name" />
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("sku")}
+                  className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                >
+                  <div className="flex items-center gap-1">
+                    SKU
+                    <SortIcon column="sku" />
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("sellingPrice")}
+                  className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    PDV
+                    <SortIcon column="sellingPrice" />
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("unitCost")}
+                  className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[160px]"
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    Custo unitário
+                    <SortIcon column="unitCost" />
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("packagingCost")}
+                  className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                >
+                  <div className="flex items-center justify-end gap-1">
+                    Embalagem
+                    <SortIcon column="packagingCost" />
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("isActive")}
+                  className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                >
+                  <div className="flex items-center gap-1">
+                    Status
+                    <SortIcon column="isActive" />
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort("createdAt")}
+                  className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                >
+                  <div className="flex items-center gap-1">
+                    Criado em
+                    <SortIcon column="createdAt" />
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleParents.map((product) => {
+                const isExpanded = expandedParentIds.includes(product.id);
+
+                return (
+                  <React.Fragment key={product.id}>
+                    <tr
+                      className="cursor-pointer border-b border-border/50 hover:bg-surface-strong/30"
+                      onClick={() => {
+                        setSelectedParentProduct(null);
+                        setSelectedProduct(product);
+                      }}
+                    >
+                      <td className="px-3 py-3 text-left">
+                        {getChannelBadge(product.derivedFromProvider)}
+                      </td>
+                      <td className="px-3 py-3 text-sm font-medium text-foreground">
+                        <div className="flex items-center gap-3">
+                          <ProductImagePreview
+                            alt={product.name}
+                            className="h-10 w-10 shrink-0 rounded-[var(--radius-md)]"
+                            url={product.coverImageUrl}
+                          />
+                          <span className="flex items-center gap-2">
+                            <span className="flex flex-col">
+                              <span>{product.name}</span>
+                              {product.catalogRole === "parent" && product.children.length > 0 ? (
+                                <button
+                                  aria-label={`${isExpanded ? "Recolher" : "Expandir"} variações`}
+                                  className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground transition-colors hover:text-foreground"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setExpandedParentIds((current) =>
+                                      current.includes(product.id)
+                                        ? current.filter((value) => value !== product.id)
+                                        : [...current, product.id],
+                                    );
+                                  }}
+                                  type="button"
+                                >
+                                  <span>
+                                    {product.children.length} {product.children.length === 1 ? "variação" : "variações"}
+                                  </span>
+                                  <ChevronDown
+                                    className={`h-3.5 w-3.5 transition-transform duration-[var(--transition-fast)] ${isExpanded ? "rotate-180" : ""}`}
+                                  />
+                                </button>
+                              ) : null}
+                            </span>
+                            {product.latestCost ? null : (
+                              <span
+                                aria-label="Produto sem custos cadastrados"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-warning/10 text-warning"
+                                title="Produto sem custos cadastrados"
+                              >
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                        {product.sku ?? "Sem SKU"}
+                      </td>
+                      <td className="px-3 py-3 text-right text-sm text-foreground">
+                        {formatMoney(Number(product.sellingPrice))}
+                      </td>
+                      <td className="px-3 py-3 text-right text-sm text-foreground">
+                        {product.latestCost
+                          ? formatMoney(Number(product.latestCost.amount))
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right text-sm text-foreground">
+                        {product.financeDefaults
+                          ? formatMoney(Number(product.financeDefaults.packagingCost))
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-left">
+                        <Badge
+                          variant={product.isActive ? "success" : "neutral"}
+                          className="gap-1.5"
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${product.isActive ? "bg-success" : "bg-muted"}`}
+                          />
+                          {product.isActive ? "Ativo" : "Arquivado"}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-3 text-sm text-muted-foreground">
+                        {formatProductDate(product.createdAt)}
+                      </td>
+                    </tr>
+
+                    {product.catalogRole === "parent" && isExpanded
+                      ? product.children.map((child, childIndex) => {
+                          const isLastChild = childIndex === product.children.length - 1;
+                          return (
+                            <tr
+                              key={child.id}
+                              data-testid="child-product-row"
+                              className="cursor-pointer border-b border-border/30 hover:bg-surface-strong/20"
+                              onClick={() => {
+                                setSelectedParentProduct(product);
+                                setSelectedProduct(child);
+                              }}
+                            >
+                              <td className="px-3 py-3 text-left">
+                                {getChannelBadge(child.derivedFromProvider)}
+                              </td>
+                              <td className="px-3 py-3 text-sm font-medium text-foreground">
+                                <div className="flex items-center gap-3">
+                                  {/* Tree connector — GitHub worktree style */}
+                                  <div className="relative flex h-10 w-8 shrink-0 items-center justify-center">
+                                    <div
+                                      className={cn(
+                                        "absolute left-[11px] top-0 w-px bg-muted-foreground/25",
+                                        isLastChild ? "h-1/2" : "h-full",
+                                      )}
+                                    />
+                                    <div className="absolute left-[11px] top-1/2 flex -translate-y-1/2 items-center">
+                                      <div className="h-px w-3 bg-muted-foreground/25" />
+                                      <div className="h-2 w-2 rounded-full border border-muted-foreground/40 bg-muted-foreground/20" />
+                                    </div>
+                                  </div>
+                                  <ProductImagePreview
+                                    alt={child.name}
+                                    className="h-10 w-10 shrink-0 rounded-[var(--radius-md)]"
+                                    url={child.coverImageUrl}
+                                  />
+                                  <span className="flex flex-col">
+                                    <span>{child.name}</span>
+                                    {child.variationLabel ? (
+                                      <span className="text-xs font-normal text-muted-foreground">
+                                        {child.variationLabel}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-3 text-sm text-muted-foreground">
+                                {child.sku ?? "Sem SKU"}
+                              </td>
+                              <td className="px-3 py-3 text-right text-sm text-muted-foreground/40">
+                                {formatMoney(Number(product.sellingPrice))}
+                              </td>
+                              <td className="px-3 py-3 text-right text-sm text-muted-foreground/40">
+                                {product.latestCost
+                                  ? formatMoney(Number(product.latestCost.amount))
+                                  : "—"}
+                              </td>
+                              <td className="px-3 py-3 text-right text-sm text-muted-foreground/40">
+                                {product.financeDefaults
+                                  ? formatMoney(Number(product.financeDefaults.packagingCost))
+                                  : "—"}
+                              </td>
+                              <td className="px-3 py-3 text-left">
+                                <Badge
+                                  variant={child.isActive ? "success" : "neutral"}
+                                  className="gap-1.5"
+                                >
+                                  <span
+                                    className={`h-1.5 w-1.5 rounded-full ${child.isActive ? "bg-success" : "bg-muted"}`}
+                                  />
+                                  {child.isActive ? "Ativo" : "Arquivado"}
+                                </Badge>
+                              </td>
+                              <td className="px-3 py-3 text-sm text-muted-foreground">
+                                {formatProductDate(child.createdAt)}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      : null}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {filteredParents.length === 0 ? (
+          <div className="shrink-0 rounded-[var(--radius-lg)] border border-dashed border-border/70 bg-background-soft/60 px-6 py-10 text-center">
+            <p className="text-sm font-medium text-foreground">Nenhum produto encontrado</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ajuste os filtros para visualizar outros SKUs ou canais.
+            </p>
+          </div>
+        ) : null}
+
+        {filteredParents.length > 0 ? (
+          <div className="shrink-0 pt-4">
+            <Pagination
+              currentPage={safeCurrentPage}
+              onPageChange={(page) => setCurrentPage(page)}
+              totalPages={filteredTotalPages}
+            />
+          </div>
+        ) : null}
+      </Card>
+      <CatalogProductDetailsModal
+        onDeleted={onRefresh}
+        onClose={() => {
+          setSelectedParentProduct(null);
+          setSelectedProduct(null);
+        }}
+        onOpenParent={(product) => {
+          setSelectedParentProduct(null);
+          setSelectedProduct(product);
+        }}
+        onSaved={onRefresh}
+        parentProduct={selectedParentProduct}
         product={selectedProduct}
       />
     </>
@@ -778,7 +1400,6 @@ function CatalogProductsTable({
 }
 
 export function ProductsHome({
-  organizationName,
   view = "catalog",
   onAddProduct,
   onImportProducts,
@@ -858,7 +1479,7 @@ export function ProductsHome({
         animate="visible"
         className="space-y-6"
       >
-        <ProductHeader organizationName={organizationName} stats={stats} />
+        <ProductHeader title={view === "catalog" ? "Catálogo" : "Performance"} stats={stats} />
         {marketplaceNotice ? (
           <MarketplaceNoticeCard notice={marketplaceNotice} />
         ) : null}
@@ -878,7 +1499,7 @@ export function ProductsHome({
         animate="visible"
         className="space-y-6"
       >
-        <ProductHeader organizationName={organizationName} stats={stats} />
+        <ProductHeader title="Performance" stats={stats} />
         {marketplaceNotice ? (
           <MarketplaceNoticeCard notice={marketplaceNotice} />
         ) : null}
@@ -892,10 +1513,10 @@ export function ProductsHome({
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="space-y-6"
+      className="flex max-h-[calc(100vh-112px)] flex-col gap-6 overflow-hidden md:max-h-[calc(100vh-128px)]"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <ProductHeader organizationName={organizationName} stats={stats} />
+        <ProductHeader title={view === "catalog" ? "Catálogo" : "Performance"} stats={stats} />
         {topActions}
       </div>
 
@@ -912,9 +1533,12 @@ export function ProductsHome({
 
       {view === "catalog" ? <hr className="border-border/60" /> : null}
 
-      <section className="min-w-0 w-full space-y-3">
+      <section className="min-w-0 flex flex-1 flex-col min-h-0">
         {view === "catalog" ? (
-          <CatalogProductsTable onRefresh={refresh} products={data?.products ?? []} />
+          <CatalogProductsHierarchyTable
+            onRefresh={refresh}
+            products={data?.products ?? []}
+          />
         ) : (
           <ProductTable
             rows={rows}

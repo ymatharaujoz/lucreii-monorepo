@@ -20,6 +20,7 @@ import type { AuthenticatedRequestContext } from "./auth.types";
 import { OrganizationProvisioningService } from "./organization-provisioning.service";
 
 const CREDENTIAL_PROVIDER_ID = "credential";
+const COMPANY_HEADER_NAME = "x-lucreii-company-id";
 const scrypt = promisify(nodeScrypt);
 
 type SessionRecord = {
@@ -199,8 +200,12 @@ export class AuthService {
     const membership = await this.organizationProvisioningService.findDefaultOrganization(
       persistedSession.user.id,
     );
+    const selectedCompanyId = membership?.id
+      ? await this.resolveSelectedCompanyId(request, membership.id, persistedSession.user.id)
+      : null;
 
     return {
+      selectedCompanyId,
       session: {
         expiresAt: toDate(persistedSession.expiresAt),
         id: persistedSession.id,
@@ -284,5 +289,40 @@ export class AuthService {
         : request.headers.cookie;
 
     return readApiSessionTokenFromCookieHeader(cookieHeader);
+  }
+
+  private async resolveSelectedCompanyId(
+    request:
+      | {
+          headers: Record<string, string | string[] | undefined>;
+        }
+      | {
+          headers: Headers;
+        },
+    organizationId: string,
+    userId: string,
+  ) {
+    const rawHeader =
+      request.headers instanceof Headers
+        ? request.headers.get(COMPANY_HEADER_NAME) ?? undefined
+        : request.headers[COMPANY_HEADER_NAME];
+    const companyId = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
+    const normalizedCompanyId = typeof companyId === "string" ? companyId.trim() : "";
+
+    if (!normalizedCompanyId) {
+      return null;
+    }
+
+    const company = await this.db.query.companies.findFirst({
+      where: (table, { and, eq }) =>
+        and(
+          eq(table.id, normalizedCompanyId),
+          eq(table.organizationId, organizationId),
+          eq(table.userId, userId),
+          eq(table.isActive, true),
+        ),
+    });
+
+    return company?.id ?? null;
   }
 }

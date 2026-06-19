@@ -52,6 +52,7 @@ describe("FinanceInputsService", () => {
         fixedCostDefault: "1500.00",
         id: "company_1",
         isActive: true,
+        isSelected: true,
         razaoSocial: "Mercado Livre LTDA",
         organizationId: "org_123",
         taxRateDefault: "0.120000",
@@ -70,6 +71,7 @@ describe("FinanceInputsService", () => {
         fixedCostDefault: "1500.00",
         id: "company_1",
         isActive: true,
+        isSelected: true,
         razaoSocial: "Mercado Livre LTDA",
         taxRateDefault: "0.120000",
         updatedAt: "2026-05-09T10:00:00.000Z",
@@ -81,6 +83,7 @@ describe("FinanceInputsService", () => {
 
   it("creates companies with default finance values when fields are omitted", async () => {
     const { db, service } = createService();
+    db.query.companies.findFirst.mockResolvedValue(null);
     db.query.companies.findMany.mockResolvedValue([]);
     db.query.subscriptions.findFirst.mockResolvedValue({
       planCode: "start",
@@ -95,6 +98,7 @@ describe("FinanceInputsService", () => {
           fixedCostDefault: "0",
           id: "company_1",
           isActive: true,
+          isSelected: true,
           razaoSocial: "Mercado Livre LTDA",
           organizationId: "org_123",
           taxRateDefault: "0",
@@ -131,6 +135,7 @@ describe("FinanceInputsService", () => {
 
   it("blocks company creation when total registered CNPJs reaches the plan limit", async () => {
     const { db, service } = createService();
+    db.query.companies.findFirst.mockResolvedValue(null);
     db.query.companies.findMany.mockResolvedValue([
       {
         id: "company_inactive",
@@ -154,14 +159,57 @@ describe("FinanceInputsService", () => {
     expect(db.insert).not.toHaveBeenCalled();
   });
 
-  it("rejects duplicated cnpj inside same organization", async () => {
+  it("rejects duplicated cnpj before insert", async () => {
     const { db, service } = createService();
+    db.query.companies.findFirst.mockResolvedValue({
+      id: "company_other",
+      organizationId: "org_other",
+      userId: "user_other",
+    });
+    db.query.companies.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.createCompany(context, {
+        cnpj: "12.345.678/0001-95",
+        razaoSocial: "Mercado Livre LTDA",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicated cnpj on update", async () => {
+    const { db, service } = createService();
+    db.query.companies.findFirst
+      .mockResolvedValueOnce({
+        id: "company_1",
+        organizationId: "org_123",
+        userId: "user_123",
+      })
+      .mockResolvedValueOnce({
+        id: "company_other",
+        organizationId: "org_other",
+        userId: "user_other",
+      });
+
+    await expect(
+      service.updateCompany(context, "company_1", {
+        cnpj: "12.345.678/0001-95",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate cnpj conflicts returned by the database", async () => {
+    const { db, service } = createService();
+    db.query.companies.findFirst.mockResolvedValue(null);
     db.query.companies.findMany.mockResolvedValue([]);
     db.query.subscriptions.findFirst.mockResolvedValue({
       planCode: "pro",
       status: "active",
     });
-    const duplicateError = { code: "23505", constraint_name: "companies_org_cnpj_key" };
+    const duplicateError = { code: "23505", constraint_name: "companies_cnpj_key" };
     db.insert.mockReturnValue({
       values: vi.fn().mockReturnValue({
         returning: vi.fn().mockRejectedValue(duplicateError),
@@ -178,29 +226,32 @@ describe("FinanceInputsService", () => {
 
   it("updates only provided company finance defaults", async () => {
     const { db, service } = createService();
+    db.query.companies.findFirst
+      .mockResolvedValueOnce({
+        id: "company_1",
+        organizationId: "org_123",
+        userId: "user_123",
+      })
+      .mockResolvedValueOnce(null);
     const setMock = vi.fn().mockReturnValue({
       where: vi.fn().mockReturnValue({
         returning: vi.fn().mockResolvedValue([
           {
             code: "MELI",
-            cnpj: "12345678000195",
-            createdAt: new Date("2026-05-09T10:00:00.000Z"),
-            fixedCostDefault: "1750.00",
-            id: "company_1",
-            isActive: true,
-            razaoSocial: "Mercado Livre LTDA",
-            organizationId: "org_123",
-            taxRateDefault: "0.090000",
-            updatedAt: new Date("2026-05-09T11:00:00.000Z"),
-            userId: "user_123",
+          cnpj: "12345678000195",
+          createdAt: new Date("2026-05-09T10:00:00.000Z"),
+          fixedCostDefault: "1750.00",
+          id: "company_1",
+          isActive: true,
+          isSelected: false,
+          razaoSocial: "Mercado Livre LTDA",
+          organizationId: "org_123",
+          taxRateDefault: "0.090000",
+          updatedAt: new Date("2026-05-09T11:00:00.000Z"),
+          userId: "user_123",
           },
         ]),
       }),
-    });
-    db.query.companies.findFirst.mockResolvedValue({
-      id: "company_1",
-      organizationId: "org_123",
-      userId: "user_123",
     });
     db.update.mockReturnValue({
       set: setMock,
@@ -225,10 +276,53 @@ describe("FinanceInputsService", () => {
       expect.objectContaining({
         cnpj: "12345678000195",
         fixedCostDefault: "1750.00",
+        isSelected: false,
         razaoSocial: "Mercado Livre LTDA",
         taxRateDefault: "0.090000",
       }),
     );
+  });
+
+  it("returns selected company marker based on context", async () => {
+    const { db, service } = createService();
+    db.query.companies.findMany.mockResolvedValue([
+      {
+        code: "MELI",
+        cnpj: "12345678000195",
+        createdAt: new Date("2026-05-09T10:00:00.000Z"),
+        fixedCostDefault: "1500.00",
+        id: "company_1",
+        isActive: true,
+        razaoSocial: "Mercado Livre LTDA",
+        organizationId: "org_123",
+        taxRateDefault: "0.120000",
+        updatedAt: new Date("2026-05-09T10:00:00.000Z"),
+        userId: "user_123",
+      },
+      {
+        code: "SHOP",
+        cnpj: "22345678000195",
+        createdAt: new Date("2026-05-09T10:00:00.000Z"),
+        fixedCostDefault: "0",
+        id: "company_2",
+        isActive: true,
+        razaoSocial: "Shopee LTDA",
+        organizationId: "org_123",
+        taxRateDefault: "0",
+        updatedAt: new Date("2026-05-09T10:00:00.000Z"),
+        userId: "user_123",
+      },
+    ]);
+
+    const result = await service.listCompanies({
+      ...context,
+      selectedCompanyId: "company_2",
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({ id: "company_1", isSelected: false }),
+      expect.objectContaining({ id: "company_2", isSelected: true }),
+    ]);
   });
 
   it("returns public monthly performance records without tenant internals", async () => {

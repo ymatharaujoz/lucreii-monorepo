@@ -28,6 +28,18 @@ export type ApiClientConfig = {
   defaultHeaders?: HeadersInit;
 };
 
+function readSelectedCompanyIdFromBrowserCookie() {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const match = document.cookie.match(
+    /(?:^|;\s*)lucreii_selected_company_id=([^;]+)/i,
+  );
+
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 async function parseResponse(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -95,6 +107,11 @@ export function createApiClient({
 
     if (contentType && !headers.has("content-type")) {
       headers.set("content-type", contentType);
+    }
+
+    const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
+    if (selectedCompanyId && !headers.has("x-lucreii-company-id")) {
+      headers.set("x-lucreii-company-id", selectedCompanyId);
     }
 
     const response = await fetchFn(`${baseUrl}${normalizePath(path)}`, {

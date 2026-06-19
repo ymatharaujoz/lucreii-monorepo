@@ -54,6 +54,9 @@ function createService() {
         findFirst: vi.fn(),
         findMany: vi.fn(),
       },
+      externalProducts: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
       productMonthlyPerformance: {
         findMany: vi.fn(),
       },
@@ -277,7 +280,10 @@ describe("ProductsService", () => {
     );
     expect(db.query.companies.findMany).toHaveBeenCalledOnce();
     expect(txInsert).toHaveBeenCalledTimes(3);
-    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledWith("org_1");
+    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledWith(
+      "org_1",
+      "company_1",
+    );
   });
 
   it("rejects manual product creation when sku already exists in organization", async () => {
@@ -367,8 +373,62 @@ describe("ProductsService", () => {
     expect(db.transaction).not.toHaveBeenCalled();
   });
 
-  it("rejects manual product creation when multiple active companies exist", async () => {
-    const { db, service } = createService();
+  it("allows manual product creation when multiple active companies exist but one is selected", async () => {
+    const { db, financeService, service } = createService();
+    const createdProduct = {
+      createdAt: new Date("2026-05-01T10:00:00.000Z"),
+      id: "product_1",
+      isActive: true,
+      name: "Kit Mercado Livre",
+      organizationId: "org_1",
+      sellingPrice: "149.90",
+      sku: "ML-001",
+      updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+    };
+    const createdCost = {
+      amount: "80.00",
+      costType: "base",
+      createdAt: new Date("2026-05-01T10:00:00.000Z"),
+      currency: "BRL",
+      effectiveFrom: null,
+      id: "cost_1",
+      notes: "Cadastro manual inicial",
+      organizationId: "org_1",
+      productId: "product_1",
+      updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+    };
+    const createdDefaults = {
+      advertisingCost: "0",
+      createdAt: new Date("2026-05-01T10:00:00.000Z"),
+      id: "defaults_1",
+      packagingCost: "3.00",
+      productId: "product_1",
+      updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+    };
+    const txInsert = vi
+      .fn()
+      .mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdProduct]),
+        }),
+      })
+      .mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdCost]),
+        }),
+      })
+      .mockReturnValueOnce({
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([createdDefaults]),
+        }),
+      });
+
+    db.transaction = vi.fn(async (callback) =>
+      callback({
+        insert: txInsert,
+        update: vi.fn(),
+      }),
+    );
     db.query.products.findMany.mockResolvedValue([]);
     db.query.companies.findMany.mockResolvedValue([
       {
@@ -382,11 +442,13 @@ describe("ProductsService", () => {
         taxRateDefault: "0.080000",
       },
     ]);
+    financeService.materializeOrganizationMetrics = vi.fn().mockResolvedValue(undefined);
 
     await expect(
       service.createManualProduct(
         {
           organizationId: "org_1",
+          selectedCompanyId: "company_2",
           userId: "user_1",
         },
         {
@@ -402,9 +464,15 @@ describe("ProductsService", () => {
           },
         },
       ),
-    ).rejects.toThrow("Mantenha apenas uma empresa ativa em /app antes de criar ou importar produtos.");
+    ).resolves.toEqual(
+      expect.objectContaining({
+        product: expect.objectContaining({
+          id: "product_1",
+        }),
+      }),
+    );
 
-    expect(db.transaction).not.toHaveBeenCalled();
+    expect(db.transaction).toHaveBeenCalledOnce();
   });
 
   it("imports spreadsheet rows without IMPOSTO and delegates tax resolution to manual creation", async () => {
@@ -443,6 +511,7 @@ describe("ProductsService", () => {
 
     expect(createManualProductSpy).toHaveBeenCalledWith(
       {
+        companyId: "legacy-company-scope",
         organizationId: "org_1",
         userId: "user_1",
       },
@@ -931,12 +1000,563 @@ describe("ProductsService", () => {
       ),
     ).resolves.toEqual(
       expect.objectContaining({
+        catalogRole: "standalone",
+        children: [],
         financeDefaults: expect.objectContaining({
           packagingCost: "4.50",
         }),
         latestCost: expect.objectContaining({
           amount: "30.00",
         }),
+      }),
+    );
+  });
+
+  it("groups Mercado Livre variations under a virtual parent in analytics snapshots", async () => {
+    const { db, financeService, service, syncService } = createService();
+    const productRows = [
+      {
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        financeDefaults: {
+          advertisingCost: "0.00",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          id: "defaults_1",
+          packagingCost: "4.50",
+          productId: "product_1",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        id: "product_1",
+        images: [
+          {
+            createdAt: new Date("2026-06-17T10:00:00.000Z"),
+            externalIdentifier: "img:1",
+            id: "image_1",
+            organizationId: "org_1",
+            position: 0,
+            productId: "product_1",
+            source: "mercadolivre",
+            updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+            url: "https://example.com/1.png",
+          },
+        ],
+        isActive: true,
+        name: "Produto Azul",
+        organizationId: "org_1",
+        sellingPrice: "149.90",
+        sku: "ML-001-AZ",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+      {
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        financeDefaults: {
+          advertisingCost: "0.00",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          id: "defaults_2",
+          packagingCost: "4.50",
+          productId: "product_2",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        id: "product_2",
+        images: [
+          {
+            createdAt: new Date("2026-06-17T10:00:00.000Z"),
+            externalIdentifier: "img:2",
+            id: "image_2",
+            organizationId: "org_1",
+            position: 0,
+            productId: "product_2",
+            source: "mercadolivre",
+            updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+            url: "https://example.com/2.png",
+          },
+        ],
+        isActive: true,
+        name: "Produto Vermelho",
+        organizationId: "org_1",
+        sellingPrice: "149.90",
+        sku: "ML-001-VM",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+      {
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        financeDefaults: null,
+        id: "product_3",
+        images: [],
+        isActive: true,
+        name: "Produto Manual",
+        organizationId: "org_1",
+        sellingPrice: "99.90",
+        sku: "MAN-001",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+    ];
+
+    db.query.companies.findMany.mockResolvedValue([
+      {
+        id: "company_1",
+        isActive: true,
+        taxRateDefault: "0.120000",
+      },
+    ]);
+    db.query.products.findMany
+      .mockResolvedValueOnce(productRows)
+      .mockResolvedValueOnce(
+        productRows.map(({ images, financeDefaults, ...product }) => product),
+      );
+    db.query.productCosts.findMany.mockResolvedValue([
+      {
+        amount: "30.00",
+        costType: "base",
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        currency: "BRL",
+        effectiveFrom: null,
+        id: "cost_1",
+        notes: null,
+        organizationId: "org_1",
+        productId: "product_1",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+      {
+        amount: "31.00",
+        costType: "base",
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        currency: "BRL",
+        effectiveFrom: null,
+        id: "cost_2",
+        notes: null,
+        organizationId: "org_1",
+        productId: "product_2",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+    ]);
+    db.query.adCosts.findMany.mockResolvedValue([]);
+    db.query.manualExpenses.findMany.mockResolvedValue([]);
+    db.query.productMonthlyPerformance.findMany.mockResolvedValue([]);
+    financeService.buildFinanceSnapshot.mockResolvedValue({
+      adCosts: [],
+      manualExpenses: [],
+      orders: [],
+      products: [
+        {
+          id: "product_1",
+          isActive: true,
+          name: "Produto Azul",
+          sellingPrice: "149.90",
+          sku: "ML-001-AZ",
+          unitCost: "30.00",
+        },
+        {
+          id: "product_2",
+          isActive: true,
+          name: "Produto Vermelho",
+          sellingPrice: "149.90",
+          sku: "ML-001-VM",
+          unitCost: "31.00",
+        },
+        {
+          id: "product_3",
+          isActive: true,
+          name: "Produto Manual",
+          sellingPrice: "99.90",
+          sku: "MAN-001",
+          unitCost: "0.00",
+        },
+      ],
+    });
+    syncService.getStatus.mockResolvedValue({
+      activeRun: null,
+      availability: {
+        canRun: true,
+        currentWindowKey: "2026-06-17-morning",
+        currentWindowLabel: "Manha",
+        currentWindowSlot: "morning",
+        lastSuccessfulSyncAt: null,
+        message: "Sync is available for the current daily window.",
+        nextAvailableAt: "2026-06-17T09:00:00.000Z",
+        provider: "mercadolivre",
+        reason: "available",
+      },
+      lastCompletedRun: null,
+    });
+
+    const { listSyncedProductsReadModel } = await import(
+      "@/modules/integrations/synced-products.read-model"
+    );
+    vi.mocked(listSyncedProductsReadModel).mockImplementation(async () =>
+      [
+        {
+          externalProductId: "MLB123",
+          fixedFee: "0.00",
+          grossRevenue: "0.00",
+          id: "external_0",
+          lastOrderedAt: null,
+          latestUnitPrice: null,
+          linkedProduct: {
+            id: "product_1",
+            isActive: true,
+            name: "Produto Azul",
+            sku: "ML-001-AZ",
+          },
+          marketplaceCommission: "0.00",
+          netMarketplaceTake: "0.00",
+          orderCount: 0,
+          provider: "mercadolivre",
+          reviewStatus: "linked_to_existing_product",
+          shippingCost: "0.00",
+          sku: "ML-001-AZ",
+          suggestedMatches: [],
+          title: "Produto",
+          unitsSold: 0,
+        },
+        {
+          externalProductId: "MLB123:101",
+          fixedFee: "0.00",
+          grossRevenue: "0.00",
+          id: "external_1",
+          lastOrderedAt: null,
+          latestUnitPrice: null,
+          linkedProduct: {
+            id: "product_2",
+            isActive: true,
+            name: "Produto Vermelho",
+            sku: "ML-001-VM",
+          },
+          marketplaceCommission: "0.00",
+          netMarketplaceTake: "0.00",
+          orderCount: 0,
+          provider: "mercadolivre",
+          reviewStatus: "linked_to_existing_product",
+          shippingCost: "0.00",
+          sku: "ML-001-VM",
+          suggestedMatches: [],
+          title: "Cor: Azul",
+          unitsSold: 0,
+        },
+      ],
+    );
+
+    const snapshot = await service.getAnalyticsSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+
+    expect(snapshot.products).toEqual([
+      expect.objectContaining({
+        catalogGroupKey: "mercadolivre:MLB123",
+        catalogRole: "parent",
+        children: [
+          expect.objectContaining({
+            catalogRole: "child",
+            id: "product_2",
+            parentProductId: "product_1",
+            variationLabel: "Cor: Azul",
+          }),
+        ],
+        derivedFromProvider: "mercadolivre",
+        id: "product_1",
+      }),
+      expect.objectContaining({
+        catalogRole: "standalone",
+        children: [],
+        derivedFromProvider: null,
+        id: "product_3",
+      }),
+    ]);
+  });
+
+  it("replicates catalog finance updates from parent product to linked Mercado Livre variations", async () => {
+    const { db, financeService, service } = createService();
+    const txUpdate = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    });
+
+    db.query.products.findFirst
+      .mockResolvedValueOnce({
+        id: "product_1",
+        organizationId: "org_1",
+      })
+      .mockResolvedValueOnce({
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        financeDefaults: {
+          advertisingCost: "0.00",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          id: "defaults_1",
+          packagingCost: "6.50",
+          productId: "product_1",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        id: "product_1",
+        images: [],
+        isActive: true,
+        name: "Produto Azul",
+        organizationId: "org_1",
+        sellingPrice: "149.90",
+        sku: "ML-001-AZ",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      });
+    db.query.products.findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        financeDefaults: {
+          advertisingCost: "0.00",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          id: "defaults_1",
+          packagingCost: "6.50",
+          productId: "product_1",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        id: "product_1",
+        images: [],
+        isActive: true,
+        name: "Produto Azul",
+        organizationId: "org_1",
+        sellingPrice: "149.90",
+        sku: "ML-001-AZ",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+      {
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        financeDefaults: {
+          advertisingCost: "0.00",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          id: "defaults_2",
+          packagingCost: "6.50",
+          productId: "product_2",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        id: "product_2",
+        images: [],
+        isActive: true,
+        name: "Produto Vermelho",
+        organizationId: "org_1",
+        sellingPrice: "149.90",
+        sku: "ML-001-VM",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+      {
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        financeDefaults: {
+          advertisingCost: "0.00",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          id: "defaults_3",
+          packagingCost: "6.50",
+          productId: "product_3",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        id: "product_3",
+        images: [],
+        isActive: true,
+        name: "Produto Verde",
+        organizationId: "org_1",
+        sellingPrice: "149.90",
+        sku: "ML-001-VD",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+    ]);
+    db.query.productCosts.findFirst.mockResolvedValue({
+      amount: "30.00",
+      costType: "base",
+      createdAt: new Date("2026-06-17T10:00:00.000Z"),
+      currency: "BRL",
+      effectiveFrom: null,
+      id: "cost_1",
+      notes: null,
+      organizationId: "org_1",
+      productId: "product_1",
+      updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+    });
+    db.query.productCosts.findMany.mockResolvedValue([
+      {
+        amount: "45.00",
+        costType: "base",
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        currency: "BRL",
+        effectiveFrom: null,
+        id: "cost_1",
+        notes: "Atualizado pelo catÃ¡logo",
+        organizationId: "org_1",
+        productId: "product_1",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+      {
+        amount: "45.00",
+        costType: "base",
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        currency: "BRL",
+        effectiveFrom: null,
+        id: "cost_2",
+        notes: "Atualizado pelo catÃ¡logo",
+        organizationId: "org_1",
+        productId: "product_2",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+      {
+        amount: "45.00",
+        costType: "base",
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        currency: "BRL",
+        effectiveFrom: null,
+        id: "cost_3",
+        notes: "Atualizado pelo catÃƒÂ¡logo",
+        organizationId: "org_1",
+        productId: "product_3",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+    ]);
+    db.transaction = vi.fn(async (callback) =>
+      callback({
+        insert: vi.fn().mockReturnValue({
+          values: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+        update: txUpdate,
+      }),
+    );
+    financeService.materializeOrganizationMetrics = vi.fn().mockResolvedValue(undefined);
+
+    const { listSyncedProductsReadModel } = await import(
+      "@/modules/integrations/synced-products.read-model"
+    );
+    vi.mocked(listSyncedProductsReadModel).mockImplementation(async () =>
+      [
+        {
+          externalProductId: "MLB123",
+          fixedFee: "0.00",
+          grossRevenue: "0.00",
+          id: "external_0",
+          lastOrderedAt: null,
+          latestUnitPrice: null,
+          linkedProduct: {
+            id: "product_1",
+            isActive: true,
+            name: "Produto Azul",
+            sku: "ML-001-AZ",
+          },
+          marketplaceCommission: "0.00",
+          netMarketplaceTake: "0.00",
+          orderCount: 0,
+          provider: "mercadolivre",
+          reviewStatus: "linked_to_existing_product",
+          shippingCost: "0.00",
+          sku: "ML-001-AZ",
+          suggestedMatches: [],
+          title: "Produto Azul",
+          unitsSold: 0,
+        },
+        {
+          externalProductId: "MLB123:101",
+          fixedFee: "0.00",
+          grossRevenue: "0.00",
+          id: "external_1",
+          lastOrderedAt: null,
+          latestUnitPrice: null,
+          linkedProduct: {
+            id: "product_1",
+            isActive: true,
+            name: "Produto Azul",
+            sku: "ML-001-AZ",
+          },
+          marketplaceCommission: "0.00",
+          netMarketplaceTake: "0.00",
+          orderCount: 0,
+          provider: "mercadolivre",
+          reviewStatus: "linked_to_existing_product",
+          shippingCost: "0.00",
+          sku: "ML-001-AZ",
+          suggestedMatches: [],
+          title: "Produto - Cor: Azul",
+          unitsSold: 0,
+        },
+        {
+          externalProductId: "MLB123:102",
+          fixedFee: "0.00",
+          grossRevenue: "0.00",
+          id: "external_2",
+          lastOrderedAt: null,
+          latestUnitPrice: null,
+          linkedProduct: {
+            id: "product_2",
+            isActive: true,
+            name: "Produto Vermelho",
+            sku: "ML-001-VM",
+          },
+          marketplaceCommission: "0.00",
+          netMarketplaceTake: "0.00",
+          orderCount: 0,
+          provider: "mercadolivre",
+          reviewStatus: "linked_to_existing_product",
+          shippingCost: "0.00",
+          sku: "ML-001-VM",
+          suggestedMatches: [],
+          title: "Produto - Cor: Vermelho",
+          unitsSold: 0,
+        },
+        {
+          externalProductId: "MLB123:103",
+          fixedFee: "0.00",
+          grossRevenue: "0.00",
+          id: "external_3",
+          lastOrderedAt: null,
+          latestUnitPrice: null,
+          linkedProduct: {
+            id: "product_3",
+            isActive: true,
+            name: "Produto Verde",
+            sku: "ML-001-VD",
+          },
+          marketplaceCommission: "0.00",
+          netMarketplaceTake: "0.00",
+          orderCount: 0,
+          provider: "mercadolivre",
+          reviewStatus: "linked_to_existing_product",
+          shippingCost: "0.00",
+          sku: "ML-001-VD",
+          suggestedMatches: [],
+          title: "Produto - Cor: Verde",
+          unitsSold: 0,
+        },
+      ],
+    );
+
+    const result = await service.updateCatalogFinance("org_1", "product_1", {
+      packagingCost: "6.50",
+      unitCost: "45.00",
+    });
+
+    expect(txUpdate).toHaveBeenCalled();
+    expect(txUpdate).toHaveBeenCalledTimes(6);
+    expect(result).toEqual(
+      expect.objectContaining({
+        catalogRole: "parent",
+        financeDefaults: expect.objectContaining({
+          packagingCost: "6.50",
+        }),
+        latestCost: expect.objectContaining({
+          amount: "45.00",
+        }),
+        children: [
+          expect.objectContaining({
+            financeDefaults: expect.objectContaining({
+              packagingCost: "6.50",
+            }),
+            latestCost: expect.objectContaining({
+              amount: "45.00",
+            }),
+          }),
+          expect.objectContaining({
+            financeDefaults: expect.objectContaining({
+              packagingCost: "6.50",
+            }),
+            latestCost: expect.objectContaining({
+              amount: "45.00",
+            }),
+          }),
+        ],
       }),
     );
   });
@@ -1045,6 +1665,9 @@ describe("ProductsService", () => {
 
   it("uses company-scoped monthly performance in analytics snapshots", async () => {
     const { db, financeService, service, syncService } = createService();
+    const { listSyncedProductsReadModel } = await import(
+      "@/modules/integrations/synced-products.read-model"
+    );
 
     const product = {
       createdAt: new Date("2026-05-01T10:00:00.000Z"),
@@ -1135,6 +1758,7 @@ describe("ProductsService", () => {
       },
       lastCompletedRun: null,
     });
+    vi.mocked(listSyncedProductsReadModel).mockResolvedValue([]);
 
     const snapshot = await service.getAnalyticsSnapshot(
       {
@@ -1174,6 +1798,19 @@ describe("ProductsService", () => {
         taxAmount: "18.00",
       }),
     ]);
+    expect(listSyncedProductsReadModel).toHaveBeenCalledTimes(2);
+    expect(listSyncedProductsReadModel).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        companyId: "22222222-2222-4222-8222-222222222222",
+      }),
+    );
+    expect(listSyncedProductsReadModel).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        companyId: "22222222-2222-4222-8222-222222222222",
+      }),
+    );
     expect(snapshot.monthlyPerformanceRows).toEqual([
       {
         advertisingCost: "10.00",
@@ -1235,6 +1872,66 @@ describe("ProductsService", () => {
       companyRequired: true,
       referenceMonth: expect.stringMatching(/^\d{4}-\d{2}-01$/),
       taxRateDefault: "0",
+    });
+  });
+
+  it("uses selected company as analytics fallback scope", async () => {
+    const { db, financeService, service, syncService } = createService();
+
+    db.query.companies.findMany.mockResolvedValue([
+      {
+        id: "company_1",
+        isActive: true,
+        organizationId: "org_1",
+        taxRateDefault: "0.050000",
+        userId: "user_1",
+      },
+      {
+        id: "company_2",
+        isActive: true,
+        organizationId: "org_1",
+        taxRateDefault: "0.120000",
+        userId: "user_1",
+      },
+    ]);
+    db.query.products.findMany.mockResolvedValue([]);
+    db.query.productCosts.findMany.mockResolvedValue([]);
+    db.query.adCosts.findMany.mockResolvedValue([]);
+    db.query.manualExpenses.findMany.mockResolvedValue([]);
+    db.query.productMonthlyPerformance.findMany.mockResolvedValue([]);
+    financeService.buildFinanceSnapshot.mockResolvedValue({
+      adCosts: [],
+      manualExpenses: [],
+      orders: [],
+      products: [],
+    });
+    syncService.getStatus.mockResolvedValue({
+      activeRun: null,
+      availability: {
+        canRun: false,
+        currentWindowKey: null,
+        currentWindowLabel: null,
+        currentWindowSlot: null,
+        lastSuccessfulSyncAt: null,
+        message: "Connect this marketplace account before running the first sync.",
+        nextAvailableAt: null,
+        provider: "mercadolivre",
+        reason: "provider_disconnected",
+      },
+      lastCompletedRun: null,
+    });
+
+    const snapshot = await service.getAnalyticsSnapshot({
+      organizationId: "org_1",
+      selectedCompanyId: "company_2",
+      userId: "user_1",
+    });
+
+    expect(snapshot.scope).toEqual({
+      companyId: "company_2",
+      companyRequired: false,
+      referenceMonth: expect.stringMatching(/^\d{4}-\d{2}-01$/),
+      taxRateDefault: "0.120000",
     });
   });
 });

@@ -354,6 +354,7 @@ function toSyncedProductRecord(
 async function readSyncedExternalProducts(
   db: DatabaseClient,
   organizationId: string,
+  companyId: string | undefined,
   providerSlug: IntegrationProviderSlug,
 ): Promise<Array<ExternalProduct | LegacySyncedExternalProductRow>> {
   try {
@@ -361,7 +362,11 @@ async function readSyncedExternalProducts(
       .select()
       .from(externalProducts)
       .where(
-        and(eq(externalProducts.organizationId, organizationId), eq(externalProducts.provider, providerSlug)),
+        and(
+          eq(externalProducts.organizationId, organizationId),
+          ...(companyId ? [eq(externalProducts.companyId, companyId)] : []),
+          eq(externalProducts.provider, providerSlug),
+        ),
       )
       .orderBy(desc(externalProducts.updatedAt), desc(externalProducts.createdAt));
   } catch (error) {
@@ -377,6 +382,7 @@ async function readSyncedExternalProducts(
         marketplaceConnectionId: externalProducts.marketplaceConnectionId,
         metadata: externalProducts.metadata,
         organizationId: externalProducts.organizationId,
+        companyId: externalProducts.companyId,
         provider: externalProducts.provider,
         sku: externalProducts.sku,
         title: externalProducts.title,
@@ -384,7 +390,11 @@ async function readSyncedExternalProducts(
       })
       .from(externalProducts)
       .where(
-        and(eq(externalProducts.organizationId, organizationId), eq(externalProducts.provider, providerSlug)),
+        and(
+          eq(externalProducts.organizationId, organizationId),
+          ...(companyId ? [eq(externalProducts.companyId, companyId)] : []),
+          eq(externalProducts.provider, providerSlug),
+        ),
       )
       .orderBy(desc(externalProducts.updatedAt), desc(externalProducts.createdAt));
 
@@ -397,6 +407,7 @@ async function readSyncedExternalProducts(
 }
 
 export async function listSyncedProductsReadModel(input: {
+  companyId?: string;
   db: DatabaseClient;
   organizationId: string;
   productsList: Product[];
@@ -405,6 +416,7 @@ export async function listSyncedProductsReadModel(input: {
   const externalProductRows = await readSyncedExternalProducts(
     input.db,
     input.organizationId,
+    input.companyId,
     input.providerSlug,
   );
 

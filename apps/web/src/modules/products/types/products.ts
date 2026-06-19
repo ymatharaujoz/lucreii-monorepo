@@ -33,6 +33,8 @@ export type ProductTableRow = {
   id: string;
   performanceId: string;
   name: string;
+  displayName: string;
+  variationLabel: string | null;
   sku: string;
   isActive: boolean;
   coverImageUrl: string | null;

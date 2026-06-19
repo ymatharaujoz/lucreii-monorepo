@@ -129,6 +129,7 @@ describe("AuthExchangeService", () => {
           role: "owner",
           slug: "lucreii",
         },
+        selectedCompanyId: null,
         session: {
           expiresAt: "2026-12-31T00:00:00.000Z",
           id: "session_123",
@@ -174,6 +175,7 @@ describe("AuthExchangeService", () => {
       authState: {
         onboardingStatus: "organization_missing",
         organization: null,
+        selectedCompanyId: null,
         session: {
           expiresAt: "2026-12-31T00:00:00.000Z",
           id: "session_123",

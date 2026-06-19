@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Headers,
   Controller,
   Get,
@@ -39,9 +40,11 @@ export class IntegrationsController {
   async listConnections(
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
       data: await this.integrationsService.listConnections(
         authContext.organization!.id,
+        companyId,
       ),
       error: null,
     };
@@ -53,9 +56,11 @@ export class IntegrationsController {
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
     @Param() params: IntegrationProviderParamDto,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
       data: await this.integrationsService.createConnectUrl(
         authContext.organization!.id,
+        companyId,
         params.provider,
       ),
       error: null,
@@ -135,9 +140,11 @@ export class IntegrationsController {
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
     @Param() params: IntegrationProviderParamDto,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
       data: await this.integrationsService.listSyncedProducts(
         authContext.organization!.id,
+        companyId,
         params.provider,
       ),
       error: null,
@@ -149,8 +156,10 @@ export class IntegrationsController {
   async importMercadoLivreCatalog(
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
       data: await this.integrationsService.importMercadoLivreCatalog({
+        companyId,
         organizationId: authContext.organization!.id,
         userId: authContext.user.id,
       }),
@@ -164,9 +173,11 @@ export class IntegrationsController {
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
     @Param() params: IntegrationExternalProductParamDto,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
       data: await this.integrationsService.importSyncedProduct(
         authContext.organization!.id,
+        companyId,
         params.provider,
         params.externalProductId,
       ),
@@ -181,9 +192,11 @@ export class IntegrationsController {
     @Param() params: IntegrationExternalProductParamDto,
     @Body() body: LinkSyncedProductRequestDto,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
       data: await this.integrationsService.linkSyncedProduct(
         authContext.organization!.id,
+        companyId,
         params.provider,
         params.externalProductId,
         body.productId,
@@ -198,9 +211,11 @@ export class IntegrationsController {
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
     @Param() params: IntegrationExternalProductParamDto,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
       data: await this.integrationsService.ignoreSyncedProduct(
         authContext.organization!.id,
+        companyId,
         params.provider,
         params.externalProductId,
       ),
@@ -214,12 +229,22 @@ export class IntegrationsController {
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
     @Param() params: IntegrationProviderParamDto,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
       data: await this.integrationsService.disconnectProvider(
         authContext.organization!.id,
+        companyId,
         params.provider,
       ),
       error: null,
     };
+  }
+
+  private requireSelectedCompanyId(authContext: AuthenticatedRequestContext) {
+    if (!authContext.selectedCompanyId) {
+      throw new BadRequestException("Selected company required.");
+    }
+
+    return authContext.selectedCompanyId;
   }
 }

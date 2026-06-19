@@ -49,6 +49,7 @@ export type ManualExpenseFormValues = {
 };
 
 export type ProductRecord = {
+  companyId: string;
   coverImageUrl: string | null;
   id: string;
   images: ProductImageRecord[];
@@ -72,6 +73,7 @@ export type ProductImageRecord = {
 
 export type ProductCostRecord = {
   id: string;
+  companyId: string;
   organizationId: string;
   productId: string;
   costType: string;
@@ -85,6 +87,7 @@ export type ProductCostRecord = {
 
 export type AdCostRecord = {
   id: string;
+  companyId: string;
   organizationId: string;
   productId: string | null;
   channel: string;
@@ -98,6 +101,7 @@ export type AdCostRecord = {
 
 export type ManualExpenseRecord = {
   id: string;
+  companyId: string;
   organizationId: string;
   category: string;
   amount: DecimalString;
@@ -108,9 +112,17 @@ export type ManualExpenseRecord = {
   updatedAt: string;
 };
 
+export type ProductCatalogRole = "parent" | "child" | "standalone";
+
 export type ProductListItem = ProductRecord & {
+  catalogGroupKey: string | null;
+  catalogRole: ProductCatalogRole;
+  children: ProductListItem[];
+  derivedFromProvider: "mercadolivre" | null;
   latestCost: ProductCostRecord | null;
   financeDefaults: ProductFinanceDefaultsRecord | null;
+  parentProductId: string | null;
+  variationLabel: string | null;
 };
 
 export type SyncedProductReviewStatus =

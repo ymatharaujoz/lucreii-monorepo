@@ -135,6 +135,7 @@ export const authStateSchema = z.object({
   }),
   organization: authenticatedOrganizationSchema.nullable(),
   onboardingStatus: onboardingStatusSchema,
+  selectedCompanyId: z.string().trim().min(1).nullable(),
 });
 
 export const billingPendingCheckoutSchema = z.object({
@@ -293,6 +294,7 @@ export const dashboardProfitabilityResponseSchema = z.object({
 
 export const productCostRecordSchema = z.object({
   id: z.string().trim().min(1),
+  companyId: z.string().trim().min(1),
   organizationId: z.string().trim().min(1),
   productId: z.string().trim().min(1),
   costType: z.string().trim().min(1),
@@ -320,6 +322,7 @@ export const companyRecordSchema = z.object({
   razaoSocial: z.string().trim().min(1),
   fixedCostDefault: decimalField("Fixed cost default"),
   isActive: z.boolean(),
+  isSelected: z.boolean(),
   taxRateDefault: decimalRateField("Tax rate default"),
   createdAt: isoDateTimeField("Created at"),
   updatedAt: isoDateTimeField("Updated at"),
@@ -334,28 +337,48 @@ const productImageRecordSchema = z.object({
   url: z.string().url().startsWith("https://"),
 });
 
-export const productListItemSchema = z.object({
-  coverImageUrl: z
-    .string()
-    .url()
-    .startsWith("https://")
-    .nullable()
-    .default(null),
-  id: z.string().trim().min(1),
-  images: z.array(productImageRecordSchema).default([]),
-  organizationId: z.string().trim().min(1),
-  name: z.string().trim().min(1),
-  sku: z.string().trim().min(1).nullable(),
-  sellingPrice: decimalField("Selling price"),
-  isActive: z.boolean(),
-  createdAt: isoDateTimeField("Created at"),
-  updatedAt: isoDateTimeField("Updated at"),
-  latestCost: productCostRecordSchema.nullable(),
-  financeDefaults: productFinanceDefaultsRecordSchema.nullable(),
-});
+export const productListItemSchema: z.ZodType<any> = z.lazy(() =>
+  z
+    .object({
+      catalogGroupKey: z.string().trim().min(1).nullable().default(null),
+      catalogRole: z.enum(["parent", "child", "standalone"]).default("standalone"),
+      coverImageUrl: z
+        .string()
+        .url()
+        .startsWith("https://")
+        .nullable()
+        .default(null),
+      id: z.string().trim().min(1),
+      images: z.array(productImageRecordSchema).default([]),
+      companyId: z.string().trim().min(1),
+      organizationId: z.string().trim().min(1),
+      name: z.string().trim().min(1),
+      sku: z.string().trim().min(1).nullable(),
+      sellingPrice: decimalField("Selling price"),
+      isActive: z.boolean(),
+      createdAt: isoDateTimeField("Created at"),
+      updatedAt: isoDateTimeField("Updated at"),
+      latestCost: productCostRecordSchema.nullable(),
+      financeDefaults: productFinanceDefaultsRecordSchema.nullable(),
+      parentProductId: z.string().trim().min(1).nullable().default(null),
+      variationLabel: z.string().trim().min(1).nullable().default(null),
+      derivedFromProvider: z.enum(["mercadolivre"]).nullable().default(null),
+      children: z.array(productListItemSchema).default([]),
+    })
+    .superRefine((value, ctx) => {
+      if (value.catalogRole === "child" && value.children.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Child products cannot contain nested children.",
+          path: ["children"],
+        });
+      }
+    }),
+);
 
 export const adCostRecordSchema = z.object({
   id: z.string().trim().min(1),
+  companyId: z.string().trim().min(1),
   organizationId: z.string().trim().min(1),
   productId: z.string().trim().min(1).nullable(),
   channel: z.string().trim().min(1),
@@ -369,6 +392,7 @@ export const adCostRecordSchema = z.object({
 
 export const manualExpenseRecordSchema = z.object({
   id: z.string().trim().min(1),
+  companyId: z.string().trim().min(1),
   organizationId: z.string().trim().min(1),
   category: z.string().trim().min(1),
   amount: decimalField("Expense amount"),

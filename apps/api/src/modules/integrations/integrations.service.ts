@@ -142,9 +142,14 @@ export class IntegrationsService {
 
   async listConnections(
     organizationId: string,
+    companyId: string,
   ): Promise<IntegrationConnectionRecord[]> {
     const existingRows = await this.db.query.marketplaceConnections.findMany({
-      where: (table) => eq(table.organizationId, organizationId),
+      where: (table) =>
+        and(
+          eq(table.organizationId, organizationId),
+          eq(table.companyId, companyId),
+        ),
     });
     const rowsByProvider = new Map(
       existingRows.map((row) => [row.provider, row] as const),
@@ -160,6 +165,7 @@ export class IntegrationsService {
 
   async createConnectUrl(
     organizationId: string,
+    companyId: string,
     providerSlug: IntegrationProviderSlug,
   ): Promise<IntegrationConnectResponse> {
     const provider = this.getProvider(providerSlug);
@@ -171,6 +177,7 @@ export class IntegrationsService {
           : undefined;
       const state = createSignedIntegrationState(
         {
+          companyId,
           codeVerifier,
           organizationId,
           provider: providerSlug,
@@ -243,6 +250,7 @@ export class IntegrationsService {
         .insert(marketplaceConnections)
         .values({
           accessToken: connection.accessToken,
+          companyId: state.companyId,
           externalAccountId: connection.connectedAccountId,
           metadata: {
             ...connection.metadata,
@@ -270,6 +278,7 @@ export class IntegrationsService {
           },
           target: [
             marketplaceConnections.organizationId,
+            marketplaceConnections.companyId,
             marketplaceConnections.provider,
           ],
         });
@@ -325,6 +334,7 @@ export class IntegrationsService {
         .insert(marketplaceConnections)
         .values({
           accessToken: connection.accessToken,
+          companyId: state.companyId,
           externalAccountId: connection.connectedAccountId,
           metadata: {
             ...connection.metadata,
@@ -352,6 +362,7 @@ export class IntegrationsService {
           },
           target: [
             marketplaceConnections.organizationId,
+            marketplaceConnections.companyId,
             marketplaceConnections.provider,
           ],
         });
@@ -429,6 +440,7 @@ export class IntegrationsService {
 
   async disconnectProvider(
     organizationId: string,
+    companyId: string,
     providerSlug: IntegrationProviderSlug,
   ) {
     const provider = this.getProvider(providerSlug);
@@ -436,6 +448,7 @@ export class IntegrationsService {
       where: (table) =>
         and(
           eq(table.organizationId, organizationId),
+          eq(table.companyId, companyId),
           eq(table.provider, providerSlug),
         ),
     });
@@ -467,6 +480,7 @@ export class IntegrationsService {
       .insert(marketplaceConnections)
       .values({
         organizationId,
+        companyId,
         provider: providerSlug,
         status: "disconnected",
       })
@@ -477,17 +491,20 @@ export class IntegrationsService {
 
   async listSyncedProducts(
     organizationId: string,
+    companyId: string,
     providerSlug: IntegrationProviderSlug,
   ): Promise<SyncedProductRecord[]> {
     this.assertSyncProductProvider(providerSlug);
 
     const productRows = await this.db.query.products.findMany({
       orderBy: (table) => [desc(table.createdAt)],
-      where: (table) => eq(table.organizationId, organizationId),
+      where: (table) =>
+        and(eq(table.organizationId, organizationId), eq(table.companyId, companyId)),
     });
 
     return listSyncedProductsReadModel({
       db: this.db,
+      companyId,
       organizationId,
       productsList: productRows,
       providerSlug,
@@ -495,6 +512,7 @@ export class IntegrationsService {
   }
 
   async importMercadoLivreCatalog(context: {
+    companyId: string;
     organizationId: string;
     userId: string;
   }): Promise<MarketplaceCatalogImportResult> {
@@ -504,6 +522,7 @@ export class IntegrationsService {
       where: (table) =>
         and(
           eq(table.organizationId, context.organizationId),
+          eq(table.companyId, context.companyId),
           eq(table.provider, "mercadolivre"),
         ),
     });
@@ -545,6 +564,7 @@ export class IntegrationsService {
         where: (table) =>
           and(
             eq(table.organizationId, context.organizationId),
+            eq(table.companyId, context.companyId),
             eq(table.provider, "mercadolivre"),
           ),
       }),
@@ -634,6 +654,7 @@ export class IntegrationsService {
               .insert(products)
               .values({
                 isActive: catalogProduct.isActive,
+                companyId: context.companyId,
                 name: catalogProduct.title,
                 organizationId: context.organizationId,
                 sellingPrice: catalogProduct.sellingPrice,
@@ -664,6 +685,7 @@ export class IntegrationsService {
             .values({
               externalProductId: catalogProduct.externalProductId,
               linkedProductId: product.id,
+              companyId: context.companyId,
               marketplaceConnectionId: connection.id,
               metadata: catalogProduct.metadata,
               organizationId: context.organizationId,
@@ -688,6 +710,7 @@ export class IntegrationsService {
               },
               target: [
                 externalProducts.organizationId,
+                externalProducts.companyId,
                 externalProducts.provider,
                 externalProducts.externalProductId,
               ],
@@ -768,6 +791,7 @@ export class IntegrationsService {
 
   async importSyncedProduct(
     organizationId: string,
+    companyId: string,
     providerSlug: IntegrationProviderSlug,
     externalProductId: string,
   ): Promise<SyncedProductActionResult> {
@@ -775,6 +799,7 @@ export class IntegrationsService {
 
     const externalProduct = await this.requireSyncedExternalProduct(
       organizationId,
+      companyId,
       providerSlug,
       externalProductId,
     );
@@ -803,7 +828,12 @@ export class IntegrationsService {
     const sellingPrice =
       this.selectLatestUnitPrice(externalProduct.orderItems) ?? "0.00";
     const createdProduct = await this.productsService.createProduct(
-      organizationId,
+      {
+        companyId,
+        organizationId,
+        selectedCompanyId: companyId,
+        userId: "",
+      },
       {
         isActive: true,
         name:
@@ -825,6 +855,7 @@ export class IntegrationsService {
 
     return this.buildSyncedProductActionResult(
       organizationId,
+      companyId,
       providerSlug,
       externalProductId,
       "Produto sincronizado importado para o catálogo",
@@ -833,6 +864,7 @@ export class IntegrationsService {
 
   async linkSyncedProduct(
     organizationId: string,
+    companyId: string,
     providerSlug: IntegrationProviderSlug,
     externalProductId: string,
     productId: string,
@@ -841,6 +873,7 @@ export class IntegrationsService {
 
     const externalProduct = await this.requireSyncedExternalProduct(
       organizationId,
+      companyId,
       providerSlug,
       externalProductId,
     );
@@ -882,6 +915,7 @@ export class IntegrationsService {
 
     return this.buildSyncedProductActionResult(
       organizationId,
+      companyId,
       providerSlug,
       externalProductId,
       "Produto sincronizado vinculado ao produto existente",
@@ -890,12 +924,14 @@ export class IntegrationsService {
 
   async ignoreSyncedProduct(
     organizationId: string,
+    companyId: string,
     providerSlug: IntegrationProviderSlug,
     externalProductId: string,
   ): Promise<SyncedProductActionResult> {
     this.assertSyncProductProvider(providerSlug);
     await this.requireSyncedExternalProduct(
       organizationId,
+      companyId,
       providerSlug,
       externalProductId,
     );
@@ -910,6 +946,7 @@ export class IntegrationsService {
       .where(
         and(
           eq(externalProducts.organizationId, organizationId),
+          eq(externalProducts.companyId, companyId),
           eq(externalProducts.provider, providerSlug),
           eq(externalProducts.externalProductId, externalProductId),
         ),
@@ -917,6 +954,7 @@ export class IntegrationsService {
 
     return this.buildSyncedProductActionResult(
       organizationId,
+      companyId,
       providerSlug,
       externalProductId,
       "Produto sincronizado marcado para revisão posterior",
@@ -977,12 +1015,22 @@ export class IntegrationsService {
 
   private async buildSyncedProductActionResult(
     organizationId: string,
-    providerSlug: IntegrationProviderSlug,
-    externalProductId: string,
-    message: string,
+    companyIdOrProviderSlug: string,
+    providerSlugOrExternalProductId: IntegrationProviderSlug | string,
+    externalProductIdOrMessage: string,
+    message?: string,
   ): Promise<SyncedProductActionResult> {
+    const companyId = message ? companyIdOrProviderSlug : undefined;
+    const providerSlug = (
+      message ? providerSlugOrExternalProductId : companyIdOrProviderSlug
+    ) as IntegrationProviderSlug;
+    const externalProductId = message
+      ? externalProductIdOrMessage
+      : (providerSlugOrExternalProductId as string);
+    const resolvedMessage = message ?? externalProductIdOrMessage;
     const syncedProducts = await this.listSyncedProducts(
       organizationId,
+      companyId ?? providerSlug,
       providerSlug,
     );
     const syncedProduct = syncedProducts.find(
@@ -995,7 +1043,7 @@ export class IntegrationsService {
 
     return {
       linkedProduct: syncedProduct.linkedProduct,
-      message,
+      message: resolvedMessage,
       syncedProduct,
     };
   }
@@ -1106,6 +1154,7 @@ export class IntegrationsService {
 
   private async requireSyncedExternalProduct(
     organizationId: string,
+    companyId: string,
     providerSlug: IntegrationProviderSlug,
     externalProductId: string,
   ) {
@@ -1114,6 +1163,7 @@ export class IntegrationsService {
         where: (table) =>
           and(
             eq(table.organizationId, organizationId),
+            eq(table.companyId, companyId),
             eq(table.provider, providerSlug),
             eq(table.externalProductId, externalProductId),
           ),

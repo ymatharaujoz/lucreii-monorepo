@@ -59,6 +59,7 @@ describe("integrations controller", () => {
         role: "owner",
         slug: "org",
       },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -117,6 +118,7 @@ describe("integrations controller", () => {
         role: "owner",
         slug: "org",
       },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -163,6 +165,7 @@ describe("integrations controller", () => {
   it("returns the Shopee connect URL", async () => {
     vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
       organization: { id: "org_123", name: "Org", role: "owner", slug: "org" },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-07-22T00:00:00.000Z"),
         id: "session_123",
@@ -198,6 +201,7 @@ describe("integrations controller", () => {
     expect(response.statusCode).toBe(201);
     expect(integrationsService.createConnectUrl).toHaveBeenCalledWith(
       "org_123",
+      "company_123",
       "shopee",
     );
   });
@@ -366,6 +370,7 @@ describe("integrations controller", () => {
         role: "owner",
         slug: "org",
       },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -447,6 +452,7 @@ describe("integrations controller", () => {
         role: "owner",
         slug: "lucreii",
       },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-06-16T10:00:00.000Z"),
         id: "session_123",
@@ -498,6 +504,7 @@ describe("integrations controller", () => {
       error: null,
     });
     expect(integrationsService.importMercadoLivreCatalog).toHaveBeenCalledWith({
+      companyId: "company_123",
       organizationId: "org_123",
       userId: "user_123",
     });

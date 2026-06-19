@@ -16,4 +16,5 @@ export type AuthenticatedRequestContext = {
     slug: string;
     role: string;
   } | null;
+  selectedCompanyId?: string | null;
 };

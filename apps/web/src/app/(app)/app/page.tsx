@@ -30,10 +30,14 @@ export default async function AppHomePage() {
 
   const activeCompany = getActiveCompany(companies);
 
+  if (!authState.selectedCompanyId && activeCompany) {
+    redirect(`/auth/auto-select-company?companyId=${activeCompany.id}`);
+  }
+
   return (
     <DashboardHome
       activeCompany={activeCompany}
-      organizationName={authState.organization?.name ?? authState.user.name}
+      companyName={activeCompany?.razaoSocial ?? authState.organization?.name ?? authState.user.name}
     />
   );
 }

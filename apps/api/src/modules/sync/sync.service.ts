@@ -101,12 +101,70 @@ function getMetadataObject(value: Record<string, unknown> | null | undefined) {
   return value && typeof value === "object" ? value : {};
 }
 
+function buildOrderMetadata(order: {
+  items: Array<{
+    metadata?: Record<string, unknown>;
+    quantity: number;
+    sku?: string | null;
+  }>;
+  metadata: Record<string, unknown>;
+}) {
+  const metadata = { ...order.metadata };
+  const returnQuantityBySku: Record<string, number> = {};
+
+  const existingReturnMap =
+    metadata.returnQuantityBySku &&
+    typeof metadata.returnQuantityBySku === "object"
+      ? metadata.returnQuantityBySku
+      : null;
+
+  if (existingReturnMap) {
+    for (const [sku, quantity] of Object.entries(existingReturnMap)) {
+      if (typeof quantity === "number" && Number.isFinite(quantity) && quantity > 0) {
+        returnQuantityBySku[sku] = Math.max(0, Math.trunc(quantity));
+      }
+    }
+  }
+
+  for (const item of order.items) {
+    const rawReturnQuantity =
+      item.metadata &&
+      typeof item.metadata === "object" &&
+      "returnQuantity" in item.metadata &&
+      typeof item.metadata.returnQuantity === "number" &&
+      Number.isFinite(item.metadata.returnQuantity)
+        ? item.metadata.returnQuantity
+        : 0;
+
+    if (!item.sku || rawReturnQuantity <= 0) {
+      continue;
+    }
+
+    returnQuantityBySku[item.sku] =
+      (returnQuantityBySku[item.sku] ?? 0) +
+      Math.max(0, Math.min(item.quantity, Math.trunc(rawReturnQuantity)));
+  }
+
+  metadata.returnQuantityBySku = returnQuantityBySku;
+
+  return metadata;
+}
+
 function normalizeRunOrigin(value: Record<string, unknown> | null | undefined): SyncRunOrigin {
   return value?.origin === "automatic" ? "automatic" : "manual";
 }
 
 function normalizeString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function normalizeNullableUpdateString(value: string | null | undefined) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 type SyncTriggerSummary = {
@@ -121,6 +179,7 @@ type SyncTriggerSummary = {
 
 type ExecuteSyncInput = {
   connection: MarketplaceConnection;
+  companyId: string;
   organizationId: string;
   providerSlug: IntegrationProviderSlug;
   triggerMetadata: Record<string, unknown>;
@@ -180,13 +239,16 @@ export class SyncService {
 
   async getStatus(
     organizationId: string,
-    providerSlug: IntegrationProviderSlug,
+    companyIdOrProviderSlug: string,
+    providerSlug?: IntegrationProviderSlug,
   ): Promise<SyncStatusResponse> {
-    const provider = this.getProvider(providerSlug);
+    const companyId = providerSlug ? companyIdOrProviderSlug : organizationId;
+    const resolvedProviderSlug = (providerSlug ?? companyIdOrProviderSlug) as IntegrationProviderSlug;
+    const provider = this.getProvider(resolvedProviderSlug);
     const [connection, activeRun, lastCompletedRun] = await Promise.all([
-      this.findConnection(organizationId, providerSlug),
-      this.findLatestRun(organizationId, providerSlug, "processing"),
-      this.findLatestRun(organizationId, providerSlug, "completed"),
+      this.findConnection(organizationId, companyId, resolvedProviderSlug),
+      this.findLatestRun(organizationId, companyId, resolvedProviderSlug, "processing"),
+      this.findLatestRun(organizationId, companyId, resolvedProviderSlug, "completed"),
     ]);
 
     return {
@@ -198,14 +260,18 @@ export class SyncService {
 
   async runSync(
     organizationId: string,
-    userId: string,
-    providerSlug: IntegrationProviderSlug,
+    companyIdOrUserId: string,
+    userIdOrProviderSlug: string,
+    providerSlug?: IntegrationProviderSlug,
   ): Promise<RunSyncResponse> {
-    const provider = this.getProvider(providerSlug);
+    const companyId = providerSlug ? companyIdOrUserId : organizationId;
+    const userId = providerSlug ? userIdOrProviderSlug : companyIdOrUserId;
+    const resolvedProviderSlug = (providerSlug ?? userIdOrProviderSlug) as IntegrationProviderSlug;
+    const provider = this.getProvider(resolvedProviderSlug);
     const [connection, activeRun, lastCompletedRun] = await Promise.all([
-      this.findConnection(organizationId, providerSlug),
-      this.findLatestRun(organizationId, providerSlug, "processing"),
-      this.findLatestRun(organizationId, providerSlug, "completed"),
+      this.findConnection(organizationId, companyId, resolvedProviderSlug),
+      this.findLatestRun(organizationId, companyId, resolvedProviderSlug, "processing"),
+      this.findLatestRun(organizationId, companyId, resolvedProviderSlug, "completed"),
     ]);
     const availability = this.buildAvailability(provider, connection, activeRun, lastCompletedRun);
 
@@ -215,8 +281,9 @@ export class SyncService {
 
     return this.executeSync({
       connection,
+      companyId,
       organizationId,
-      providerSlug,
+      providerSlug: resolvedProviderSlug,
       triggerMetadata: {},
       triggerOrigin: "manual",
       userId,
@@ -285,7 +352,12 @@ export class SyncService {
       };
     }
 
-    const activeRun = await this.findLatestRun(connection.organizationId, "mercadolivre", "processing");
+    const activeRun = await this.findLatestRun(
+      connection.organizationId,
+      connection.companyId,
+      "mercadolivre",
+      "processing",
+    );
 
     if (activeRun) {
       await this.markAutomaticRerunPending(connection.id, summary);
@@ -300,6 +372,7 @@ export class SyncService {
 
     await this.executeSync({
       connection,
+      companyId: connection.companyId,
       organizationId: connection.organizationId,
       providerSlug: "mercadolivre",
       triggerMetadata: {
@@ -355,7 +428,12 @@ export class SyncService {
       return { accepted: true, reason: "connection_not_found", status: "ignored", summary };
     }
 
-    const activeRun = await this.findLatestRun(connection.organizationId, "shopee", "processing");
+    const activeRun = await this.findLatestRun(
+      connection.organizationId,
+      connection.companyId,
+      "shopee",
+      "processing",
+    );
     if (activeRun) {
       await this.markAutomaticRerunPending(connection.id, summary);
       return {
@@ -368,6 +446,7 @@ export class SyncService {
 
     await this.executeSync({
       connection,
+      companyId: connection.companyId,
       organizationId: connection.organizationId,
       providerSlug: "shopee",
       triggerMetadata: { notification: summary },
@@ -383,6 +462,7 @@ export class SyncService {
     const connection = await this.refreshConnectionIfNeeded(provider, input.connection);
     const lastCompletedRun = await this.findLatestRun(
       input.organizationId,
+      input.companyId,
       input.providerSlug,
       "completed",
     );
@@ -390,6 +470,7 @@ export class SyncService {
     const [pendingRun] = await this.db
       .insert(syncRuns)
       .values({
+        companyId: input.companyId,
         marketplaceConnectionId: connection.id,
         metadata: {
           origin: input.triggerOrigin,
@@ -423,6 +504,7 @@ export class SyncService {
         organizationId: input.organizationId,
       });
       const counts = await this.persistSyncResult({
+        companyId: input.companyId,
         connection,
         organizationId: input.organizationId,
         providerSlug: input.providerSlug,
@@ -430,6 +512,7 @@ export class SyncService {
         syncRunId: processingRun.id,
       });
       await this.syncPerformanceMaterializer.materializeForSync({
+        companyId: input.companyId,
         organizationId: input.organizationId,
         providerSlug: input.providerSlug,
         syncRunId: processingRun.id,
@@ -462,10 +545,15 @@ export class SyncService {
         .where(eq(syncRuns.id, processingRun.id))
         .returning();
 
-      await this.financeService.materializeOrganizationMetrics(input.organizationId);
+      await this.financeService.materializeOrganizationMetrics(
+        input.organizationId,
+        input.companyId,
+      );
 
       response = {
-        availability: (await this.getStatus(input.organizationId, input.providerSlug)).availability,
+        availability: (
+          await this.getStatus(input.organizationId, input.companyId, input.providerSlug)
+        ).availability,
         run: this.toRunRecord(completedRun),
       };
     } catch (error) {
@@ -492,6 +580,7 @@ export class SyncService {
       try {
         await this.flushAutomaticRerunIfNeeded(
           connection.id,
+          input.companyId,
           input.organizationId,
           input.providerSlug,
         );
@@ -559,6 +648,7 @@ export class SyncService {
 
   private async flushAutomaticRerunIfNeeded(
     connectionId: string,
+    companyId: string,
     organizationId: string,
     providerSlug: IntegrationProviderSlug,
   ) {
@@ -583,7 +673,12 @@ export class SyncService {
       })
       .where(eq(marketplaceConnections.id, connectionId));
 
-    const activeRun = await this.findLatestRun(organizationId, providerSlug, "processing");
+    const activeRun = await this.findLatestRun(
+      organizationId,
+      companyId,
+      providerSlug,
+      "processing",
+    );
 
     if (activeRun || connection.status !== "connected" || !connection.accessToken) {
       return;
@@ -595,6 +690,7 @@ export class SyncService {
 
     await this.executeSync({
       connection,
+      companyId,
       organizationId,
       providerSlug,
       triggerMetadata: {
@@ -783,6 +879,7 @@ export class SyncService {
   }
 
   private async persistSyncResult(input: {
+    companyId: string;
     organizationId: string;
     providerSlug: IntegrationProviderSlug;
     connection: MarketplaceConnection;
@@ -793,9 +890,12 @@ export class SyncService {
       const productIdsByExternalId = new Map<string, string>();
 
       for (const product of input.syncResult.products.filter((entry) => entry.externalProductId)) {
+        const nextSku = normalizeNullableUpdateString(product.sku);
+        const nextTitle = normalizeNullableUpdateString(product.title);
         const [storedProduct] = await tx
           .insert(externalProducts)
           .values({
+            companyId: input.companyId,
             marketplaceConnectionId: input.connection.id,
             metadata: product.metadata,
             organizationId: input.organizationId,
@@ -808,12 +908,13 @@ export class SyncService {
             set: {
               marketplaceConnectionId: input.connection.id,
               metadata: product.metadata,
-              sku: product.sku,
-              title: product.title,
+              ...(nextSku !== undefined ? { sku: nextSku } : {}),
+              ...(nextTitle !== undefined ? { title: nextTitle } : {}),
               updatedAt: new Date(),
             },
             target: [
               externalProducts.organizationId,
+              externalProducts.companyId,
               externalProducts.provider,
               externalProducts.externalProductId,
             ],
@@ -829,12 +930,14 @@ export class SyncService {
       let itemCount = 0;
 
       for (const order of input.syncResult.orders) {
+        const orderMetadata = buildOrderMetadata(order);
         const [storedOrder] = await tx
           .insert(externalOrders)
           .values({
+            companyId: input.companyId,
             currency: order.currency,
             marketplaceConnectionId: input.connection.id,
-            metadata: order.metadata,
+            metadata: orderMetadata,
             orderedAt: order.orderedAt ? new Date(order.orderedAt) : null,
             organizationId: input.organizationId,
             provider: input.providerSlug,
@@ -847,7 +950,7 @@ export class SyncService {
             set: {
               currency: order.currency,
               marketplaceConnectionId: input.connection.id,
-              metadata: order.metadata,
+              metadata: orderMetadata,
               orderedAt: order.orderedAt ? new Date(order.orderedAt) : null,
               status: order.status,
               syncRunId: input.syncRunId,
@@ -856,6 +959,7 @@ export class SyncService {
             },
             target: [
               externalOrders.organizationId,
+              externalOrders.companyId,
               externalOrders.provider,
               externalOrders.externalOrderId,
             ],
@@ -914,11 +1018,19 @@ export class SyncService {
     return provider;
   }
 
-  private async findConnection(organizationId: string, providerSlug: IntegrationProviderSlug) {
+  private async findConnection(
+    organizationId: string,
+    companyId: string,
+    providerSlug: IntegrationProviderSlug,
+  ) {
     return (
       (await this.db.query.marketplaceConnections.findFirst({
         where: (table) =>
-          and(eq(table.organizationId, organizationId), eq(table.provider, providerSlug)),
+          and(
+            eq(table.organizationId, organizationId),
+            eq(table.companyId, companyId),
+            eq(table.provider, providerSlug),
+          ),
       })) ?? null
     );
   }
@@ -982,6 +1094,7 @@ export class SyncService {
 
   private async findLatestRun(
     organizationId: string,
+    companyId: string,
     providerSlug: IntegrationProviderSlug,
     status: string,
   ) {
@@ -991,6 +1104,7 @@ export class SyncService {
         where: (table) =>
           and(
             eq(table.organizationId, organizationId),
+            eq(table.companyId, companyId),
             eq(table.provider, providerSlug),
             eq(table.status, status),
           ),

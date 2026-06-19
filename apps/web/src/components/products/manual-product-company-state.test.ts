@@ -32,6 +32,7 @@ describe("manual product company state", () => {
             fixedCostDefault: "0.00",
             id: "company_1",
             isActive: true,
+            isSelected: false,
             razaoSocial: "Empresa Principal LTDA",
             taxRateDefault: "0.000000",
             updatedAt: "2026-05-15T10:00:00.000Z",
@@ -59,6 +60,7 @@ describe("manual product company state", () => {
             fixedCostDefault: "0.00",
             id: "company_1",
             isActive: true,
+            isSelected: false,
             razaoSocial: "Empresa Principal LTDA",
             taxRateDefault: "0.000000",
             updatedAt: "2026-05-15T10:00:00.000Z",
@@ -70,6 +72,7 @@ describe("manual product company state", () => {
             fixedCostDefault: "0.00",
             id: "company_2",
             isActive: true,
+            isSelected: false,
             razaoSocial: "Filial Shop LTDA",
             taxRateDefault: "0.000000",
             updatedAt: "2026-05-15T10:00:00.000Z",
@@ -97,6 +100,7 @@ describe("manual product company state", () => {
             fixedCostDefault: "0.00",
             id: "company_1",
             isActive: true,
+            isSelected: false,
             razaoSocial: "Empresa Principal LTDA",
             taxRateDefault: "0.000000",
             updatedAt: "2026-05-15T10:00:00.000Z",
@@ -108,6 +112,7 @@ describe("manual product company state", () => {
             fixedCostDefault: "0.00",
             id: "company_2",
             isActive: true,
+            isSelected: false,
             razaoSocial: "Filial Shop LTDA",
             taxRateDefault: "0.000000",
             updatedAt: "2026-05-15T10:00:00.000Z",
@@ -120,13 +125,53 @@ describe("manual product company state", () => {
     );
   });
 
-  it("requires exactly one active company for catalog product creation/import", () => {
+  it("requires selected company when multiple active companies exist for catalog actions", () => {
     expect(getCatalogCompanyRequirementMessage(0)).toBe(
       "Cadastre uma empresa ativa em /app antes de criar ou importar produtos.",
     );
     expect(getCatalogCompanyRequirementMessage(1)).toBeNull();
-    expect(getCatalogCompanyRequirementMessage(2)).toBe(
-      "Mantenha apenas uma empresa ativa em /app antes de criar ou importar produtos.",
+    expect(getCatalogCompanyRequirementMessage(2, null)).toBe(
+      "Selecione a empresa ativa que deve receber produtos e importacoes.",
+    );
+    expect(getCatalogCompanyRequirementMessage(2, "company_2")).toBeNull();
+  });
+
+  it("uses preferred or selected company when multiple active companies exist", () => {
+    expect(
+      resolveManualProductCompanyState({
+        companies: [
+          {
+            cnpj: "12345678000195",
+            code: "MAIN",
+            createdAt: "2026-05-15T10:00:00.000Z",
+            fixedCostDefault: "0.00",
+            id: "company_1",
+            isActive: true,
+            isSelected: false,
+            razaoSocial: "Empresa Principal LTDA",
+            taxRateDefault: "0.000000",
+            updatedAt: "2026-05-15T10:00:00.000Z",
+          },
+          {
+            cnpj: "11222333000181",
+            code: "SHOP",
+            createdAt: "2026-05-15T10:00:00.000Z",
+            fixedCostDefault: "0.00",
+            id: "company_2",
+            isActive: true,
+            isSelected: true,
+            razaoSocial: "Filial Shop LTDA",
+            taxRateDefault: "0.000000",
+            updatedAt: "2026-05-15T10:00:00.000Z",
+          },
+        ],
+        preferredCompanyId: null,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        requiresExplicitSelection: false,
+        selectedCompanyId: "company_2",
+      }),
     );
   });
 });

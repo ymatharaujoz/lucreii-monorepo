@@ -356,6 +356,7 @@ describe("public auth routes", () => {
               role: "owner",
               slug: "lucreii",
             },
+            selectedCompanyId: null,
             session: {
               expiresAt: "2026-12-31T00:00:00.000Z",
               id: "session_123",

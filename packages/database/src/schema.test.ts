@@ -14,6 +14,10 @@ import {
   productImages,
   productMonthlyPerformance,
   products,
+  marketplaceConnections,
+  syncRuns,
+  externalProducts,
+  externalOrders,
   users,
   verifications,
 } from "./index";
@@ -41,9 +45,17 @@ describe("@lucreii/database schema", () => {
     expect(db.query.organizations).toBeDefined();
     expect(db.query.companies).toBeDefined();
     expect(db.query.products).toBeDefined();
+    expect(db.query.marketplaceConnections).toBeDefined();
+    expect(db.query.syncRuns).toBeDefined();
+    expect(db.query.externalProducts).toBeDefined();
+    expect(db.query.externalOrders).toBeDefined();
     expect(db.query.productFinanceDefaults).toBeDefined();
     expect(db.query.productImages).toBeDefined();
     expect(db.query.productMonthlyPerformance).toBeDefined();
+  });
+
+  it("scopes product catalog persistence by company", () => {
+    expect(products.companyId).toBeDefined();
   });
 
   it("defines ordered product images with marketplace source metadata", () => {
@@ -60,6 +72,7 @@ describe("@lucreii/database schema", () => {
       slug: "demo-org",
     };
     const productInsert: typeof products.$inferInsert = {
+      companyId: randomUUID(),
       organizationId: randomUUID(),
       name: "Produto",
     };
@@ -198,6 +211,73 @@ describe("@lucreii/database schema", () => {
     expect(skuUniquenessMigration).toContain('char_length(trim("sku")) > 0');
   });
 
+  it("keeps marketplace company scoping migration aligned with schema", () => {
+    const marketplaceScopeMigration = readFileSync(
+      path.resolve(
+        __dirname,
+        "../drizzle/0017_marketplace_connections_company_scope.sql",
+      ),
+      "utf8",
+    );
+    const migrationJournal = readFileSync(
+      path.resolve(__dirname, "../drizzle/meta/_journal.json"),
+      "utf8",
+    );
+
+    expect(marketplaceConnections.companyId).toBeDefined();
+    expect(syncRuns.companyId).toBeDefined();
+    expect(externalProducts.companyId).toBeDefined();
+    expect(externalOrders.companyId).toBeDefined();
+    expect(marketplaceScopeMigration).toContain(
+      'ALTER TABLE "marketplace_connections"',
+    );
+    expect(marketplaceScopeMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS "company_id" uuid;',
+    );
+    expect(marketplaceScopeMigration).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "marketplace_connections_org_provider_key"',
+    );
+    expect(marketplaceScopeMigration).toContain(
+      '"organization_id","company_id","provider"',
+    );
+    expect(marketplaceScopeMigration).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "external_products_org_provider_external_key"',
+    );
+    expect(marketplaceScopeMigration).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "external_orders_org_provider_external_key"',
+    );
+    expect(migrationJournal).toContain(
+      '"tag": "0017_marketplace_connections_company_scope"',
+    );
+  });
+
+  it("keeps product catalog company scoping migration aligned with schema", () => {
+    const catalogScopeMigration = readFileSync(
+      path.resolve(
+        __dirname,
+        "../drizzle/0019_product_catalog_company_scope.sql",
+      ),
+      "utf8",
+    );
+    const migrationJournal = readFileSync(
+      path.resolve(__dirname, "../drizzle/meta/_journal.json"),
+      "utf8",
+    );
+
+    expect(products.companyId).toBeDefined();
+    expect(catalogScopeMigration).toContain('ALTER TABLE "products"');
+    expect(catalogScopeMigration).toContain('ALTER TABLE "product_costs"');
+    expect(catalogScopeMigration).toContain('ALTER TABLE "ad_costs"');
+    expect(catalogScopeMigration).toContain('ALTER TABLE "manual_expenses"');
+    expect(catalogScopeMigration).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "products_company_normalized_sku_key"',
+    );
+    expect(catalogScopeMigration).toContain('"company_id"');
+    expect(migrationJournal).toContain(
+      '"tag": "0019_product_catalog_company_scope"',
+    );
+  });
+
   it("keeps tax removal migration aligned with schema", () => {
     const taxGlobalizationMigration = readFileSync(
       path.resolve(__dirname, "../drizzle/0010_globalize_company_tax.sql"),
@@ -307,5 +387,21 @@ describe("@lucreii/database schema", () => {
     expect(legalIdentityRepairMigration).toContain('ADD COLUMN IF NOT EXISTS "cnpj" varchar(14)');
     expect(migrationJournal).toContain('"tag": "0014_company_legal_identity"');
     expect(migrationJournal).toContain('"tag": "0015_company_legal_identity_repair"');
+  });
+
+  it("keeps global company CNPJ uniqueness aligned with schema", () => {
+    const companyCnpjMigration = readFileSync(
+      path.resolve(__dirname, "../drizzle/0018_company_cnpj_global_unique.sql"),
+      "utf8",
+    );
+    const migrationJournal = readFileSync(
+      path.resolve(__dirname, "../drizzle/meta/_journal.json"),
+      "utf8",
+    );
+
+    expect(companies.cnpj).toBeDefined();
+    expect(companyCnpjMigration).toContain('DROP INDEX IF EXISTS "companies_org_cnpj_key";');
+    expect(companyCnpjMigration).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "companies_cnpj_key" ON "companies" USING btree ("cnpj");');
+    expect(migrationJournal).toContain('"tag": "0018_company_cnpj_global_unique"');
   });
 });

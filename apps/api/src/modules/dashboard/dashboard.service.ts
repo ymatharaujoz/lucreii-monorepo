@@ -63,9 +63,14 @@ export class DashboardService {
 
   async readSummary(
     organizationId: string,
+    companyId: string,
     provider?: IntegrationProviderSlug,
   ): Promise<DashboardSummaryResponse> {
-    const summary = await this.financeService.readSummaryMetrics(organizationId, provider);
+    const summary = await this.financeService.readSummaryMetrics(
+      organizationId,
+      companyId,
+      provider,
+    );
 
     return {
       cards: createSummaryCards(summary),
@@ -73,8 +78,16 @@ export class DashboardService {
     };
   }
 
-  async readCharts(organizationId: string, provider?: IntegrationProviderSlug): Promise<DashboardChartsResponse> {
-    const readModel = await this.financeService.buildDashboardReadModel(organizationId, provider);
+  async readCharts(
+    organizationId: string,
+    companyId: string,
+    provider?: IntegrationProviderSlug,
+  ): Promise<DashboardChartsResponse> {
+    const readModel = await this.financeService.buildDashboardReadModel(
+      organizationId,
+      companyId,
+      provider,
+    );
 
     return {
       channels: readModel.channels.map<DashboardChannelChartRow>((row) => ({
@@ -95,16 +108,22 @@ export class DashboardService {
 
   async readRecentSync(
     organizationId: string,
+    companyId: string,
     provider: IntegrationProviderSlug = "mercadolivre",
   ): Promise<DashboardRecentSyncResponse> {
-    return this.syncService.getStatus(organizationId, provider);
+    return this.syncService.getStatus(organizationId, companyId, provider);
   }
 
   async readProfitability(
     organizationId: string,
+    companyId: string,
     provider?: IntegrationProviderSlug,
   ): Promise<DashboardProfitabilityResponse> {
-    const readModel = await this.financeService.buildDashboardReadModel(organizationId, provider);
+    const readModel = await this.financeService.buildDashboardReadModel(
+      organizationId,
+      companyId,
+      provider,
+    );
 
     return {
       channels: readModel.channels,

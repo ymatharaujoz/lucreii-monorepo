@@ -14,6 +14,7 @@ const authState: AuthState = {
     role: "owner",
     slug: "lucreii",
   },
+  selectedCompanyId: "company_123",
   session: {
     expiresAt: "2026-12-31T00:00:00.000Z",
     id: "session_123",

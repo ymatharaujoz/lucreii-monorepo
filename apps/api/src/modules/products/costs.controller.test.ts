@@ -14,6 +14,7 @@ const authContext = {
     role: "owner",
     slug: "org",
   },
+  selectedCompanyId: "company_123",
   session: {
     expiresAt: new Date("2026-04-22T00:00:00.000Z"),
     id: "session_123",
@@ -76,6 +77,7 @@ describe("costs controller", () => {
     });
     vi.spyOn(productsService, "createProductCost").mockResolvedValueOnce({
       amount: "12.00",
+      companyId: "company_123",
       costType: "base",
       createdAt: "2026-04-28T10:00:00.000Z",
       currency: "BRL",
@@ -142,6 +144,7 @@ describe("costs controller", () => {
         createdAt: "2026-04-28T10:00:00.000Z",
         currency: "BRL",
         id: "expense_1",
+        companyId: "company_123",
         incurredAt: "2026-04-28",
         notes: "Office rent",
         organizationId: "org_123",

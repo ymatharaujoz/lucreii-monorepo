@@ -8,8 +8,43 @@ import {
 describe("@lucreii/validation protected app schemas", () => {
   it("accepts product image galleries and cover image URLs", () => {
     const result = productListItemSchema.safeParse({
+      catalogGroupKey: "meli:MLB123",
+      catalogRole: "parent",
       coverImageUrl: "https://http2.mlstatic.com/cover.jpg",
       createdAt: "2026-06-15T10:00:00.000Z",
+      children: [
+        {
+          catalogGroupKey: "meli:MLB123",
+          catalogRole: "child",
+          coverImageUrl: "https://http2.mlstatic.com/cover.jpg",
+          createdAt: "2026-06-15T10:00:00.000Z",
+          children: [],
+          derivedFromProvider: "mercadolivre",
+          financeDefaults: null,
+          id: "product-child-1",
+          images: [
+            {
+              externalIdentifier: "PIC-CHILD-1",
+              id: "image-child-1",
+              position: 0,
+              productId: "product-child-1",
+              source: "mercadolivre",
+              url: "https://http2.mlstatic.com/cover.jpg",
+            },
+          ],
+          isActive: true,
+          latestCost: null,
+          name: "Produto Azul",
+          companyId: "company-1",
+          organizationId: "org-1",
+          parentProductId: "product-1",
+          sellingPrice: "10.00",
+          sku: "SKU-1-AZ",
+          updatedAt: "2026-06-15T10:00:00.000Z",
+          variationLabel: "Cor: Azul",
+        },
+      ],
+      derivedFromProvider: "mercadolivre",
       financeDefaults: null,
       id: "product-1",
       images: [
@@ -25,10 +60,13 @@ describe("@lucreii/validation protected app schemas", () => {
       isActive: true,
       latestCost: null,
       name: "Produto",
+      companyId: "company-1",
       organizationId: "org-1",
+      parentProductId: null,
       sellingPrice: "10.00",
       sku: "SKU-1",
       updatedAt: "2026-06-15T10:00:00.000Z",
+      variationLabel: null,
     });
 
     expect(result.success).toBe(true);
@@ -38,6 +76,54 @@ describe("@lucreii/validation protected app schemas", () => {
       );
       expect(result.data.images).toHaveLength(1);
     }
+  });
+
+  it("rejects child products containing nested children", () => {
+    const result = productListItemSchema.safeParse({
+      catalogGroupKey: "meli:MLB123",
+      catalogRole: "child",
+      coverImageUrl: null,
+      createdAt: "2026-06-15T10:00:00.000Z",
+      children: [
+        {
+          catalogGroupKey: "meli:MLB123",
+          catalogRole: "child",
+          coverImageUrl: null,
+          createdAt: "2026-06-15T10:00:00.000Z",
+          children: [],
+          derivedFromProvider: "mercadolivre",
+          financeDefaults: null,
+          id: "nested-child",
+          images: [],
+          isActive: true,
+          latestCost: null,
+          name: "Nested",
+          companyId: "company-1",
+          organizationId: "org-1",
+          parentProductId: "product-child-1",
+          sellingPrice: "10.00",
+          sku: "SKU-1-N",
+          updatedAt: "2026-06-15T10:00:00.000Z",
+          variationLabel: "Nested",
+        },
+      ],
+      derivedFromProvider: "mercadolivre",
+      financeDefaults: null,
+      id: "product-child-1",
+      images: [],
+      isActive: true,
+      latestCost: null,
+      name: "Produto Azul",
+      companyId: "company-1",
+      organizationId: "org-1",
+      parentProductId: "product-1",
+      sellingPrice: "10.00",
+      sku: "SKU-1-AZ",
+      updatedAt: "2026-06-15T10:00:00.000Z",
+      variationLabel: "Cor: Azul",
+    });
+
+    expect(result.success).toBe(false);
   });
   it("accepts full dashboard profitability payloads with explicit analytic fields", () => {
     const result = dashboardProfitabilityApiResponseSchema.safeParse({
@@ -324,6 +410,7 @@ describe("@lucreii/validation protected app schemas", () => {
         ],
         products: [
           {
+            companyId: "company_123",
             createdAt: "2026-05-01T10:00:00.000Z",
             financeDefaults: null,
             id: "product_2",

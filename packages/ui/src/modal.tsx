@@ -38,15 +38,15 @@ export function Modal({ children, className, onClose, open, title }: ModalProps)
         onClick={onClose}
         aria-hidden
       />
-      <div
-        className={cn(
-          "relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-[var(--radius-xl)] border border-border bg-surface-strong shadow-[var(--shadow-xl)] animate-rise-in",
-          className,
-        )}
-        role="dialog"
-        aria-modal="true"
-        aria-label={typeof title === "string" ? title : undefined}
-      >
+        <div
+          className={cn(
+            "relative z-10 flex w-full max-w-lg max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-surface-strong shadow-[var(--shadow-xl)] animate-rise-in",
+            className,
+          )}
+          role="dialog"
+          aria-modal="true"
+          aria-label={typeof title === "string" ? title : undefined}
+        >
         {title && (
           <div className="flex shrink-0 items-start justify-between border-b border-border/50 px-8 py-6">
             <div className="flex flex-col gap-1">

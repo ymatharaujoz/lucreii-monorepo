@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
+import type { Company } from "@lucreii/types";
 import { AppSidebar } from "./app-sidebar";
 import { AppTopBar } from "./app-top-bar";
 import { MinimalHeader } from "./minimal-header";
@@ -10,6 +11,8 @@ type AppLayoutClientProps = {
   organization: {
     name: string;
   };
+  companies: Company[];
+  planLimit: number;
   user: {
     email: string;
     image: string | null;
@@ -19,7 +22,15 @@ type AppLayoutClientProps = {
   hasOnboarded: boolean;
 };
 
-export function AppLayoutClient({ children, organization, user, hasSubscription, hasOnboarded }: AppLayoutClientProps) {
+export function AppLayoutClient({
+  children,
+  companies,
+  organization,
+  planLimit,
+  user,
+  hasSubscription,
+  hasOnboarded,
+}: AppLayoutClientProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -48,7 +59,9 @@ export function AppLayoutClient({ children, organization, user, hasSubscription,
       <div className="hidden lg:flex">
         <AppSidebar
           collapsed={collapsed}
+          companies={companies}
           onToggle={() => setCollapsed(!collapsed)}
+          planLimit={planLimit}
           user={user}
           organization={organization}
           isMobile={false}
@@ -62,7 +75,9 @@ export function AppLayoutClient({ children, organization, user, hasSubscription,
       >
         <AppSidebar
           collapsed={false}
+          companies={companies}
           onToggle={() => setMobileOpen(false)}
+          planLimit={planLimit}
           user={user}
           organization={organization}
           isMobile

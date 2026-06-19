@@ -56,6 +56,7 @@ describe("sync controller", () => {
         role: "owner",
         slug: "org",
       },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -183,7 +184,12 @@ describe("sync controller", () => {
       }),
       error: null,
     });
-    expect(syncService.runSync).toHaveBeenCalledWith("org_123", "user_123", "mercadolivre");
+    expect(syncService.runSync).toHaveBeenCalledWith(
+      "org_123",
+      "company_123",
+      "user_123",
+      "mercadolivre",
+    );
   });
 
   it("rejects unauthenticated sync requests", async () => {

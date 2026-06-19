@@ -15,6 +15,18 @@ import {
 
 export const productCatalogQueryKey = ["product-catalog-module"] as const;
 
+function readSelectedCompanyIdFromBrowserCookie() {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const match = document.cookie.match(
+    /(?:^|;\s*)lucreii_selected_company_id=([^;]+)/i,
+  );
+
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 export function getSaoPauloCurrentReferenceMonth(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
     month: "2-digit",
@@ -101,6 +113,7 @@ const REFERENCE_MONTH_HISTORY = 6;
 
 export function useProductData() {
   const queryClient = useQueryClient();
+  const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
   const [referenceMonth, setReferenceMonthState] = useState(() => getSaoPauloCurrentReferenceMonth());
@@ -120,7 +133,7 @@ export function useProductData() {
       fetchProductCatalog({
         referenceMonth,
       }),
-    queryKey: [...productCatalogQueryKey, referenceMonth],
+    queryKey: [...productCatalogQueryKey, selectedCompanyId, referenceMonth],
   });
 
   const allRows = useMemo(() => {

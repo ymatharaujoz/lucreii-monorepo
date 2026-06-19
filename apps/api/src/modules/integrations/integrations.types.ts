@@ -57,11 +57,13 @@ export type IntegrationCatalogImportContext = {
 
 export type IntegrationSyncOrderItem = {
   externalProductId: string | null;
+  metadata?: Record<string, unknown>;
   quantity: number;
   sku?: string | null;
   title?: string | null;
   unitPrice: string;
   totalPrice: string;
+  variationId?: string | null;
 };
 
 export type IntegrationSyncFee = {

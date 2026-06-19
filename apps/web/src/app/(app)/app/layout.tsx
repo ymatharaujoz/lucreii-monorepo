@@ -5,6 +5,7 @@ import { readServerAuthState } from "@/lib/server-auth";
 import { readServerBillingState } from "@/lib/server-billing";
 import { hasActiveCompany, readServerCompanies } from "@/lib/server-companies";
 import { hasSubscriptionForProtectedApp } from "@/lib/protected-app-route";
+import { BILLING_PLAN_BY_CODE, isBillingPlanCode } from "@lucreii/types";
 
 export const metadata: Metadata = {
   robots: {
@@ -30,9 +31,15 @@ export default async function ProtectedAppLayout({
   const hasSubscription = hasSubscriptionForProtectedApp(billingState);
   const companies = authState.organization ? await readServerCompanies() : [];
   const hasOnboarded = !!authState.organization && hasActiveCompany(companies);
+  const planCode =
+    billingState?.subscription?.planCode && isBillingPlanCode(billingState.subscription.planCode)
+      ? billingState.subscription.planCode
+      : "start";
+  const planLimit = BILLING_PLAN_BY_CODE[planCode].cnpjLimit;
 
   return (
     <AppLayoutClient
+      companies={companies}
       user={{
         email: authState.user.email,
         image: authState.user.image,
@@ -41,6 +48,7 @@ export default async function ProtectedAppLayout({
       organization={{
         name: authState.organization?.name ?? "Novo workspace",
       }}
+      planLimit={planLimit}
       hasSubscription={hasSubscription}
       hasOnboarded={hasOnboarded}
     >

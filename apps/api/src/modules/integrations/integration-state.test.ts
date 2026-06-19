@@ -8,6 +8,7 @@ describe("integration-state", () => {
   it("round-trips signed integration callback state", () => {
     const state = createSignedIntegrationState(
       {
+        companyId: "company_123",
         organizationId: "org_123",
         provider: "mercadolivre",
       },
@@ -25,6 +26,7 @@ describe("integration-state", () => {
   it("rejects state signed with a different secret", () => {
     const state = createSignedIntegrationState(
       {
+        companyId: "company_123",
         organizationId: "org_123",
         provider: "mercadolivre",
       },
@@ -40,6 +42,7 @@ describe("integration-state", () => {
     const state = createSignedIntegrationState(
       {
         codeVerifier: "verifier_123",
+        companyId: "company_123",
         organizationId: "org_123",
         provider: "mercadolivre",
       },

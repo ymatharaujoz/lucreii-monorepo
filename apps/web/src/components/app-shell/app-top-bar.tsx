@@ -1,6 +1,5 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -8,19 +7,7 @@ type AppTopBarProps = {
   onMenuToggle: () => void;
 };
 
-const pageTitles: Record<string, string> = {
-  "/app": "Painel",
-  "/app/products": "Produtos e custos",
-  "/app/products/catalog": "Catálogo",
-  "/app/products/performance": "Performance",
-  "/app/integrations": "Integrações",
-  "/app/billing": "Assinatura",
-};
-
 export function AppTopBar({ onMenuToggle }: AppTopBarProps) {
-  const pathname = usePathname();
-  const title = pageTitles[pathname] || "Painel";
-
   return (
     <header className="border-b border-border bg-surface-strong/60 backdrop-blur-md">
       <div className="mx-auto flex h-16 w-full max-w-[min(100%,1440px)] items-center justify-between px-6 sm:px-8 md:px-10 lg:px-12 xl:px-14">
@@ -38,7 +25,6 @@ export function AppTopBar({ onMenuToggle }: AppTopBarProps) {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <h1 className="text-lg font-semibold text-foreground">{title}</h1>
         </div>
         <div className="flex items-center gap-3">
           <ThemeToggle />

@@ -21,6 +21,18 @@ const dashboardSummaryQueryKey = ["dashboard-summary"] as const;
 const dashboardChartsQueryKey = ["dashboard-charts"] as const;
 const dashboardProfitabilityQueryKey = ["dashboard-profitability"] as const;
 
+function readSelectedCompanyIdFromBrowserCookie() {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const match = document.cookie.match(
+    /(?:^|;\s*)lucreii_selected_company_id=([^;]+)/i,
+  );
+
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 function dashboardUrl(path: string, provider?: IntegrationProviderSlug | null) {
   return provider ? `${path}?provider=${provider}` : path;
 }
@@ -63,21 +75,22 @@ export async function fetchDashboardProfitability(
 }
 
 export function useDashboardData(provider: IntegrationProviderSlug | null = null) {
+  const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
   const summaryQuery = useQuery({
     queryFn: () => fetchDashboardSummary(provider),
-    queryKey: [...dashboardSummaryQueryKey, provider],
+    queryKey: [...dashboardSummaryQueryKey, selectedCompanyId, provider],
     retry: 2,
   });
 
   const chartsQuery = useQuery({
     queryFn: () => fetchDashboardCharts(provider),
-    queryKey: [...dashboardChartsQueryKey, provider],
+    queryKey: [...dashboardChartsQueryKey, selectedCompanyId, provider],
     retry: 2,
   });
 
   const profitabilityQuery = useQuery({
     queryFn: () => fetchDashboardProfitability(provider),
-    queryKey: [...dashboardProfitabilityQueryKey, provider],
+    queryKey: [...dashboardProfitabilityQueryKey, selectedCompanyId, provider],
     retry: 2,
   });
 

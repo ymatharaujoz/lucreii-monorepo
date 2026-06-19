@@ -22,7 +22,7 @@ describe("company finance defaults helpers", () => {
     expect(formatTaxPercentInput("0.120000")).toBe("12,00");
   });
 
-  it("returns the first active company", () => {
+  it("returns selected company before first active fallback", () => {
     const activeCompany = getActiveCompany([
       {
         cnpj: "12345678000195",
@@ -31,6 +31,7 @@ describe("company finance defaults helpers", () => {
         fixedCostDefault: "0.00",
         id: "company_0",
         isActive: false,
+        isSelected: false,
         razaoSocial: "Inativa LTDA",
         taxRateDefault: "0.000000",
         updatedAt: "2026-05-09T10:00:00.000Z",
@@ -42,12 +43,25 @@ describe("company finance defaults helpers", () => {
         fixedCostDefault: "1500.00",
         id: "company_1",
         isActive: true,
+        isSelected: false,
         razaoSocial: "Mercado Livre LTDA",
         taxRateDefault: "0.120000",
         updatedAt: "2026-05-09T10:00:00.000Z",
       },
+      {
+        cnpj: "11222333000182",
+        code: "SHOP",
+        createdAt: "2026-05-09T10:00:00.000Z",
+        fixedCostDefault: "1700.00",
+        id: "company_2",
+        isActive: true,
+        isSelected: true,
+        razaoSocial: "Shopee LTDA",
+        taxRateDefault: "0.090000",
+        updatedAt: "2026-05-09T10:00:00.000Z",
+      },
     ]);
 
-    expect(activeCompany?.id).toBe("company_1");
+    expect(activeCompany?.id).toBe("company_2");
   });
 });

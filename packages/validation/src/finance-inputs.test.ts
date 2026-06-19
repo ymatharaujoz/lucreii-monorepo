@@ -55,6 +55,7 @@ describe("finance input company schemas", () => {
           fixedCostDefault: "1500.00",
           id: "company_1",
           isActive: true,
+          isSelected: true,
           razaoSocial: "Mercado Livre LTDA",
           taxRateDefault: "0.120000",
           updatedAt: "2026-05-09T10:00:00.000Z",
@@ -67,6 +68,7 @@ describe("finance input company schemas", () => {
       expect.objectContaining({
         cnpj: "12345678000195",
         fixedCostDefault: "1500.00",
+        isSelected: true,
         razaoSocial: "Mercado Livre LTDA",
         taxRateDefault: "0.120000",
       }),

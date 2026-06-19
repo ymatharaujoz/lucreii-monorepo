@@ -3,6 +3,7 @@ import type { IntegrationProviderSlug } from "@lucreii/types";
 import { IntegrationProviderError } from "./integrations.types";
 
 type SignedStatePayload = {
+  companyId: string;
   codeVerifier?: string;
   issuedAt: number;
   nonce: string;
@@ -26,6 +27,7 @@ function signPayload(value: string, secret: string) {
 
 export function createSignedIntegrationState(
   input: {
+    companyId: string;
     codeVerifier?: string;
     organizationId: string;
     provider: IntegrationProviderSlug;
@@ -33,6 +35,7 @@ export function createSignedIntegrationState(
   secret: string,
 ) {
   const payload: SignedStatePayload = {
+    companyId: input.companyId,
     codeVerifier: input.codeVerifier,
     issuedAt: Date.now(),
     nonce: randomUUID(),

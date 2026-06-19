@@ -6,6 +6,7 @@ export type Company = {
   razaoSocial: string;
   code: string;
   isActive: boolean;
+  isSelected: boolean;
   fixedCostDefault: DecimalString;
   taxRateDefault: DecimalString;
   createdAt: string;

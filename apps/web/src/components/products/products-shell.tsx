@@ -348,12 +348,14 @@ function normalizeTextInput(value: string) {
 
 interface ProductsShellProps {
   activeCompanyCount?: number;
+  selectedCompanyId?: string | null;
   organizationName: string;
   children: React.ReactNode;
 }
 
 export function ProductsShell({
   activeCompanyCount = 1,
+  selectedCompanyId = null,
   organizationName,
   children,
 }: ProductsShellProps) {
@@ -418,7 +420,7 @@ export function ProductsShell({
     SyncedProductRecord[]
   >([]);
   const catalogCompanyRequirementMessage =
-    getCatalogCompanyRequirementMessage(activeCompanyCount);
+    getCatalogCompanyRequirementMessage(activeCompanyCount, selectedCompanyId);
 
   async function refreshCatalog(
     message?: string,
@@ -724,19 +726,17 @@ export function ProductsShell({
   });
 
   const handleImportProducts = useCallback(() => {
-    if (blockCatalogCreationIfCompanyRuleFails()) {
-      return;
-    }
+    blockCatalogCreationIfCompanyRuleFails();
     setShowImportInstructionsModal(true);
     importSourcesMutation.mutate();
   }, [blockCatalogCreationIfCompanyRuleFails, importSourcesMutation]);
 
   const handleAddProduct = useCallback(
     (_context?: { companyId: string | null; referenceMonth: string }) => {
-      if (blockCatalogCreationIfCompanyRuleFails()) {
-        return;
+      const blocked = blockCatalogCreationIfCompanyRuleFails();
+      if (!blocked) {
+        setFeedbackMessage(null);
       }
-      setFeedbackMessage(null);
       setEditingProductId(null);
       setProductForm(initialProductForm);
       setShowProductForm(false);
@@ -1439,6 +1439,17 @@ export function ProductsShell({
             transition={{ duration: 0.3 }}
             className="space-y-7"
           >
+            {feedbackMessage ? (
+              <div
+                className={`rounded-lg border px-3.5 py-2.5 text-sm ${
+                  feedbackTone === "critical"
+                    ? "border-error/20 bg-error-soft text-error"
+                    : "border-warning/20 bg-warning-soft/30 text-foreground"
+                }`}
+              >
+                {feedbackMessage}
+              </div>
+            ) : null}
             <div className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-border/40 bg-gradient-to-br from-accent/[0.02] via-surface-strong/40 to-background/20 p-4 shadow-[var(--shadow-xs)]">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10 ring-1 ring-accent/20">
                 <Upload className="h-5 w-5 text-accent" />
@@ -1692,7 +1703,7 @@ export function ProductsShell({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
-              className="space-y-6"
+              className="space-y-4 sm:space-y-5"
             >
               {/* Hero Card */}
               <motion.div
@@ -1700,7 +1711,7 @@ export function ProductsShell({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 className={cn(
-                  "relative overflow-hidden rounded-[var(--radius-2xl)] border p-8 text-center",
+                  "relative overflow-hidden rounded-[var(--radius-2xl)] border p-5 sm:p-6 text-center",
                   hasIssues
                     ? "border-warning/30 bg-gradient-to-br from-warning-soft/20 via-surface/60 to-background"
                     : "border-success/30 bg-gradient-to-br from-success-soft/20 via-surface/60 to-background",
@@ -1716,7 +1727,7 @@ export function ProductsShell({
                     ease: [0.34, 1.56, 0.64, 1],
                   }}
                   className={cn(
-                    "mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full ring-2",
+                    "mx-auto mb-4 flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full ring-2",
                     hasIssues
                       ? "bg-warning/10 ring-warning/20"
                       : "bg-success/10 ring-success/20",
@@ -1724,12 +1735,12 @@ export function ProductsShell({
                 >
                   {hasIssues ? (
                     <AlertTriangle
-                      className="h-8 w-8 text-warning"
+                      className="h-6 w-6 sm:h-7 sm:w-7 text-warning"
                       strokeWidth={1.5}
                     />
                   ) : (
                     <CheckCircle2
-                      className="h-8 w-8 text-success"
+                      className="h-6 w-6 sm:h-7 sm:w-7 text-success"
                       strokeWidth={1.5}
                     />
                   )}
@@ -1740,7 +1751,7 @@ export function ProductsShell({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.2, duration: 0.3 }}
-                  className="text-xl font-semibold tracking-tight text-foreground"
+                  className="text-lg font-semibold tracking-tight text-foreground"
                 >
                   {hasIssues
                     ? "Importação com ressalvas"
@@ -1752,35 +1763,22 @@ export function ProductsShell({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.25, duration: 0.3 }}
-                  className="mt-2 text-sm text-muted-foreground"
+                  className="mt-1.5 text-sm text-muted-foreground"
                 >
                   {marketplaceImportResult.found} produto
                   {marketplaceImportResult.found !== 1 ? "s" : ""} do Mercado Livre
                   processado{marketplaceImportResult.found !== 1 ? "s" : ""}
                 </motion.p>
-
-                {/* Divider */}
-                <motion.div
-                  initial={{ scaleX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ delay: 0.3, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                  className="mx-auto mt-6 h-px w-32 bg-border/40"
-                />
               </motion.div>
 
-              {/* Bento Grid Stats */}
+              {/* Bento Grid Stats — only Created & Updated */}
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                  className="grid grid-cols-2 gap-4 sm:gap-5"
+                  className="grid grid-cols-2 gap-3 sm:gap-4"
                 >
                   {[
-                    {
-                      label: "Encontrados",
-                      value: marketplaceImportResult.found,
-                      icon: <Search className="h-4 w-4" strokeWidth={1.5} />,
-                    },
                     {
                       label: "Criados",
                       value: marketplaceImportResult.created,
@@ -1790,11 +1788,6 @@ export function ProductsShell({
                       label: "Atualizados",
                       value: marketplaceImportResult.updated,
                       icon: <RefreshCw className="h-4 w-4" strokeWidth={1.5} />,
-                    },
-                    {
-                      label: "Sem alteração",
-                      value: marketplaceImportResult.unchanged,
-                      icon: <Minus className="h-4 w-4" strokeWidth={1.5} />,
                     },
                   ].map((stat, idx) => (
                     <motion.div
@@ -1806,7 +1799,7 @@ export function ProductsShell({
                         duration: 0.35,
                         ease: [0.16, 1, 0.3, 1],
                       }}
-                      className="relative flex min-h-[120px] flex-col justify-between rounded-[var(--radius-xl)] border border-border/40 bg-surface/60 px-5 py-4"
+                      className="relative flex min-h-[80px] sm:min-h-[96px] flex-col justify-between rounded-[var(--radius-xl)] border border-border/40 bg-surface/60 px-4 py-3"
                     >
                       <div className="flex items-start gap-2">
                         <p className="min-w-0 flex-1 text-[11px] font-semibold uppercase leading-tight tracking-[0.04em] text-muted-foreground/60">
@@ -1834,10 +1827,10 @@ export function ProductsShell({
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                  className="rounded-[var(--radius-xl)] border border-warning/20 bg-surface p-5 shadow-[var(--shadow-xs)]"
+                  className="rounded-[var(--radius-xl)] border border-warning/20 bg-surface p-4 sm:p-5 shadow-[var(--shadow-xs)]"
                 >
                   {/* Panel Header */}
-                  <div className="mb-4 flex items-center justify-between">
+                  <div className="mb-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning/10 ring-1 ring-warning/20">
                         <AlertTriangle className="h-4 w-4 text-warning" />
@@ -1858,10 +1851,10 @@ export function ProductsShell({
                   </div>
 
                   {/* Divider */}
-                  <div className="mb-4 h-px bg-border/40" />
+                  <div className="mb-3 h-px bg-border/40" />
 
                   {/* Scrollable List */}
-                  <div className="max-h-52 space-y-1 overflow-y-auto mf-scrollbar">
+                  <div className="max-h-28 sm:max-h-36 space-y-1 overflow-y-auto mf-scrollbar">
                     {[
                       ...marketplaceImportResult.conflicts,
                       ...marketplaceImportResult.errors,
@@ -1875,14 +1868,14 @@ export function ProductsShell({
                           duration: 0.3,
                           ease: [0.16, 1, 0.3, 1],
                         }}
-                        className="flex items-start gap-3 rounded-[var(--radius-md)] px-3 py-2.5 transition-colors hover:bg-error-soft/30"
+                        className="flex items-start gap-3 rounded-[var(--radius-md)] px-3 py-2 transition-colors hover:bg-error-soft/30"
                       >
                         <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-border-strong" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-foreground">
+                          <p className="break-words text-sm font-medium text-foreground">
                             {issue.sku || issue.externalProductId}
                           </p>
-                          <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                          <p className="mt-0.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
                             {issue.message}
                           </p>
                         </div>
@@ -1897,7 +1890,7 @@ export function ProductsShell({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.4, duration: 0.3 }}
-                className="flex justify-end pt-2"
+                className="flex justify-end pt-1"
               >
                 <Button
                   onClick={() => {
@@ -2096,7 +2089,7 @@ export function ProductsShell({
                     transition: { duration: 0.35, ease: "easeOut" },
                   },
                 }}
-                className={`rounded-lg border px-3.5 py-2.5 text-sm ${
+                className={`rounded-lg border px-3.5 py-2.5 text-center text-sm ${
                   feedbackTone === "critical"
                     ? "border-error/20 bg-error-soft text-error"
                     : "border-warning/20 bg-warning-soft/30 text-foreground"

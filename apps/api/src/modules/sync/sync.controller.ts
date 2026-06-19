@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Post, Query, UseGuards } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, Inject, Post, Query, UseGuards } from "@nestjs/common";
 import { CurrentAuthContext } from "@/modules/auth/current-auth-context";
 import type { AuthenticatedRequestContext } from "@/modules/auth/auth.types";
 import { EntitlementGuard } from "@/modules/billing/entitlement.guard";
@@ -18,8 +18,9 @@ export class SyncController {
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
     @Query() query: SyncProviderDto,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
-      data: await this.syncService.getStatus(authContext.organization!.id, query.provider),
+      data: await this.syncService.getStatus(authContext.organization!.id, companyId, query.provider),
       error: null,
     };
   }
@@ -29,13 +30,23 @@ export class SyncController {
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
     @Body() body: RunSyncDto,
   ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
     return {
       data: await this.syncService.runSync(
         authContext.organization!.id,
+        companyId,
         authContext.user.id,
         body.provider,
       ),
       error: null,
     };
+  }
+
+  private requireSelectedCompanyId(authContext: AuthenticatedRequestContext) {
+    if (!authContext.selectedCompanyId) {
+      throw new BadRequestException("Selected company required.");
+    }
+
+    return authContext.selectedCompanyId;
   }
 }

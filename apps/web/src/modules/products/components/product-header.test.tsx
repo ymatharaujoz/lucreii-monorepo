@@ -41,20 +41,20 @@ afterEach(() => {
 
 describe("ProductHeader", () => {
   it("renders 'Carregando' when stats is null", () => {
-    const { container } = mount(<ProductHeader organizationName="Acme" stats={null} />);
+    const { container } = mount(<ProductHeader title="Catálogo" stats={null} />);
     expect(container.textContent).toContain("Carregando");
   });
 
   it("renders 'Catálogo vazio' when totalProducts is 0", () => {
     const { container } = mount(
-      <ProductHeader organizationName="Acme" stats={buildStats({ totalProducts: 0, activeProducts: 0 })} />
+      <ProductHeader title="Catálogo" stats={buildStats({ totalProducts: 0, activeProducts: 0 })} />
     );
     expect(container.textContent).toContain("Catálogo vazio");
   });
 
   it("renders 'Produtos sem custo' when productsWithoutCost > 0", () => {
     const { container } = mount(
-      <ProductHeader organizationName="Acme" stats={buildStats({ productsWithoutCost: 1, productsWithCost: 0 })} />
+      <ProductHeader title="Catálogo" stats={buildStats({ productsWithoutCost: 1, productsWithCost: 0 })} />
     );
     expect(container.textContent).toContain("Produtos sem custo");
   });
@@ -62,7 +62,7 @@ describe("ProductHeader", () => {
   it("prioriza 'Produtos sem custo' sobre 'Revisão pendente'", () => {
     const { container } = mount(
       <ProductHeader
-        organizationName="Acme"
+        title="Catálogo"
         stats={buildStats({ productsWithoutCost: 1, pendingSyncProducts: 1 })}
       />
     );
@@ -72,14 +72,14 @@ describe("ProductHeader", () => {
 
   it("renders 'Revisão pendente' when pendingSyncProducts > 0 and no products without cost", () => {
     const { container } = mount(
-      <ProductHeader organizationName="Acme" stats={buildStats({ pendingSyncProducts: 1 })} />
+      <ProductHeader title="Catálogo" stats={buildStats({ pendingSyncProducts: 1 })} />
     );
     expect(container.textContent).toContain("Revisão pendente");
   });
 
   it("renders 'Catálogo saudável' when everything is fine", () => {
     const { container } = mount(
-      <ProductHeader organizationName="Acme" stats={buildStats()} />
+      <ProductHeader title="Catálogo" stats={buildStats()} />
     );
     expect(container.textContent).toContain("Catálogo saudável");
   });

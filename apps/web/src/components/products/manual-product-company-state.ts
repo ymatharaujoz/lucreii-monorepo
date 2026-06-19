@@ -6,8 +6,8 @@ const COMPANY_SELECTION_MESSAGE =
   "Selecione a empresa que deve receber os custos e impostos mensais deste produto.";
 const CATALOG_COMPANY_REQUIRED_MESSAGE =
   "Cadastre uma empresa ativa em /app antes de criar ou importar produtos.";
-const CATALOG_SINGLE_ACTIVE_COMPANY_MESSAGE =
-  "Mantenha apenas uma empresa ativa em /app antes de criar ou importar produtos.";
+const CATALOG_SELECTION_REQUIRED_MESSAGE =
+  "Selecione a empresa ativa que deve receber produtos e importacoes.";
 
 export function getActiveCompanies(companies: Company[]) {
   return companies.filter((company) => company.isActive);
@@ -18,6 +18,7 @@ export function resolveManualProductCompanyState(input: {
   preferredCompanyId: string | null;
 }) {
   const activeCompanies = getActiveCompanies(input.companies);
+  const selectedActiveCompany = activeCompanies.find((company) => company.isSelected) ?? null;
   const hasPreferredCompany =
     input.preferredCompanyId !== null &&
     activeCompanies.some((company) => company.id === input.preferredCompanyId);
@@ -25,10 +26,13 @@ export function resolveManualProductCompanyState(input: {
   return {
     activeCompanies,
     blockingMessage: activeCompanies.length === 0 ? COMPANY_REQUIRED_MESSAGE : null,
-    requiresExplicitSelection: activeCompanies.length > 1 && !hasPreferredCompany,
+    requiresExplicitSelection:
+      activeCompanies.length > 1 && !hasPreferredCompany && selectedActiveCompany === null,
     selectedCompanyId: hasPreferredCompany
       ? input.preferredCompanyId ?? ""
-      : activeCompanies.length === 1
+      : selectedActiveCompany
+        ? selectedActiveCompany.id
+        : activeCompanies.length === 1
         ? activeCompanies[0]?.id ?? ""
         : "",
   };
@@ -55,13 +59,16 @@ export function getManualProductCompanyValidationMessage(input: {
   return null;
 }
 
-export function getCatalogCompanyRequirementMessage(activeCompanyCount: number) {
+export function getCatalogCompanyRequirementMessage(
+  activeCompanyCount: number,
+  selectedCompanyId?: string | null,
+) {
   if (activeCompanyCount === 0) {
     return CATALOG_COMPANY_REQUIRED_MESSAGE;
   }
 
-  if (activeCompanyCount > 1) {
-    return CATALOG_SINGLE_ACTIVE_COMPANY_MESSAGE;
+  if (activeCompanyCount > 1 && !selectedCompanyId) {
+    return CATALOG_SELECTION_REQUIRED_MESSAGE;
   }
 
   return null;

@@ -12,7 +12,10 @@ export async function readServerCompanies(): Promise<Company[]> {
 
   const response = await fetch(`${getWebEnv().NEXT_PUBLIC_API_BASE_URL}/companies`, {
     cache: "no-store",
-    headers: buildRemoteAuthHeaders(webSession.remoteSessionToken),
+    headers: buildRemoteAuthHeaders(
+      webSession.remoteSessionToken,
+      webSession.authState.selectedCompanyId,
+    ),
   });
 
   if (response.status === 401) {

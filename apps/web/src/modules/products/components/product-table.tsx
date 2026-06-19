@@ -13,7 +13,7 @@ import {
   Store,
   X,
 } from "lucide-react";
-import { Badge, Card, EmptyState } from "@lucreii/ui";
+import { Badge, Card, EmptyState, cn } from "@lucreii/ui";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { slideInUpVariants } from "@/lib/animations";
 import { ProductDetailsModal } from "./product-details-modal";
@@ -36,14 +36,11 @@ type SortKey =
   | "returns"
   | "unitCost"
   | "sellingPrice"
-  | "advertisingCost"
-  | "commissionPct"
-  | "shipping"
-  | "taxPct"
-  | "packagingCost"
-  | "totalProductCost"
-  | "revenue"
-  | "totalProfit";
+  | "actualRoas"
+  | "unitProfit"
+  | "contributionMarginRatio"
+  | "roiRatio"
+  | "minimumRoas";
 
 function compareSortValues(
   a: ProductTableRow[SortKey],
@@ -73,7 +70,7 @@ function compareSortValues(
 type SortDirection = "asc" | "desc" | null;
 
 const marketplaceOptions = [
-  { value: "mercadolivre", label: "Mercado Livre" },
+  { value: "mercadolivre", label: "MELI" },
   { value: "shopee", label: "Shopee" },
 ];
 
@@ -242,9 +239,9 @@ export function ProductTable({
   }
 
   return (
-    <motion.div variants={slideInUpVariants} className={className}>
-      <Card padding="lg" className="min-w-0 overflow-hidden">
-        <div className="mb-4 flex items-center justify-between">
+    <motion.div variants={slideInUpVariants} className={cn("flex flex-1 min-h-0", className)}>
+      <Card padding="lg" className="min-w-0 flex flex-1 flex-col overflow-hidden min-h-0">
+        <div className="mb-4 flex items-center justify-between shrink-0">
           <div>
             <h3 className="text-sm font-semibold text-foreground">Produtos</h3>
             <p className="text-xs text-muted-foreground/70">Grade mensal de produtos</p>
@@ -267,7 +264,7 @@ export function ProductTable({
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-5 rounded-[var(--radius-lg)] border border-border bg-surface-strong/50 p-4"
+            className="mb-5 rounded-[var(--radius-lg)] border border-border bg-surface-strong/50 p-4 shrink-0"
           >
             <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-start">
               <div className="space-y-1.5">
@@ -346,14 +343,13 @@ export function ProductTable({
           </motion.div>
         ) : null}
 
-        <div className="relative -mx-6 min-w-0">
-          <div className="overflow-x-auto px-6">
-            <table className="w-full min-w-[1100px] border-separate border-spacing-0">
+        <div className="flex-1 min-h-0 overflow-auto">
+          <table className="w-full min-w-[1300px] border-separate border-spacing-0">
               <thead>
                 <tr className="border-b border-border bg-surface-strong/95">
                   <th
                     onClick={() => handleSort("channelLabel")}
-                    className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
                   >
                     <div className="flex items-center gap-1">
                       Canal
@@ -362,7 +358,7 @@ export function ProductTable({
                   </th>
                   <th
                     onClick={() => handleSort("name")}
-                    className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[200px]"
+                    className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[200px]"
                   >
                     <div className="flex items-center gap-1">
                       Produto
@@ -371,7 +367,7 @@ export function ProductTable({
                   </th>
                   <th
                     onClick={() => handleSort("sales")}
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
                   >
                     <div className="flex items-center justify-end gap-1">
                       Vendas
@@ -380,7 +376,7 @@ export function ProductTable({
                   </th>
                   <th
                     onClick={() => handleSort("returns")}
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
                   >
                     <div className="flex items-center justify-end gap-1">
                       Devoluções
@@ -389,7 +385,7 @@ export function ProductTable({
                   </th>
                   <th
                     onClick={() => handleSort("unitCost")}
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
                   >
                     <div className="flex items-center justify-end gap-1">
                       Custo
@@ -398,7 +394,7 @@ export function ProductTable({
                   </th>
                   <th
                     onClick={() => handleSort("sellingPrice")}
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
                   >
                     <div className="flex items-center justify-end gap-1">
                       PDV
@@ -406,75 +402,48 @@ export function ProductTable({
                     </div>
                   </th>
                   <th
-                    onClick={() => handleSort("advertisingCost")}
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    onClick={() => handleSort("actualRoas")}
+                    className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[120px]"
                   >
                     <div className="flex items-center justify-end gap-1">
-                      Publicidade
-                      <SortIcon column="advertisingCost" />
+                      ROAS Real
+                      <SortIcon column="actualRoas" />
                     </div>
                   </th>
                   <th
-                    onClick={() => handleSort("commissionPct")}
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    onClick={() => handleSort("unitProfit")}
+                    className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[140px]"
                   >
                     <div className="flex items-center justify-end gap-1">
-                      Comissão
-                      <SortIcon column="commissionPct" />
+                      Lucro Unitário
+                      <SortIcon column="unitProfit" />
                     </div>
                   </th>
                   <th
-                    onClick={() => handleSort("shipping")}
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    onClick={() => handleSort("contributionMarginRatio")}
+                    className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[200px]"
                   >
                     <div className="flex items-center justify-end gap-1">
-                      Frete
-                      <SortIcon column="shipping" />
+                      Margem Contribuição
+                      <SortIcon column="contributionMarginRatio" />
                     </div>
                   </th>
                   <th
-                    onClick={() => handleSort("taxPct")}
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    onClick={() => handleSort("roiRatio")}
+                    className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[120px]"
                   >
                     <div className="flex items-center justify-end gap-1">
-                      Alíquota
-                      <SortIcon column="taxPct" />
+                      ROI
+                      <SortIcon column="roiRatio" />
                     </div>
                   </th>
                   <th
-                    onClick={() => handleSort("packagingCost")}
-                    className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                    onClick={() => handleSort("minimumRoas")}
+                    className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[140px]"
                   >
                     <div className="flex items-center justify-end gap-1">
-                      Embalagem
-                      <SortIcon column="packagingCost" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort("totalProductCost")}
-                    className="hidden px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[140px] whitespace-nowrap"
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      Custo Produto Total
-                      <SortIcon column="totalProductCost" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort("revenue")}
-                    className="hidden px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 border-l border-l-border-strong min-w-[100px]"
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      Receita
-                      <SortIcon column="revenue" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort("totalProfit")}
-                    className="hidden px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[110px]"
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      Lucro Total
-                      <SortIcon column="totalProfit" />
+                      ROAS Mínimo
+                      <SortIcon column="minimumRoas" />
                     </div>
                   </th>
                 </tr>
@@ -501,9 +470,12 @@ export function ProductTable({
                     <td className="px-3 py-3 text-left">{getChannelBadge(row.channelLabel)}</td>
                     <td className="px-3 py-3 text-left">
                       <div className="flex items-center gap-3">
-                        <ProductImagePreview alt={row.name} url={row.coverImageUrl} />
+                        <ProductImagePreview alt={row.displayName} url={row.coverImageUrl} />
                         <div className="flex flex-col gap-0.5">
-                          <span className="text-sm font-medium text-foreground">{row.name}</span>
+                          <span className="text-sm font-medium text-foreground">{row.displayName}</span>
+                          {row.variationLabel ? (
+                            <span className="text-xs text-muted-foreground">{row.variationLabel}</span>
+                          ) : null}
                           <span className="text-xs text-muted-foreground">{row.sku}</span>
                         </div>
                       </div>
@@ -521,38 +493,28 @@ export function ProductTable({
                       <span className="text-sm text-foreground">{formatMoney(row.sellingPrice)}</span>
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <span className="text-sm text-foreground">{formatMoney(row.advertisingCost)}</span>
+                      <span className="text-sm text-foreground">{formatPercent(row.actualRoas)}</span>
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <span className="text-sm text-foreground">{formatPercent(row.commissionPct)}</span>
+                      <span className="text-sm text-foreground">{formatMoney(row.unitProfit)}</span>
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <span className="text-sm text-foreground">{formatMoney(row.shipping * row.netLiquidSales)}</span>
+                      <span className="text-sm text-foreground">{formatPercent(row.contributionMarginRatio)}</span>
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <span className="text-sm text-foreground">{formatPercent(row.taxPct)}</span>
+                      <span className="text-sm text-foreground">{formatPercent(row.roiRatio)}</span>
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <span className="text-sm text-foreground">{formatMoney(row.totalPackagingCost)}</span>
-                    </td>
-                    <td className="hidden px-3 py-3 text-right">
-                      <span className="text-sm font-semibold text-foreground">{formatMoney(row.totalProductCost)}</span>
-                    </td>
-                    <td className="hidden px-3 py-3 text-right border-l border-l-border-strong">
-                      <span className="text-sm font-semibold text-foreground">{formatMoney(row.revenue)}</span>
-                    </td>
-                    <td className="hidden px-3 py-3 text-right">
-                      <span className="text-sm font-semibold text-foreground">{formatMoney(row.totalProfit)}</span>
+                      <span className="text-sm text-foreground">{formatPercent(row.minimumRoas)}</span>
                     </td>
                   </MotionTableRow>
                 ))}
               </tbody>
-            </table>
-          </div>
+          </table>
         </div>
 
         {filteredRows.length === 0 ? (
-          <div className="rounded-[var(--radius-lg)] border border-dashed border-border/70 bg-background-soft/60 px-6 py-10 text-center">
+          <div className="shrink-0 rounded-[var(--radius-lg)] border border-dashed border-border/70 bg-background-soft/60 px-6 py-10 text-center">
             <p className="text-sm font-medium text-foreground">Nenhum produto encontrado</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Ajuste os filtros para visualizar outros SKUs ou canais.
@@ -561,7 +523,7 @@ export function ProductTable({
         ) : null}
 
         {filteredRows.length > 0 ? (
-          <div className="mt-6">
+          <div className="shrink-0 pt-4">
             <Pagination
               currentPage={safeCurrentPage}
               onPageChange={onPageChange}

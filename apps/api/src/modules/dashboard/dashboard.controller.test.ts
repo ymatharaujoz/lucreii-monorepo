@@ -54,6 +54,7 @@ describe("dashboard controller", () => {
         role: "owner",
         slug: "org",
       },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -102,7 +103,7 @@ describe("dashboard controller", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(dashboardService.readSummary).toHaveBeenCalledWith("org_123", "shopee");
+    expect(dashboardService.readSummary).toHaveBeenCalledWith("org_123", "company_123", "shopee");
     expect(response.json()).toEqual({
       data: expect.objectContaining({
         cards: [],
@@ -119,6 +120,7 @@ describe("dashboard controller", () => {
         role: "owner",
         slug: "org",
       },
+      selectedCompanyId: "company_123",
       session: {
         expiresAt: new Date("2026-04-22T00:00:00.000Z"),
         id: "session_123",
@@ -179,6 +181,21 @@ describe("dashboard controller", () => {
     expect(chartsResponse.statusCode).toBe(200);
     expect(recentSyncResponse.statusCode).toBe(200);
     expect(profitabilityResponse.statusCode).toBe(200);
+    expect(dashboardService.readCharts).toHaveBeenCalledWith(
+      "org_123",
+      "company_123",
+      undefined,
+    );
+    expect(dashboardService.readRecentSync).toHaveBeenCalledWith(
+      "org_123",
+      "company_123",
+      undefined,
+    );
+    expect(dashboardService.readProfitability).toHaveBeenCalledWith(
+      "org_123",
+      "company_123",
+      undefined,
+    );
   });
 
   it("rejects unauthenticated requests", async () => {

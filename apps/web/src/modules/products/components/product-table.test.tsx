@@ -48,6 +48,7 @@ function buildRow(index: number, overrides: Partial<ProductTableRow> = {}): Prod
     commissionPct: 16,
     contributionMarginRatio: 0.18,
     coverImageUrl: "https://example.com/product.png",
+    displayName: `Produto ${index}`,
     id: `2026-06-01:mercadolivre:SKU-${index}`,
     isActive: true,
     minimumRoas: 5.55,
@@ -70,6 +71,7 @@ function buildRow(index: number, overrides: Partial<ProductTableRow> = {}): Prod
     totalProfit: 160,
     unitCost: 60,
     unitProfit: 20,
+    variationLabel: null,
     ...overrides,
   };
 }
@@ -171,9 +173,6 @@ describe("ProductTable", () => {
     expect(document.body.textContent).toContain("Comissão MELI");
     expect(document.body.textContent).toContain("Investimento em Publicidade");
 
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Lucratividade")!);
-    expect(document.body.textContent).toContain("ROAS Real");
-
     click(document.querySelector('[aria-label="Close"]')!);
 
     expect(document.body.textContent).not.toContain("Visão Geral de Vendas");
@@ -211,12 +210,6 @@ describe("ProductTable", () => {
     click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Composição")!);
     expect(document.body.textContent).toContain("Composição de Preço");
     expect(document.body.textContent).toContain("Sem foto");
-
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Lucratividade")!);
-    expect(document.body.textContent).toContain("ROI");
-    expect(document.body.textContent).toContain("ROAS Mínimo");
-    expect(document.body.textContent).toContain("ROAS Real");
-    expect(document.body.textContent).toContain("—");
 
     keydown(document, "Escape");
 

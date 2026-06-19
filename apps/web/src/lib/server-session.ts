@@ -22,8 +22,12 @@ export async function readServerWebAuthSession(): Promise<WebAuthSessionPayload 
   }
 }
 
-export function buildRemoteAuthHeaders(remoteSessionToken: string) {
+export function buildRemoteAuthHeaders(
+  remoteSessionToken: string,
+  selectedCompanyId?: string | null,
+) {
   return {
     cookie: buildRemoteAuthCookieHeader(remoteSessionToken),
+    ...(selectedCompanyId ? { "x-lucreii-company-id": selectedCompanyId } : {}),
   };
 }

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { AuthState } from "@lucreii/types";
 
 export const WEB_AUTH_SESSION_COOKIE_NAME = "lucreii.web_session";
+export const WEB_SELECTED_COMPANY_COOKIE_NAME = "lucreii_selected_company_id";
 
 export type WebAuthSessionPayload = {
   authState: AuthState;

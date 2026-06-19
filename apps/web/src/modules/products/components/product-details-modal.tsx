@@ -10,18 +10,16 @@ import {
   Package,
   Percent,
   ShoppingCart,
-  Target,
   TrendingUp,
   Truck,
   Wallet,
-  Zap,
 } from "lucide-react";
 import { Badge, Button, Modal, cn } from "@lucreii/ui";
 import { ApiClientError, apiClient } from "@/lib/api/client";
 import { productCatalogQueryKey, formatReferenceMonthPtBr } from "../hooks/use-product-data";
 import { CurrencyInput, parseCurrencyValue } from "./currency-input";
 import type { ProductTableRow } from "../types/products";
-import { formatMoney, formatMultiplier, formatNumber, formatPercent } from "../utils/formatters";
+import { formatMoney, formatNumber } from "../utils/formatters";
 
 type ProductDetailsModalProps = {
   onClose: () => void;
@@ -29,16 +27,7 @@ type ProductDetailsModalProps = {
   row: ProductTableRow | null;
 };
 
-type TabKey = "overview" | "composition" | "profitability";
-
-function isNegative(value: number | null): boolean {
-  return value !== null && value < 0;
-}
-
-function buildValue(val: number | null, formatter: (v: number) => string): string {
-  if (val == null) return "—";
-  return formatter(val);
-}
+type TabKey = "overview" | "composition";
 
 type SectionCardProps = {
   title: string;
@@ -313,14 +302,8 @@ export function ProductDetailsModal({
     return null;
   }
 
-  const shippingTotal = row.shipping * row.netLiquidSales;
-  const taxValue = row.revenue * (row.taxPct / 100);
-  const totalCommission = row.totalCommission;
-  const unitProfit = row.unitProfit ?? 0;
-  const margin = row.contributionMarginRatio !== null ? row.contributionMarginRatio * 100 : null;
-  const roi = row.roiRatio !== null ? row.roiRatio * 100 : null;
-  const minimumRoas = row.minimumRoas ?? null;
-  const actualRoas = row.actualRoas ?? null;
+  const unitCommission = row.sellingPrice * (row.commissionPct / 100);
+  const unitTax = row.sellingPrice * (row.taxPct / 100);
 
   return (
     <Modal
@@ -369,7 +352,6 @@ export function ProductDetailsModal({
                 tabs={[
                   { key: "overview", label: "Visão Geral" },
                   { key: "composition", label: "Composição" },
-                  { key: "profitability", label: "Lucratividade" },
                 ]}
               />
             </div>
@@ -451,22 +433,22 @@ export function ProductDetailsModal({
                     />
                     <MetricCard
                       label="Comissão MELI"
-                      value={formatMoney(totalCommission)}
+                      value={formatMoney(unitCommission)}
                       icon={<Percent className="h-3 w-3" />}
                     />
                     <MetricCard
                       label="Frete"
-                      value={formatMoney(shippingTotal)}
+                      value={formatMoney(row.shipping)}
                       icon={<Truck className="h-3 w-3" />}
                     />
                     <MetricCard
                       label="Embalagem"
-                      value={formatMoney(row.totalPackagingCost)}
+                      value={formatMoney(row.packagingCost)}
                       icon={<Package className="h-3 w-3" />}
                     />
                     <MetricCard
                       label="Imposto"
-                      value={formatMoney(taxValue)}
+                      value={formatMoney(unitTax)}
                       icon={<Percent className="h-3 w-3" />}
                     />
                   </div>
@@ -504,67 +486,6 @@ export function ProductDetailsModal({
                 </div>
               </motion.div>
             )}
-
-            {activeTab === "profitability" && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="space-y-4"
-              >
-                <SectionCard
-                  title="Lucratividade"
-                  icon={<Zap className="h-4 w-4 text-accent" />}
-                >
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <MetricCard
-                      label="ROAS Real"
-                      value={formatMultiplier(row.actualRoas)}
-                      icon={<Target className="h-3 w-3" />}
-                      variant={
-                        actualRoas == null || minimumRoas == null
-                          ? "default"
-                          : actualRoas < minimumRoas
-                            ? "negative"
-                            : "highlight"
-                      }
-                    />
-                    <MetricCard
-                      label="Lucro Unitário"
-                      value={buildValue(row.unitProfit, formatMoney)}
-                      icon={<Zap className="h-3 w-3" />}
-                      variant={isNegative(unitProfit) ? "negative" : "highlight"}
-                    />
-                    <MetricCard
-                      label="Margem de Contribuição"
-                      value={buildValue(
-                        row.contributionMarginRatio !== null
-                          ? row.contributionMarginRatio * 100
-                          : null,
-                        (value) => formatPercent(value, { digits: 2 }),
-                      )}
-                      icon={<Percent className="h-3 w-3" />}
-                      variant={isNegative(margin) ? "negative" : "default"}
-                    />
-                    <MetricCard
-                      label="ROI"
-                      value={buildValue(
-                        row.roiRatio !== null ? row.roiRatio * 100 : null,
-                        (value) => formatPercent(value, { digits: 2 }),
-                      )}
-                      icon={<TrendingUp className="h-3 w-3" />}
-                      variant={isNegative(roi) ? "negative" : "default"}
-                    />
-                    <MetricCard
-                      label="ROAS Mínimo"
-                      value={formatMultiplier(row.minimumRoas)}
-                      icon={<Target className="h-3 w-3" />}
-                    />
-                  </div>
-                </SectionCard>
-              </motion.div>
-            )}
-
           </motion.form>
         )}
       </AnimatePresence>
