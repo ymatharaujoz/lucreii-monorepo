@@ -141,6 +141,13 @@
       "when": 1782039600000,
       "tag": "0019_product_catalog_company_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1782126000000,
+      "tag": "0020_product_monthly_performance_product_link",
+      "breakpoints": true
     }
   ]
 }

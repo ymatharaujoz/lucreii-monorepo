@@ -145,6 +145,7 @@ describe("SyncPerformanceMaterializerService", () => {
         commissionRate: "0.061700",
         companyId: "company_1",
         packagingCost: "2.00",
+        productId: "product_1",
         productName: "Produto ML",
         referenceMonth: "2026-05-01",
         returnsQuantity: 0,
@@ -507,11 +508,114 @@ describe("SyncPerformanceMaterializerService", () => {
     expect(insertedRows).toEqual([
       expect.objectContaining({
         companyId: "company_1",
+        productId: "product_blue",
         productName: "Camiseta Azul",
         salesQuantity: 1,
         sku: "SKU-BLUE",
       }),
     ]);
+  });
+
+  it("keeps rows separate by linked product even when parent and variation share sku", async () => {
+    const { db, service } = createService();
+    const insertedRows: Array<Record<string, unknown>> = [];
+
+    db.query.companies.findFirst.mockResolvedValue({
+      id: "company_1",
+      isActive: true,
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+    db.query.products.findMany.mockResolvedValue([
+      {
+        companyId: "company_1",
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        financeDefaults: null,
+        id: "product_parent",
+        isActive: true,
+        name: "Produto Pai",
+        organizationId: "org_1",
+        productCosts: [],
+        sellingPrice: "120.00",
+        sku: "SKU-SHARED",
+        updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+      },
+      {
+        companyId: "company_1",
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        financeDefaults: null,
+        id: "product_child",
+        isActive: true,
+        name: "Produto Filho",
+        organizationId: "org_1",
+        productCosts: [],
+        sellingPrice: "120.00",
+        sku: "SKU-SHARED",
+        updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+      },
+    ]);
+    db.query.externalOrders.findMany.mockResolvedValue([
+      {
+        fees: [],
+        items: [
+          {
+            externalProduct: {
+              linkedProductId: "product_parent",
+              sku: "SKU-SHARED",
+            },
+            metadata: {},
+            quantity: 1,
+            totalPrice: "120.00",
+          },
+          {
+            externalProduct: {
+              linkedProductId: "product_child",
+              sku: "SKU-SHARED",
+            },
+            metadata: {},
+            quantity: 1,
+            totalPrice: "120.00",
+          },
+        ],
+        metadata: {
+          tags: [],
+        },
+        orderedAt: "2026-05-16T12:00:00.000Z",
+        status: "paid",
+      },
+    ]);
+    db.transaction.mockImplementation(
+      async (callback: (tx: { insert: ReturnType<typeof createTxInsertMock> }) => Promise<unknown>) =>
+        callback({
+          insert: createTxInsertMock(insertedRows),
+        }),
+    );
+
+    await service.materializeForSync({
+      companyId: "company_1",
+      organizationId: "org_1",
+      providerSlug: "mercadolivre",
+      syncRunId: "sync_1",
+      userId: "user_1",
+    });
+
+    expect(insertedRows).toHaveLength(2);
+    expect(insertedRows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productId: "product_parent",
+          productName: "Produto Pai",
+          salesQuantity: 1,
+          sku: "SKU-SHARED",
+        }),
+        expect.objectContaining({
+          productId: "product_child",
+          productName: "Produto Filho",
+          salesQuantity: 1,
+          sku: "SKU-SHARED",
+        }),
+      ]),
+    );
   });
 
   it("does not materialize unpaid Shopee orders as sales", async () => {

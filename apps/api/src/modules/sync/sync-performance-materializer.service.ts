@@ -242,6 +242,57 @@ function resolveMatchedProduct(input: {
   return input.productsBySku.get(normalizedSku) ?? null;
 }
 
+function buildAggregateKey(input: {
+  matchedProduct: ProductRowWithFinance;
+  providerSlug: string;
+  referenceMonth: string;
+  item: Pick<ExternalOrderItem, "quantity"> & {
+    externalProduct: Pick<ExternalProduct, "linkedProductId" | "sku"> | null;
+  };
+}) {
+  const linkedProductId = input.item.externalProduct?.linkedProductId ?? null;
+
+  if (linkedProductId) {
+    return [
+      input.referenceMonth,
+      input.providerSlug,
+      "product",
+      linkedProductId,
+    ].join("::");
+  }
+
+  return [
+    input.referenceMonth,
+    input.providerSlug,
+    "sku",
+    normalizeSku(input.matchedProduct.sku) ?? input.matchedProduct.id,
+  ].join("::");
+}
+
+function buildPerformanceConflictTarget(productId: string | null) {
+  if (productId) {
+    return {
+      target: [
+        productMonthlyPerformance.organizationId,
+        productMonthlyPerformance.companyId,
+        productMonthlyPerformance.referenceMonth,
+        productMonthlyPerformance.channel,
+        productMonthlyPerformance.productId,
+      ] as const,
+    };
+  }
+
+  return {
+    target: [
+      productMonthlyPerformance.organizationId,
+      productMonthlyPerformance.companyId,
+      productMonthlyPerformance.referenceMonth,
+      productMonthlyPerformance.channel,
+      productMonthlyPerformance.sku,
+    ] as const,
+  };
+}
+
 @Injectable()
 export class SyncPerformanceMaterializerService {
   constructor(
@@ -307,11 +358,12 @@ export class SyncPerformanceMaterializerService {
           continue;
         }
 
-        const key = [
+        const key = buildAggregateKey({
+          item,
+          matchedProduct,
+          providerSlug: input.providerSlug,
           referenceMonth,
-          input.providerSlug,
-          normalizeSku(matchedProduct.sku) ?? matchedProduct.id,
-        ].join("::");
+        });
         const aggregate = aggregates.get(key) ?? createAggregate(matchedProduct);
         aggregates.set(key, aggregate);
         aggregate.salesQuantity += item.quantity;
@@ -365,6 +417,7 @@ export class SyncPerformanceMaterializerService {
             notes: null,
             organizationId: input.organizationId,
             packagingCost: aggregate.product.financeDefaults?.packagingCost ?? "0",
+            productId: aggregate.product.id,
             productName: aggregate.product.name,
             referenceMonth,
             returnsQuantity: aggregate.returnsQuantity,
@@ -391,13 +444,7 @@ export class SyncPerformanceMaterializerService {
               shippingFee,
               updatedAt: new Date(),
             },
-            target: [
-              productMonthlyPerformance.organizationId,
-              productMonthlyPerformance.companyId,
-              productMonthlyPerformance.referenceMonth,
-              productMonthlyPerformance.channel,
-              productMonthlyPerformance.sku,
-            ],
+            ...buildPerformanceConflictTarget(aggregate.product.id),
           });
       }
     });

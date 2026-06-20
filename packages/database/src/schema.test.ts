@@ -278,6 +278,36 @@ describe("@lucreii/database schema", () => {
     );
   });
 
+  it("keeps monthly performance product linkage migration aligned with schema", () => {
+    const performanceLinkMigration = readFileSync(
+      path.resolve(
+        __dirname,
+        "../drizzle/0020_product_monthly_performance_product_link.sql",
+      ),
+      "utf8",
+    );
+    const migrationJournal = readFileSync(
+      path.resolve(__dirname, "../drizzle/meta/_journal.json"),
+      "utf8",
+    );
+
+    expect(productMonthlyPerformance.productId).toBeDefined();
+    expect(performanceLinkMigration).toContain('ALTER TABLE "product_monthly_performance"');
+    expect(performanceLinkMigration).toContain('ADD COLUMN IF NOT EXISTS "product_id" uuid');
+    expect(performanceLinkMigration).toContain(
+      'CREATE INDEX IF NOT EXISTS "product_monthly_performance_product_id_idx"',
+    );
+    expect(performanceLinkMigration).toContain(
+      'product_monthly_performance_org_company_month_channel_product_key',
+    );
+    expect(performanceLinkMigration).toContain(
+      'product_monthly_performance_org_company_month_channel_sku_legacy_key',
+    );
+    expect(migrationJournal).toContain(
+      '"tag": "0020_product_monthly_performance_product_link"',
+    );
+  });
+
   it("keeps tax removal migration aligned with schema", () => {
     const taxGlobalizationMigration = readFileSync(
       path.resolve(__dirname, "../drizzle/0010_globalize_company_tax.sql"),

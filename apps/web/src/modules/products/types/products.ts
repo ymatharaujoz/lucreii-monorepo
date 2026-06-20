@@ -31,9 +31,14 @@ export type ProductMarketplaceNotice = {
 
 export type ProductTableRow = {
   id: string;
+  productId: string | null;
   performanceId: string;
+  catalogGroupKey: string | null;
+  catalogRole: "parent" | "child" | "standalone";
+  children: ProductTableRow[];
   name: string;
   displayName: string;
+  parentProductId: string | null;
   variationLabel: string | null;
   sku: string;
   isActive: boolean;

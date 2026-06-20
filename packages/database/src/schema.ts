@@ -247,6 +247,9 @@ export const productMonthlyPerformance = pgTable(
     channel: varchar("channel", { length: 120 }).notNull(),
     productName: varchar("product_name", { length: 255 }).notNull(),
     sku: varchar("sku", { length: 128 }).notNull(),
+    productId: uuid("product_id").references(() => products.id, {
+      onDelete: "set null",
+    }),
     salesQuantity: integer("sales_quantity").default(0).notNull(),
     returnsQuantity: integer("returns_quantity").default(0).notNull(),
     unitCost: numeric("unit_cost", { precision: 12, scale: 2 })
@@ -338,16 +341,26 @@ export const productMonthlyPerformance = pgTable(
       table.channel,
       table.referenceMonth,
     ),
+    index("product_monthly_performance_product_id_idx").on(table.productId),
     index("product_monthly_performance_sku_idx").on(table.sku),
     uniqueIndex(
-      "product_monthly_performance_org_company_month_channel_sku_key",
+      "product_monthly_performance_org_company_month_channel_product_key",
+    ).on(
+      table.organizationId,
+      table.companyId,
+      table.referenceMonth,
+      table.channel,
+      table.productId,
+    ),
+    uniqueIndex(
+      "product_monthly_performance_org_company_month_channel_sku_legacy_key",
     ).on(
       table.organizationId,
       table.companyId,
       table.referenceMonth,
       table.channel,
       table.sku,
-    ),
+    ).where(sql`${table.productId} is null`),
   ],
 );
 
@@ -1317,6 +1330,7 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   productCosts: many(productCosts),
   images: many(productImages),
   adCosts: many(adCosts),
+  performanceRows: many(productMonthlyPerformance),
   productMetrics: many(productMetrics),
 }));
 
@@ -1396,6 +1410,10 @@ export const productMonthlyPerformanceRelations = relations(
     company: one(companies, {
       fields: [productMonthlyPerformance.companyId],
       references: [companies.id],
+    }),
+    product: one(products, {
+      fields: [productMonthlyPerformance.productId],
+      references: [products.id],
     }),
   }),
 );

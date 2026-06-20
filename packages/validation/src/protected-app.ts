@@ -472,6 +472,7 @@ export const productAnalyticsRowSchema = z.object({
 
 export const productMonthlyPerformanceRowSchema = z.object({
   id: z.string().trim().min(1),
+  productId: z.string().trim().min(1).nullable(),
   referenceMonth: isoDateField("Reference month"),
   channel: z.string().trim().min(1),
   productName: z.string().trim().min(1),
@@ -486,6 +487,27 @@ export const productMonthlyPerformanceRowSchema = z.object({
   advertisingCost: decimalField("Advertising cost"),
   marketplaceCommission: decimalField("Marketplace commission").optional(),
 });
+
+export const productPerformanceRowSchema: z.ZodType<any> = z.lazy(() =>
+  z
+    .object({
+      ...productMonthlyPerformanceRowSchema.shape,
+      catalogGroupKey: z.string().trim().min(1).nullable().default(null),
+      catalogRole: z.enum(["parent", "child", "standalone"]).default("standalone"),
+      children: z.array(productPerformanceRowSchema).default([]),
+      parentProductId: z.string().trim().min(1).nullable().default(null),
+      variationLabel: z.string().trim().min(1).nullable().default(null),
+    })
+    .superRefine((value, ctx) => {
+      if (value.catalogRole === "child" && value.children.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Child performance rows cannot contain nested children.",
+          path: ["children"],
+        });
+      }
+    }),
+);
 
 export const productAnalyticsCatalogStatsSchema = z.object({
   totalProducts: z.number().int().min(0),
@@ -509,6 +531,7 @@ export const productAnalyticsSnapshotSchema = z.object({
   mercadoLivreSyncStatus: dashboardRecentSyncResponseSchema,
   productRows: z.array(productAnalyticsRowSchema),
   monthlyPerformanceRows: z.array(productMonthlyPerformanceRowSchema),
+  performanceRows: z.array(productPerformanceRowSchema),
   catalogStats: productAnalyticsCatalogStatsSchema,
   financialState: productFinancialStateSchema,
   dataGaps: z.array(productAnalyticsDataGapSchema),

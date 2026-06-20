@@ -44,10 +44,13 @@ function buildRow(index: number, overrides: Partial<ProductTableRow> = {}): Prod
     actualRoas: 2.4,
     adSpend: 120,
     advertisingCost: 120,
+    catalogRole: "standalone",
     channelLabel: "mercadolivre",
+    children: [],
     commissionPct: 16,
     contributionMarginRatio: 0.18,
     coverImageUrl: "https://example.com/product.png",
+    catalogGroupKey: null,
     displayName: `Produto ${index}`,
     id: `2026-06-01:mercadolivre:SKU-${index}`,
     isActive: true,
@@ -55,7 +58,9 @@ function buildRow(index: number, overrides: Partial<ProductTableRow> = {}): Prod
     name: `Produto ${index}`,
     netLiquidSales: 8,
     packagingCost: 4,
+    parentProductId: null,
     performanceId: `perf_${index}`,
+    productId: null,
     referenceMonth: "2026-06-01",
     returns: 2,
     revenue: 960,
@@ -156,6 +161,60 @@ beforeEach(() => {
 });
 
 describe("ProductTable", () => {
+  it("renders aggregated parent rows with expandable variation children", () => {
+    const rows = [
+      buildRow(1, {
+        catalogGroupKey: "mercadolivre:MLB123",
+        catalogRole: "parent",
+        children: [
+          buildRow(101, {
+            catalogGroupKey: "mercadolivre:MLB123",
+            catalogRole: "child",
+            children: [],
+            displayName: "Produto 1",
+            name: "Produto 1 - Azul",
+            parentProductId: "2026-06-01:mercadolivre:SKU-1",
+            sales: 2,
+            sku: "SKU-1-AZ",
+            variationLabel: "Cor: Azul",
+          }),
+          buildRow(102, {
+            catalogGroupKey: "mercadolivre:MLB123",
+            catalogRole: "child",
+            children: [],
+            displayName: "Produto 1",
+            name: "Produto 1 - Vermelho",
+            parentProductId: "2026-06-01:mercadolivre:SKU-1",
+            sales: 3,
+            sku: "SKU-1-VM",
+            variationLabel: "Cor: Vermelho",
+          }),
+        ],
+        sales: 5,
+      }),
+    ];
+
+    const view = renderWithClient(
+      <ProductTable
+        onPageChange={() => {}}
+        pagination={{ currentPage: 1, pageSize: 10, totalItems: rows.length, totalPages: 1 }}
+        rows={rows}
+      />,
+    );
+
+    expect(document.body.textContent).toContain("5");
+    expect(document.body.textContent).toContain("2 variações");
+    expect(document.body.textContent).not.toContain("Cor: Azul");
+
+    click(document.querySelector('button[aria-label="Expandir variações"]')!);
+
+    expect(document.body.textContent).toContain("Cor: Azul");
+    expect(document.body.textContent).toContain("Cor: Vermelho");
+    expect(document.querySelectorAll("tbody tr")).toHaveLength(3);
+
+    view.unmount();
+  });
+
   it("opens monthly details modal on row click and keeps current page after close", () => {
     const rows = Array.from({ length: 11 }, (_, index) => buildRow(index + 1));
     const view = renderWithClient(<ProductTableHarness rows={rows} />);

@@ -114,9 +114,12 @@ type MercadoLivreOrderResponse = {
   total_amount?: number;
 };
 
+type MercadoLivreOrderDetailResponse = MercadoLivreOrderResponse;
+
 type MercadoLivreOrderItemResponse = {
   item?: {
     id?: number | string;
+    variation_id?: number | string;
     seller_sku?: string;
     title?: string;
   };
@@ -780,7 +783,9 @@ export class MercadoLivreProvider implements IntegrationProvider {
     const items = (order.order_items ?? []).map<IntegrationSyncOrderItem>(
       (item) => {
         const itemId = toOptionalString(item.item?.id);
-        const variationId = toOptionalString(item.variation_id);
+        const variationId = toOptionalString(
+          item.item?.variation_id ?? item.variation_id,
+        );
         const externalProductId =
           itemId && variationId ? `${itemId}:${variationId}` : itemId;
         const sku = item.item?.seller_sku ?? null;
@@ -821,6 +826,83 @@ export class MercadoLivreProvider implements IntegrationProvider {
       },
     );
 
+    const fees = await this.resolveOrderFees(order, input);
+
+    return {
+      currency: order.currency_id ?? "BRL",
+      externalOrderId: String(order.id ?? ""),
+      fees,
+      items,
+      metadata: {
+        returnQuantityBySku,
+        skuByExternalProductId,
+        tags: order.tags ?? [],
+        titleByExternalProductId,
+      },
+      orderedAt: order.date_closed ?? order.date_created ?? null,
+      status: order.status ?? "imported",
+      totalAmount: toDecimalString(order.total_amount),
+    };
+  }
+
+  private async resolveOrderFees(
+    order: MercadoLivreOrderResponse,
+    input: {
+      accessToken: string;
+      sellerAccountId: string;
+    },
+  ) {
+    const hasShipmentLookup = Boolean(order.shipping?.id);
+    const initialFees = await this.collectOrderFees(order, input);
+
+    if (this.hasCompleteFeeCoverage(initialFees) || !order.id) {
+      return initialFees;
+    }
+
+    // The search payload can omit fee fields for some orders, so hydrate the
+    // order detail once before giving up on commission/fixed/shipping data.
+    const detailedOrder = await this.fetchOrderDetails({
+      accessToken: input.accessToken,
+      orderId: String(order.id),
+    });
+
+    if (!detailedOrder) {
+      return initialFees;
+    }
+
+    return this.collectOrderFees({
+      ...order,
+      currency_id: detailedOrder.currency_id ?? order.currency_id,
+      date_closed: detailedOrder.date_closed ?? order.date_closed,
+      date_created: detailedOrder.date_created ?? order.date_created,
+      order_items: detailedOrder.order_items ?? order.order_items,
+      payments: detailedOrder.payments ?? order.payments,
+      shipping: detailedOrder.shipping ?? order.shipping,
+      shipping_cost:
+        detailedOrder.shipping_cost !== undefined
+          ? detailedOrder.shipping_cost
+          : order.shipping_cost,
+      status: detailedOrder.status ?? order.status,
+      tags: detailedOrder.tags ?? order.tags,
+      total_amount:
+        detailedOrder.total_amount !== undefined
+          ? detailedOrder.total_amount
+          : order.total_amount,
+    }, input, {
+      skipShipmentLookup: hasShipmentLookup,
+    });
+  }
+
+  private async collectOrderFees(
+    order: MercadoLivreOrderResponse,
+    input: {
+      accessToken: string;
+      sellerAccountId: string;
+    },
+    options: {
+      skipShipmentLookup?: boolean;
+    } = {},
+  ) {
     const fees: IntegrationSyncFee[] = [];
 
     const paymentMarketplaceFee = (order.payments ?? []).reduce(
@@ -871,7 +953,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
       }
     }
 
-    const shippingCost = await this.resolveShippingCost(order, input);
+    const shippingCost = await this.resolveShippingCost(order, input, options);
 
     if (shippingCost > 0) {
       fees.push({
@@ -884,21 +966,16 @@ export class MercadoLivreProvider implements IntegrationProvider {
       });
     }
 
-    return {
-      currency: order.currency_id ?? "BRL",
-      externalOrderId: String(order.id ?? ""),
-      fees,
-      items,
-      metadata: {
-        returnQuantityBySku,
-        skuByExternalProductId,
-        tags: order.tags ?? [],
-        titleByExternalProductId,
-      },
-      orderedAt: order.date_closed ?? order.date_created ?? null,
-      status: order.status ?? "imported",
-      totalAmount: toDecimalString(order.total_amount),
-    };
+    return fees;
+  }
+
+  private hasCompleteFeeCoverage(fees: IntegrationSyncFee[]) {
+    const types = new Set(fees.map((fee) => fee.feeType));
+    return (
+      types.has("marketplace_commission") &&
+      types.has("fixed_fee") &&
+      types.has("shipping_cost")
+    );
   }
 
   private async resolveShippingCost(
@@ -907,10 +984,13 @@ export class MercadoLivreProvider implements IntegrationProvider {
       accessToken: string;
       sellerAccountId: string;
     },
+    options: {
+      skipShipmentLookup?: boolean;
+    } = {},
   ) {
     const shipmentId = order.shipping?.id ? String(order.shipping.id) : null;
 
-    if (shipmentId) {
+    if (shipmentId && !options.skipShipmentLookup) {
       const shipmentCost = await this.fetchShipmentSellerCost({
         accessToken: input.accessToken,
         sellerAccountId: input.sellerAccountId,
@@ -941,6 +1021,33 @@ export class MercadoLivreProvider implements IntegrationProvider {
     return typeof order.shipping_cost === "number" && order.shipping_cost > 0
       ? order.shipping_cost
       : 0;
+  }
+
+  private async fetchOrderDetails(input: {
+    accessToken: string;
+    orderId: string;
+  }) {
+    const url = new URL(
+      `https://api.mercadolibre.com/orders/${encodeURIComponent(input.orderId)}`,
+    );
+
+    const response = await this.fetchWithRetry(url, {
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        accept: "application/json",
+      },
+      method: "GET",
+    });
+
+    const payload = (await parseProviderResponse(response)) as
+      | MercadoLivreOrderDetailResponse
+      | string;
+
+    if (!response.ok || typeof payload === "string") {
+      return null;
+    }
+
+    return payload;
   }
 
   private async fetchShipmentSellerCost(input: {

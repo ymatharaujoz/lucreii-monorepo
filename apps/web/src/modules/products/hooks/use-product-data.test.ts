@@ -54,6 +54,7 @@ describe("products protected fetchers", () => {
         lastCompletedRun: null,
       },
       monthlyPerformanceRows: [],
+      performanceRows: [],
       productCosts: [],
       productRows: [],
       products: [],

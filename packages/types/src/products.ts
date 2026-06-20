@@ -251,6 +251,7 @@ export type ProductAnalyticsScope = {
 
 export type ProductMonthlyPerformanceDisplayRow = {
   id: string;
+  productId: string | null;
   referenceMonth: string;
   channel: string;
   productName: string;
@@ -264,6 +265,14 @@ export type ProductMonthlyPerformanceDisplayRow = {
   packagingCost: DecimalString;
   advertisingCost: DecimalString;
   marketplaceCommission?: DecimalString;
+};
+
+export type ProductPerformanceRow = ProductMonthlyPerformanceDisplayRow & {
+  catalogGroupKey: string | null;
+  catalogRole: ProductCatalogRole;
+  children: ProductPerformanceRow[];
+  parentProductId: string | null;
+  variationLabel: string | null;
 };
 
 export type ProductAnalyticsCatalogStats = {
@@ -290,6 +299,7 @@ export type ProductCatalogSnapshot = {
 export type ProductAnalyticsSnapshot = ProductCatalogSnapshot & {
   productRows: ProductAnalyticsRow[];
   monthlyPerformanceRows: ProductMonthlyPerformanceDisplayRow[];
+  performanceRows: ProductPerformanceRow[];
   catalogStats: ProductAnalyticsCatalogStats;
   financialState: ProductFinancialState;
   dataGaps: ProductAnalyticsDataGap[];

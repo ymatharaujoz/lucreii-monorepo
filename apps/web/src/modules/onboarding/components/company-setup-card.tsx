@@ -70,8 +70,8 @@ export function CompanySetupCard({
   const cnpjError = showErrors && normalizeCnpj(cnpj).length !== 14;
 
   return (
-    <motion.div variants={itemVariants} className="h-full min-h-0">
-      <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+    <motion.div variants={itemVariants} className="h-full">
+      <Card className="flex h-full flex-col overflow-hidden">
         <div className="shrink-0 border-b border-border bg-surface-strong/30 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent">
@@ -85,7 +85,7 @@ export function CompanySetupCard({
         </div>
 
         <form
-          className="flex min-h-0 flex-1 flex-col justify-between p-6"
+          className="flex flex-1 flex-col p-6"
           onSubmit={handleSubmit}
         >
           <div className="space-y-5">
@@ -101,7 +101,7 @@ export function CompanySetupCard({
                     ? "border-error hover:border-error focus:border-error focus:ring-error/10"
                     : "border-border focus:border-accent focus:ring-accent/10"
                 }`}
-                maxLength={255}
+                maxLength={100}
                 minLength={2}
                 onChange={(event) => {
                   setShowErrors(false);
@@ -112,9 +112,14 @@ export function CompanySetupCard({
                 type="text"
                 value={razaoSocial}
               />
-              {razaoSocialError ? (
-                <p className="text-xs text-error">Informe pelo menos 2 caracteres</p>
-              ) : null}
+              <div className="flex items-center justify-between text-xs">
+                <span className={razaoSocialError ? "text-error" : "text-muted-foreground"}>
+                  {razaoSocialError ? "Informe pelo menos 2 caracteres" : "Este nome será usado nos relatórios e filtros"}
+                </span>
+                <span className={`${razaoSocial.length > 90 ? "text-warning" : "text-muted-foreground"}`}>
+                  {razaoSocial.length}/100
+                </span>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -157,7 +162,7 @@ export function CompanySetupCard({
             ) : null}
           </div>
 
-          <div className="shrink-0 pt-6">
+          <div className="mt-auto pt-4">
             <Button
               className="w-full gap-2 text-white hover:text-white [&_svg]:text-white"
               disabled={isSubmitting}

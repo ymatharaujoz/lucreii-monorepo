@@ -88,12 +88,12 @@ export function OnboardingPanel({
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="mx-auto max-w-4xl space-y-8 pt-6"
+      className="mx-auto w-full max-w-4xl space-y-8 pt-6 pb-6"
     >
       <SetupHeader organizationName={organizationName} stage={stage} userName={userName} />
       <SetupProgress currentStep={stage} />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px] lg:items-stretch">
+      <div className="grid gap-6 lg:grid-cols-[1fr_340px] lg:items-start">
         {isCompanyStage ? (
           <CompanySetupCard
             isSubmitting={isSubmitting}
@@ -110,9 +110,7 @@ export function OnboardingPanel({
           />
         )}
 
-        <div className="flex min-h-0 flex-col">
-          <SetupInfoCard stage={stage} />
-        </div>
+        <SetupInfoCard stage={stage} />
       </div>
     </motion.div>
   );

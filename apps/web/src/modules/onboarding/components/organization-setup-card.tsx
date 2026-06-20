@@ -57,8 +57,8 @@ export function OrganizationSetupCard({
   const nameError = showErrors && name.trim().length < 2;
 
   return (
-    <motion.div variants={itemVariants} className="h-full min-h-0">
-      <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+    <motion.div variants={itemVariants} className="h-full">
+      <Card className="flex h-full flex-col overflow-hidden">
         {/* Card Header */}
         <div className="shrink-0 border-b border-border bg-surface-strong/30 px-6 py-4">
           <div className="flex items-center gap-3">
@@ -75,7 +75,7 @@ export function OrganizationSetupCard({
         </div>
 
         {/* Form */}
-        <form className="flex min-h-0 flex-1 flex-col justify-between p-6" onSubmit={handleSubmit}>
+        <form className="flex flex-1 flex-col p-6" onSubmit={handleSubmit}>
           <div className="space-y-5">
             {/* Organization Name Field */}
             <div className="space-y-2">
@@ -144,29 +144,29 @@ export function OrganizationSetupCard({
             )}
 
             {/* Submit Button */}
-            <div className="shrink-0 pt-2">
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                loading={isSubmitting}
-                size="lg"
-                className="w-full gap-2 text-white hover:text-white [&_svg]:text-white"
-              >
-                {isSubmitting ? (
-                  <>Criando organização...</>
-                ) : (
-                  <>
-                    Criar organização e continuar
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </Button>
-            </div>
+          </div>
+          <div className="mt-auto pt-4">
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              loading={isSubmitting}
+              size="lg"
+              className="w-full gap-2 text-white hover:text-white [&_svg]:text-white"
+            >
+              {isSubmitting ? (
+                <>Criando organização...</>
+              ) : (
+                <>
+                  Criar organização e continuar
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
+            </Button>
           </div>
         </form>
 
         {/* Footer */}
-        <div className="mt-auto shrink-0 border-t border-border bg-surface-strong/30 px-6 py-3">
+        <div className="shrink-0 border-t border-border bg-surface-strong/30 px-6 py-3">
           <p className="text-center text-xs text-muted-foreground">
             Você poderá alterar essas informações depois nas configurações.
           </p>
