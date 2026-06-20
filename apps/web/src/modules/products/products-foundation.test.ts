@@ -417,4 +417,158 @@ describe("products foundation helpers", () => {
       ]),
     );
   });
+
+  it("prefers analytics commission totals when building a monthly performance row", () => {
+    const commissionSnapshot = structuredClone(snapshot);
+    const product = structuredClone(snapshot.products[1]);
+    product.id = "product_acc";
+    product.catalogRole = "standalone";
+    product.name = "Acessório De Celular";
+    product.sku = "ACESSORIO-AZUL";
+    product.children = [];
+
+    const monthlyPerformanceRow = structuredClone(snapshot.monthlyPerformanceRows[1]);
+    monthlyPerformanceRow.id = "perf_acc";
+    monthlyPerformanceRow.channel = "mercadolivre";
+    monthlyPerformanceRow.productId = "product_acc";
+    monthlyPerformanceRow.productName = "Acessório De Celular";
+    monthlyPerformanceRow.sku = "ACESSORIO-AZUL";
+    monthlyPerformanceRow.salesQuantity = 3;
+    monthlyPerformanceRow.returnsQuantity = 0;
+    monthlyPerformanceRow.salePrice = "29.90";
+    monthlyPerformanceRow.commissionRate = "0.117600";
+    monthlyPerformanceRow.marketplaceCommission = "3.51";
+    monthlyPerformanceRow.unitCost = "23.00";
+    monthlyPerformanceRow.shippingFee = "0.00";
+    monthlyPerformanceRow.packagingCost = "0.00";
+
+    commissionSnapshot.products = [product];
+    commissionSnapshot.monthlyPerformanceRows = [monthlyPerformanceRow];
+    commissionSnapshot.performanceRows = [];
+    commissionSnapshot.productRows = [
+      {
+        ...structuredClone(snapshot.productRows[1]),
+        channel: "mercadolivre",
+        marketplaceCommission: "31.62",
+        name: "Acessório De Celular",
+        netSales: 3,
+        productId: "product_acc",
+        revenue: "89.70",
+        sales: 3,
+        salePrice: "29.90",
+        sku: "ACESSORIO-AZUL",
+        returns: 0,
+      },
+    ];
+
+    const [row] = buildProductTableRows(commissionSnapshot);
+
+    expect(row).toEqual(
+      expect.objectContaining({
+        name: "Acessório De Celular",
+        netLiquidSales: 3,
+        sku: "ACESSORIO-AZUL",
+        totalCommission: 31.62,
+      }),
+    );
+    expect(row.commissionPct).toBeCloseTo(35.25, 2);
+  });
+
+  it("falls back to monthly performance commission totals when MELI analytics total is unavailable", () => {
+    const commissionSnapshot = structuredClone(snapshot);
+    const product = structuredClone(snapshot.products[1]);
+    product.id = "product_acc";
+    product.catalogRole = "standalone";
+    product.name = "Acessório De Celular";
+    product.sku = "ACESSORIO-AZUL";
+    product.children = [];
+
+    const monthlyPerformanceRow = structuredClone(snapshot.monthlyPerformanceRows[1]);
+    monthlyPerformanceRow.id = "perf_acc";
+    monthlyPerformanceRow.channel = "mercadolivre";
+    monthlyPerformanceRow.productId = "product_acc";
+    monthlyPerformanceRow.productName = "Acessório De Celular";
+    monthlyPerformanceRow.sku = "ACESSORIO-AZUL";
+    monthlyPerformanceRow.salesQuantity = 3;
+    monthlyPerformanceRow.returnsQuantity = 0;
+    monthlyPerformanceRow.salePrice = "29.90";
+    monthlyPerformanceRow.commissionRate = "0.117600";
+    monthlyPerformanceRow.marketplaceCommission = "3.51";
+    monthlyPerformanceRow.unitCost = "23.00";
+    monthlyPerformanceRow.shippingFee = "0.00";
+    monthlyPerformanceRow.packagingCost = "0.00";
+
+    commissionSnapshot.products = [product];
+    commissionSnapshot.monthlyPerformanceRows = [monthlyPerformanceRow];
+    commissionSnapshot.performanceRows = [];
+    commissionSnapshot.productRows = [
+      {
+        ...structuredClone(snapshot.productRows[1]),
+        channel: "mercadolivre",
+        marketplaceCommission: "0.00",
+        name: "Acessório De Celular",
+        netSales: 999,
+        productId: "product_acc",
+        revenue: "89.70",
+        sales: 3,
+        salePrice: "29.90",
+        sku: "ACESSORIO-AZUL",
+        returns: 0,
+      },
+    ];
+
+    const [row] = buildProductTableRows(commissionSnapshot);
+
+    expect(row.totalCommission).toBeCloseTo(10.53, 2);
+    expect(row.commissionPct).toBeCloseTo((10.53 / 89.7) * 100, 2);
+  });
+
+  it("does not apply MELI commission total override to non-MELI channels", () => {
+    const commissionSnapshot = structuredClone(snapshot);
+    const product = structuredClone(snapshot.products[1]);
+    product.id = "product_shopee";
+    product.catalogRole = "standalone";
+    product.name = "Produto Shopee";
+    product.sku = "SHOPEE-1";
+    product.children = [];
+
+    const monthlyPerformanceRow = structuredClone(snapshot.monthlyPerformanceRows[1]);
+    monthlyPerformanceRow.id = "perf_shopee";
+    monthlyPerformanceRow.channel = "shopee";
+    monthlyPerformanceRow.productId = "product_shopee";
+    monthlyPerformanceRow.productName = "Produto Shopee";
+    monthlyPerformanceRow.sku = "SHOPEE-1";
+    monthlyPerformanceRow.salesQuantity = 3;
+    monthlyPerformanceRow.returnsQuantity = 0;
+    monthlyPerformanceRow.salePrice = "29.90";
+    monthlyPerformanceRow.commissionRate = "0.117600";
+    monthlyPerformanceRow.marketplaceCommission = "3.51";
+    monthlyPerformanceRow.unitCost = "23.00";
+    monthlyPerformanceRow.shippingFee = "0.00";
+    monthlyPerformanceRow.packagingCost = "0.00";
+
+    commissionSnapshot.products = [product];
+    commissionSnapshot.monthlyPerformanceRows = [monthlyPerformanceRow];
+    commissionSnapshot.performanceRows = [];
+    commissionSnapshot.productRows = [
+      {
+        ...structuredClone(snapshot.productRows[1]),
+        channel: "shopee",
+        marketplaceCommission: "31.62",
+        name: "Produto Shopee",
+        netSales: 3,
+        productId: "product_shopee",
+        revenue: "89.70",
+        sales: 3,
+        salePrice: "29.90",
+        sku: "SHOPEE-1",
+        returns: 0,
+      },
+    ];
+
+    const [row] = buildProductTableRows(commissionSnapshot);
+
+    expect(row.totalCommission).toBeCloseTo(10.53, 2);
+    expect(row.commissionPct).toBeCloseTo((10.53 / 89.7) * 100, 2);
+  });
 });

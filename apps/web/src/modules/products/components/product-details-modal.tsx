@@ -302,8 +302,17 @@ export function ProductDetailsModal({
     return null;
   }
 
-  const unitCommission = row.sellingPrice * (row.commissionPct / 100);
+  const totalCommission = row.totalCommission;
   const unitTax = row.sellingPrice * (row.taxPct / 100);
+  // TARIFA TOTAL: quando totalCommission representa o valor unitário da
+  // comissão, multiplicamos por netLiquidSales. Se o produto já chegou
+  // com o total integral, a multiplicação excederia o faturamento e
+  // usamos o valor diretamente.
+  const commissionTotal =
+    totalCommission * row.netLiquidSales > row.revenue
+      ? totalCommission
+      : totalCommission * row.netLiquidSales;
+  const netRevenue = row.revenue - commissionTotal;
 
   return (
     <Modal
@@ -380,10 +389,16 @@ export function ProductDetailsModal({
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <MetricCard
-                      label="Receita"
+                      label="Faturamento"
                       value={formatMoney(row.revenue)}
                       icon={<Wallet className="h-3 w-3" />}
                       variant="highlight"
+                    />
+                    <MetricCard
+                      label="Receita Líquida"
+                      value={formatMoney(netRevenue)}
+                      icon={<TrendingUp className="h-3 w-3" />}
+                      variant={netRevenue < 0 ? "negative" : "default"}
                     />
                     <MetricCard
                       label="Vendas"
@@ -395,12 +410,6 @@ export function ProductDetailsModal({
                       value={formatNumber(row.returns)}
                       icon={<Package className="h-3 w-3" />}
                       variant={row.returns > 0 ? "negative" : "default"}
-                    />
-                    <MetricCard
-                      label="Vendas Líquidas"
-                      value={formatNumber(row.netLiquidSales)}
-                      icon={<TrendingUp className="h-3 w-3" />}
-                      variant={row.netLiquidSales < 0 ? "negative" : "highlight"}
                     />
                   </div>
                 </SectionCard>
@@ -433,7 +442,7 @@ export function ProductDetailsModal({
                     />
                     <MetricCard
                       label="Comissão MELI"
-                      value={formatMoney(unitCommission)}
+                      value={formatMoney(totalCommission)}
                       icon={<Percent className="h-3 w-3" />}
                     />
                     <MetricCard

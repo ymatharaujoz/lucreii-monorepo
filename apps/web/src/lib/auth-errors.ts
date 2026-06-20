@@ -35,7 +35,7 @@ export function resolveAuthInlineErrorMessage(authError: unknown): string {
     normalized.includes("invalid credentials") ||
     normalized.includes("wrong password")
   ) {
-    return "E-mail ou senha inválidos";
+    return "E-mail ou senha inválidos.";
   }
 
   if (
@@ -43,7 +43,7 @@ export function resolveAuthInlineErrorMessage(authError: unknown): string {
     normalized.includes("already registered") ||
     normalized.includes("email already")
   ) {
-    return "Já existe conta com este e-mail";
+    return "Já existe conta com este e-mail.";
   }
 
   return rawMessage;

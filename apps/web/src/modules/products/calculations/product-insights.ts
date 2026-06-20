@@ -28,7 +28,11 @@ function resolveNetLiquidSales(salesQuantity: number, returnsQuantity: number): 
   return Math.max(0, sales - cappedReturns);
 }
 
-function deriveRowFinancials(row: ProductMonthlyPerformanceDisplayRow, taxRateDefault: number): {
+function deriveRowFinancials(
+  row: ProductMonthlyPerformanceDisplayRow,
+  taxRateDefault: number,
+  marketplaceCommissionTotal: number | null = null,
+): {
   netLiquidSales: number;
   revenue: number;
   totalCommission: number;
@@ -52,7 +56,7 @@ function deriveRowFinancials(row: ProductMonthlyPerformanceDisplayRow, taxRateDe
   const marketplaceCommission = toNumber(row.marketplaceCommission ?? "0") || commissionRate * sellingPrice;
 
   const revenue = sellingPrice * netLiquidSales;
-  const totalCommission = marketplaceCommission * netLiquidSales;
+  const totalCommission = marketplaceCommissionTotal ?? marketplaceCommission * netLiquidSales;
   const totalShipping = shippingFee * netLiquidSales;
   const totalTax = revenue * taxRateDefault;
   const totalPackagingCost = packagingCost * netLiquidSales;
@@ -398,6 +402,12 @@ function buildProductLookupMaps(products: ProductListItem[]) {
 
 export function buildProductTableRows(data: ProductCatalogData): ProductTableRow[] {
   const { byId, bySku } = buildProductLookupMaps(data.products);
+  const productAnalyticsById = new Map(
+    data.productRows.map((row) => [row.productId, row] as const),
+  );
+  const productAnalyticsBySku = new Map(
+    data.productRows.map((row) => [row.sku, row] as const),
+  );
   const monthlyPerformanceByProductId = new Map(
     data.monthlyPerformanceRows
       .filter((row): row is ProductMonthlyPerformanceDisplayRow & { productId: string } => row.productId !== null)
@@ -411,6 +421,38 @@ export function buildProductTableRows(data: ProductCatalogData): ProductTableRow
   const hasHierarchicalPerformanceRows = data.performanceRows.some(
     (row) => row.catalogRole !== "standalone" || row.children.length > 0,
   );
+
+  const resolveProductAnalyticsRow = (
+    row: Pick<ProductMonthlyPerformanceDisplayRow, "productId" | "sku">,
+  ): ProductAnalyticsRow | null =>
+    (row.productId ? productAnalyticsById.get(row.productId) ?? null : null) ??
+    productAnalyticsBySku.get(row.sku) ??
+    null;
+
+  const resolveMarketplaceCommissionTotal = (
+    row: Pick<
+      ProductMonthlyPerformanceDisplayRow,
+      "channel" | "productId" | "sku" | "salesQuantity" | "returnsQuantity" | "marketplaceCommission"
+    >,
+  ): number | null => {
+    const normalizedChannel = row.channel.trim().toLowerCase();
+    const netSales = resolveNetLiquidSales(row.salesQuantity, row.returnsQuantity);
+    const analyticsRow = resolveProductAnalyticsRow(row);
+    if (
+      normalizedChannel === "mercadolivre" &&
+      analyticsRow?.marketplaceCommission !== undefined &&
+      analyticsRow.netSales === netSales
+    ) {
+      return toNumber(analyticsRow.marketplaceCommission);
+    }
+
+    const marketplaceCommission = toNumber(row.marketplaceCommission ?? "0");
+    if (marketplaceCommission <= 0) {
+      return null;
+    }
+
+    return marketplaceCommission * resolveNetLiquidSales(row.salesQuantity, row.returnsQuantity);
+  };
 
   const mapRow = (
     row: ProductMonthlyPerformanceDisplayRow,
@@ -442,7 +484,8 @@ export function buildProductTableRows(data: ProductCatalogData): ProductTableRow
       }
     }
 
-    const financials = deriveRowFinancials(effectiveRow, taxRateDefault);
+    const marketplaceCommissionTotal = resolveMarketplaceCommissionTotal(row);
+    const financials = deriveRowFinancials(effectiveRow, taxRateDefault, marketplaceCommissionTotal);
     const sellingPrice = toNumber(effectiveRow.salePrice);
     const variationLabel = product?.variationLabel ?? extractVariationLabel(row.productName);
     const displayName = resolveProductDisplayName(row.productName, variationLabel);
@@ -455,8 +498,8 @@ export function buildProductTableRows(data: ProductCatalogData): ProductTableRow
       catalogRole: product?.catalogRole ?? "standalone",
       channelLabel: row.channel,
       children,
-      commissionPct: sellingPrice > 0
-        ? (toNumber(row.marketplaceCommission ?? "0") / sellingPrice) * 100
+      commissionPct: financials.revenue > 0
+        ? (financials.totalCommission / financials.revenue) * 100
         : 0,
       coverImageUrl: product?.coverImageUrl ?? null,
       displayName,
@@ -526,12 +569,12 @@ export function buildProductTableRows(data: ProductCatalogData): ProductTableRow
     const firstRow = ownRow ?? sourceRows[0];
     const totals = sourceRows.reduce((accumulator, sourceRow) => {
       const netSales = resolveNetLiquidSales(sourceRow.salesQuantity, sourceRow.returnsQuantity);
+      const commissionTotal = resolveMarketplaceCommissionTotal(sourceRow);
       accumulator.salesQuantity += sourceRow.salesQuantity;
       accumulator.returnsQuantity += sourceRow.returnsQuantity;
       accumulator.netSales += netSales;
       accumulator.revenue += toNumber(sourceRow.salePrice) * netSales;
-      accumulator.marketplaceCommission +=
-        toNumber(sourceRow.marketplaceCommission ?? "0") * netSales;
+      accumulator.marketplaceCommission += commissionTotal ?? 0;
       accumulator.shipping += toNumber(sourceRow.shippingFee) * netSales;
       accumulator.packagingCost += toNumber(sourceRow.packagingCost) * netSales;
       accumulator.unitCost += toNumber(sourceRow.unitCost) * netSales;

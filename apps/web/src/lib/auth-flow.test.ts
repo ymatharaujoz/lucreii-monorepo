@@ -131,7 +131,7 @@ describe("submitPasswordAuth", () => {
     });
 
     expect(result).toEqual({
-      inlineError: "E-mail ou senha inválidos",
+      inlineError: "E-mail ou senha inválidos.",
       success: false,
     });
   });

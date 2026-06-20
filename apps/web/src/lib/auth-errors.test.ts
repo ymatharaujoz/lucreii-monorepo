@@ -18,7 +18,7 @@ describe("resolveAuthInlineErrorMessage", () => {
       resolveAuthInlineErrorMessage({
         message: "Invalid email or password",
       }),
-    ).toBe("E-mail ou senha inválidos");
+    ).toBe("E-mail ou senha inválidos.");
   });
 
   it("maps existing email conflicts", () => {
@@ -26,6 +26,6 @@ describe("resolveAuthInlineErrorMessage", () => {
       resolveAuthInlineErrorMessage({
         message: "User already exists",
       }),
-    ).toBe("Já existe conta com este e-mail");
+    ).toBe("Já existe conta com este e-mail.");
   });
 });
