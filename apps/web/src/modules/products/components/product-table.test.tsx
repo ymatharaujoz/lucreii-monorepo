@@ -297,7 +297,7 @@ describe("ProductTable", () => {
     expect(document.body.textContent).toContain("Pre\u00e7o de Venda");
     expect(document.body.textContent).toContain("Margem Contribui\u00e7\u00e3o");
     expect(document.body.textContent).toContain("Lucro Total");
-    expect(document.body.textContent).toContain("R$ 78,03");
+    expect(document.body.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 78,03");
     expect(document.body.textContent).not.toContain("ROAS Real");
     expect(document.body.textContent).not.toContain("Lucro Unit\u00e1rio");
     expect(document.body.textContent).not.toContain("ROAS M\u00ednimo");
