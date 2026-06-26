@@ -65,6 +65,8 @@ describe("orders validation schemas", () => {
           productCostAmount: "60.00",
           revenueAmount: "200.00",
           shippingOrFixedFeeAmount: "23.00",
+          taxAmount: "24.00",
+          taxRateDefault: "0.120000",
         },
         items: [
           {
@@ -126,6 +128,8 @@ describe("orders validation schemas", () => {
           productCostAmount: "20.00",
           revenueAmount: "29.90",
           shippingOrFixedFeeAmount: "6.65",
+          taxAmount: "3.59",
+          taxRateDefault: "0.120000",
         },
         items: [
           {

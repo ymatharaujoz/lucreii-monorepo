@@ -234,9 +234,10 @@ export function DashboardFinancialIndicators({
   const totalProfit = ordersSummary
     ? normalizeNumber(ordersSummary.grossProfit)
     : financials.totalProfit;
-  const averageMargin = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
-  const breakEvenPoint = averageMargin > 0 ? fixedCost / averageMargin : 0;
-  const netProfit = totalProfit - fixedCost;
+    const netProfit = totalProfit - fixedCost;
+    const averageMargin = totalRevenue > 0 ? netProfit / totalRevenue : 0;
+    const averageMarginPercent = averageMargin * 100;
+    const breakEvenPoint = averageMargin > 0 ? fixedCost / averageMargin : 0;
   const revenueSub = ordersSummary
     ? `${ordersSummary.ordersCount} pedidos · ${ordersSummary.unitsSold} unidades`
     : summary
@@ -254,7 +255,7 @@ export function DashboardFinancialIndicators({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <IndicatorCard
           label="Faturamento"
-          value={formatMoney(totalRevenue)}
+          value={formatMoney(totalRevenue, {maximumFractionDigits: 2 })}
           subValue={revenueSub}
           icon={<DollarSign className="h-4 w-4" />}
           variant="default"
@@ -262,8 +263,8 @@ export function DashboardFinancialIndicators({
 
         <IndicatorCard
           label="Margem Média"
-          value={formatPercent(averageMargin * 100, { digits: 2, truncate: true })}
-          subValue={`Lucro Total: ${formatMoney(totalProfit)}`}
+          value={formatPercent(averageMarginPercent, { digits: 2, truncate: true })}
+          subValue={`Lucro Total: ${formatMoney(totalProfit, { maximumFractionDigits: 2 })}`}
           icon={<Percent className="h-4 w-4" />}
           variant={
             averageMargin > 0.2
@@ -285,7 +286,7 @@ export function DashboardFinancialIndicators({
 
         <IndicatorCard
           label="Ponto de Equilíbrio"
-          value={formatMoney(breakEvenPoint)}
+          value={formatMoney(breakEvenPoint, { maximumFractionDigits: 2 })}
           subValue="Meta para cobrir custo fixo"
           icon={<Scale className="h-4 w-4" />}
           variant={totalRevenue >= breakEvenPoint ? "success" : "warning"}
@@ -297,7 +298,7 @@ export function DashboardFinancialIndicators({
 
         <IndicatorCard
           label="Lucro Líquido"
-          value={formatMoney(netProfit)}
+          value={formatMoney(netProfit, { maximumFractionDigits: 2 })}
           subValue="Após custos fixos e publicidade"
           icon={<PiggyBank className="h-4 w-4" />}
           variant={netProfit > 0 ? "success" : netProfit < 0 ? "error" : "warning"}

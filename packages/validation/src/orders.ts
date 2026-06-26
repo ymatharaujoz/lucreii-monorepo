@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { taxRateField } from "./finance-inputs";
 import { createApiSuccessResponseSchema } from "./protected-app";
 
 const decimalPattern = /^-?\d+(?:\.\d{1,4})?$/;
@@ -111,6 +112,8 @@ export const orderLineItemSchema = z.object({
 export const orderCompositionSchema = z.object({
   revenueAmount: decimalField("Revenue amount"),
   netRevenueAmount: decimalField("Net revenue amount"),
+  taxAmount: decimalField("Tax amount"),
+  taxRateDefault: taxRateField("Tax rate default").nullable(),
   productCostAmount: decimalField("Product cost amount"),
   marketplaceCommissionAmount: decimalField("Marketplace commission amount"),
   shippingOrFixedFeeAmount: decimalField("Shipping or fixed fee amount"),

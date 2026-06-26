@@ -43,7 +43,6 @@ import { containerVariants, fadeInVariants } from "@/lib/animations";
 import { SkeletonGrid } from "@/components/ui-premium/skeleton-grid";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { ProductHeader } from "./product-header";
-import { ProductFinancialIndicators } from "./product-financial-indicators";
 
 import { ProductTable } from "./product-table";
 import {
@@ -1537,13 +1536,6 @@ export function ProductsHome({
 
       {view === "catalog" && marketplaceNotice ? (
         <MarketplaceNoticeCard notice={marketplaceNotice} />
-      ) : null}
-
-      {view === "performance" ? (
-        <>
-          <hr className="border-border/60" />
-          <ProductFinancialIndicators rows={rows} />
-        </>
       ) : null}
 
       {view === "catalog" ? <hr className="border-border/60" /> : null}

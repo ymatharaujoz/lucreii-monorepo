@@ -11,7 +11,8 @@ export function buildDashboardKpis(summaryResponse: DashboardSummaryResponse): D
   const grossRevenue = normalizeNumber(summary.grossRevenue) ?? 0;
   const netProfit = normalizeNumber(summary.netProfit) ?? 0;
   const grossProfit = normalizeNumber(summary.grossProfit) ?? 0;
-  const grossMargin = normalizeNumber(summary.grossMarginPercent) ?? 0;
+  const grossMargin =
+    grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
   const avgRoi = normalizeNumber(summary.avgRoi) ?? 0;
   const avgRoas = normalizeNumber(summary.avgRoas) ?? 0;
   const totalFees = normalizeNumber(summary.totalFees) ?? 0;

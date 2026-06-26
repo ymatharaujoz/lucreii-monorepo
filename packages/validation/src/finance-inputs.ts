@@ -19,6 +19,8 @@ function rateField(label: string) {
     .regex(ratePattern, `${label} must be a decimal rate between 0 and 1.`);
 }
 
+export const taxRateField = rateField;
+
 function optionalNotesField() {
   return z
     .string()

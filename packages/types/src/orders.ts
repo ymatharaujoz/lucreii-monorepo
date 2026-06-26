@@ -92,6 +92,8 @@ export type OrderLineItem = {
 export type OrderComposition = {
   revenueAmount: string;
   netRevenueAmount: string;
+  taxAmount: string;
+  taxRateDefault: string | null;
   productCostAmount: string;
   marketplaceCommissionAmount: string;
   shippingOrFixedFeeAmount: string;

@@ -36,10 +36,6 @@ vi.mock("./product-header", () => ({
   ProductHeader: () => <div>Product header</div>,
 }));
 
-vi.mock("./product-financial-indicators", () => ({
-  ProductFinancialIndicators: () => <div>Product financial indicators</div>,
-}));
-
 vi.mock("../calculations/product-insights", () => ({
   buildMarketplaceSyncNotice: () => null,
 }));

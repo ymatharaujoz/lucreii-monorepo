@@ -284,6 +284,8 @@ describe("OrdersService", () => {
           productCostAmount: "43.00",
           revenueAmount: "200.00",
           shippingOrFixedFeeAmount: "23.00",
+          taxAmount: "24.00",
+          taxRateDefault: "0.120000",
         },
         items: expect.arrayContaining([
           expect.objectContaining({

@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  AlertTriangle,
   ArrowUpDown,
   ChevronDown,
   ChevronUp,
   Filter,
+  Loader2,
   Package,
   Percent,
   Search,
@@ -59,23 +59,38 @@ type SortKey =
 
 type SortDirection = "asc" | "desc" | null;
 
-type ItemSortKey =
-  | "channel"
-  | "displayName"
-  | "orderedAt"
-  | "totalPrice"
-  | "contributionMarginPercent"
-  | "totalProfitAmount";
+type ItemSortKey = "displayName" | "unitPrice" | "quantity";
 
 type DetailTabKey = "items" | "composition";
 
 type StatusType = "active" | "inactive" | "pending" | "warning" | "error" | "success";
 
-function formatMoney(value: string) {
+function formatMoney(value: string | null | undefined) {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed)) {
+    return new Intl.NumberFormat("pt-BR", {
+      currency: "BRL",
+      style: "currency",
+    }).format(0);
+  }
   return new Intl.NumberFormat("pt-BR", {
     currency: "BRL",
     style: "currency",
-  }).format(Number(value));
+  }).format(parsed);
+}
+
+function formatTaxRate(value: string | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const parsed = Number(value) * 100;
+  if (!Number.isFinite(parsed) || parsed === 0) {
+    return null;
+  }
+  return `${new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(parsed)}%`;
 }
 
 function formatDateTime(value: string | null) {
@@ -270,20 +285,12 @@ function getItemSortValue(
   key: ItemSortKey,
 ): string | number | null {
   switch (key) {
-    case "channel":
-      return PROVIDER_LABELS[row.channel] ?? row.channel;
     case "displayName":
       return row.displayName;
-    case "orderedAt":
-      return row.orderedAt;
-    case "totalPrice":
-      return Number(row.totalPrice);
-    case "contributionMarginPercent":
-      return row.contributionMarginPercent === null
-        ? null
-        : Number(row.contributionMarginPercent);
-    case "totalProfitAmount":
-      return row.totalProfitAmount === null ? null : Number(row.totalProfitAmount);
+    case "unitPrice":
+      return Number(row.unitPrice);
+    case "quantity":
+      return row.quantity;
     default:
       return null;
   }
@@ -311,14 +318,14 @@ function ItemSortableHeader({
   align = "left",
   children,
   column,
-  minWidth,
+  width,
   onSort,
   sortConfig,
 }: {
   align?: "left" | "right";
   children: ReactNode;
   column: ItemSortKey;
-  minWidth?: string;
+  width?: string;
   onSort: (key: ItemSortKey) => void;
   sortConfig: { key: ItemSortKey; direction: SortDirection } | null;
 }) {
@@ -329,7 +336,7 @@ function ItemSortableHeader({
         "sticky top-0 z-10 cursor-pointer select-none bg-surface-strong/95 px-3 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground",
         align === "right" ? "text-right" : "text-left",
       )}
-      style={minWidth ? { minWidth } : undefined}
+      style={width ? { width } : undefined}
     >
       <div
         className={cn(
@@ -433,7 +440,7 @@ function CompositionMetric({
 }: {
   icon: ReactNode;
   label: string;
-  value: string;
+  value: ReactNode;
   variant?: "default" | "highlight" | "warning";
 }) {
   return (
@@ -459,39 +466,11 @@ function CompositionMetric({
 function CompositionTab({ composition }: { composition: OrderComposition }) {
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-sm font-semibold text-foreground">Composição do pedido</h2>
-        <p className="text-xs text-muted-foreground">
-          Totais agregados do pedido, sem rateio por item unitário
-        </p>
-      </div>
-
-      {composition.hasIncompleteCostData ? (
-        <div className="rounded-[var(--radius-lg)] border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-warning">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <p className="font-semibold">Dados parciais</p>
-              <p className="text-xs text-warning/90">
-                {composition.missingLinkedItemsCount} item(ns) sem produto vinculado e{" "}
-                {composition.missingCostItemsCount} item(ns) sem custo completo.
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <CompositionMetric
           icon={<Wallet className="h-4 w-4" />}
           label="Faturamento"
           value={formatMoney(composition.revenueAmount)}
-          variant="highlight"
-        />
-        <CompositionMetric
-          icon={<Wallet className="h-4 w-4" />}
-          label="Receita Líquida"
-          value={formatMoney(composition.netRevenueAmount)}
           variant="highlight"
         />
         <CompositionMetric
@@ -513,6 +492,23 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
           icon={<Package className="h-4 w-4" />}
           label="Embalagem"
           value={formatMoney(composition.packagingCostAmount)}
+        />
+        <CompositionMetric
+          icon={<Percent className="h-4 w-4" />}
+          label="Imposto"
+          value={
+            <span className="flex items-baseline gap-1.5">
+              <span>{formatMoney(composition.taxAmount)}</span>
+              {(() => {
+                const rateLabel = formatTaxRate(composition.taxRateDefault);
+                return rateLabel ? (
+                  <span className="text-sm font-medium text-muted-foreground">
+                    ({rateLabel})
+                  </span>
+                ) : null;
+              })()}
+            </span>
+          }
         />
       </div>
     </div>
@@ -1004,7 +1000,9 @@ export function OrdersHome() {
         }
       >
         {detailQuery.isLoading ? (
-          <div className="py-8 text-sm text-muted-foreground">Carregando detalhes...</div>
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-7 w-7 animate-spin text-accent" />
+          </div>
         ) : detailQuery.error || !detailQuery.data ? (
           <div className="py-8 text-sm text-muted-foreground">
             Não foi possível carregar detalhes do pedido.
@@ -1020,59 +1018,34 @@ export function OrdersHome() {
             ) : (
               <div className="space-y-3">
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-[var(--radius-lg)] border border-border">
-                  <table className="w-full border-separate border-spacing-0">
+                  <table className="w-full table-fixed border-separate border-spacing-0">
                     <thead>
                       <tr className="border-b border-border bg-surface-strong/95">
                         <ItemSortableHeader
-                          column="channel"
-                          minWidth="48px"
-                          onSort={handleItemSort}
-                          sortConfig={itemSortConfig}
-                        >
-                          Canal
-                        </ItemSortableHeader>
-                        <ItemSortableHeader
                           column="displayName"
-                          minWidth="180px"
+                          width="220px"
                           onSort={handleItemSort}
                           sortConfig={itemSortConfig}
                         >
-                          PRODUTO
-                        </ItemSortableHeader>
-                        <ItemSortableHeader
-                          column="orderedAt"
-                          minWidth="145px"
-                          onSort={handleItemSort}
-                          sortConfig={itemSortConfig}
-                        >
-                          Data do Pedido
+                          Produto
                         </ItemSortableHeader>
                         <ItemSortableHeader
                           align="right"
-                          column="totalPrice"
-                          minWidth="110px"
+                          column="unitPrice"
+                          width="150px"
                           onSort={handleItemSort}
                           sortConfig={itemSortConfig}
                         >
-                          Faturamento
+                          Preço de Venda
                         </ItemSortableHeader>
                         <ItemSortableHeader
                           align="right"
-                          column="contributionMarginPercent"
-                          minWidth="128px"
+                          column="quantity"
+                          width="180px"
                           onSort={handleItemSort}
                           sortConfig={itemSortConfig}
                         >
-                          Margem de Contribuição
-                        </ItemSortableHeader>
-                        <ItemSortableHeader
-                          align="right"
-                          column="totalProfitAmount"
-                          minWidth="110px"
-                          onSort={handleItemSort}
-                          sortConfig={itemSortConfig}
-                        >
-                          Lucro Total
+                          Quantidade
                         </ItemSortableHeader>
                       </tr>
                     </thead>
@@ -1094,7 +1067,7 @@ export function OrdersHome() {
                         if (sortedItems.length === 0) {
                           return (
                             <tr>
-                              <td colSpan={6}>
+                              <td colSpan={3}>
                                 <EmptyState
                                   title="Nenhum produto encontrado"
                                   description="Este pedido nao possui itens sincronizados."
@@ -1110,11 +1083,8 @@ export function OrdersHome() {
                             key={item.id}
                             className="border-b border-border/50 outline-none transition-colors hover:bg-surface-strong/30 focus-visible:bg-accent/5"
                           >
-                            <td className="px-3 py-3 text-left">
-                              {getProviderBadge(item.channel)}
-                            </td>
-                            <td className="px-3 py-3 text-left">
-                              <div className="flex items-center gap-3 overflow-hidden">
+                            <td className="px-3 py-3 text-left align-top">
+                              <div className="flex items-start gap-3 overflow-hidden">
                                 <OrderItemThumbnail
                                   alt={item.displayName}
                                   src={item.imageUrl}
@@ -1129,35 +1099,11 @@ export function OrdersHome() {
                                 </div>
                               </div>
                             </td>
-                            <td className="px-3 py-3 text-left text-sm tabular-nums text-muted-foreground">
-                              {formatDateTime(item.orderedAt)}
+                            <td className="px-3 py-3 text-right align-top text-sm font-semibold tabular-nums text-foreground">
+                              {formatMoney(item.unitPrice)}
                             </td>
-                            <td className="px-3 py-3 text-right text-sm font-semibold tabular-nums text-foreground">
-                              {formatMoney(item.totalPrice)}
-                            </td>
-                            <td
-                              className={cn(
-                                "px-3 py-3 text-right text-sm tabular-nums",
-                                item.contributionMarginPercent !== null &&
-                                  Number(item.contributionMarginPercent) < 0
-                                  ? "text-error"
-                                  : "text-foreground",
-                              )}
-                            >
-                              {formatPercent(item.contributionMarginPercent)}
-                            </td>
-                            <td
-                              className={cn(
-                                "px-3 py-3 text-right text-sm font-semibold tabular-nums",
-                                item.totalProfitAmount !== null &&
-                                  Number(item.totalProfitAmount) < 0
-                                  ? "text-error"
-                                  : "text-foreground",
-                              )}
-                            >
-                              {item.totalProfitAmount === null
-                                ? "—"
-                                : formatMoney(item.totalProfitAmount)}
+                            <td className="px-3 py-3 text-right align-top text-sm font-semibold tabular-nums text-foreground">
+                              {item.quantity}
                             </td>
                           </tr>
                         ));

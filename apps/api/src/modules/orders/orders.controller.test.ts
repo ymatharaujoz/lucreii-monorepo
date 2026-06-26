@@ -131,6 +131,8 @@ describe("orders controller", () => {
         productCostAmount: "0.00",
         revenueAmount: "0.00",
         shippingOrFixedFeeAmount: "0.00",
+        taxAmount: "0.00",
+        taxRateDefault: null,
       },
       items: [],
       order: {

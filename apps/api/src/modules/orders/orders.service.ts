@@ -529,7 +529,7 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
 
 function buildOrderComposition(
   order: OrderRow,
-  _taxRateDefault: string | number | null | undefined,
+  taxRateDefault: string | number | null | undefined,
 ): OrderComposition {
   const orderRow = toOrderListItem(order);
   const revenueAmount = toNumber(orderRow.totalWithFees);
@@ -538,6 +538,9 @@ function buildOrderComposition(
   const marketplaceCommissionAmount = toNumber(orderRow.tariffAmount);
   const netRevenueAmount =
     revenueAmount - marketplaceCommissionAmount - shippingOrFixedFeeAmount;
+  const parsedTaxRate = toNumber(taxRateDefault);
+  const taxRateValue = Number.isFinite(parsedTaxRate) ? parsedTaxRate : 0;
+  const taxAmount = revenueAmount * taxRateValue;
 
   let productCostAmount = 0;
   let packagingCostAmount = 0;
@@ -574,6 +577,11 @@ function buildOrderComposition(
     productCostAmount: productCostAmount.toFixed(2),
     revenueAmount: revenueAmount.toFixed(2),
     shippingOrFixedFeeAmount: shippingOrFixedFeeAmount.toFixed(2),
+    taxAmount: taxAmount.toFixed(2),
+    taxRateDefault:
+      taxRateDefault === null || taxRateDefault === undefined
+        ? null
+        : String(taxRateDefault),
   };
 }
 

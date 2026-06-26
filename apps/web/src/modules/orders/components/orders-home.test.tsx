@@ -103,6 +103,8 @@ describe("OrdersHome", () => {
           productCostAmount: "43.00",
           revenueAmount: "200.00",
           shippingOrFixedFeeAmount: "23.00",
+          taxAmount: "24.00",
+          taxRateDefault: "0.120000",
         },
         items: [
           {
@@ -172,39 +174,44 @@ describe("OrdersHome", () => {
 
     const content = text();
 
-    expect(content).toContain("Composição do pedido");
+    expect(content).not.toContain("Composição do pedido");
+    expect(content).not.toContain("Totais agregados do pedido");
     expect(content).toContain("R$ 200,00");
-    expect(content).toContain("R$ 167,00");
+    expect(content).toContain("R$ 24,00");
     expect(content).toContain("R$ 43,00");
     expect(content).toContain("R$ 23,00");
-    expect(content).toContain("Receita Líquida");
+    expect(content).toContain("Imposto");
+    expect(content).toContain("12,00%");
     expect(content).toContain("Frete / Taxa Fixa");
-    expect(content).not.toContain("Imposto");
-    expect(content).toContain("Dados parciais");
+    expect(content).not.toContain("Receita Líquida");
+    expect(content).not.toContain("Dados parciais");
+
+    const impostoCardOrder = content.indexOf("Embalagem");
+    const impostoValueOrder = content.indexOf("Imposto");
+    expect(impostoCardOrder).toBeGreaterThan(-1);
+    expect(impostoValueOrder).toBeGreaterThan(impostoCardOrder);
 
     view.unmount();
   });
 
-  it("renders analytics item columns and hides source status in modal header", () => {
+  it("renders product/unit price/quantity item columns and hides source status in modal header", () => {
     const view = mount(<OrdersHome />);
 
     click(document.querySelector('tr[role="button"]')!);
 
-    const content = text();
+    const modalTable = document.querySelectorAll("table")[1];
+    const modalContent = (modalTable?.textContent ?? "").replace(/\u00a0/g, " ");
 
-    expect(content).toContain("Canal");
-    expect(content).toContain("Produto");
-    expect(content).toContain("Data do Pedido");
-    expect(content).toContain("Faturamento");
-    expect(content).toContain("Margem de Contribuição %");
-    expect(content).toContain("Lucro Total");
-    expect(content).toContain("Cor: Azul | Produto Pai");
-    expect(content).toContain("R$ 120,00");
-    expect(content).toContain("17,50%");
-    expect(content).toContain("R$ 21,00");
-    expect(content).not.toContain("status origem");
-    expect(content).not.toContain("PreÃ§o unitÃ¡rio");
-    expect(content).not.toContain("Quantidade");
+    expect(modalContent).toContain("Produto");
+    expect(modalContent).toContain("Preço de Venda");
+    expect(modalContent).toContain("Quantidade");
+    expect(modalContent).toContain("Cor: Azul | Produto Pai");
+    expect(modalContent).not.toContain("Data do Pedido");
+    expect(modalContent).not.toContain("Canal");
+    expect(modalContent).not.toContain("Faturamento");
+    expect(modalContent).not.toContain("Margem de Contribuição");
+    expect(modalContent).not.toContain("Lucro Total");
+    expect(text()).not.toContain("status origem");
 
     view.unmount();
   });
