@@ -15,6 +15,7 @@ import type {
   ProductFinanceDefaults,
   ProductImage,
 } from "@lucreii/database";
+import { externalOrders } from "@lucreii/database";
 import type {
   OrderCanonicalStatus,
   OrderComposition,
@@ -27,7 +28,7 @@ import type {
   OrderStatusLabel,
   OrderStatusOption,
 } from "@lucreii/types";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 
 type TenantContext = {
@@ -64,6 +65,8 @@ type OrderRowShallow = ExternalOrder & {
     }
   >;
 };
+
+type OrderSortKey = NonNullable<OrderListFilters["sortBy"]>;
 
 const ORDER_STATUS_OPTIONS: OrderStatusOption[] = [
   { value: "confirmed", label: "Pagamento pendente" },
@@ -176,6 +179,28 @@ function includesIgnoreCase(haystack: string | null | undefined, needle: string)
   }
 
   return haystack.toLowerCase().includes(needle.toLowerCase());
+}
+
+function isOrderWithinRange(
+  orderedAt: string | null,
+  orderedFrom?: string,
+  orderedTo?: string,
+) {
+  if (!orderedAt) {
+    return false;
+  }
+
+  const orderDate = orderedAt.slice(0, 10);
+
+  if (orderedFrom && orderDate < orderedFrom) {
+    return false;
+  }
+
+  if (orderedTo && orderDate > orderedTo) {
+    return false;
+  }
+
+  return true;
 }
 
 function getOrderStatusLabel(status: OrderCanonicalStatus): OrderStatusLabel {
@@ -350,6 +375,122 @@ function resolveLatestCostAmount(product: LinkedProductRecord | null | undefined
   return latestCost ? toNumber(latestCost.amount) : null;
 }
 
+function buildOrderBaseMetrics(order: OrderRow) {
+  const metadata = (order.metadata ?? {}) as Record<string, unknown>;
+  const totalWithFees = toNumber(order.totalAmount);
+  const shippingAmount =
+    sumFeesByPredicate(order.fees, (fee) => fee.feeType === "shipping_cost") ||
+    readMetadataMoney(metadata, "shippingCostAmount");
+  const tariffAmount = sumFeesByPredicate(
+    order.fees,
+    (fee) => fee.feeType === "marketplace_commission",
+  );
+  const fixedCostAmount =
+    sumFeesByPredicate(order.fees, (fee) => fee.feeType === "fixed_fee") ||
+    readMetadataMoney(metadata, "fixedCostAmount");
+  const refundBonusAmount = sumFeesByPredicate(
+    order.fees,
+    (fee) => fee.feeType === "refund_bonus",
+  );
+  const totalFees =
+    shippingAmount + tariffAmount + fixedCostAmount - refundBonusAmount;
+  const totalWithoutFees = Math.max(0, totalWithFees - totalFees);
+  const itemsSold = order.items.reduce((total, item) => total + item.quantity, 0);
+  const canonicalStatus = normalizeOrderStatus(order.provider, order.status, metadata);
+
+  return {
+    canonicalStatus,
+    fixedCostAmount,
+    itemsSold,
+    metadata,
+    refundBonusAmount,
+    shippingAmount,
+    tariffAmount,
+    totalFees,
+    totalWithFees,
+    totalWithoutFees,
+  };
+}
+
+function buildOrderFinancialMetrics(
+  order: OrderRow,
+  taxRateDefault: string | number | null | undefined,
+) {
+  const baseMetrics = buildOrderBaseMetrics(order);
+  const revenueAmount = baseMetrics.totalWithFees;
+  const shippingOrFixedFeeAmount =
+    baseMetrics.shippingAmount + baseMetrics.fixedCostAmount;
+  const marketplaceCommissionAmount = baseMetrics.tariffAmount;
+  const netRevenueAmount =
+    revenueAmount -
+    marketplaceCommissionAmount -
+    shippingOrFixedFeeAmount +
+    baseMetrics.refundBonusAmount;
+  const parsedTaxRate = toNumber(taxRateDefault);
+  const taxRateValue = Number.isFinite(parsedTaxRate) ? parsedTaxRate : 0;
+  const taxAmount = revenueAmount * taxRateValue;
+
+  let productCostAmount = 0;
+  let packagingCostAmount = 0;
+  let missingLinkedItemsCount = 0;
+  let missingCostItemsCount = 0;
+
+  for (const item of order.items) {
+    const linkedProduct = item.externalProduct?.linkedProduct;
+    if (!linkedProduct || !item.externalProduct?.linkedProductId) {
+      missingLinkedItemsCount += 1;
+      missingCostItemsCount += 1;
+      continue;
+    }
+
+    const latestCostAmount = resolveLatestCostAmount(linkedProduct);
+    if (latestCostAmount === null) {
+      missingCostItemsCount += 1;
+    } else {
+      productCostAmount += latestCostAmount * item.quantity;
+    }
+
+    packagingCostAmount +=
+      toNumber(linkedProduct.financeDefaults?.packagingCost) * item.quantity;
+  }
+
+  const hasIncompleteCostData =
+    missingLinkedItemsCount > 0 || missingCostItemsCount > 0;
+  const totalProfitAmount = hasIncompleteCostData
+    ? null
+    : netRevenueAmount - productCostAmount - packagingCostAmount - taxAmount;
+  const contributionMarginPercent =
+    totalProfitAmount === null || revenueAmount <= 0
+      ? null
+      : (totalProfitAmount / revenueAmount) * 100;
+
+  return {
+    composition: {
+      hasIncompleteCostData,
+      marketplaceCommissionAmount: marketplaceCommissionAmount.toFixed(2),
+      missingCostItemsCount,
+      missingLinkedItemsCount,
+      netRevenueAmount: netRevenueAmount.toFixed(2),
+      packagingCostAmount: packagingCostAmount.toFixed(2),
+      productCostAmount: productCostAmount.toFixed(2),
+      refundBonusAmount: baseMetrics.refundBonusAmount.toFixed(2),
+      revenueAmount: revenueAmount.toFixed(2),
+      shippingOrFixedFeeAmount: shippingOrFixedFeeAmount.toFixed(2),
+      taxAmount: taxAmount.toFixed(2),
+      taxRateDefault:
+        taxRateDefault === null || taxRateDefault === undefined
+          ? null
+          : String(taxRateDefault),
+    } satisfies OrderComposition,
+    contributionMarginPercent:
+      contributionMarginPercent === null
+        ? null
+        : contributionMarginPercent.toFixed(2),
+    totalProfitAmount:
+      totalProfitAmount === null ? null : totalProfitAmount.toFixed(2),
+  };
+}
+
 function buildOrderDisplayNameMaps(order: OrderRow) {
   const parentNameByGroupKey = new Map<string, string>();
   const displayNameByItemId = new Map<string, string>();
@@ -425,53 +566,51 @@ function buildOrderDisplayNameMaps(order: OrderRow) {
   return displayNameByItemId;
 }
 
-function toOrderListItem(order: OrderRow): OrderListItem {
-  const metadata = (order.metadata ?? {}) as Record<string, unknown>;
-  const totalWithFees = toNumber(order.totalAmount);
-  const totalFees = order.fees.reduce((total, fee) => total + toNumber(fee.amount), 0);
-  const shippingAmount =
-    sumFeesByPredicate(order.fees, (fee) => fee.feeType === "shipping_cost") ||
-    readMetadataMoney(metadata, "shippingCostAmount");
-  const tariffAmount = sumFeesByPredicate(
-    order.fees,
-    (fee) => fee.feeType === "marketplace_commission",
-  );
-  const fixedCostAmount =
-    sumFeesByPredicate(order.fees, (fee) => fee.feeType === "fixed_fee") ||
-    readMetadataMoney(metadata, "fixedCostAmount");
-  const totalWithoutFees = Math.max(0, totalWithFees - totalFees);
-  const itemsSold = order.items.reduce((total, item) => total + item.quantity, 0);
-  const canonicalStatus = normalizeOrderStatus(order.provider, order.status, metadata);
+function toOrderListItem(
+  order: OrderRow,
+  financialMetrics?: {
+    contributionMarginPercent: string | null;
+    totalProfitAmount: string | null;
+  },
+): OrderListItem {
+  const baseMetrics = buildOrderBaseMetrics(order);
 
   return {
     createdAt: toIsoString(order.createdAt)!,
     currency: order.currency,
-    fixedCostAmount: fixedCostAmount.toFixed(2),
+    fixedCostAmount: baseMetrics.fixedCostAmount.toFixed(2),
     id: order.id,
-    itemsSold,
+    itemsSold: baseMetrics.itemsSold,
     orderDate: toDateOnly(order.orderedAt),
     orderId: order.externalOrderId,
     orderedAt: toIsoString(order.orderedAt),
     provider: order.provider as "mercadolivre" | "shopee" | "shein",
-    shippingAmount: shippingAmount.toFixed(2),
+    shippingAmount: baseMetrics.shippingAmount.toFixed(2),
     sourceStatus: order.status,
-    status: canonicalStatus,
-    statusLabel: getOrderStatusLabel(canonicalStatus),
-    tariffAmount: tariffAmount.toFixed(2),
-    totalFees: totalFees.toFixed(2),
-    totalWithFees: totalWithFees.toFixed(2),
-    totalWithoutFees: totalWithoutFees.toFixed(2),
+    status: baseMetrics.canonicalStatus,
+    statusLabel: getOrderStatusLabel(baseMetrics.canonicalStatus),
+    tariffAmount: baseMetrics.tariffAmount.toFixed(2),
+    totalFees: baseMetrics.totalFees.toFixed(2),
+    totalWithFees: baseMetrics.totalWithFees.toFixed(2),
+    totalWithoutFees: baseMetrics.totalWithoutFees.toFixed(2),
+    contributionMarginPercent:
+      financialMetrics?.contributionMarginPercent ?? null,
+    totalProfitAmount: financialMetrics?.totalProfitAmount ?? null,
   };
 }
 
 function toOrderLineItems(order: OrderRow): OrderLineItem[] {
   const orderRow = toOrderListItem(order);
+  const baseMetrics = buildOrderBaseMetrics(order);
   const displayNameByItemId = buildOrderDisplayNameMaps(order);
   const itemTotalsCents = order.items.map((item) => parseMoneyToCents(item.totalPrice));
   const commissionTotalCents = parseMoneyToCents(orderRow.tariffAmount);
   const shippingOrFixedFeeTotalCents =
     parseMoneyToCents(orderRow.shippingAmount) +
     parseMoneyToCents(orderRow.fixedCostAmount);
+  const refundBonusTotalCents = parseMoneyToCents(
+    baseMetrics.refundBonusAmount.toFixed(2),
+  );
   const commissionAllocations = allocateCentsByWeights(
     commissionTotalCents,
     itemTotalsCents,
@@ -480,13 +619,19 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
     shippingOrFixedFeeTotalCents,
     itemTotalsCents,
   );
+  const refundBonusAllocations = allocateCentsByWeights(
+    refundBonusTotalCents,
+    itemTotalsCents,
+  );
 
   return order.items.map((item, index) => {
     const linkedProduct = item.externalProduct?.linkedProduct;
     const revenueCents = itemTotalsCents[index] ?? 0n;
     const commissionCents = commissionAllocations[index] ?? 0n;
     const shippingOrFixedFeeCents = shippingOrFixedFeeAllocations[index] ?? 0n;
-    const netRevenueCents = revenueCents - commissionCents - shippingOrFixedFeeCents;
+    const refundBonusCents = refundBonusAllocations[index] ?? 0n;
+    const netRevenueCents =
+      revenueCents - commissionCents - shippingOrFixedFeeCents + refundBonusCents;
     const packagingCostCents = linkedProduct
       ? parseMoneyToCents(linkedProduct.financeDefaults?.packagingCost) *
         BigInt(item.quantity)
@@ -531,58 +676,7 @@ function buildOrderComposition(
   order: OrderRow,
   taxRateDefault: string | number | null | undefined,
 ): OrderComposition {
-  const orderRow = toOrderListItem(order);
-  const revenueAmount = toNumber(orderRow.totalWithFees);
-  const shippingOrFixedFeeAmount =
-    toNumber(orderRow.shippingAmount) + toNumber(orderRow.fixedCostAmount);
-  const marketplaceCommissionAmount = toNumber(orderRow.tariffAmount);
-  const netRevenueAmount =
-    revenueAmount - marketplaceCommissionAmount - shippingOrFixedFeeAmount;
-  const parsedTaxRate = toNumber(taxRateDefault);
-  const taxRateValue = Number.isFinite(parsedTaxRate) ? parsedTaxRate : 0;
-  const taxAmount = revenueAmount * taxRateValue;
-
-  let productCostAmount = 0;
-  let packagingCostAmount = 0;
-  let missingLinkedItemsCount = 0;
-  let missingCostItemsCount = 0;
-
-  for (const item of order.items) {
-    const linkedProduct = item.externalProduct?.linkedProduct;
-    if (!linkedProduct || !item.externalProduct?.linkedProductId) {
-      missingLinkedItemsCount += 1;
-      missingCostItemsCount += 1;
-      continue;
-    }
-
-    const latestCostAmount = resolveLatestCostAmount(linkedProduct);
-    if (latestCostAmount === null) {
-      missingCostItemsCount += 1;
-    } else {
-      productCostAmount += latestCostAmount * item.quantity;
-    }
-
-    packagingCostAmount +=
-      toNumber(linkedProduct.financeDefaults?.packagingCost) * item.quantity;
-  }
-
-  return {
-    hasIncompleteCostData:
-      missingLinkedItemsCount > 0 || missingCostItemsCount > 0,
-    marketplaceCommissionAmount: marketplaceCommissionAmount.toFixed(2),
-    missingCostItemsCount,
-    missingLinkedItemsCount,
-    netRevenueAmount: netRevenueAmount.toFixed(2),
-    packagingCostAmount: packagingCostAmount.toFixed(2),
-    productCostAmount: productCostAmount.toFixed(2),
-    revenueAmount: revenueAmount.toFixed(2),
-    shippingOrFixedFeeAmount: shippingOrFixedFeeAmount.toFixed(2),
-    taxAmount: taxAmount.toFixed(2),
-    taxRateDefault:
-      taxRateDefault === null || taxRateDefault === undefined
-        ? null
-        : String(taxRateDefault),
-  };
+  return buildOrderFinancialMetrics(order, taxRateDefault).composition;
 }
 
 function buildEmptyOrdersSummary(): OrdersListSummary {
@@ -628,6 +722,69 @@ function buildOrdersSummary(rows: OrderRow[]): OrdersListSummary {
   };
 }
 
+function getOrderListSortValue(row: OrderListItem, key: OrderSortKey) {
+  switch (key) {
+    case "provider":
+      return row.provider;
+    case "orderId":
+      return row.orderId;
+    case "statusLabel":
+      return row.statusLabel;
+    case "orderedAt":
+      return row.orderedAt ?? "";
+    case "itemsSold":
+      return row.itemsSold;
+    case "contributionMarginPercent":
+      return row.contributionMarginPercent === null
+        ? null
+        : Number(row.contributionMarginPercent);
+    case "shippingAmount":
+      return Number(row.shippingAmount);
+    case "tariffAmount":
+      return Number(row.tariffAmount);
+    case "fixedCostAmount":
+      return Number(row.fixedCostAmount);
+    case "totalProfitAmount":
+      return row.totalProfitAmount === null ? null : Number(row.totalProfitAmount);
+    case "totalWithFees":
+      return Number(row.totalWithFees);
+  }
+}
+
+function compareOrderListItems(
+  left: OrderListItem,
+  right: OrderListItem,
+  key: OrderSortKey,
+  direction: "asc" | "desc",
+) {
+  const leftValue = getOrderListSortValue(left, key);
+  const rightValue = getOrderListSortValue(right, key);
+  const leftNull = leftValue === null || leftValue === undefined;
+  const rightNull = rightValue === null || rightValue === undefined;
+
+  if (leftNull && rightNull) {
+    return 0;
+  }
+  if (leftNull) {
+    return 1;
+  }
+  if (rightNull) {
+    return -1;
+  }
+
+  if (typeof leftValue === "string" && typeof rightValue === "string") {
+    return direction === "asc"
+      ? leftValue.localeCompare(rightValue)
+      : rightValue.localeCompare(leftValue);
+  }
+
+  const leftNumber = Number(leftValue);
+  const rightNumber = Number(rightValue);
+  return direction === "asc"
+    ? leftNumber - rightNumber
+    : rightNumber - leftNumber;
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -644,14 +801,120 @@ export class OrdersService {
     const pageSize = Number.isFinite(filters.pageSize)
       ? Math.trunc(filters.pageSize ?? 20)
       : 20;
+    const includeSummary = filters.includeSummary ?? true;
+    const sortBy = filters.sortBy ?? "orderedAt";
+    const sortDirection = filters.sortDirection ?? "desc";
+    const searchNeedle = filters.search?.trim();
+    const baseWhereConditions = [
+      eq(externalOrders.organizationId, authContext.organizationId),
+      eq(externalOrders.companyId, companyId),
+      ...(filters.provider ? [eq(externalOrders.provider, filters.provider)] : []),
+      ...(searchNeedle
+        ? [
+            sql`upper(trim(${externalOrders.externalOrderId})) like ${`%${searchNeedle.toUpperCase()}%`}`,
+          ]
+        : []),
+      ...(filters.orderedFrom
+        ? [sql`${externalOrders.orderedAt}::date >= ${filters.orderedFrom}`]
+        : []),
+      ...(filters.orderedTo
+        ? [sql`${externalOrders.orderedAt}::date <= ${filters.orderedTo}`]
+        : []),
+    ];
+    const baseWhere = and(...baseWhereConditions);
+    const canPageInDatabase =
+      !filters.status &&
+      ["orderedAt", "orderId", "provider"].includes(sortBy);
+    const [company] = await Promise.all([
+      this.db.query.companies.findFirst({
+        where: (table) =>
+          and(
+            eq(table.id, companyId),
+            eq(table.organizationId, authContext.organizationId),
+          ),
+      }),
+    ]);
+
+    if (canPageInDatabase && typeof (this.db as { select?: unknown }).select === "function") {
+      const orderByClause =
+        sortBy === "provider"
+          ? sortDirection === "asc"
+            ? [asc(externalOrders.provider), desc(externalOrders.orderedAt), desc(externalOrders.createdAt)]
+            : [desc(externalOrders.provider), desc(externalOrders.orderedAt), desc(externalOrders.createdAt)]
+          : sortBy === "orderId"
+            ? sortDirection === "asc"
+              ? [asc(externalOrders.externalOrderId), desc(externalOrders.orderedAt), desc(externalOrders.createdAt)]
+              : [desc(externalOrders.externalOrderId), desc(externalOrders.orderedAt), desc(externalOrders.createdAt)]
+            : sortDirection === "asc"
+              ? [asc(externalOrders.orderedAt), asc(externalOrders.createdAt)]
+              : [desc(externalOrders.orderedAt), desc(externalOrders.createdAt)];
+      const [{ count: totalItems }] = await this.db
+        .select({
+          count: sql<number>`count(*)`,
+        })
+        .from(externalOrders)
+        .where(baseWhere);
+      const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+      const safePage = Math.min(page, totalPages);
+      const pagedIds = await this.db
+        .select({ id: externalOrders.id })
+        .from(externalOrders)
+        .where(baseWhere)
+        .orderBy(...orderByClause)
+        .limit(pageSize)
+        .offset((safePage - 1) * pageSize);
+      const ids = pagedIds.map((row) => row.id);
+      const shallowRows =
+        ids.length === 0
+          ? []
+          : await this.db.query.externalOrders.findMany({
+              where: (table) => inArray(table.id, ids),
+              with: {
+                fees: true,
+                items: {
+                  with: {
+                    externalProduct: true,
+                  },
+                },
+              },
+            });
+      const rowById = new Map(shallowRows.map((row) => [row.id, row as OrderRowShallow] as const));
+      const orderedRows = ids
+        .map((id) => rowById.get(id) ?? null)
+        .filter((row): row is OrderRowShallow => row !== null);
+      const hydratedRows = await this.hydrateLinkedProducts(
+        authContext,
+        companyId,
+        orderedRows,
+      );
+      const items = hydratedRows.map((row) =>
+        toOrderListItem(
+          row,
+          buildOrderFinancialMetrics(row, company?.taxRateDefault),
+        ),
+      );
+
+      return {
+        availableStatuses: ORDER_STATUS_OPTIONS,
+        items,
+        page: safePage,
+        pageSize,
+        summary: includeSummary
+          ? await this.buildOrdersSummaryForFilters(
+              authContext,
+              companyId,
+              company?.taxRateDefault,
+              filters,
+            )
+          : buildEmptyOrdersSummary(),
+        totalItems,
+        totalPages,
+      };
+    }
+
     const rows = await this.db.query.externalOrders.findMany({
       orderBy: (table) => [desc(table.orderedAt), desc(table.createdAt)],
-      where: (table) =>
-        and(
-          eq(table.organizationId, authContext.organizationId),
-          eq(table.companyId, companyId),
-          ...(filters.provider ? [eq(table.provider, filters.provider)] : []),
-        ),
+      where: () => baseWhere,
       with: {
         fees: true,
         items: {
@@ -661,41 +924,54 @@ export class OrdersService {
         },
       },
     });
-
     const hydratedRows = await this.hydrateLinkedProducts(
       authContext,
       companyId,
       rows as OrderRowShallow[],
     );
     const mapped = hydratedRows
-      .map((row) => toOrderListItem(row))
-      .filter((row) => {
-        if (filters.search && !includesIgnoreCase(row.orderId, filters.search)) {
+      .map((row) => ({
+        item: toOrderListItem(
+          row,
+          buildOrderFinancialMetrics(row, company?.taxRateDefault),
+        ),
+        row,
+      }))
+      .filter(({ item }) => {
+        if (filters.search && !includesIgnoreCase(item.orderId, filters.search)) {
           return false;
         }
 
-        if (filters.status && row.status !== filters.status) {
+        if (filters.status && item.status !== filters.status) {
+          return false;
+        }
+
+        if (
+          (filters.orderedFrom || filters.orderedTo) &&
+          !isOrderWithinRange(item.orderDate, filters.orderedFrom, filters.orderedTo)
+        ) {
           return false;
         }
 
         return true;
       });
-    const filteredRowIds = new Set(mapped.map((row) => row.id));
-    const filteredHydratedRows = hydratedRows.filter((row) =>
-      filteredRowIds.has(row.id),
+    mapped.sort((left, right) =>
+      compareOrderListItems(left.item, right.item, sortBy, sortDirection),
     );
-
     const totalItems = mapped.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const safePage = Math.min(page, totalPages);
     const start = (safePage - 1) * pageSize;
+    const paged = mapped.slice(start, start + pageSize);
 
     return {
       availableStatuses: ORDER_STATUS_OPTIONS,
-      items: mapped.slice(start, start + pageSize),
+      items: paged.map(({ item }) => item),
       page: safePage,
       pageSize,
-      summary: buildOrdersSummary(filteredHydratedRows),
+      summary: includeSummary
+        ? buildOrdersSummary(mapped.map(({ row }) => row))
+        : buildEmptyOrdersSummary(),
       totalItems,
       totalPages,
     };
@@ -749,8 +1025,66 @@ export class OrdersService {
         company?.taxRateDefault,
       ),
       items: toOrderLineItems(hydratedRow),
-      order: toOrderListItem(hydratedRow),
+      order: toOrderListItem(
+        hydratedRow,
+        buildOrderFinancialMetrics(hydratedRow, company?.taxRateDefault),
+      ),
     };
+  }
+
+  private async buildOrdersSummaryForFilters(
+    authContext: TenantContext,
+    companyId: string,
+    taxRateDefault: string | number | null | undefined,
+    filters: OrderListFilters,
+  ) {
+    const rows = await this.db.query.externalOrders.findMany({
+      orderBy: (table) => [desc(table.orderedAt), desc(table.createdAt)],
+      where: (table) =>
+        and(
+          eq(table.organizationId, authContext.organizationId),
+          eq(table.companyId, companyId),
+          ...(filters.provider ? [eq(table.provider, filters.provider)] : []),
+        ),
+      with: {
+        fees: true,
+        items: {
+          with: {
+            externalProduct: true,
+          },
+        },
+      },
+    });
+    const hydratedRows = await this.hydrateLinkedProducts(
+      authContext,
+      companyId,
+      rows as OrderRowShallow[],
+    );
+    const filteredRows = hydratedRows.filter((row) => {
+      const listItem = toOrderListItem(
+        row,
+        buildOrderFinancialMetrics(row, taxRateDefault),
+      );
+
+      if (filters.search && !includesIgnoreCase(listItem.orderId, filters.search)) {
+        return false;
+      }
+
+      if (filters.status && listItem.status !== filters.status) {
+        return false;
+      }
+
+      if (
+        (filters.orderedFrom || filters.orderedTo) &&
+        !isOrderWithinRange(listItem.orderDate, filters.orderedFrom, filters.orderedTo)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return buildOrdersSummary(filteredRows);
   }
 
   private requireSelectedCompanyId(context: TenantContext) {

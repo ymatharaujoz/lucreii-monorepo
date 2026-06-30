@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUpDown,
+  CalendarRange,
   ChevronDown,
   ChevronUp,
   Filter,
@@ -13,13 +14,14 @@ import {
   Percent,
   Search,
   SlidersHorizontal,
+  Store,
   Truck,
-  Wallet,
   X,
 } from "lucide-react";
 import { Badge, Card, Dropdown, EmptyState, Modal, cn } from "@lucreii/ui";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { StatusBadge } from "@/components/ui-premium/status-badge";
+import { MultiSelectDropdown } from "@/components/ui-premium/multi-select-dropdown";
 import { slideInUpVariants } from "@/lib/animations";
 import type {
   IntegrationProviderSlug,
@@ -33,10 +35,14 @@ import { useOrderDetails, useOrdersList } from "../hooks/use-orders-data";
 
 const PAGE_SIZE = 20;
 
-const PROVIDER_FILTER_OPTIONS: { value: IntegrationProviderSlug; label: string }[] = [
-  { value: "mercadolivre", label: "Mercado Livre" },
-  { value: "shopee", label: "Shopee" },
-  { value: "shein", label: "Shein" },
+const PROVIDER_FILTER_OPTIONS: {
+  value: IntegrationProviderSlug;
+  label: string;
+  swatch: string;
+}[] = [
+  { value: "mercadolivre", label: "Mercado Livre", swatch: "#ffe600" },
+  { value: "shopee", label: "Shopee", swatch: "#fa5230" },
+  { value: "shein", label: "Shein", swatch: "#111111" },
 ];
 
 const PROVIDER_LABELS: Record<IntegrationProviderSlug, string> = {
@@ -51,11 +57,12 @@ type SortKey =
   | "statusLabel"
   | "orderedAt"
   | "itemsSold"
+  | "contributionMarginPercent"
   | "shippingAmount"
   | "tariffAmount"
   | "fixedCostAmount"
-  | "totalWithFees"
-  | "totalWithoutFees";
+  | "totalProfitAmount"
+  | "totalWithFees";
 
 type SortDirection = "asc" | "desc" | null;
 
@@ -184,6 +191,10 @@ function getSortValue(
       return row.statusLabel;
     case "orderedAt":
       return row.orderedAt;
+    case "contributionMarginPercent":
+      return row.contributionMarginPercent === null
+        ? null
+        : Number(row.contributionMarginPercent);
     case "shippingAmount":
       return Number(row.shippingAmount);
     case "tariffAmount":
@@ -192,8 +203,8 @@ function getSortValue(
       return Number(row.fixedCostAmount);
     case "totalWithFees":
       return Number(row.totalWithFees);
-    case "totalWithoutFees":
-      return Number(row.totalWithoutFees);
+    case "totalProfitAmount":
+      return row.totalProfitAmount === null ? null : Number(row.totalProfitAmount);
     case "itemsSold":
       return row.itemsSold;
     default:
@@ -468,9 +479,9 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <CompositionMetric
-          icon={<Wallet className="h-4 w-4" />}
-          label="Faturamento"
-          value={formatMoney(composition.revenueAmount)}
+          icon={<Percent className="h-4 w-4" />}
+          label="Estornos / Bônus"
+          value={formatMoney(composition.refundBonusAmount)}
           variant="highlight"
         />
         <CompositionMetric
@@ -531,11 +542,13 @@ function buildStatusDropdownItems(
   ];
 }
 
-export function OrdersHome() {
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [searchDraft, setSearchDraft] = useState("");
-  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
+export function OrdersHome() { 
+  const [page, setPage] = useState(1); 
+  const [search, setSearch] = useState(""); 
+  const [searchDraft, setSearchDraft] = useState(""); 
+  const [orderedFrom, setOrderedFrom] = useState("");
+  const [orderedTo, setOrderedTo] = useState("");
+  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]); 
   const [selectedStatus, setSelectedStatus] = useState<OrderCanonicalStatus | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -554,11 +567,20 @@ export function OrdersHome() {
     selectedMarketplaces.length === 1 ? selectedMarketplaces[0] : "";
 
   const listQuery = useOrdersList({
+    includeSummary: false,
     page,
     pageSize: PAGE_SIZE,
     ...(search ? { search } : {}),
     ...(provider ? { provider: provider as IntegrationProviderSlug } : {}),
     ...(selectedStatus ? { status: selectedStatus } : {}),
+    ...(sortConfig?.direction
+      ? {
+          sortBy: sortConfig.key,
+          sortDirection: sortConfig.direction,
+        }
+      : {}),
+    ...(orderedFrom ? { orderedFrom } : {}),
+    ...(orderedTo ? { orderedTo } : {}),
   });
 
   const detailQuery = useOrderDetails(selectedOrderId, modalOpen);
@@ -573,40 +595,28 @@ export function OrdersHome() {
   const availableStatuses = listQuery.data?.availableStatuses ?? [];
   const totalPages = listQuery.data?.totalPages ?? 1;
 
-  const sortedRows = useMemo(() => {
-    if (!sortConfig || !sortConfig.direction) {
-      return rows;
-    }
-    const { key, direction } = sortConfig;
-    return [...rows].sort((a, b) =>
-      compareSortValues(getSortValue(a, key), getSortValue(b, key), direction),
-    );
-  }, [rows, sortConfig]);
-
   const hasActiveFilters =
-    search.trim().length > 0 ||
-    selectedMarketplaces.length > 0 ||
-    selectedStatus !== null;
-
-  const activeFilterCount =
-    (search.trim() ? 1 : 0) +
-    selectedMarketplaces.length +
-    (selectedStatus ? 1 : 0);
-
-  const clearAllFilters = () => {
-    setSearch("");
-    setSearchDraft("");
-    setSelectedMarketplaces([]);
-    setSelectedStatus(null);
+    search.trim().length > 0 || 
+    selectedMarketplaces.length > 0 || 
+    selectedStatus !== null ||
+    orderedFrom.length > 0 ||
+    orderedTo.length > 0; 
+ 
+  const activeFilterCount = 
+    (search.trim() ? 1 : 0) + 
+    selectedMarketplaces.length + 
+    (selectedStatus ? 1 : 0) +
+    (orderedFrom ? 1 : 0) +
+    (orderedTo ? 1 : 0); 
+ 
+  const clearAllFilters = () => { 
+    setSearch(""); 
+    setSearchDraft(""); 
+    setOrderedFrom("");
+    setOrderedTo("");
+    setSelectedMarketplaces([]); 
+    setSelectedStatus(null); 
     setPage(1);
-  };
-
-  const toggleMarketplace = (value: string) => {
-    setSelectedMarketplaces((previous) =>
-      previous.includes(value)
-        ? previous.filter((entry) => entry !== value)
-        : [...previous, value],
-    );
   };
 
   const applyFilters = () => {
@@ -707,19 +717,19 @@ export function OrdersHome() {
               >
               <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--radius-lg)] border border-border/60 bg-gradient-to-r from-surface/60 via-surface-strong/50 to-surface/60 p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
                 <form
-                  className="relative flex min-w-[200px] flex-1 items-center"
+                  className="relative flex min-w-[260px] flex-[1.5] items-center"
                   onSubmit={(event) => {
                     event.preventDefault();
                     applyFilters();
                   }}
                 >
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
                   <input
                     type="text"
                     value={searchDraft}
                     onChange={(event) => setSearchDraft(event.target.value)}
-                    placeholder="Buscar pedido por ID..."
-                    className="h-8 w-full rounded-[var(--radius-md)] border border-transparent bg-background pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground/60 transition-all duration-[var(--transition-fast)] hover:border-border/60 focus:border-accent/60 focus:bg-background focus:outline-none focus:ring-2 focus:ring-accent/20"
+                    placeholder="Buscar pedido por ID"
+                    className="h-8 w-full min-w-0 rounded-[var(--radius-md)] border border-transparent bg-background pl-9 pr-9 text-sm text-foreground transition-all duration-[var(--transition-fast)] hover:border-border/60 focus:border-accent/60 focus:bg-background focus:outline-none focus:ring-2 focus:ring-accent/20"
                   />
                   {searchDraft ? (
                     <button
@@ -738,44 +748,90 @@ export function OrdersHome() {
 
                 <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
 
-                <div className="flex items-center gap-1">
-                  {PROVIDER_FILTER_OPTIONS.map((option) => {
-                    const isSelected = selectedMarketplaces.includes(option.value);
-                    const dotColor =
-                      option.value === "mercadolivre"
-                        ? "#ffe600"
-                        : option.value === "shopee"
-                          ? "#fa5230"
-                          : option.value === "shein"
-                            ? "#111111"
-                            : "#9ca3af";
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => {
-                          toggleMarketplace(option.value);
-                          setPage(1);
-                        }}
-                        className={`inline-flex items-center gap-1.5 rounded-[var(--radius-md)] px-2.5 py-1.5 text-xs font-medium transition-all duration-[var(--transition-fast)] ${
-                          isSelected
-                            ? "bg-accent text-accent-foreground shadow-[var(--shadow-xs)]"
-                            : "border border-border bg-background text-muted-foreground hover:border-border-strong hover:text-foreground"
-                        }`}
-                      >
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full transition-transform duration-[var(--transition-fast)] ${
-                            isSelected ? "scale-125" : ""
-                          }`}
-                          style={{ backgroundColor: dotColor }}
-                        />
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <MultiSelectDropdown
+                  align="left"
+                  emptyLabel="Todos os canais"
+                  label="Canais"
+                  onChange={(next) => {
+                    setSelectedMarketplaces(next);
+                    setPage(1);
+                  }}
+                  options={PROVIDER_FILTER_OPTIONS.map((option) => ({
+                    id: option.value,
+                    label: option.label,
+                    swatch: option.swatch,
+                  }))}
+                  selected={selectedMarketplaces}
+                  triggerIcon={<Store className="h-3.5 w-3.5" />}
+                />
 
                 <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
+
+                <div
+                  className={cn(
+                    "group flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] border bg-background pl-2.5 pr-1.5 transition-all duration-[var(--transition-fast)]",
+                    orderedFrom || orderedTo
+                      ? "border-accent/40 ring-1 ring-inset ring-accent/15"
+                      : "border-border hover:border-border-strong focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/20",
+                  )}
+                >
+                  <CalendarRange
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 transition-colors",
+                      orderedFrom || orderedTo
+                        ? "text-accent"
+                        : "text-muted-foreground/70 group-focus-within:text-accent",
+                    )}
+                  />
+                  <span className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 sm:inline">
+                    Data do Pedido
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 sm:hidden">
+                    Data
+                  </span>
+                  <input
+                    aria-label="Data inicial do pedido"
+                    type="date"
+                    value={orderedFrom}
+                    onChange={(event) => {
+                      setOrderedFrom(event.target.value);
+                      setPage(1);
+                    }}
+                    className="h-6 min-w-[110px] cursor-pointer rounded-sm border-0 bg-transparent px-1 text-xs font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-foreground/5 focus-visible:bg-foreground/5 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 [&::-webkit-calendar-picker-indicator]:transition-opacity hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus-visible:[&::-webkit-calendar-picker-indicator]:opacity-100 dark:[color-scheme:dark]"
+                  />
+                  <span
+                    aria-hidden
+                    className="select-none text-[10px] font-medium text-muted-foreground/50"
+                  >
+                    →
+                  </span>
+                  <input
+                    aria-label="Data final do pedido"
+                    type="date"
+                    value={orderedTo}
+                    onChange={(event) => {
+                      setOrderedTo(event.target.value);
+                      setPage(1);
+                    }}
+                    className="h-6 min-w-[110px] cursor-pointer rounded-sm border-0 bg-transparent px-1 text-xs font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-foreground/5 focus-visible:bg-foreground/5 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 [&::-webkit-calendar-picker-indicator]:transition-opacity hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus-visible:[&::-webkit-calendar-picker-indicator]:opacity-100 dark:[color-scheme:dark]"
+                  />
+                  {orderedFrom || orderedTo ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOrderedFrom("");
+                        setOrderedTo("");
+                        setPage(1);
+                      }}
+                      className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
+                      aria-label="Limpar período"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" /> 
 
                 <Dropdown
                   align="left"
@@ -785,17 +841,33 @@ export function OrdersHome() {
                     setPage(1);
                   }}
                   trigger={
-                    <div className="inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] border border-border bg-background px-3 text-sm text-foreground transition-all duration-[var(--transition-fast)] hover:border-border-strong">
-                      <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground/70" />
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                    <div
+                      className={cn(
+                        "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] border bg-background pl-2.5 pr-2.5 text-sm transition-all duration-[var(--transition-fast)]",
+                        selectedStatus
+                          ? "border-accent/40 text-foreground ring-1 ring-inset ring-accent/15"
+                          : "border-border text-foreground hover:border-border-strong",
+                      )}
+                    >
+                      <SlidersHorizontal
+                        className={cn(
+                          "h-3.5 w-3.5 shrink-0 transition-colors",
+                          selectedStatus ? "text-accent" : "text-muted-foreground/70",
+                        )}
+                      />
+                      <span className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 md:inline">
                         Status
                       </span>
-                      <span className="font-medium text-foreground">
+                      <span
+                        aria-hidden
+                        className="hidden h-3 w-px shrink-0 bg-border/70 md:inline-block"
+                      />
+                      <span className="max-w-[140px] truncate font-medium text-foreground">
                         {selectedStatusLabel === "Todos os status"
                           ? "Todos"
                           : selectedStatusLabel}
                       </span>
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     </div>
                   }
                 />
@@ -820,15 +892,15 @@ export function OrdersHome() {
           <div className="mb-3 flex shrink-0 items-center justify-between text-xs text-muted-foreground">
             <span>
               <span className="font-semibold tabular-nums text-foreground">
-                {sortedRows.length}
+                {rows.length}
               </span>{" "}
-              {sortedRows.length === 1 ? "pedido exibido" : "pedidos exibidos"} na
+              {rows.length === 1 ? "pedido exibido" : "pedidos exibidos"} na
               página atual
             </span>
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full min-w-[1260px] border-separate border-spacing-0">
+            <table className="w-full min-w-[1100px] border-separate border-spacing-0">
               <thead>
                 <tr className="border-b border-border bg-surface-strong/95">
                   <OrderSortableHeader column="provider" onSort={handleSort} sortConfig={sortConfig}>
@@ -843,23 +915,14 @@ export function OrdersHome() {
                   <OrderSortableHeader column="orderedAt" onSort={handleSort} sortConfig={sortConfig}>
                     Data do Pedido
                   </OrderSortableHeader>
-                  <OrderSortableHeader column="itemsSold" align="right" onSort={handleSort} sortConfig={sortConfig}>
-                    Itens
-                  </OrderSortableHeader>
-                  <OrderSortableHeader column="shippingAmount" align="right" onSort={handleSort} sortConfig={sortConfig}>
-                    Frete
-                  </OrderSortableHeader>
-                  <OrderSortableHeader column="tariffAmount" align="right" onSort={handleSort} sortConfig={sortConfig}>
-                    Comissão
-                  </OrderSortableHeader>
-                  <OrderSortableHeader column="fixedCostAmount" align="right" onSort={handleSort} sortConfig={sortConfig}>
-                    Taxa
-                  </OrderSortableHeader>
                   <OrderSortableHeader column="totalWithFees" align="right" onSort={handleSort} sortConfig={sortConfig}>
                     Faturamento
                   </OrderSortableHeader>
-                  <OrderSortableHeader column="totalWithoutFees" align="right" onSort={handleSort} sortConfig={sortConfig}>
-                    Receita Liquida
+                  <OrderSortableHeader column="contributionMarginPercent" align="right" onSort={handleSort} sortConfig={sortConfig}>
+                    Margem de Contribuição
+                  </OrderSortableHeader>
+                  <OrderSortableHeader column="totalProfitAmount" align="right" onSort={handleSort} sortConfig={sortConfig}>
+                    Lucro Total
                   </OrderSortableHeader>
                 </tr>
               </thead>
@@ -868,7 +931,7 @@ export function OrdersHome() {
                 {listQuery.isLoading ? (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={7}
                       className="px-3 py-10 text-center text-sm text-muted-foreground"
                     >
                       Carregando pedidos...
@@ -877,15 +940,15 @@ export function OrdersHome() {
                 ) : listQuery.error ? (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={7}
                       className="px-3 py-10 text-center text-sm text-muted-foreground"
                     >
                       Nao foi possivel carregar os pedidos.
                     </td>
                   </tr>
-                ) : sortedRows.length === 0 ? (
+                ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={10}>
+                    <td colSpan={7}>
                       <EmptyState
                         title="Nenhum pedido encontrado"
                         description="Ajuste os filtros para visualizar outros pedidos."
@@ -894,7 +957,7 @@ export function OrdersHome() {
                     </td>
                   </tr>
                 ) : (
-                  sortedRows.map((row) => (
+                  rows.map((row) => (
                     <tr
                       key={row.id}
                       className="cursor-pointer border-b border-border/50 outline-none transition-colors hover:bg-surface-strong/30 focus-visible:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/30"
@@ -934,22 +997,15 @@ export function OrdersHome() {
                         {formatDateTime(row.orderedAt)}
                       </td>
                       <td className="px-3 py-3 text-right text-sm font-semibold tabular-nums text-foreground">
-                        {row.itemsSold}
-                      </td>
-                      <td className="px-3 py-3 text-right text-sm tabular-nums text-foreground">
-                        {formatMoney(row.shippingAmount)}
-                      </td>
-                      <td className="px-3 py-3 text-right text-sm tabular-nums text-foreground">
-                        {formatMoney(row.tariffAmount)}
-                      </td>
-                      <td className="px-3 py-3 text-right text-sm tabular-nums text-foreground">
-                        {formatMoney(row.fixedCostAmount)}
-                      </td>
-                      <td className="px-3 py-3 text-right text-sm font-semibold tabular-nums text-foreground">
                         {formatMoney(row.totalWithFees)}
                       </td>
                       <td className="px-3 py-3 text-right text-sm font-semibold tabular-nums text-foreground">
-                        {formatMoney(row.totalWithoutFees)}
+                        {formatPercent(row.contributionMarginPercent)}
+                      </td>
+                      <td className="px-3 py-3 text-right text-sm font-semibold tabular-nums text-foreground">
+                        {row.totalProfitAmount === null
+                          ? "—"
+                          : formatMoney(row.totalProfitAmount)}
                       </td>
                     </tr>
                   ))

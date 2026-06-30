@@ -129,6 +129,7 @@ describe("orders controller", () => {
         netRevenueAmount: "0.00",
         packagingCostAmount: "0.00",
         productCostAmount: "0.00",
+        refundBonusAmount: "0.00",
         revenueAmount: "0.00",
         shippingOrFixedFeeAmount: "0.00",
         taxAmount: "0.00",
@@ -136,6 +137,7 @@ describe("orders controller", () => {
       },
       items: [],
       order: {
+        contributionMarginPercent: null,
         createdAt: "2026-06-20T12:00:00.000Z",
         currency: "BRL",
         fixedCostAmount: "0.00",
@@ -151,6 +153,7 @@ describe("orders controller", () => {
         status: "paid",
         statusLabel: "Pagamento aprovado",
         totalFees: "0.00",
+        totalProfitAmount: null,
         totalWithFees: "0.00",
         totalWithoutFees: "0.00",
       },

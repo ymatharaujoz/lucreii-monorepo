@@ -12,6 +12,7 @@ import {
   type IntegrationProviderContext,
   type IntegrationProviderTokenRefreshResult,
   type IntegrationSyncFee,
+  type IntegrationSyncNotification,
   type IntegrationSyncOrder,
   type IntegrationSyncProduct,
   type IntegrationSyncContext,
@@ -178,6 +179,26 @@ function externalProductId(item: ShopeeOrderItem) {
   return item.model_id && item.model_id > 0
     ? `${item.item_id}:${item.model_id}`
     : String(item.item_id);
+}
+
+function extractShopeeOrderNumberFromNotification(
+  notification: IntegrationSyncNotification | null | undefined,
+) {
+  if (!notification) {
+    return null;
+  }
+
+  if (notification.notificationId?.trim()) {
+    return notification.notificationId.trim();
+  }
+
+  const resource = notification.resource?.trim();
+  if (!resource) {
+    return null;
+  }
+
+  const match = resource.match(/\/orders\/([^/?]+)/i);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 function dedupeProducts(products: IntegrationSyncProduct[]) {
@@ -376,31 +397,74 @@ export class ShopeeProvider implements IntegrationProvider {
       );
     }
 
-    const timeTo =
-      input.mode === "manual_range"
-        ? Math.floor(new Date(input.range.endAt).getTime() / 1000)
-        : timestampNow();
-    const timeFrom =
-      input.mode === "manual_range"
-        ? Math.floor(new Date(input.range.startAt).getTime() / 1000)
-        : Math.max(
-            (input.cursor && typeof input.cursor.updateTime === "number"
-              ? input.cursor.updateTime
-              : timestampNow() - FIRST_SYNC_LOOKBACK_SECONDS) -
-              CURSOR_OVERLAP_SECONDS,
-            timeTo - FIRST_SYNC_LOOKBACK_SECONDS,
-          );
-    const orderNumbers = await this.fetchOrderNumbers({
-      accessToken,
-      shopId,
-      timeFrom,
-      timeTo,
-    });
-    const details = await this.fetchOrderDetails({
-      accessToken,
-      orderNumbers,
-      shopId,
-    });
+    const notificationOrderNumber =
+      input.mode !== "manual_range"
+        ? extractShopeeOrderNumberFromNotification(input.notification)
+        : null;
+
+    let nextUpdateTime =
+      input.mode !== "manual_range" &&
+      input.cursor &&
+      typeof input.cursor.updateTime === "number"
+        ? input.cursor.updateTime
+        : null;
+
+    let details: ShopeeOrderDetail[] = [];
+
+    if (input.mode === "manual_range") {
+      const timeTo = Math.floor(new Date(input.range.endAt).getTime() / 1000);
+      const timeFrom = Math.floor(
+        new Date(input.range.startAt).getTime() / 1000,
+      );
+      const orderNumbers = await this.fetchOrderNumbers({
+        accessToken,
+        shopId,
+        timeFrom,
+        timeTo,
+      });
+      details = await this.fetchOrderDetails({
+        accessToken,
+        orderNumbers,
+        shopId,
+      });
+    } else if (notificationOrderNumber) {
+      details = await this.fetchOrderDetails({
+        accessToken,
+        orderNumbers: [notificationOrderNumber],
+        shopId,
+      });
+      nextUpdateTime = details.reduce<number | null>((latest, order) => {
+        if (
+          typeof order.update_time !== "number" ||
+          !Number.isFinite(order.update_time)
+        ) {
+          return latest;
+        }
+
+        return latest === null || order.update_time > latest
+          ? order.update_time
+          : latest;
+      }, nextUpdateTime);
+    } else {
+      const timeTo = timestampNow();
+      const timeFrom = Math.max(
+        (nextUpdateTime ?? timeTo - FIRST_SYNC_LOOKBACK_SECONDS) -
+          CURSOR_OVERLAP_SECONDS,
+        timeTo - FIRST_SYNC_LOOKBACK_SECONDS,
+      );
+      const orderNumbers = await this.fetchOrderNumbers({
+        accessToken,
+        shopId,
+        timeFrom,
+        timeTo,
+      });
+      details = await this.fetchOrderDetails({
+        accessToken,
+        orderNumbers,
+        shopId,
+      });
+      nextUpdateTime = timeTo;
+    }
     const orders = await Promise.all(
       details.map((order) =>
         this.normalizeOrder({ accessToken, order, shopId }),
@@ -420,7 +484,12 @@ export class ShopeeProvider implements IntegrationProvider {
     );
 
     return {
-      cursor: input.mode === "manual_range" ? null : { updateTime: timeTo },
+      cursor:
+        input.mode === "manual_range"
+          ? null
+          : nextUpdateTime !== null
+            ? { updateTime: nextUpdateTime }
+            : input.cursor,
       orders,
       products,
     };

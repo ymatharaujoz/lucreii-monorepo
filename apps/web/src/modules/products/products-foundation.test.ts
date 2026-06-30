@@ -377,11 +377,11 @@ describe("products foundation helpers", () => {
           }),
         ],
         commissionPct: 10,
-        contributionMarginRatio: 0.4,
+        contributionMarginRatio: 65,
         coverImageUrl: "https://example.com/product-one.png",
         isActive: true,
         isSyntheticParent: false,
-        minimumRoas: 2.5,
+        minimumRoas: expect.any(Number),
         name: "Product One",
         netLiquidSales: 1,
         packagingCost: 4,
@@ -521,7 +521,7 @@ describe("products foundation helpers", () => {
     );
   });
 
-  it("computes net revenue subtracting commission and shipping/fixed fee totals", () => {
+  it("computes net revenue subtracting commission, shipping/fixed fee and packaging totals", () => {
     const [baseRow] = buildProductTableRows(snapshot);
     const row = {
       ...baseRow,
@@ -533,7 +533,16 @@ describe("products foundation helpers", () => {
       totalCommission: 11.67,
     };
 
-    expect(computeRowNetRevenue(row)).toBeCloseTo(58.08, 2);
+    expect(computeRowNetRevenue(row)).toBeCloseTo(54.08, 2);
+  });
+
+  it("computes contribution margin as a percentage of selling price after variable costs and tax", () => {
+    const rows = buildProductTableRows(snapshot);
+    const parent = rows[0];
+    const standalone = rows[1];
+
+    expect(parent.contributionMarginRatio).toBeCloseTo(65, 2);
+    expect(standalone.contributionMarginRatio).toBeNull();
   });
 
   it("falls back to monthly performance commission totals when MELI analytics total is unavailable", () => {

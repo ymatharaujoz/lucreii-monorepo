@@ -32,6 +32,22 @@ export type OrderListFilters = {
   search?: string;
   provider?: IntegrationProviderSlug;
   status?: OrderCanonicalStatus;
+  orderedFrom?: string;
+  orderedTo?: string;
+  sortBy?:
+    | "provider"
+    | "orderId"
+    | "statusLabel"
+    | "orderedAt"
+    | "itemsSold"
+    | "contributionMarginPercent"
+    | "shippingAmount"
+    | "tariffAmount"
+    | "fixedCostAmount"
+    | "totalProfitAmount"
+    | "totalWithFees";
+  sortDirection?: "asc" | "desc";
+  includeSummary?: boolean;
 };
 
 export type OrderListItem = {
@@ -51,6 +67,8 @@ export type OrderListItem = {
   totalFees: string;
   totalWithFees: string;
   totalWithoutFees: string;
+  contributionMarginPercent: string | null;
+  totalProfitAmount: string | null;
   itemsSold: number;
 };
 
@@ -97,6 +115,7 @@ export type OrderComposition = {
   productCostAmount: string;
   marketplaceCommissionAmount: string;
   shippingOrFixedFeeAmount: string;
+  refundBonusAmount: string;
   packagingCostAmount: string;
   hasIncompleteCostData: boolean;
   missingLinkedItemsCount: number;

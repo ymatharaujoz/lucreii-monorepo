@@ -36,6 +36,7 @@ import { createIntegrationProviders } from "@/modules/integrations/provider-regi
 import {
   IntegrationProviderError,
   type IntegrationProvider,
+  type IntegrationSyncNotification,
   type IntegrationSyncCursor,
   type IntegrationSyncResult,
 } from "@/modules/integrations/integrations.types";
@@ -252,6 +253,7 @@ type ExecuteSyncInput = {
   connection: MarketplaceConnection;
   companyId: string;
   manualRange: ManualSyncRange | null;
+  notification: IntegrationSyncNotification | null;
   organizationId: string;
   providerSlug: IntegrationProviderSlug;
   triggerMetadata: Record<string, unknown>;
@@ -399,6 +401,7 @@ export class SyncService {
       connection,
       companyId,
       manualRange,
+      notification: null,
       organizationId,
       providerSlug: resolvedProviderSlug,
       triggerMetadata: {
@@ -499,6 +502,7 @@ export class SyncService {
       connection,
       companyId: connection.companyId,
       manualRange: null,
+      notification: this.toIntegrationNotification(summary),
       organizationId: connection.organizationId,
       providerSlug: "mercadolivre",
       triggerMetadata: {
@@ -612,6 +616,7 @@ export class SyncService {
       connection,
       companyId: connection.companyId,
       manualRange: null,
+      notification: this.toIntegrationNotification(summary),
       organizationId: connection.organizationId,
       providerSlug: "shopee",
       triggerMetadata: { notification: summary },
@@ -717,6 +722,7 @@ export class SyncService {
       connection,
       companyId: connection.companyId,
       manualRange: null,
+      notification: this.toIntegrationNotification(summary),
       organizationId: connection.organizationId,
       providerSlug: "shein",
       triggerMetadata: { notification: summary },
@@ -784,6 +790,7 @@ export class SyncService {
               connection,
               cursor: requestedCursor,
               mode: "incremental",
+              notification: input.notification,
               organizationId: input.organizationId,
             },
       );
@@ -1000,6 +1007,9 @@ export class SyncService {
       connection,
       companyId,
       manualRange: null,
+      notification: notificationSummary
+        ? this.toIntegrationNotification(notificationSummary)
+        : null,
       organizationId,
       providerSlug,
       triggerMetadata: {
@@ -1056,6 +1066,20 @@ export class SyncService {
       : resolveSyncWindowState().currentWindowKey;
   }
 
+  private toIntegrationNotification(
+    summary: SyncTriggerSummary | null,
+  ): IntegrationSyncNotification | null {
+    if (!summary) {
+      return null;
+    }
+
+    return {
+      notificationId: summary.notificationId,
+      resource: summary.resource,
+      topic: summary.topic,
+    };
+  }
+
   private normalizeManualSyncRequest(
     input?: ManualSyncRequest,
   ): ManualSyncRange {
@@ -1086,9 +1110,7 @@ export class SyncService {
         0,
       ),
     );
-    const oldestAllowedStart = new Date(
-      todayStart.getTime() - 30 * 24 * 60 * 60 * 1000,
-    );
+    const oldestAllowedStart = addUtcMonths(todayStart, -3);
     const newestAllowedEnd = endOfUtcDay(todayStart);
 
     if (
@@ -1096,14 +1118,7 @@ export class SyncService {
       endAtDate.getTime() > newestAllowedEnd.getTime()
     ) {
       throw new BadRequestException(
-        "Periodo manual deve ficar dentro dos ultimos 30 dias.",
-      );
-    }
-
-    const maxEndAt = endOfUtcDay(addUtcMonths(startAtDate, 1));
-    if (endAtDate.getTime() > maxEndAt.getTime()) {
-      throw new BadRequestException(
-        "Periodo manual nao pode ultrapassar 1 mes.",
+        "Periodo manual deve ficar dentro dos ultimos 3 meses.",
       );
     }
 

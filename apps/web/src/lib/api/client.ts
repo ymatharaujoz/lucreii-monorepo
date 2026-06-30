@@ -181,7 +181,7 @@ export function createApiClient({
     patch<T>(path: string, options?: ApiRequestOptions) {
       return request<T>("PATCH", path, options);
     },
-    delete<T>(path: string, options?: Omit<ApiRequestOptions, "body">) {
+    delete<T>(path: string, options?: ApiRequestOptions) {
       return request<T>("DELETE", path, options);
     },
   };
@@ -219,7 +219,7 @@ export const apiClient = {
   patch<T>(path: string, options?: ApiRequestOptions) {
     return getDefaultApiClient().patch<T>(path, options);
   },
-  delete<T>(path: string, options?: Omit<ApiRequestOptions, "body">) {
+  delete<T>(path: string, options?: ApiRequestOptions) {
     return getDefaultApiClient().delete<T>(path, options);
   },
 };

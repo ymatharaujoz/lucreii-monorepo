@@ -9,36 +9,29 @@ interface ManualSyncRangeErrorBannerProps {
   describedById?: string;
 }
 
-const errorCopyMap: Record<
-  string,
-  { title: string; suggestion: string }
-> = {
+const errorCopyMap: Record<string, { title: string; suggestion: string }> = {
   "Selecione data inicial e final.": {
     suggestion:
-      "Preencha ambos os campos para habilitar a sincronização manual.",
-    title: "Datas obrigatórias",
+      "Preencha ambos os campos para habilitar a sincronizacao manual.",
+    title: "Datas obrigatorias",
   },
-  "Período inválido.": {
+  "Periodo invalido.": {
     suggestion: "Revise as datas selecionadas e tente novamente.",
-    title: "Formato inválido",
+    title: "Formato invalido",
   },
-  "Data inicial não pode ser maior que data final.": {
-    suggestion: "A data inicial deve ser anterior ou igual à data final.",
+  "Data inicial nao pode ser maior que data final.": {
+    suggestion: "A data inicial deve ser anterior ou igual a data final.",
     title: "Intervalo invertido",
   },
-  "Período manual deve ficar dentro dos últimos 30 dias.": {
+  "Periodo manual deve ficar dentro dos ultimos 3 meses.": {
     suggestion: "Selecione datas mais recentes, dentro da janela permitida.",
-    title: "Fora da janela de 30 dias",
-  },
-  "Período manual não pode ultrapassar 1 mês.": {
-    suggestion: "Reduza o intervalo para no máximo 1 mês.",
-    title: "Período muito longo",
+    title: "Fora da janela de 3 meses",
   },
 };
 
 const fallbackCopy = {
-  suggestion: "Revise o período selecionado e tente novamente.",
-  title: "Período inválido",
+  suggestion: "Revise o periodo selecionado e tente novamente.",
+  title: "Periodo invalido",
 };
 
 export function ManualSyncRangeErrorBanner({

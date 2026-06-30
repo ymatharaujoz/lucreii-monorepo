@@ -545,26 +545,67 @@ describe("SyncService", () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it("rejects manual ranges older than the rolling 30-day window", async () => {
+  it("rejects manual ranges older than the rolling 3-month window", async () => {
     vi.setSystemTime(new Date("2026-06-22T12:30:00.000Z"));
     const { service } = createService();
 
     await expect(
       service.runSync("org_123", "company_123", "user_123", "mercadolivre", {
-        endDate: "2026-05-22",
-        startDate: "2026-05-20",
+        endDate: "2026-03-21",
+        startDate: "2026-03-20",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it("rejects manual ranges longer than one month", async () => {
-    vi.setSystemTime(new Date("2026-03-01T12:30:00.000Z"));
+  it("accepts manual ranges longer than one month when still inside the last 3 months", async () => {
+    vi.setSystemTime(new Date("2026-06-27T12:30:00.000Z"));
+    const { db, service } = createService();
+
+    db.query.marketplaceConnections.findFirst.mockResolvedValue({
+      accessToken: "token",
+      createdAt: new Date("2026-05-01T11:00:00.000Z"),
+      externalAccountId: "seller_123",
+      id: "conn_123",
+      lastSyncedAt: null,
+      metadata: {},
+      companyId: "company_123",
+      organizationId: "org_123",
+      provider: "mercadolivre",
+      refreshToken: "refresh",
+      status: "connected",
+      tokenExpiresAt: new Date("2026-07-03T11:00:00.000Z"),
+      updatedAt: new Date("2026-05-01T11:00:00.000Z"),
+    });
+    db.query.syncRuns.findFirst.mockResolvedValue(null);
+    (
+      service as unknown as {
+        executeSync: ReturnType<typeof vi.fn>;
+      }
+    ).executeSync = vi.fn().mockResolvedValue({
+      availability: { reason: "available" },
+      run: { id: "sync_123" },
+    });
+
+    await expect(
+      service.runSync("org_123", "company_123", "user_123", "mercadolivre", {
+        endDate: "2026-06-27",
+        startDate: "2026-03-27",
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        availability: expect.objectContaining({ reason: "available" }),
+      }),
+    );
+  });
+
+  it("rejects manual ranges with end date in the future", async () => {
+    vi.setSystemTime(new Date("2026-06-27T12:30:00.000Z"));
     const { service } = createService();
 
     await expect(
       service.runSync("org_123", "company_123", "user_123", "mercadolivre", {
-        endDate: "2026-03-01",
-        startDate: "2026-01-30",
+        endDate: "2026-06-28",
+        startDate: "2026-06-10",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });

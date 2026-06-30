@@ -47,6 +47,26 @@ export async function fetchOrders(
     params.set("status", filters.status);
   }
 
+  if (filters.orderedFrom) {
+    params.set("orderedFrom", filters.orderedFrom);
+  }
+
+  if (filters.orderedTo) {
+    params.set("orderedTo", filters.orderedTo);
+  }
+
+  if (filters.sortBy) {
+    params.set("sortBy", filters.sortBy);
+  }
+
+  if (filters.sortDirection) {
+    params.set("sortDirection", filters.sortDirection);
+  }
+
+  if (typeof filters.includeSummary === "boolean") {
+    params.set("includeSummary", String(filters.includeSummary));
+  }
+
   const path = params.size > 0 ? `/orders?${params.toString()}` : "/orders";
   return apiClient.getValidatedData(path, ordersListApiResponseSchema);
 }
@@ -68,6 +88,11 @@ export function useOrdersList(filters: OrderListFilters = {}) {
       filters.search ?? "",
       filters.provider ?? "",
       filters.status ?? "",
+      filters.sortBy ?? "",
+      filters.sortDirection ?? "",
+      filters.includeSummary ?? true,
+      filters.orderedFrom ?? "",
+      filters.orderedTo ?? "",
     ],
   });
 }

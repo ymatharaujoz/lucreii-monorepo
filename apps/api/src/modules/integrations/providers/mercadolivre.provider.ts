@@ -11,6 +11,7 @@ import {
   type IntegrationProviderContext,
   type IntegrationSyncContext,
   type IntegrationSyncFee,
+  type IntegrationSyncNotification,
   type IntegrationSyncOrder,
   type IntegrationSyncOrderItem,
   type IntegrationSyncProduct,
@@ -314,6 +315,29 @@ function readBillingMarketplaceCommission(
   return null;
 }
 
+function readBillingRefundBonus(
+  result:
+    | {
+        sale_fee?: MercadoLivreBillingDetailFeeResponse;
+      }
+    | null
+    | undefined,
+) {
+  if (!result?.sale_fee) {
+    return null;
+  }
+
+  const candidates = [result.sale_fee.rebate, result.sale_fee.discount];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "number" && candidate > 0) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function readListingPriceMarketplaceCommission(
   payload: MercadoLivreListingPriceResponse | null | undefined,
 ) {
@@ -414,6 +438,32 @@ function toTimestamp(value: string | null | undefined) {
 
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function extractMercadoLivreOrderIdFromNotification(
+  notification: IntegrationSyncNotification | null | undefined,
+) {
+  if (!notification || typeof notification !== "object") {
+    return null;
+  }
+
+  const candidate =
+    "notificationId" in notification &&
+    typeof notification.notificationId === "string" &&
+    notification.notificationId.trim().length > 0
+      ? notification.notificationId.trim()
+      : "resource" in notification &&
+          typeof notification.resource === "string" &&
+          notification.resource.trim().length > 0
+        ? notification.resource.trim()
+        : null;
+
+  if (!candidate) {
+    return null;
+  }
+
+  const match = candidate.match(/\/orders\/([^/?]+)/i);
+  return match?.[1] ? decodeURIComponent(match[1]) : candidate;
 }
 
 function resolveMercadoLivreReturnQuantity(
@@ -660,16 +710,70 @@ export class MercadoLivreProvider implements IntegrationProvider {
       );
     }
 
+    const isManualRange = input.mode === "manual_range";
     const incrementalOrderedAfter =
-      input.mode === "incremental" &&
+      !isManualRange &&
       input.cursor &&
       typeof input.cursor === "object" &&
       typeof input.cursor.orderedAfter === "string"
         ? input.cursor.orderedAfter
         : null;
 
+    const notificationOrderId =
+      !isManualRange
+        ? extractMercadoLivreOrderIdFromNotification(input.notification)
+        : null;
+
+    if (!isManualRange && notificationOrderId) {
+      const detail = await this.fetchOrderDetails({
+        accessToken: input.connection.accessToken,
+        orderId: notificationOrderId,
+      });
+      const order = detail
+        ? await this.normalizeOrder(detail, {
+            accessToken: input.connection.accessToken,
+            sellerAccountId: accountId,
+          })
+        : null;
+      const orders = order ? [order] : [];
+      const products = dedupeProducts(
+        orders.flatMap((entry) =>
+          entry.items
+            .filter((item) => item.externalProductId !== null)
+            .map<IntegrationSyncProduct>((item) => ({
+              externalProductId: item.externalProductId ?? "",
+              metadata: {
+                source: "mercadolivre-order-item",
+                variationId: item.variationId ?? null,
+              },
+              sku: item.sku ?? null,
+              title: item.title ?? null,
+            })),
+        ),
+      );
+      const nextOrderedAfter = orders.reduce<string | null>((latest, entry) => {
+        if (!entry.orderedAt) {
+          return latest;
+        }
+
+        return latest === null || entry.orderedAt > latest
+          ? entry.orderedAt
+          : latest;
+      }, incrementalOrderedAfter);
+
+      return {
+        cursor: nextOrderedAfter
+          ? {
+              orderedAfter: nextOrderedAfter,
+            }
+          : input.cursor,
+        orders,
+        products,
+      };
+    }
+
     const orderFetchResult =
-      input.mode === "manual_range"
+      isManualRange
         ? await this.fetchOrders({
             accessToken: input.connection.accessToken,
             accountId,
@@ -702,7 +806,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
     );
 
     const nextOrderedAfter =
-      input.mode === "manual_range"
+      isManualRange
         ? null
         : orders.reduce<string | null>((latest, order) => {
             if (!order.orderedAt) {
@@ -719,7 +823,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
         ? {
             orderedAfter: nextOrderedAfter,
           }
-        : input.mode === "incremental"
+        : !isManualRange
           ? input.cursor
           : null,
       metadata,
@@ -1251,16 +1355,34 @@ export class MercadoLivreProvider implements IntegrationProvider {
       };
     });
 
-    if (!feeBreakdown || feeBreakdown.fixedFee === null) {
-      return adjustedFees;
+    const completedFees = [...adjustedFees];
+
+    if (
+      feeBreakdown?.refundBonus !== null &&
+      feeBreakdown?.refundBonus !== undefined &&
+      feeBreakdown.refundBonus > 0 &&
+      !this.hasFeeType(completedFees, "refund_bonus")
+    ) {
+      completedFees.push({
+        amount: toDecimalString(feeBreakdown.refundBonus),
+        currency: order.currency_id ?? detailedOrder.currency_id ?? "BRL",
+        feeType: "refund_bonus",
+        metadata: {
+          source: "billing.sale_fee.rebate",
+        },
+      });
     }
 
-    if (this.hasFeeType(adjustedFees, "fixed_fee")) {
-      return adjustedFees;
+    if (!feeBreakdown || feeBreakdown.fixedFee === null) {
+      return completedFees;
+    }
+
+    if (this.hasFeeType(completedFees, "fixed_fee")) {
+      return completedFees;
     }
 
     return [
-      ...adjustedFees,
+      ...completedFees,
       {
         amount: toDecimalString(feeBreakdown.fixedFee),
         currency: order.currency_id ?? detailedOrder.currency_id ?? "BRL",
@@ -1510,6 +1632,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
       fixedFee: fixedFee !== null && fixedFee > 0 ? fixedFee : null,
       grossAmount,
       marketplaceCommission,
+      refundBonus: readBillingRefundBonus(matchedResult),
     };
   }
 
@@ -1600,6 +1723,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
       grossAmount: grossAmount > 0 ? grossAmount : null,
       marketplaceCommission:
         marketplaceCommission > 0 ? marketplaceCommission : null,
+      refundBonus: null,
     };
   }
 

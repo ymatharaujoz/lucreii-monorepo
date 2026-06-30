@@ -339,8 +339,8 @@ export function DashboardFinancialIndicators({
                   disabled={!activeCompany}
                   onClick={() => {
                     setFeedbackMessage(null);
-                    setFixedCostInput("");
-                    setTaxPercentInput("");
+                    setFixedCostInput(formatCurrencyInput(fixedCost));
+                    setTaxPercentInput(formatCurrencyInput(taxPercent));
                     setIsEditing(true);
                   }}
                 >

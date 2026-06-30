@@ -653,6 +653,7 @@ describe("MercadoLivreProvider", () => {
         amount: "12.00",
         feeType: "marketplace_commission",
       }),
+      expect.objectContaining({ amount: "19.95", feeType: "refund_bonus" }),
       expect.objectContaining({ amount: "19.95", feeType: "fixed_fee" }),
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -824,6 +825,10 @@ describe("MercadoLivreProvider", () => {
       }),
       expect.objectContaining({
         amount: "6.65",
+        feeType: "refund_bonus",
+      }),
+      expect.objectContaining({
+        amount: "6.65",
         feeType: "fixed_fee",
       }),
     ]);
@@ -988,6 +993,10 @@ describe("MercadoLivreProvider", () => {
       expect.objectContaining({
         amount: "3.89",
         feeType: "marketplace_commission",
+      }),
+      expect.objectContaining({
+        amount: "6.65",
+        feeType: "refund_bonus",
       }),
       expect.objectContaining({
         amount: "6.65",
@@ -1595,6 +1604,61 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders).toEqual([]);
     expect(result.products).toEqual([]);
     expect(result.cursor).toBeNull();
+  });
+
+  it("fetches only the notified order during automatic sync without cursor history", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            currency_id: "BRL",
+            date_closed: "2026-05-15T10:00:00.000Z",
+            date_created: "2026-05-15T09:00:00.000Z",
+            id: 123,
+            order_items: [
+              {
+                item: {
+                  id: "MLB123",
+                  seller_sku: "SKU-1",
+                  title: "Produto 1",
+                },
+                quantity: 1,
+                sale_fee: 10,
+                unit_price: 100,
+              },
+            ],
+            payments: [{ fee_amount: 3, shipping_cost: 5 }],
+            total_amount: 100,
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        ),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      notification: {
+        notificationId: "123",
+        resource: "/orders/123",
+        topic: "orders_v2",
+      },
+      organizationId: "org_1",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/orders/123");
+    expect(result.orders).toHaveLength(1);
+    expect(result.orders[0]?.externalOrderId).toBe("123");
+    expect(result.cursor).toEqual({
+      orderedAfter: "2026-05-15T10:00:00.000Z",
+    });
   });
 
   it("hydrates order details when the search response omits fee fields", async () => {

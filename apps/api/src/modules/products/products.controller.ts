@@ -22,9 +22,11 @@ import { EntitlementGuard } from "@/modules/billing/entitlement.guard";
 import { ProductsService } from "./products.service";
 import {
   CreateManualProductRequestDto,
+  ProductBulkDeleteRequestDto,
   ProductCatalogExportQueryDto,
   CreateProductRequestDto,
   ProductAnalyticsQueryDto,
+  ProductPerformanceListQueryDto,
   UpdateProductCatalogFinanceRequestDto,
   UpdateProductRequestDto,
 } from "./products.dto";
@@ -56,6 +58,24 @@ export class ProductsController {
   ) {
     return {
       data: await this.productsService.getAnalyticsSnapshot(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        query,
+      ),
+      error: null,
+    };
+  }
+
+  @Get("performance")
+  async listPerformanceRows(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Query() query: ProductPerformanceListQueryDto,
+  ) {
+    return {
+      data: await this.productsService.listPerformanceRows(
         {
           organizationId: authContext.organization!.id,
           selectedCompanyId: authContext.selectedCompanyId ?? null,
@@ -203,21 +223,39 @@ export class ProductsController {
     };
   }
 
-  @Delete(":id")
-  async deleteProduct(
-    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
-    @Param("id") productId: string,
-  ) {
-    return {
-      data: await this.productsService.deleteProduct(
-        {
-          organizationId: authContext.organization!.id,
-          selectedCompanyId: authContext.selectedCompanyId ?? null,
-          userId: authContext.user.id,
-        },
-        productId,
-      ),
-      error: null,
-    };
-  }
+  @Delete("bulk-delete") 
+  async deleteProductsBulk( 
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext, 
+    @Body() body: ProductBulkDeleteRequestDto, 
+  ) { 
+    return { 
+      data: await this.productsService.deleteProductsBulk( 
+        { 
+          organizationId: authContext.organization!.id, 
+          selectedCompanyId: authContext.selectedCompanyId ?? null, 
+          userId: authContext.user.id, 
+        }, 
+        body.ids, 
+      ), 
+      error: null, 
+    }; 
+  } 
+ 
+  @Delete(":id") 
+  async deleteProduct( 
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext, 
+    @Param("id") productId: string, 
+  ) { 
+    return { 
+      data: await this.productsService.deleteProduct( 
+        { 
+          organizationId: authContext.organization!.id, 
+          selectedCompanyId: authContext.selectedCompanyId ?? null, 
+          userId: authContext.user.id, 
+        }, 
+        productId, 
+      ), 
+      error: null, 
+    }; 
+  } 
 }

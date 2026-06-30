@@ -2,24 +2,19 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
   BarChart3,
-  DollarSign,
   Package,
   Percent,
   ShoppingCart,
   TrendingUp,
-  Truck,
   Wallet,
 } from "lucide-react";
-import { Badge, Button, Modal, cn } from "@lucreii/ui";
-import { ApiClientError, apiClient } from "@/lib/api/client";
-import { productCatalogQueryKey, formatReferenceMonthPtBr } from "../hooks/use-product-data";
+import { Badge, Modal, cn } from "@lucreii/ui";
+import { formatReferenceMonthPtBr } from "../hooks/use-product-data";
 import { computeRowNetRevenue } from "../calculations/product-insights";
-import { CurrencyInput, parseCurrencyValue } from "./currency-input";
 import type { ProductTableRow } from "../types/products";
 import { formatMoney, formatNumber, formatPercent } from "../utils/formatters";
 
@@ -29,7 +24,7 @@ type ProductDetailsModalProps = {
   row: ProductTableRow | null;
 };
 
-type TabKey = "overview" | "profitability" | "composition";
+type TabKey = "overview" | "profitability";
 
 type SectionCardProps = {
   title: string;
@@ -193,7 +188,9 @@ function TabButton({
       type="button"
       className={cn(
         "relative z-10 whitespace-nowrap px-3 py-1.5 text-[9px] font-medium uppercase tracking-[0.12em] leading-none transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-        active ? "text-accent" : "text-muted-foreground/50 hover:text-muted-foreground/80",
+        active
+          ? "text-accent"
+          : "text-muted-foreground/50 hover:text-muted-foreground/80",
       )}
     >
       {label}
@@ -227,7 +224,9 @@ function TabGroup({
             label={tab.label}
           />
           {index !== tabs.length - 1 && (
-            <span className="mx-0.5 text-[10px] text-muted-foreground/30 select-none">|</span>
+            <span className="mx-0.5 select-none text-[10px] text-muted-foreground/30">
+              |
+            </span>
           )}
         </div>
       ))}
@@ -270,52 +269,17 @@ export function ProductDetailsModal({
   open,
   row,
 }: ProductDetailsModalProps) {
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
-  const [advertisingCost, setAdvertisingCost] = useState("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!row) return;
     setActiveTab("overview");
-    setAdvertisingCost(String(row.advertisingCost));
-    setErrorMessage(null);
   }, [row]);
-
-  const updateMutation = useMutation({
-    mutationFn: async (nextAdvertisingCost: string) => {
-      if (!row) {
-        throw new Error("Produto não encontrado.");
-      }
-
-      return apiClient.patch<{ data: { id: string }; error: null }>(
-        `/performance/${row.performanceId}`,
-        {
-          body: {
-            advertisingCost: nextAdvertisingCost,
-          },
-        },
-      );
-    },
-    onError: (error) => {
-      setErrorMessage(
-        error instanceof ApiClientError
-          ? error.message
-          : "Não foi possível salvar o investimento em publicidade.",
-      );
-    },
-    onSuccess: async () => {
-      setErrorMessage(null);
-      await queryClient.invalidateQueries({ queryKey: productCatalogQueryKey });
-      onClose();
-    },
-  });
 
   if (!row) {
     return null;
   }
 
-  const isSyntheticParent = row.isSyntheticParent;
   const netRevenue = computeRowNetRevenue(row);
 
   return (
@@ -327,7 +291,9 @@ export function ProductDetailsModal({
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold text-foreground">{row.name}</h2>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-muted-foreground">SKU: {row.sku}</span>
+            <span className="font-mono text-xs text-muted-foreground">
+              SKU: {row.sku}
+            </span>
             <Badge
               className={
                 row.isActive
@@ -343,18 +309,10 @@ export function ProductDetailsModal({
     >
       <AnimatePresence>
         {open && (
-          <motion.form
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onSubmit={(event) => {
-              event.preventDefault();
-              const formData = new FormData(event.currentTarget);
-              const rawAdvertisingCost = String(formData.get("advertisingCost") ?? "");
-              const nextAdvertisingCost = parseCurrencyValue(rawAdvertisingCost);
-              setAdvertisingCost(nextAdvertisingCost);
-              updateMutation.mutate(nextAdvertisingCost);
-            }}
             transition={{ duration: 0.3 }}
             className="space-y-4"
           >
@@ -364,7 +322,6 @@ export function ProductDetailsModal({
                 onChange={setActiveTab}
                 tabs={[
                   { key: "overview", label: "Visão Geral" },
-                  { key: "composition", label: "Composição" },
                   { key: "profitability", label: "Lucratividade" },
                 ]}
               />
@@ -418,92 +375,6 @@ export function ProductDetailsModal({
                     />
                   </div>
                 </SectionCard>
-
-              </motion.div>
-            )}
-
-            {activeTab === "composition" && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="space-y-4"
-              >
-                <SectionCard
-                  title="Composição de Preço"
-                  icon={<DollarSign className="h-4 w-4 text-accent" />}
-                >
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    <MetricCard
-                      label="Preço de Venda"
-                      value={formatMoney(row.sellingPrice)}
-                      icon={<DollarSign className="h-3 w-3" />}
-                      variant="highlight"
-                    />
-                    <MetricCard
-                      label="Custo Unitário"
-                      value={formatMoney(row.unitCost)}
-                      icon={<Package className="h-3 w-3" />}
-                    />
-                    <MetricCard
-                      label="Comissão"
-                      value={formatMoney(row.marketplaceCommissionUnit ?? 0)}
-                      icon={<Percent className="h-3 w-3" />}
-                    />
-                    <MetricCard
-                      label="Frete/Custo Fixo"
-                      value={formatMoney(row.shippingOrFixedFeeUnit ?? 0)}
-                      icon={<Truck className="h-3 w-3" />}
-                    />
-                    <MetricCard
-                      label="Embalagem"
-                      value={formatMoney(row.packagingCost)}
-                      icon={<Package className="h-3 w-3" />}
-                    />
-                    <MetricCard
-                      label="Imposto"
-                      value={`${formatMoney((row.sellingPrice * row.taxPct) / 100)} (${row.taxPct}%)`}
-                      icon={<Percent className="h-3 w-3" />}
-                    />
-                  </div>
-
-                  <div className="mt-4 rounded-[var(--radius-lg)] border border-border/30 bg-surface/80 p-4">
-                    <label
-                      className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/60"
-                      htmlFor="performance-advertising-cost"
-                    >
-                      Investimento em Publicidade
-                    </label>
-                  <div className="mt-2">
-                    <CurrencyInput
-                      disabled={isSyntheticParent}
-                      id="performance-advertising-cost"
-                      name="advertisingCost"
-                      onChange={setAdvertisingCost}
-                      placeholder="0,00"
-                        required
-                        value={advertisingCost}
-                      />
-                    </div>
-                  </div>
-                </SectionCard>
-
-                {errorMessage ? (
-                  <div className="rounded-[var(--radius-md)] border border-error/30 bg-error/10 px-3 py-2.5 text-sm text-error">
-                    {errorMessage}
-                  </div>
-                ) : null}
-                {isSyntheticParent ? (
-                  <div className="rounded-[var(--radius-md)] border border-border/40 bg-surface/60 px-3 py-2.5 text-sm text-muted-foreground">
-                    Pai lógico do anúncio. A composição consolidada aparece aqui, mas a edição continua nas variações.
-                  </div>
-                ) : null}
-
-                <div className="flex justify-end border-t border-border/30 pt-4">
-                  <Button disabled={isSyntheticParent || updateMutation.isPending} type="submit">
-                    Salvar
-                  </Button>
-                </div>
               </motion.div>
             )}
 
@@ -515,22 +386,10 @@ export function ProductDetailsModal({
                 className="space-y-4"
               >
                 <SectionCard
-                  title="Lucratividade Unitária"
+                  title="Lucratividade"
                   icon={<TrendingUp className="h-4 w-4 text-accent" />}
                 >
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <MetricCard
-                      label="Lucro Unitário"
-                      value={formatMoney(row.unitProfit)}
-                      icon={<DollarSign className="h-3 w-3" />}
-                      variant={
-                        row.unitProfit === null
-                          ? "default"
-                          : row.unitProfit < 0
-                            ? "negative"
-                            : "highlight"
-                      }
-                    />
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <MetricCard
                       label="ROI"
                       value={formatPercent(row.roiRatio)}
@@ -557,7 +416,7 @@ export function ProductDetailsModal({
                 </SectionCard>
               </motion.div>
             )}
-          </motion.form>
+          </motion.div>
         )}
       </AnimatePresence>
     </Modal>

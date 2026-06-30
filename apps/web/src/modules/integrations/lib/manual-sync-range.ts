@@ -10,6 +10,11 @@ export type ManualSyncRangeValidationResult = {
   isValid: boolean;
 };
 
+export type ManualSyncDateBounds = {
+  maxDate: string;
+  minDate: string;
+};
+
 function parseUtcDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) {
@@ -44,6 +49,32 @@ function addUtcMonths(value: Date, months: number) {
   return new Date(Date.UTC(targetYear, targetMonth, targetDay, 0, 0, 0, 0));
 }
 
+function formatUtcDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+export function getManualSyncDateBounds(
+  nowIso: string = new Date().toISOString(),
+): ManualSyncDateBounds {
+  const now = new Date(nowIso);
+  const todayStart = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0,
+      0,
+      0,
+      0,
+    ),
+  );
+
+  return {
+    maxDate: formatUtcDate(todayStart),
+    minDate: formatUtcDate(addUtcMonths(todayStart, -3)),
+  };
+}
+
 export function validateManualSyncRange(
   values: ManualSyncFormValues,
   nowIso: string = new Date().toISOString(),
@@ -59,7 +90,7 @@ export function validateManualSyncRange(
   const endDate = parseUtcDate(values.endDate);
   if (!startAt || !endDate) {
     return {
-      error: "Período inválido.",
+      error: "Periodo invalido.",
       isValid: false,
     };
   }
@@ -67,42 +98,28 @@ export function validateManualSyncRange(
   const endAt = endOfUtcDay(endDate);
   if (startAt.getTime() > endAt.getTime()) {
     return {
-      error: "Data inicial não pode ser maior que data final.",
+      error: "Data inicial nao pode ser maior que data final.",
       isValid: false,
     };
   }
 
-  const now = new Date(nowIso);
-  const todayStart = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      0,
-      0,
-      0,
-      0,
-    ),
-  );
-  const oldestAllowed = new Date(
-    todayStart.getTime() - 30 * 24 * 60 * 60 * 1000,
-  );
-  const latestAllowed = endOfUtcDay(todayStart);
+  const bounds = getManualSyncDateBounds(nowIso);
+  const minDate = parseUtcDate(bounds.minDate);
+  const maxDate = parseUtcDate(bounds.maxDate);
+
+  if (!minDate || !maxDate) {
+    return {
+      error: "Periodo invalido.",
+      isValid: false,
+    };
+  }
 
   if (
-    startAt.getTime() < oldestAllowed.getTime() ||
-    endAt.getTime() > latestAllowed.getTime()
+    startAt.getTime() < minDate.getTime() ||
+    endAt.getTime() > endOfUtcDay(maxDate).getTime()
   ) {
     return {
-      error: "Período manual deve ficar dentro dos últimos 30 dias.",
-      isValid: false,
-    };
-  }
-
-  const maxEndAt = endOfUtcDay(addUtcMonths(startAt, 1));
-  if (endAt.getTime() > maxEndAt.getTime()) {
-    return {
-      error: "Período manual não pode ultrapassar 1 mês.",
+      error: "Periodo manual deve ficar dentro dos ultimos 3 meses.",
       isValid: false,
     };
   }

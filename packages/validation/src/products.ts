@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createApiSuccessResponseSchema } from "./protected-app";
 
 const decimalPattern = /^\d+(?:\.\d{1,2})?$/;
 const optionalDateField = z
@@ -166,7 +167,58 @@ export const productAnalyticsQuerySchema = z.object({
   referenceMonth: optionalReferenceMonthField,
 });
 
+export const productPerformanceListQuerySchema = z.object({
+  marketplaces: z
+    .preprocess((value) => {
+      if (Array.isArray(value)) {
+        return value;
+      }
+
+      if (typeof value !== "string") {
+        return [];
+      }
+
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    }, z.array(z.enum(["mercadolivre", "shopee", "shein"])).default([]))
+    .optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+  referenceMonth: optionalReferenceMonthField,
+  search: optionalQueryString(255),
+  sortBy: z
+    .enum([
+      "channelLabel",
+      "parentName",
+      "variationName",
+      "sales",
+      "sellingPrice",
+      "contributionMarginRatio",
+      "totalProfit",
+    ])
+    .optional(),
+  sortDirection: z.enum(["asc", "desc"]).optional(),
+});
+
 export const productCatalogExportQuerySchema = z.object({
+  ids: z
+    .preprocess((value) => {
+      if (Array.isArray(value)) {
+        return value;
+      }
+
+      if (typeof value !== "string") {
+        return [];
+      }
+
+      return value
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+    }, z.array(z.string().trim().min(1)).default([]))
+    .optional(),
   marketplaces: z
     .preprocess((value) => {
       if (Array.isArray(value)) {
@@ -185,6 +237,70 @@ export const productCatalogExportQuerySchema = z.object({
     .optional(),
   search: optionalQueryString(255),
 });
+
+export const productBulkDeleteSchema = z.object({
+  ids: z.array(z.string().trim().min(1)).min(1),
+});
+
+export const productPerformanceListItemSchema: z.ZodType<any> = z.lazy(() =>
+  z.object({
+    actualRoas: z.number().nullable(),
+    adSpend: z.number(),
+    advertisingCost: z.number(),
+    catalogGroupKey: z.string().trim().min(1).nullable(),
+    catalogRole: z.enum(["parent", "child", "standalone"]),
+    channelLabel: z.string().trim().min(1),
+    children: z.array(productPerformanceListItemSchema),
+    commissionPct: z.number(),
+    contributionMarginRatio: z.number().nullable(),
+    coverImageUrl: z.string().trim().url().nullable(),
+    displayName: z.string().trim().min(1),
+    fixedFeeUnit: z.number().optional(),
+    id: z.string().trim().min(1),
+    isActive: z.boolean(),
+    isSyntheticParent: z.boolean(),
+    marketplaceCommissionUnit: z.number().optional(),
+    minimumRoas: z.number().nullable(),
+    name: z.string().trim().min(1),
+    netLiquidSales: z.number().int().min(0),
+    packagingCost: z.number(),
+    parentProductId: z.string().trim().min(1).nullable(),
+    performanceId: z.string().trim().min(1),
+    productId: z.string().trim().min(1).nullable(),
+    referenceMonth: z.string().trim().regex(/^\d{4}-\d{2}-01$/),
+    returns: z.number().int().min(0),
+    revenue: z.number(),
+    roiRatio: z.number().nullable(),
+    sales: z.number().int().min(0),
+    sellingPrice: z.number(),
+    shipping: z.number(),
+    shippingOrFixedFeeSource: z
+      .enum(["shipping", "fixed_fee", "none"])
+      .optional(),
+    shippingOrFixedFeeUnit: z.number().optional(),
+    shippingUnit: z.number().optional(),
+    sku: z.string().trim().min(1),
+    taxPct: z.number(),
+    totalCommission: z.number(),
+    totalPackagingCost: z.number(),
+    totalProductCost: z.number(),
+    totalProfit: z.number(),
+    unitCost: z.number(),
+    unitProfit: z.number().nullable(),
+    variationLabel: z.string().trim().min(1).nullable(),
+  }),
+);
+
+export const productPerformanceListResponseSchema = z.object({
+  items: z.array(productPerformanceListItemSchema),
+  page: z.coerce.number().int().min(1),
+  pageSize: z.coerce.number().int().min(1),
+  totalItems: z.coerce.number().int().min(0),
+  totalPages: z.coerce.number().int().min(1),
+});
+
+export const productPerformanceListApiResponseSchema =
+  createApiSuccessResponseSchema(productPerformanceListResponseSchema);
 
 export const productImportRowSchema = z.object({
   PRODUTO: z
@@ -254,6 +370,10 @@ export type ManualExpenseFormInput = z.infer<typeof manualExpenseFormSchema>;
 export type ManualExpenseUpdateInput = z.infer<typeof manualExpenseUpdateSchema>;
 export type SyncedProductLinkInput = z.infer<typeof syncedProductLinkSchema>;
 export type ProductAnalyticsQueryInput = z.infer<typeof productAnalyticsQuerySchema>;
+export type ProductPerformanceListQueryInput = z.infer<
+  typeof productPerformanceListQuerySchema
+>;
 export type ProductCatalogExportQueryInput = z.infer<
   typeof productCatalogExportQuerySchema
 >;
+export type ProductBulkDeleteInput = z.infer<typeof productBulkDeleteSchema>;
