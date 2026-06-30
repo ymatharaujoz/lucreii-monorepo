@@ -311,6 +311,66 @@ describe("ProductsHome catalog modal", () => {
     view.unmount();
   });
 
+  it("exports only selected real catalog rows and excludes synthetic parents", async () => {
+    apiClientMocks.download.mockResolvedValue(new Blob(["xlsx"]));
+
+    const view = renderProductsHome();
+
+    click(
+      document.querySelector('input[aria-label="Selecionar Kit Mercado Livre"]')!,
+    );
+
+    await act(async () => {
+      click(
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Exportar selecionados"),
+        )!,
+      );
+      await Promise.resolve();
+    });
+
+    expect(apiClientMocks.download).toHaveBeenCalledWith(
+      "/products/export?ids=product_1",
+    );
+
+    view.unmount();
+  });
+
+  it("deletes selected real catalog rows in bulk and clears selection after refresh", async () => {
+    apiClientMocks.delete.mockResolvedValue({
+      data: {
+        ids: ["product_1"],
+        totalDeleted: 1,
+      },
+      error: null,
+    });
+
+    const view = renderProductsHome();
+
+    click(
+      document.querySelector('input[aria-label="Selecionar Kit Mercado Livre"]')!,
+    );
+
+    await act(async () => {
+      click(
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Excluir selecionados"),
+        )!,
+      );
+      await Promise.resolve();
+    });
+
+    expect(apiClientMocks.delete).toHaveBeenCalledWith("/products/bulk-delete", {
+      body: {
+        ids: ["product_1"],
+      },
+    });
+    expect(refreshMock).toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain("1 selecionado");
+
+    view.unmount();
+  });
+
   it("opens modal, keeps non-finance fields read-only, saves finance inputs, and deletes product", async () => {
     apiClientMocks.patch.mockResolvedValue({
       data: { id: "product_1" },
@@ -526,6 +586,74 @@ describe("ProductsHome catalog modal", () => {
       ),
     ).toBe(false);
     expect(document.body.textContent).toContain("Pai lógico do anúncio");
+
+    view.unmount();
+  });
+
+  it("does not allow selecting synthetic parent catalog rows", async () => {
+    const useProductData = await import("../hooks/use-product-data");
+    vi.mocked(useProductData.useProductData).mockReturnValue({
+      data: {
+        products: [
+          {
+            catalogGroupKey: "meli:MLB999",
+            catalogRole: "parent",
+            companyId: "company_1",
+            coverImageUrl: null,
+            createdAt: "2026-06-17T10:00:00.000Z",
+            children: [],
+            derivedFromProvider: "mercadolivre",
+            financeDefaults: null,
+            id: "synthetic-parent:mercadolivre:MLB999",
+            images: [],
+            isActive: true,
+            isSyntheticParent: true,
+            latestCost: null,
+            name: "Tenis Run Pro",
+            organizationId: "org_1",
+            parentProductId: null,
+            sellingPrice: "199.90",
+            sku: "TENIS-RUN-PRO",
+            updatedAt: "2026-06-17T10:00:00.000Z",
+            variationLabel: null,
+          },
+        ],
+        scope: {
+          companyId: null,
+        },
+      },
+      error: null,
+      financialState: "no-costs",
+      goToPage: vi.fn(),
+      isLoading: false,
+      isUnauthorized: false,
+      pagination: { currentPage: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      referenceMonth: "2026-06-01",
+      referenceMonthSelectOptions: ["2026-06-01"],
+      refetch: refetchMock,
+      refresh: refreshMock,
+      rows: [],
+      setReferenceMonth: vi.fn(),
+      stats: {
+        activeProducts: 1,
+        archivedProducts: 0,
+        pendingSyncProducts: 0,
+        productsWithCost: 0,
+        productsWithoutCost: 1,
+        syncedProductsTotal: 0,
+        totalAdCosts: 0,
+        totalManualExpenses: 0,
+        totalProductCosts: 0,
+        totalProducts: 1,
+      },
+    } as never);
+
+    const view = renderProductsHome();
+    const checkbox = document.querySelector(
+      'input[aria-label="Selecionar Tenis Run Pro"]',
+    ) as HTMLInputElement;
+
+    expect(checkbox.disabled).toBe(true);
 
     view.unmount();
   });

@@ -17,6 +17,7 @@ import {
 } from "@/modules/integrations";
 import {
   buildManualSyncPayload,
+  getManualSyncDateBounds,
   validateManualSyncRange,
 } from "@/modules/integrations/lib/manual-sync-range";
 import type { IntegrationProviderSlug, RunSyncResponse } from "@lucreii/types";
@@ -181,6 +182,7 @@ export function IntegrationsHub({
   const isConnected = activeConnection?.status === "connected";
   const lastCompletedRun = syncStatusQuery.data?.lastCompletedRun;
   const manualSyncValidation = validateManualSyncRange(manualSyncDates);
+  const manualSyncBounds = getManualSyncDateBounds();
 
   return (
     <motion.div
@@ -294,6 +296,8 @@ export function IntegrationsHub({
             endDate={manualSyncDates.endDate}
             isLoading={syncStatusQuery.isLoading}
             isSyncing={syncMutation.isPending}
+            maxDate={manualSyncBounds.maxDate}
+            minDate={manualSyncBounds.minDate}
             onEndDateChange={(value) =>
               setManualSyncDates((current) => ({ ...current, endDate: value }))
             }

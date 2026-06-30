@@ -84,6 +84,12 @@ export type IntegrationSyncOrder = {
   fees: IntegrationSyncFee[];
 };
 
+export type IntegrationSyncNotification = {
+  notificationId: string | null;
+  resource: string | null;
+  topic: string | null;
+};
+
 export type IntegrationSyncContext = {
   organizationId: string;
 } & (
@@ -91,6 +97,7 @@ export type IntegrationSyncContext = {
       connection: MarketplaceConnection;
       cursor: IntegrationSyncCursor;
       mode?: "incremental";
+      notification?: IntegrationSyncNotification | null;
     }
   | {
       connection: MarketplaceConnection;

@@ -15,6 +15,8 @@ interface SyncControlCardProps {
   syncStatus?: SyncStatusResponse;
   startDate: string;
   endDate: string;
+  minDate: string;
+  maxDate: string;
   rangeError: string | null;
   isLoading: boolean;
   isSyncing: boolean;
@@ -27,6 +29,8 @@ export function SyncControlCard({
   syncStatus,
   startDate,
   endDate,
+  minDate,
+  maxDate,
   rangeError,
   isLoading,
   isSyncing,
@@ -81,6 +85,8 @@ export function SyncControlCard({
               <input
                 id="manual-sync-start"
                 type="date"
+                min={minDate}
+                max={maxDate}
                 value={startDate}
                 onChange={(event) => onStartDateChange(event.target.value)}
                 aria-invalid={hasRangeError}
@@ -101,6 +107,8 @@ export function SyncControlCard({
               <input
                 id="manual-sync-end"
                 type="date"
+                min={minDate}
+                max={maxDate}
                 value={endDate}
                 onChange={(event) => onEndDateChange(event.target.value)}
                 aria-invalid={hasRangeError}

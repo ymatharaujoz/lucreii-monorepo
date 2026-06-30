@@ -1,6 +1,5 @@
 ﻿"use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -15,7 +14,7 @@ import {
   Store,
   X,
 } from "lucide-react";
-import { Badge, Button, Card, EmptyState, cn } from "@lucreii/ui";
+import { Badge, Card, EmptyState, cn } from "@lucreii/ui";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { slideInUpVariants } from "@/lib/animations";
 import { ProductDetailsModal } from "./product-details-modal";
@@ -29,6 +28,18 @@ interface ProductTableProps {
   pagination: PaginationState;
   onPageChange: (page: number) => void;
   className?: string;
+  error?: boolean;
+  loading?: boolean;
+  searchFilter?: string;
+  selectedMarketplaces?: string[];
+  serverMode?: boolean;
+  sortConfig?: {
+    key: SortKey;
+    direction: SortDirection;
+  } | null;
+  onSearchFilterChange?: (value: string) => void;
+  onSelectedMarketplacesChange?: (value: string[]) => void;
+  onSortChange?: (value: { key: SortKey; direction: SortDirection } | null) => void;
 }
 
 type SortKey =
@@ -48,6 +59,7 @@ type DisplayRow = {
   sales: number;
   sellingPrice: number;
   contributionMarginRatio: number | null;
+  displayTitle: string;
   parentName: string;
   variationName: string | null;
   totalProfit: number | null;
@@ -228,6 +240,22 @@ function resolveProductLabels(
   return { parentName: rowDisplayName || rowName || "Produto", variationName: null };
 }
 
+function buildDisplayTitle(parentName: string, variationName: string | null) {
+  return variationName ? `${parentName} | ${variationName}` : parentName;
+}
+
+function getPerformanceRowKey(row: ProductTableRow) {
+  return (
+    row.performanceId ||
+    [
+      row.referenceMonth,
+      row.channelLabel,
+      row.productId || row.sku || row.id,
+      row.variationLabel || "",
+    ].join("::")
+  );
+}
+
 function buildDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
   return rows.flatMap((row) => {
     const sourceRows =
@@ -241,6 +269,7 @@ function buildDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
       return {
         channelLabel: sourceRow.channelLabel,
         contributionMarginRatio: sourceRow.contributionMarginRatio,
+        displayTitle: buildDisplayTitle(parentName, variationName),
         hasCostsConfigured: sourceRow.unitCost > 0 && sourceRow.packagingCost > 0,
         parentName,
         row: sourceRow,
@@ -259,17 +288,78 @@ export function ProductTable({
   pagination,
   onPageChange,
   className = "",
+  error = false,
+  loading = false,
+  searchFilter: controlledSearchFilter,
+  selectedMarketplaces: controlledSelectedMarketplaces,
+  serverMode = false,
+  sortConfig: controlledSortConfig,
+  onSearchFilterChange,
+  onSelectedMarketplacesChange,
+  onSortChange,
 }: ProductTableProps) {
-  const [sortConfig, setSortConfig] = useState<{
+  const [uncontrolledSortConfig, setUncontrolledSortConfig] = useState<{
     key: SortKey;
     direction: SortDirection;
   } | null>(null);
-  const [searchFilter, setSearchFilter] = useState("");
-  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
+  const [uncontrolledSearchFilter, setUncontrolledSearchFilter] = useState("");
+  const [uncontrolledSelectedMarketplaces, setUncontrolledSelectedMarketplaces] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ProductTableRow | null>(null);
 
-  const displayRows = useMemo(() => buildDisplayRows(rows), [rows]);
+  const sortConfig = controlledSortConfig ?? uncontrolledSortConfig;
+  const searchFilter = controlledSearchFilter ?? uncontrolledSearchFilter;
+  const selectedMarketplaces =
+    controlledSelectedMarketplaces ?? uncontrolledSelectedMarketplaces;
+
+  const displayRows = useMemo(() => {
+    if (!serverMode) {
+      return buildDisplayRows(rows);
+    }
+
+    return rows.map((row) => {
+      const { parentName, variationName } = resolveProductLabels(row);
+
+      return {
+        channelLabel: row.channelLabel,
+        contributionMarginRatio: row.contributionMarginRatio,
+        displayTitle: buildDisplayTitle(parentName, variationName),
+        hasCostsConfigured: row.unitCost > 0 && row.packagingCost > 0,
+        parentName,
+        row,
+        sales: row.sales,
+        sellingPrice: row.sellingPrice,
+        totalProfit: row.totalProfit,
+        variationName,
+      };
+    });
+  }, [rows, serverMode]);
+
+  const setSearchFilter = (value: string) => {
+    onSearchFilterChange?.(value);
+    if (controlledSearchFilter === undefined) {
+      setUncontrolledSearchFilter(value);
+    }
+  };
+
+  const setSelectedMarketplaces = (value: string[]) => {
+    onSelectedMarketplacesChange?.(value);
+    if (controlledSelectedMarketplaces === undefined) {
+      setUncontrolledSelectedMarketplaces(value);
+    }
+  };
+
+  const setSortConfig = (
+    value: {
+      key: SortKey;
+      direction: SortDirection;
+    } | null,
+  ) => {
+    onSortChange?.(value);
+    if (controlledSortConfig === undefined) {
+      setUncontrolledSortConfig(value);
+    }
+  };
 
   const handleSort = (key: SortKey) => {
     let direction: SortDirection = "asc";
@@ -284,6 +374,10 @@ export function ProductTable({
   };
 
   const filteredRows = useMemo(() => {
+    if (serverMode) {
+      return displayRows;
+    }
+
     let result = [...displayRows];
 
     if (searchFilter.trim()) {
@@ -312,21 +406,24 @@ export function ProductTable({
     return result;
   }, [displayRows, searchFilter, selectedMarketplaces, sortConfig]);
 
-  const filteredTotalPages = Math.max(1, Math.ceil(filteredRows.length / pagination.pageSize));
-  const safeCurrentPage = Math.min(pagination.currentPage, filteredTotalPages);
+  const filteredTotalPages = serverMode
+    ? pagination.totalPages
+    : Math.max(1, Math.ceil(filteredRows.length / pagination.pageSize));
+  const safeCurrentPage = serverMode
+    ? pagination.currentPage
+    : Math.min(pagination.currentPage, filteredTotalPages);
 
   const visibleRows = useMemo(() => {
+    if (serverMode) {
+      return filteredRows;
+    }
+
     const start = (safeCurrentPage - 1) * pagination.pageSize;
     const end = start + pagination.pageSize;
     return filteredRows.slice(start, end);
-  }, [filteredRows, pagination.pageSize, safeCurrentPage]);
+  }, [filteredRows, pagination.pageSize, safeCurrentPage, serverMode]);
 
   const hasActiveFilters = searchFilter.trim() || selectedMarketplaces.length > 0;
-
-  const productsMissingCostCount = useMemo(
-    () => displayRows.filter((item) => !item.hasCostsConfigured).length,
-    [displayRows],
-  );
 
   const clearAllFilters = () => {
     setSearchFilter("");
@@ -391,24 +488,6 @@ export function ProductTable({
           </button>
         </div>
 
-        {productsMissingCostCount > 0 ? (
-          <div className="mb-5 rounded-[var(--radius-lg)] border border-warning/30 bg-warning-soft/30 p-4 shrink-0">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  Você tem {productsMissingCostCount} produto{productsMissingCostCount === 1 ? "" : "s"} para atualizar custos
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Configure custo unitário e embalagem no catálogo para liberar análises mais confiáveis.
-                </p>
-              </div>
-              <Button asChild size="sm" variant="secondary">
-                <Link href="/app/products/catalog">Ir para catálogo</Link>
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
         {showFilters ? (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
@@ -454,13 +533,12 @@ export function ProductTable({
                     return (
                       <button
                         key={option.value}
-                        onClick={() =>
-                          setSelectedMarketplaces((previous) =>
-                            isSelected
-                              ? previous.filter((value) => value !== option.value)
-                              : [...previous, option.value],
-                          )
-                        }
+                        onClick={() => {
+                          const next = isSelected
+                            ? selectedMarketplaces.filter((value) => value !== option.value)
+                            : [...selectedMarketplaces, option.value];
+                          setSelectedMarketplaces(next);
+                        }}
                         className={`inline-flex items-center gap-1.5 rounded-[var(--radius-md)] px-3 py-1.5 text-xs font-medium transition-all duration-[var(--transition-fast)] ${
                           isSelected
                             ? "bg-accent text-accent-foreground shadow-sm"
@@ -557,9 +635,21 @@ export function ProductTable({
             </thead>
 
             <tbody>
-              {visibleRows.map(({ hasCostsConfigured, parentName, row, totalProfit, variationName }, index) => (
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                    Carregando produtos...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                    Nao foi possivel carregar os produtos.
+                  </td>
+                </tr>
+              ) : visibleRows.map(({ displayTitle, hasCostsConfigured, parentName, row, totalProfit }, index) => (
                 <MotionTableRow
-                  key={row.id}
+                  key={getPerformanceRowKey(row)}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.03 }}
@@ -586,7 +676,7 @@ export function ProductTable({
                             ? "border-success/30 bg-success/10"
                             : "border-warning/30 bg-warning/10",
                         )}
-                        data-testid={`cost-status-${row.id}`}
+                        data-testid={`cost-status-${getPerformanceRowKey(row)}`}
                         title={hasCostsConfigured ? "Precificado" : "Não precificado"}
                       >
                         <DollarSign
@@ -596,10 +686,7 @@ export function ProductTable({
                         />
                       </span>
                       <div className="flex flex-col gap-0.5">
-                        <span className="text-sm font-medium text-foreground">{parentName}</span>
-                        {variationName ? (
-                          <span className="text-xs text-muted-foreground">{variationName}</span>
-                        ) : null}
+                        <span className="text-sm font-medium text-foreground">{displayTitle}</span>
                       </div>
                     </div>
                   </td>
@@ -613,7 +700,7 @@ export function ProductTable({
                     <span className="text-sm text-foreground">{formatMoney(row.sellingPrice)}</span>
                   </td>
                   <td className="px-3 py-3 text-right">
-                    <span className="text-sm text-foreground">{formatPercent(row.contributionMarginRatio)}</span>
+                    <span className="text-sm text-foreground">{formatPercent(row.contributionMarginRatio, { digits: 2 })}</span>
                   </td>
                   <td className="px-3 py-3 text-right">
                     <span className="text-sm text-foreground">{formatMoney(totalProfit)}</span>
@@ -624,7 +711,7 @@ export function ProductTable({
           </table>
         </div>
 
-        {filteredRows.length === 0 ? (
+        {!loading && !error && filteredRows.length === 0 ? (
           <div className="shrink-0 rounded-[var(--radius-lg)] border border-dashed border-border/70 bg-background-soft/60 px-6 py-10 text-center">
             <p className="text-sm font-medium text-foreground">Nenhum produto encontrado</p>
             <p className="mt-1 text-xs text-muted-foreground">

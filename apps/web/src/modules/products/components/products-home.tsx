@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   RefreshCw,
   Plus,
@@ -25,6 +25,8 @@ import {
   Search,
   Store,
   X,
+  Trash2,
+  CheckCheck,
 } from "lucide-react";
 import {
   Card,
@@ -49,6 +51,7 @@ import {
   formatReferenceMonthPtBr,
   useProductData,
 } from "../hooks/use-product-data";
+import { useProductPerformancePage } from "../hooks/use-product-performance-data";
 import { buildMarketplaceSyncNotice } from "../calculations/product-insights";
 import { formatMoney } from "../utils/formatters";
 import type { ProductMarketplaceNotice } from "../types/products";
@@ -61,6 +64,15 @@ interface ProductsHomeProps {
   }) => void;
   onImportProducts?: () => void;
 }
+
+type PerformanceSortKey =
+  | "channelLabel"
+  | "parentName"
+  | "variationName"
+  | "sales"
+  | "sellingPrice"
+  | "contributionMarginRatio"
+  | "totalProfit";
 
 function LoadingState() {
   return (
@@ -880,26 +892,174 @@ function compareCatalogSortValues(
   return direction === "asc" ? an - bn : bn - an;
 }
 
-function CatalogProductsHierarchyTable({
-  onRefresh,
-  products,
+function CatalogSelectionActionBar({
+  allVisibleSelected,
+  isDeleting,
+  isExporting,
+  onClearSelection,
+  onDeleteSelected,
+  onExportSelected,
+  onSelectAllVisible,
+  selectedCount,
+  selectedTotalValue,
+  visibleCount,
 }: {
-  onRefresh: () => Promise<unknown> | unknown;
-  products: ReturnType<typeof useProductData>["products"];
-}) { 
-  const [expandedParentIds, setExpandedParentIds] = useState<string[]>([]); 
-  const [selectedProduct, setSelectedProduct] = 
-    useState<ProductListItem | null>(null); 
+  allVisibleSelected: boolean;
+  isDeleting: boolean;
+  isExporting: boolean;
+  onClearSelection: () => void;
+  onDeleteSelected: () => void;
+  onExportSelected: () => void;
+  onSelectAllVisible: () => void;
+  selectedCount: number;
+  selectedTotalValue: number;
+  visibleCount: number;
+}) {
+  return (
+    <AnimatePresence initial={false} mode="wait">
+      {selectedCount > 0 ? (
+        <motion.div
+          key="catalog-selection-bar"
+          initial={{ opacity: 0, y: -8, scale: 0.985 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -8, scale: 0.985 }}
+          transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          className="group relative mb-4 flex shrink-0 flex-col gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-accent/25 bg-gradient-to-r from-accent/[0.07] via-accent/[0.04] to-transparent p-3 pl-4 shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,var(--shadow-sm)] backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:pl-5 dark:from-accent/[0.12] dark:via-accent/[0.06] dark:shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,var(--shadow-sm)]"
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-accent via-accent-strong to-accent"
+          />
 
-  const [sortConfig, setSortConfig] = useState<{
-    key: CatalogSortKey;
-    direction: CatalogSortDirection;
-  } | null>(null);
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-accent/10 text-accent ring-1 ring-inset ring-accent/20">
+              <Sparkles className="h-4.5 w-4.5" strokeWidth={2.25} />
+              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent ring-2 ring-background">
+                <span className="absolute inset-0 animate-ping rounded-full bg-accent/60" />
+              </span>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline gap-1.5 text-sm text-foreground">
+                <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Seleção
+                </span>
+                <span className="text-muted-foreground/40">·</span>
+                <div className="flex items-baseline gap-1">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span
+                      key={selectedCount}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18, ease: "easeOut" }}
+                      className="font-mono text-base font-bold tabular-nums text-accent"
+                    >
+                      {selectedCount}
+                    </motion.span>
+                  </AnimatePresence>
+                  <span className="font-medium text-foreground">
+                    {selectedCount === 1 ? "selecionado" : "selecionados"}
+                  </span>
+                </div>
+              </div>
+              {selectedTotalValue > 0 ? null : (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Pronto para ação em massa
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:gap-2">
+            {visibleCount > 0 && !allVisibleSelected ? (
+              <Button
+                className="h-8 gap-1.5 rounded-[var(--radius-sm)] px-2.5 text-xs font-medium text-muted-foreground hover:bg-accent/10 hover:text-accent"
+                onClick={onSelectAllVisible}
+                size="sm"
+                variant="ghost"
+              >
+                <CheckCheck className="h-3.5 w-3.5" />
+                Selecionar página
+              </Button>
+            ) : null}
+
+            <Button
+              aria-label="Limpar seleção"
+              className="h-8 gap-1.5 rounded-[var(--radius-sm)] px-2.5 text-xs font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+              onClick={onClearSelection}
+              size="sm"
+              variant="ghost"
+            >
+              <X className="h-3.5 w-3.5" />
+              Limpar
+            </Button>
+
+            <div className="mx-1 hidden h-5 w-px bg-border/70 sm:block" />
+
+            <Button
+              className="h-8 gap-1.5 rounded-[var(--radius-sm)] bg-accent/95 px-3 text-xs font-semibold text-accent-foreground shadow-[0_1px_0_0_rgba(255,255,255,0.25)_inset,var(--shadow-xs)] hover:bg-accent hover:shadow-[var(--shadow-sm)]"
+              disabled={isExporting}
+              loading={isExporting}
+              onClick={onExportSelected}
+              size="sm"
+            >
+              {!isExporting ? <Download className="h-3.5 w-3.5" /> : null}
+              Exportar selecionados
+            </Button>
+
+            <Button
+              className="h-8 gap-1.5 rounded-[var(--radius-sm)] border border-error/30 bg-error/10 px-3 text-xs font-semibold text-error shadow-[var(--shadow-xs)] hover:border-error/50 hover:bg-error hover:text-white"
+              disabled={isDeleting}
+              loading={isDeleting}
+              onClick={onDeleteSelected}
+              size="sm"
+            >
+              {!isDeleting ? <Trash2 className="h-3.5 w-3.5" /> : null}
+              Excluir selecionados
+            </Button>
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+function CatalogProductsHierarchyTable({ 
+  onRefresh, 
+  products, 
+}: { 
+  onRefresh: () => Promise<unknown> | unknown; 
+  products: ReturnType<typeof useProductData>["products"]; 
+}) {  
+  const [expandedParentIds, setExpandedParentIds] = useState<string[]>([]);  
+  const [selectedProduct, setSelectedProduct] =  
+    useState<ProductListItem | null>(null);  
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+ 
+  const [sortConfig, setSortConfig] = useState<{ 
+    key: CatalogSortKey; 
+    direction: CatalogSortDirection; 
+  } | null>(null); 
   const [searchFilter, setSearchFilter] = useState("");
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isExporting, setIsExporting] = useState(false);
+  const [showFilters, setShowFilters] = useState(false); 
+  const [currentPage, setCurrentPage] = useState(1); 
+  const [isExporting, setIsExporting] = useState(false); 
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) =>
+      apiClient.delete<{
+        data: { ids: string[]; totalDeleted: number };
+        error: null;
+      }>("/products/bulk-delete", {
+        body: { ids },
+      }),
+    onSuccess: async () => {
+      setSelectedProductIds([]);
+      await onRefresh();
+    },
+  });
 
   const handleSort = (key: CatalogSortKey) => {
     let direction: CatalogSortDirection = "asc";
@@ -950,13 +1110,42 @@ function CatalogProductsHierarchyTable({
   );
   const safeCurrentPage = Math.min(currentPage, filteredTotalPages);
 
-  const visibleParents = useMemo(() => {
-    const start = (safeCurrentPage - 1) * CATALOG_PAGE_SIZE;
-    const end = start + CATALOG_PAGE_SIZE;
-    return filteredParents.slice(start, end);
-  }, [filteredParents, safeCurrentPage]);
+  const visibleParents = useMemo(() => { 
+    const start = (safeCurrentPage - 1) * CATALOG_PAGE_SIZE; 
+    const end = start + CATALOG_PAGE_SIZE; 
+    return filteredParents.slice(start, end); 
+  }, [filteredParents, safeCurrentPage]); 
 
-  const hasActiveFilters = searchFilter.trim() || selectedMarketplaces.length > 0;
+  const selectableVisibleRows = useMemo(
+    () =>
+      visibleParents.flatMap((product) => {
+        const ownRows = product.isSyntheticParent ? [] : [product.id];
+        const childRows = product.children
+          .filter((child) => !child.isSyntheticParent)
+          .map((child) => child.id);
+        return [...ownRows, ...childRows];
+      }),
+    [visibleParents],
+  );
+
+  const selectedVisibleCount = selectableVisibleRows.filter((id) =>
+    selectedProductIds.includes(id),
+  ).length;
+  const allVisibleSelected =
+    selectableVisibleRows.length > 0 &&
+    selectedVisibleCount === selectableVisibleRows.length;
+
+  const selectedTotalValue = useMemo(() => {
+    if (selectedProductIds.length === 0) return 0;
+    const selectedSet = new Set(selectedProductIds);
+    return products.reduce((sum, product) => {
+      if (!selectedSet.has(product.id)) return sum;
+      const price = Number(product.sellingPrice);
+      return sum + (Number.isFinite(price) ? price : 0);
+    }, 0);
+  }, [products, selectedProductIds]);
+
+  const hasActiveFilters = searchFilter.trim() || selectedMarketplaces.length > 0; 
 
   const clearAllFilters = () => {
     setSearchFilter("");
@@ -964,7 +1153,7 @@ function CatalogProductsHierarchyTable({
     setCurrentPage(1);
   };
 
-  const handleExport = async () => {
+  const handleExport = async () => { 
     try {
       setIsExporting(true);
       const params = new URLSearchParams();
@@ -988,9 +1177,62 @@ function CatalogProductsHierarchyTable({
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+    } finally { 
+      setIsExporting(false); 
+    } 
+  }; 
+
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProductIds((current) =>
+      current.includes(productId)
+        ? current.filter((id) => id !== productId)
+        : [...current, productId],
+    );
+  };
+
+  const toggleVisibleSelection = () => {
+    setSelectedProductIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter((id) => !selectableVisibleRows.includes(id));
+      }
+
+      return [...new Set([...current, ...selectableVisibleRows])];
+    });
+  };
+
+  const handleExportSelected = async () => {
+    if (selectedProductIds.length === 0) {
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      const params = new URLSearchParams();
+      params.set("ids", selectedProductIds.join(","));
+      const blob = await apiClient.download(`/products/export?${params.toString()}`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `catalogo-produtos-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedProductIds.length === 0) {
+      return;
+    }
+
+    if (!confirm("Excluir produtos selecionados?")) {
+      return;
+    }
+
+    await bulkDeleteMutation.mutateAsync(selectedProductIds);
   };
 
   const SortIcon = ({ column }: { column: CatalogSortKey }) => {
@@ -1019,7 +1261,7 @@ function CatalogProductsHierarchyTable({
   return (
     <>
       <Card padding="lg" className="min-w-0 flex flex-1 flex-col overflow-hidden min-h-0">
-        <div className="mb-4 flex items-center justify-between gap-3 shrink-0">
+        <div className="mb-4 flex items-center justify-between gap-3 shrink-0"> 
           <div>
             <h3 className="text-sm font-semibold text-foreground">
               Produtos do catálogo
@@ -1054,10 +1296,29 @@ function CatalogProductsHierarchyTable({
               <Filter className="h-3.5 w-3.5" />
               Filtros
             </button>
-          </div>
-        </div>
+          </div> 
+        </div> 
 
-        {showFilters ? (
+        {selectedProductIds.length > 0 ? (
+          <CatalogSelectionActionBar
+            allVisibleSelected={allVisibleSelected}
+            isDeleting={bulkDeleteMutation.isPending}
+            isExporting={isExporting}
+            onClearSelection={() => setSelectedProductIds([])}
+            onDeleteSelected={() => {
+              void handleDeleteSelected();
+            }}
+            onExportSelected={() => {
+              void handleExportSelected();
+            }}
+            onSelectAllVisible={() => toggleVisibleSelection()}
+            selectedCount={selectedProductIds.length}
+            selectedTotalValue={selectedTotalValue}
+            visibleCount={selectableVisibleRows.length}
+          />
+        ) : null}
+
+        {showFilters ? ( 
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1147,10 +1408,18 @@ function CatalogProductsHierarchyTable({
 
         <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full min-w-[1100px] border-separate border-spacing-0">
-            <thead>
-              <tr className="border-b border-border bg-surface-strong/95">
-                <th
-                  onClick={() => handleSort("channel")}
+            <thead> 
+              <tr className="border-b border-border bg-surface-strong/95"> 
+                <th className="sticky top-0 z-10 w-12 bg-surface-strong/95 px-3 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={() => toggleVisibleSelection()}
+                    aria-label="Selecionar produtos visiveis"
+                  />
+                </th>
+                <th 
+                  onClick={() => handleSort("channel")} 
                   className="sticky top-0 z-10 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
                 >
                   <div className="flex items-center gap-1">
@@ -1220,15 +1489,28 @@ function CatalogProductsHierarchyTable({
 
                 return (
                   <React.Fragment key={product.id}>
-                    <tr
-                      className="cursor-pointer border-b border-border/50 hover:bg-surface-strong/30"
-                      onClick={() => {
-                        setSelectedProduct(product);
-                      }}
-                    >
+                    <tr 
+                      className="cursor-pointer border-b border-border/50 hover:bg-surface-strong/30" 
+                      onClick={() => { 
+                        setSelectedProduct(product); 
+                      }} 
+                    > 
                       <td className="px-3 py-3 text-left">
-                        {getChannelBadge(product.derivedFromProvider)}
+                        <input
+                          type="checkbox"
+                          disabled={product.isSyntheticParent}
+                          checked={selectedProductIds.includes(product.id)}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            toggleProductSelection(product.id);
+                          }}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Selecionar ${product.name}`}
+                        />
                       </td>
+                      <td className="px-3 py-3 text-left"> 
+                        {getChannelBadge(product.derivedFromProvider)} 
+                      </td> 
                       <td className="px-3 py-3 text-sm font-medium text-foreground">
                         <div className="flex items-center gap-3">
                           <ProductImagePreview
@@ -1236,43 +1518,41 @@ function CatalogProductsHierarchyTable({
                             className="h-10 w-10 shrink-0 rounded-[var(--radius-md)]"
                             url={product.coverImageUrl}
                           />
-                          <span className="flex items-center gap-2">
-                            <span className="flex flex-col">
-                              <span className="inline-flex items-center gap-2">
-                                <span>{product.name}</span>
-                                {product.latestCost ? null : (
-                                  <span
-                                    aria-label="Produto sem custos cadastrados"
-                                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-warning/10 text-warning"
-                                    title="Produto sem custos cadastrados"
-                                  >
-                                    <AlertTriangle className="h-3.5 w-3.5" />
-                                  </span>
-                                )}
-                              </span>
-                              {product.catalogRole === "parent" && product.children.length > 0 ? (
-                                <button
-                                  aria-label={`${isExpanded ? "Recolher" : "Expandir"} variações`}
-                                  className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground transition-colors hover:text-foreground"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setExpandedParentIds((current) =>
-                                      current.includes(product.id)
-                                        ? current.filter((value) => value !== product.id)
-                                        : [...current, product.id],
-                                    );
-                                  }}
-                                  type="button"
-                                >
-                                  <span>
-                                    {product.children.length} {product.children.length === 1 ? "variação" : "variações"}
-                                  </span>
-                                  <ChevronDown
-                                    className={`h-3.5 w-3.5 transition-transform duration-[var(--transition-fast)] ${isExpanded ? "rotate-180" : ""}`}
-                                  />
-                                </button>
-                              ) : null}
+                          {product.latestCost ? null : (
+                            <span
+                              aria-label="Produto sem custos cadastrados"
+                              className="inline-flex h-5 w-5 shrink-0 items-center justify-center self-center rounded-full bg-warning/10 text-warning"
+                              title="Produto sem custos cadastrados"
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" />
                             </span>
+                          )}
+                          <span className="flex flex-col">
+                            <span className="inline-flex items-center gap-2">
+                              <span>{product.name}</span>
+                            </span>
+                            {product.catalogRole === "parent" && product.children.length > 0 ? (
+                              <button
+                                aria-label={`${isExpanded ? "Recolher" : "Expandir"} variações`}
+                                className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground transition-colors hover:text-foreground"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setExpandedParentIds((current) =>
+                                    current.includes(product.id)
+                                      ? current.filter((value) => value !== product.id)
+                                      : [...current, product.id],
+                                  );
+                                }}
+                                type="button"
+                              >
+                                <span>
+                                  {product.children.length} {product.children.length === 1 ? "variação" : "variações"}
+                                </span>
+                                <ChevronDown
+                                  className={`h-3.5 w-3.5 transition-transform duration-[var(--transition-fast)] ${isExpanded ? "rotate-180" : ""}`}
+                                />
+                              </button>
+                            ) : null}
                           </span>
                         </div>
                       </td>
@@ -1309,17 +1589,29 @@ function CatalogProductsHierarchyTable({
                       ? product.children.map((child, childIndex) => {
                           const isLastChild = childIndex === product.children.length - 1;
                           return (
-                            <tr
-                              key={child.id}
-                              data-testid="child-product-row"
-                              className="cursor-pointer border-b border-border/30 hover:bg-surface-strong/20"
-                              onClick={() => {
-                                setSelectedProduct(child);
-                              }}
-                            >
+                            <tr 
+                              key={child.id} 
+                              data-testid="child-product-row" 
+                              className="cursor-pointer border-b border-border/30 hover:bg-surface-strong/20" 
+                              onClick={() => { 
+                                setSelectedProduct(child); 
+                              }} 
+                            > 
                               <td className="px-3 py-3 text-left">
-                                {getChannelBadge(child.derivedFromProvider)}
+                                <input
+                                  type="checkbox"
+                                  checked={selectedProductIds.includes(child.id)}
+                                  onChange={(event) => {
+                                    event.stopPropagation();
+                                    toggleProductSelection(child.id);
+                                  }}
+                                  onClick={(event) => event.stopPropagation()}
+                                  aria-label={`Selecionar ${child.name}`}
+                                />
                               </td>
+                              <td className="px-3 py-3 text-left"> 
+                                {getChannelBadge(child.derivedFromProvider)} 
+                              </td> 
                               <td className="px-3 py-3 text-sm font-medium text-foreground">
                                 <div className="flex items-center gap-3">
                                   {/* Tree connector — GitHub worktree style */}
@@ -1340,18 +1632,18 @@ function CatalogProductsHierarchyTable({
                                     className="h-10 w-10 shrink-0 rounded-[var(--radius-md)]"
                                     url={child.coverImageUrl}
                                   />
+                                  {child.latestCost ? null : (
+                                    <span
+                                      aria-label="Produto sem custos cadastrados"
+                                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center self-center rounded-full bg-warning/10 text-warning"
+                                      title="Produto sem custos cadastrados"
+                                    >
+                                      <AlertTriangle className="h-3.5 w-3.5" />
+                                    </span>
+                                  )}
                                   <span className="flex flex-col">
                                     <span className="inline-flex items-center gap-2">
                                       <span>{child.name}</span>
-                                      {child.latestCost ? null : (
-                                        <span
-                                          aria-label="Produto sem custos cadastrados"
-                                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-warning/10 text-warning"
-                                          title="Produto sem custos cadastrados"
-                                        >
-                                          <AlertTriangle className="h-3.5 w-3.5" />
-                                        </span>
-                                      )}
                                     </span>
                                     {child.variationLabel ? (
                                       <span className="text-xs font-normal text-muted-foreground">
@@ -1435,13 +1727,18 @@ export function ProductsHome({
   onAddProduct,
   onImportProducts,
 }: ProductsHomeProps) {
+  const [performancePage, setPerformancePage] = useState(1);
+  const [performanceSearch, setPerformanceSearch] = useState("");
+  const [performanceMarketplaces, setPerformanceMarketplaces] = useState<string[]>([]);
+  const [performanceSort, setPerformanceSort] = useState<{
+    key: PerformanceSortKey;
+    direction: "asc" | "desc" | null;
+  } | null>(null);
   const {
     data,
     referenceMonth,
     referenceMonthSelectOptions,
     stats,
-    rows,
-    pagination,
     financialState,
     isLoading,
     error,
@@ -1449,14 +1746,32 @@ export function ProductsHome({
     setReferenceMonth,
     refresh,
     refetch,
-    goToPage,
   } = useProductData();
+  const performanceQuery = useProductPerformancePage(
+    {
+      marketplaces:
+        performanceMarketplaces.length > 0
+          ? (performanceMarketplaces as Array<"mercadolivre" | "shopee" | "shein">)
+          : undefined,
+      page: performancePage,
+      pageSize: 10,
+      referenceMonth,
+      search: performanceSearch || undefined,
+      sortBy: performanceSort?.direction ? performanceSort.key : undefined,
+      sortDirection: performanceSort?.direction ?? undefined,
+    },
+    view === "performance",
+  );
   const marketplaceNotice = data ? buildMarketplaceSyncNotice(data) : null;
   const handleAddProduct = () =>
     onAddProduct?.({
       companyId: data?.scope.companyId ?? null,
       referenceMonth,
     });
+
+  useEffect(() => {
+    setPerformancePage(1);
+  }, [referenceMonth]);
 
   if (isLoading) {
     return <LoadingState />;
@@ -1552,9 +1867,41 @@ export function ProductsHome({
           />
         ) : (
           <ProductTable
-            rows={rows}
-            pagination={pagination}
-            onPageChange={goToPage}
+            error={Boolean(performanceQuery.error)}
+            loading={performanceQuery.isLoading}
+            onPageChange={setPerformancePage}
+            onSearchFilterChange={(value) => {
+              setPerformanceSearch(value);
+              setPerformancePage(1);
+            }}
+            onSelectedMarketplacesChange={(value) => {
+              setPerformanceMarketplaces(value);
+              setPerformancePage(1);
+            }}
+            onSortChange={(value) => {
+              setPerformanceSort(value);
+              setPerformancePage(1);
+            }}
+            pagination={
+              performanceQuery.data
+                ? {
+                    currentPage: performanceQuery.data.page,
+                    pageSize: performanceQuery.data.pageSize,
+                    totalItems: performanceQuery.data.totalItems,
+                    totalPages: performanceQuery.data.totalPages,
+                  }
+                : {
+                    currentPage: performancePage,
+                    pageSize: 10,
+                    totalItems: 0,
+                    totalPages: 1,
+                  }
+            }
+            rows={performanceQuery.data?.items ?? []}
+            searchFilter={performanceSearch}
+            selectedMarketplaces={performanceMarketplaces}
+            serverMode
+            sortConfig={performanceSort}
           />
         )}
       </section>

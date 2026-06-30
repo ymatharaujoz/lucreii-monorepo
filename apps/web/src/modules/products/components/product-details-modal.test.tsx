@@ -7,8 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ProductDetailsModal } from "./product-details-modal";
 import type { ProductTableRow } from "../types/products";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 function buildRow(overrides: Partial<ProductTableRow> = {}): ProductTableRow {
   return {
@@ -80,7 +81,9 @@ function renderWithClient(node: React.ReactNode) {
     },
   });
 
-  return mount(<QueryClientProvider client={queryClient}>{node}</QueryClientProvider>);
+  return mount(
+    <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>,
+  );
 }
 
 function click(element: Element) {
@@ -98,295 +101,33 @@ afterEach(() => {
 });
 
 describe("ProductDetailsModal", () => {
-  it("shows unit marketplace commission and shipping composition values", () => {
-    const row = {
-      ...buildRow({ taxPct: 13 }),
-      marketplaceCommissionUnit: 3.51,
-      shippingOrFixedFeeSource: "shipping" as const,
-      shippingOrFixedFeeUnit: 9,
-    };
+  it("does not render the Faturamento tab", () => {
     const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
+      <ProductDetailsModal onClose={() => {}} open row={buildRow()} />,
     );
 
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Composição")!);
-
-    const text = normalizedTextContent();
-
-    expect(text).toContain("Comissão");
-    expect(text).not.toContain("Comissão MELI");
-    expect(text).toContain("R$ 3,51");
-    expect(text).not.toContain("R$ 31,62");
-    expect(text).toContain("Frete/Custo Fixo");
-    expect(text).toContain("R$ 9,00");
-    expect(text).toContain("Imposto");
-    expect(text).toContain("R$ 3,89 (13%)");
+    expect(
+      Array.from(document.querySelectorAll("button")).some(
+        (button) => button.textContent?.trim() === "Faturamento",
+      ),
+    ).toBe(false);
 
     view.unmount();
   });
 
-  it("falls back to fixed fee when shipping is unavailable", () => {
-    const row = {
-      ...buildRow({
-        netLiquidSales: 1,
-        sales: 1,
-        totalCommission: 3.89,
-      }),
-      marketplaceCommissionUnit: 3.89,
-      shippingOrFixedFeeSource: "fixed_fee" as const,
-      shippingOrFixedFeeUnit: 6.65,
-    };
+  it("labels sales summary as vendas", () => {
     const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
-    );
-
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Composição")!);
-
-    const text = normalizedTextContent();
-
-    expect(text).toContain("R$ 3,89");
-    expect(text).toContain("R$ 6,65");
-
-    view.unmount();
-  });
-
-  it("still renders the unit commission for a single-unit row", () => {
-    const row = {
-      ...buildRow({
-        netLiquidSales: 1,
-        sales: 1,
-        totalCommission: 11.67,
-      }),
-      marketplaceCommissionUnit: 11.67,
-      shippingOrFixedFeeSource: "none" as const,
-      shippingOrFixedFeeUnit: 0,
-    };
-    const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
-    );
-
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Composição")!);
-
-    expect(normalizedTextContent()).toContain("R$ 11,67");
-
-    view.unmount();
-  });
-
-  it("derives net revenue as FATURAMENTO - COMISSÃO MELI (composition value) for a parent row with variations", () => {
-    const child = {
-      ...buildRow({
-        id: "child-1",
-        netLiquidSales: 1,
-        sales: 1,
-        sku: "CHILD-1",
-        totalCommission: 10.54,
-      }),
-      marketplaceCommissionUnit: 10.54,
-      shippingOrFixedFeeSource: "none" as const,
-      shippingOrFixedFeeUnit: 0,
-    };
-    const row = {
-      ...buildRow({
-        catalogRole: "parent",
-        children: [child],
-        id: "parent-1",
-        netLiquidSales: 4,
-        revenue: 119.6,
-        sales: 4,
-        sku: "PARENT-1",
-        totalCommission: 100,
-      }),
-      marketplaceCommissionUnit: 10.54,
-      shippingOrFixedFeeSource: "none" as const,
-      shippingOrFixedFeeUnit: 0,
-    };
-    const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
-    );
-
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Composição")!);
-
-    const text = normalizedTextContent();
-
-    expect(text).toContain("R$ 10,54");
-
-    view.unmount();
-
-    const view2 = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
-    );
-
-    const overviewText = normalizedTextContent();
-
-    expect(overviewText).toContain("R$ 109,06");
-
-    view2.unmount();
-  });
-
-  it("calculates net revenue using commission total when commission exceeds revenue on multiplication", () => {
-    const row = buildRow({ totalCommission: 31.62 });
-    const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
+      <ProductDetailsModal onClose={() => {}} open row={buildRow({ sales: 1 })} />,
     );
 
     const text = normalizedTextContent();
 
-    expect(text).toContain("Receita Líquida");
-    expect(text).toContain("R$ 58,08");
+    expect(text).toContain("Vendas");
 
     view.unmount();
   });
 
-  it("calculates net revenue as FATURAMENTO - COMISSÃO MELI regardless of unit/total ambiguity", () => {
-    const row = {
-      ...buildRow({ totalCommission: 10.54 }),
-      marketplaceCommissionUnit: 10.54,
-      shippingOrFixedFeeSource: "none" as const,
-      shippingOrFixedFeeUnit: 0,
-    };
-    const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
-    );
-
-    const text = normalizedTextContent();
-
-    expect(text).toContain("Receita Líquida");
-    expect(text).toContain("R$ 79,16");
-
-    view.unmount();
-  });
-
-  it.skip("disables advertising save for a synthetic parent row", () => {
-    const row = {
-      ...buildRow({
-        catalogRole: "parent",
-        children: [
-          buildRow({
-            catalogRole: "child",
-            id: "child-1",
-            parentProductId: "synthetic-parent:mercadolivre:MLB123",
-            productId: "product_child_1",
-            sku: "SKU-CHILD-1",
-          }),
-        ],
-        id: "synthetic-parent:mercadolivre:MLB123",
-        productId: null,
-      }),
-      isSyntheticParent: true,
-    } as ProductTableRow;
-    const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
-    );
-
-    click(
-      Array.from(document.querySelectorAll("button")).find(
-        (button) => button.textContent?.trim() === "ComposiÃ§Ã£o",
-      )!,
-    );
-
-    const input = document.querySelector(
-      'input[name="advertisingCost"]',
-    ) as HTMLInputElement;
-    const saveButton = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("Salvar"),
-    ) as HTMLButtonElement;
-
-    expect(input.disabled).toBe(true);
-    expect(saveButton.disabled).toBe(true);
-    expect(normalizedTextContent()).toContain("Pai lÃ³gico do anÃºncio");
-
-    view.unmount();
-  });
-
-  it("disables composition editing for a synthetic parent row", () => {
-    const row = {
-      ...buildRow({
-        catalogRole: "parent",
-        children: [
-          buildRow({
-            catalogRole: "child",
-            id: "child-1",
-            parentProductId: "synthetic-parent:mercadolivre:MLB123",
-            productId: "product_child_1",
-            sku: "SKU-CHILD-1",
-          }),
-        ],
-        id: "synthetic-parent:mercadolivre:MLB123",
-        productId: null,
-      }),
-      isSyntheticParent: true,
-    } as ProductTableRow;
-    const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
-    );
-
-    const compositionTab = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent?.toLowerCase().includes("compos"),
-    );
-    click(compositionTab!);
-
-    const input = document.querySelector(
-      'input[name="advertisingCost"]',
-    ) as HTMLInputElement;
-    const saveButton = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("Salvar"),
-    ) as HTMLButtonElement;
-
-    expect(input.disabled).toBe(true);
-    expect(saveButton.disabled).toBe(true);
-
-    view.unmount();
-  });
-
-  it("calculates net revenue subtracting commission and fixed fee totals for multi-sale rows", () => {
-    const row = {
-      ...buildRow({
-        netLiquidSales: 3,
-        revenue: 89.7,
-        sales: 3,
-        totalCommission: 11.67,
-      }),
-      marketplaceCommissionUnit: 3.89,
-      shippingOrFixedFeeSource: "fixed_fee" as const,
-      shippingOrFixedFeeUnit: 6.65,
-    };
-    const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
-    );
-
-    const text = normalizedTextContent();
-
-    expect(text).toContain("Receita Líquida");
-    expect(text).toContain("R$ 58,08");
-
-    view.unmount();
-  });
-
-  it("renders resolved unit cost and packaging for a variation row", () => {
-    const row = buildRow({
-      catalogRole: "child",
-      packagingCost: 2.75,
-      parentProductId: "parent-1",
-      unitCost: 21.5,
-      variationLabel: "Cor: Azul",
-    });
-    const view = renderWithClient(
-      <ProductDetailsModal onClose={() => {}} open row={row} />,
-    );
-
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Composição")!);
-
-    const text = normalizedTextContent();
-
-    expect(text).toContain("Custo Unitário");
-    expect(text).toContain("Embalagem");
-    expect(text).toContain("R$ 21,50");
-    expect(text).toContain("R$ 2,75");
-
-    view.unmount();
-  });
-
-  it("renders profitability tab with unit profit, ROI, and minimum ROAS", () => {
+  it("renders profitability tab with ROI and minimum ROAS", () => {
     const row = buildRow({
       minimumRoas: 4.77,
       roiRatio: 0.41,
@@ -396,24 +137,22 @@ describe("ProductDetailsModal", () => {
       <ProductDetailsModal onClose={() => {}} open row={row} />,
     );
 
-    const profitabilityTab = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Lucratividade",
-    );
+    const profitabilityTab = Array.from(
+      document.querySelectorAll("button"),
+    ).find((button) => button.textContent?.trim() === "Lucratividade");
 
     expect(profitabilityTab).toBeDefined();
     click(profitabilityTab!);
 
     const text = normalizedTextContent();
 
-    expect(text).toContain("Lucratividade Unitária");
-    expect(text).toContain("Lucro Unitário");
+    expect(text).toContain("Lucratividade");
+    expect(text).not.toContain("Lucro Unitário");
     expect(text).toContain("ROI");
     expect(text).toContain("ROAS Mínimo");
-    expect(text).toContain("R$ 6,76");
     expect(text).toContain("0.4%");
     expect(text).toContain("21.0%");
     expect(text).not.toContain("4,77x");
-    expect(text).not.toContain("Lucro por unidade vendida");
 
     view.unmount();
   });
@@ -428,15 +167,14 @@ describe("ProductDetailsModal", () => {
       <ProductDetailsModal onClose={() => {}} open row={row} />,
     );
 
-    const profitabilityTab = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Lucratividade",
-    );
+    const profitabilityTab = Array.from(
+      document.querySelectorAll("button"),
+    ).find((button) => button.textContent?.trim() === "Lucratividade");
 
     click(profitabilityTab!);
 
     const text = normalizedTextContent();
 
-    expect(text).toContain("Lucro Unitário");
     expect(text).toContain("ROI");
     expect(text).toContain("ROAS Mínimo");
     expect(text).toContain("—");

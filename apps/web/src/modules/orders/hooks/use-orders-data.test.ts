@@ -48,15 +48,48 @@ describe("orders protected fetchers", () => {
     });
 
     await fetchOrders({
+      includeSummary: false,
       page: 1,
       pageSize: 20,
       provider: "mercadolivre",
       search: "MLB-1001",
+      sortBy: "orderedAt",
+      sortDirection: "desc",
       status: "paid",
     });
 
     expect(apiClientMock.getValidatedData).toHaveBeenCalledWith(
-      "/orders?page=1&pageSize=20&search=MLB-1001&provider=mercadolivre&status=paid",
+      "/orders?page=1&pageSize=20&search=MLB-1001&provider=mercadolivre&status=paid&sortBy=orderedAt&sortDirection=desc&includeSummary=false",
+      expect.any(Object),
+    );
+  });
+
+  it("sends ordered date range filters to orders list endpoint", async () => {
+    apiClientMock.getValidatedData.mockResolvedValue({
+      summary: {
+        averageMargin: "0.00",
+        grossProfit: "0.00",
+        grossRevenue: "0.00",
+        ordersCount: 0,
+        unitsSold: 0,
+      },
+      availableStatuses: [],
+      items: [],
+      page: 1,
+      pageSize: 20,
+      totalItems: 0,
+      totalPages: 1,
+    });
+
+    await fetchOrders({
+      orderedFrom: "2026-06-01",
+      orderedTo: "2026-06-30",
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(apiClientMock.getValidatedData).toHaveBeenCalledWith(
+      "/orders?page=1&pageSize=20&orderedFrom=2026-06-01&orderedTo=2026-06-30",
       expect.any(Object),
     );
   });
@@ -71,6 +104,7 @@ describe("orders protected fetchers", () => {
         netRevenueAmount: "0.00",
         packagingCostAmount: "0.00",
         productCostAmount: "0.00",
+        refundBonusAmount: "0.00",
         revenueAmount: "0.00",
         shippingOrFixedFeeAmount: "0.00",
       },
@@ -163,10 +197,13 @@ describe("orders protected fetchers", () => {
     });
 
     useOrdersList({
+      includeSummary: false,
       page: 2,
       pageSize: 20,
       provider: "shopee",
       search: "SHP-1001",
+      sortBy: "totalWithFees",
+      sortDirection: "asc",
       status: "paid",
     });
 
@@ -180,6 +217,52 @@ describe("orders protected fetchers", () => {
           "SHP-1001",
           "shopee",
           "paid",
+          "totalWithFees",
+          "asc",
+          false,
+          "",
+          "",
+        ],
+      }),
+    );
+
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+    });
+  });
+
+  it("keys order list queries by selected company and ordered date range", () => {
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: {
+        cookie: "lucreii_selected_company_id=company_123",
+      },
+    });
+
+    useOrdersList({
+      orderedFrom: "2026-06-01",
+      orderedTo: "2026-06-30",
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(useQueryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: [
+          "orders",
+          "company_123",
+          1,
+          20,
+          "",
+          "",
+          "",
+          "",
+          "",
+          true,
+          "2026-06-01",
+          "2026-06-30",
         ],
       }),
     );

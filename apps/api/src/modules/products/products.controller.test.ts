@@ -592,6 +592,58 @@ describe("products controller", () => {
     expect(response.body).toBe("xlsx");
   });
 
+  it("exports selected catalog rows when ids are provided", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: {
+        id: "org_123",
+        name: "Org",
+        role: "owner",
+        slug: "org",
+      },
+      selectedCompanyId: "company_123",
+      session: {
+        expiresAt: new Date("2026-04-22T00:00:00.000Z"),
+        id: "session_123",
+      },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(
+      entitlementsService,
+      "requireActiveEntitlement",
+    ).mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(productsService, "exportProductsSpreadsheet").mockResolvedValueOnce(
+      Buffer.from("xlsx"),
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/products/export?ids=product_1,product_2",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(productsService.exportProductsSpreadsheet).toHaveBeenCalledWith(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        ids: ["product_1", "product_2"],
+      },
+    );
+  });
+
   it("deletes a product from catalog", async () => {
     vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
       organization: {
@@ -638,6 +690,90 @@ describe("products controller", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       data: { id: "product_1" },
+      error: null,
+    });
+  });
+
+  it("deletes selected products in bulk", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: {
+        id: "org_123",
+        name: "Org",
+        role: "owner",
+        slug: "org",
+      },
+      selectedCompanyId: "company_123",
+      session: {
+        expiresAt: new Date("2026-04-22T00:00:00.000Z"),
+        id: "session_123",
+      },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(
+      entitlementsService,
+      "requireActiveEntitlement",
+    ).mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(
+      productsService as ProductsService & {
+        deleteProductsBulk: (
+          context: {
+            organizationId: string;
+            selectedCompanyId?: string | null;
+            userId: string;
+          },
+          ids: string[],
+        ) => Promise<{ ids: string[]; totalDeleted: number }>;
+      },
+      "deleteProductsBulk",
+    ).mockResolvedValueOnce({
+      ids: ["product_1", "product_2"],
+      totalDeleted: 2,
+    });
+
+    const response = await app.inject({
+      method: "DELETE",
+      payload: {
+        ids: ["product_1", "product_2"],
+      },
+      url: "/products/bulk-delete",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      (productsService as ProductsService & {
+        deleteProductsBulk: (
+          context: {
+            organizationId: string;
+            selectedCompanyId?: string | null;
+            userId: string;
+          },
+          ids: string[],
+        ) => Promise<{ ids: string[]; totalDeleted: number }>;
+      }).deleteProductsBulk,
+    ).toHaveBeenCalledWith(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      ["product_1", "product_2"],
+    );
+    expect(response.json()).toEqual({
+      data: {
+        ids: ["product_1", "product_2"],
+        totalDeleted: 2,
+      },
       error: null,
     });
   });
@@ -930,6 +1066,101 @@ describe("products controller", () => {
           }),
         ],
       }),
+      error: null,
+    });
+  });
+
+  it("returns paginated protected performance rows for authenticated requests", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: {
+        id: "org_123",
+        name: "Org",
+        role: "owner",
+        slug: "org",
+      },
+      selectedCompanyId: "company_123",
+      session: {
+        expiresAt: new Date("2026-04-22T00:00:00.000Z"),
+        id: "session_123",
+      },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(
+      entitlementsService,
+      "requireActiveEntitlement",
+    ).mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(
+      productsService as ProductsService & {
+        listPerformanceRows: (
+          context: {
+            organizationId: string;
+            selectedCompanyId?: string | null;
+            userId: string;
+          },
+          query: Record<string, unknown>,
+        ) => Promise<unknown>;
+      },
+      "listPerformanceRows",
+    ).mockResolvedValueOnce({
+      items: [],
+      page: 2,
+      pageSize: 10,
+      totalItems: 0,
+      totalPages: 1,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/products/performance?referenceMonth=2026-06-01&page=2&pageSize=10&search=kit&marketplaces=mercadolivre,shopee&sortBy=totalProfit&sortDirection=desc",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      (productsService as ProductsService & {
+        listPerformanceRows: (
+          context: {
+            organizationId: string;
+            selectedCompanyId?: string | null;
+            userId: string;
+          },
+          query: Record<string, unknown>,
+        ) => Promise<unknown>;
+      }).listPerformanceRows,
+    ).toHaveBeenCalledWith(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        marketplaces: ["mercadolivre", "shopee"],
+        page: 2,
+        pageSize: 10,
+        referenceMonth: "2026-06-01",
+        search: "kit",
+        sortBy: "totalProfit",
+        sortDirection: "desc",
+      },
+    );
+    expect(response.json()).toEqual({
+      data: {
+        items: [],
+        page: 2,
+        pageSize: 10,
+        totalItems: 0,
+        totalPages: 1,
+      },
       error: null,
     });
   });

@@ -32,8 +32,14 @@ export type ProductManualCreateFormValues = {
 };
 
 export type ProductCatalogExportFilters = {
+  ids?: string[];
   marketplaces?: Array<"mercadolivre" | "shopee" | "shein">;
   search?: string;
+};
+
+export type ProductBulkDeleteResult = {
+  ids: string[];
+  totalDeleted: number;
 };
 
 export type ProductSpreadsheetImportResult = {
@@ -263,6 +269,25 @@ export type ProductAnalyticsScope = {
   taxRateDefault: DecimalString;
 };
 
+export type ProductPerformanceListSortKey =
+  | "channelLabel"
+  | "parentName"
+  | "variationName"
+  | "sales"
+  | "sellingPrice"
+  | "contributionMarginRatio"
+  | "totalProfit";
+
+export type ProductPerformanceListQuery = {
+  referenceMonth?: string;
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  marketplaces?: Array<"mercadolivre" | "shopee" | "shein">;
+  sortBy?: ProductPerformanceListSortKey;
+  sortDirection?: "asc" | "desc";
+};
+
 export type ProductMonthlyPerformanceDisplayRow = {
   id: string;
   productId: string | null;
@@ -293,6 +318,59 @@ export type ProductPerformanceRow = ProductMonthlyPerformanceDisplayRow & {
   isSyntheticParent: boolean;
   parentProductId: string | null;
   variationLabel: string | null;
+};
+
+export type ProductPerformanceListItem = {
+  id: string;
+  productId: string | null;
+  performanceId: string;
+  catalogGroupKey: string | null;
+  catalogRole: ProductCatalogRole;
+  children: ProductPerformanceListItem[];
+  isSyntheticParent: boolean;
+  name: string;
+  displayName: string;
+  parentProductId: string | null;
+  variationLabel: string | null;
+  sku: string;
+  isActive: boolean;
+  coverImageUrl: string | null;
+  channelLabel: string;
+  sales: number; // Quantidade bruta de unidades vendidas no periodo
+  returns: number;
+  netLiquidSales: number; // Quantidade liquida de unidades no periodo
+  unitCost: number;
+  sellingPrice: number;
+  commissionPct: number;
+  shipping: number;
+  marketplaceCommissionUnit?: number;
+  fixedFeeUnit?: number;
+  shippingUnit?: number;
+  shippingOrFixedFeeUnit?: number;
+  shippingOrFixedFeeSource?: "shipping" | "fixed_fee" | "none";
+  taxPct: number;
+  packagingCost: number;
+  totalPackagingCost: number;
+  adSpend: number;
+  advertisingCost: number;
+  revenue: number;
+  totalCommission: number;
+  totalProfit: number;
+  totalProductCost: number;
+  unitProfit: number | null;
+  contributionMarginRatio: number | null;
+  roiRatio: number | null;
+  minimumRoas: number | null;
+  actualRoas: number | null;
+  referenceMonth: string;
+};
+
+export type ProductPerformanceListResponse = {
+  items: ProductPerformanceListItem[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
 };
 
 export type ProductAnalyticsCatalogStats = {

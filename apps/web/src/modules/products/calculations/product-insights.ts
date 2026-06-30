@@ -28,10 +28,11 @@ function resolveNetLiquidSales(salesQuantity: number, returnsQuantity: number): 
   return Math.max(0, sales - cappedReturns);
 }
 
-function deriveRowFinancials(
+export function deriveRowFinancials(
   row: ProductMonthlyPerformanceDisplayRow,
   taxRateDefault: number,
   marketplaceCommissionTotal: number | null = null,
+  shippingOrFixedFeeUnitOverride: number | null = null,
 ): {
   netLiquidSales: number;
   revenue: number;
@@ -49,15 +50,17 @@ function deriveRowFinancials(
 
   const sellingPrice = toNumber(row.salePrice);
   const commissionRate = toNumber(row.commissionRate);
-  const shippingFee = toNumber(row.shippingFee);
   const packagingCost = toNumber(row.packagingCost);
   const unitCost = toNumber(row.unitCost);
   const advertising = toNumber(row.advertisingCost);
-  const marketplaceCommission = toNumber(row.marketplaceCommission ?? "0") || commissionRate * sellingPrice;
+  const marketplaceCommission =
+    toNumber(row.marketplaceCommissionUnit ?? row.marketplaceCommission ?? "0") ||
+    commissionRate * sellingPrice;
+  const shippingOrFixedFeeUnit = shippingOrFixedFeeUnitOverride ?? toNumber(row.shippingOrFixedFeeUnit ?? row.shippingFee);
 
   const revenue = sellingPrice * netLiquidSales;
   const totalCommission = marketplaceCommissionTotal ?? marketplaceCommission * netLiquidSales;
-  const totalShipping = shippingFee * netLiquidSales;
+  const totalShippingOrFixedFee = shippingOrFixedFeeUnit * netLiquidSales;
   const totalTax = revenue * taxRateDefault;
   const totalPackagingCost = packagingCost * netLiquidSales;
   const totalProductCost = unitCost * netLiquidSales;
@@ -65,18 +68,20 @@ function deriveRowFinancials(
   const totalProfit =
     revenue
     - totalCommission
-    - totalShipping
+    - totalShippingOrFixedFee
     - totalTax
     - totalPackagingCost
     - totalProductCost;
 
   const unitProfit = netLiquidSales > 0 ? totalProfit / netLiquidSales : null;
   const contributionMarginRatio =
-    unitProfit !== null && sellingPrice > 0 ? unitProfit / sellingPrice : null;
+    netLiquidSales > 0 && sellingPrice > 0
+      ? (totalProfit / netLiquidSales / sellingPrice) * 100
+      : null;
   const roiRatio = unitProfit !== null && unitCost > 0 ? unitProfit / unitCost : null;
   const minimumRoas =
     contributionMarginRatio !== null && contributionMarginRatio > 0
-      ? 1 / contributionMarginRatio
+      ? 100 / contributionMarginRatio
       : null;
   const actualRoas = advertising > 0 ? revenue / advertising : null;
 
@@ -448,8 +453,23 @@ function buildSyntheticParentRow(
           0,
         ) / totals.netLiquidSales
       : 0;
+  const shippingOrFixedFeeUnitAvg = weightedUnitMetric(
+    (row) => row.shippingOrFixedFeeUnit ?? 0,
+  );
+  const taxPctAvg = weightedUnitMetric((row) => row.taxPct);
+  const sellingPriceAvg = weightedUnitMetric((row) => row.sellingPrice);
+  const totalShippingOrFixedFee = shippingOrFixedFeeUnitAvg * totals.netLiquidSales;
+  const totalTax = totals.revenue * (taxPctAvg / 100);
+  const netContribution =
+    totals.revenue
+    - totals.totalCommission
+    - totalShippingOrFixedFee
+    - totalTax
+    - totals.totalPackagingCost;
   const contributionMarginRatio =
-    totals.revenue > 0 ? totals.totalProfit / totals.revenue : null;
+    totals.netLiquidSales > 0 && sellingPriceAvg > 0
+      ? (netContribution / totals.netLiquidSales / sellingPriceAvg) * 100
+      : null;
   const roiRatio =
     totals.totalProductCost > 0 ? totals.totalProfit / totals.totalProductCost : null;
 
@@ -474,7 +494,7 @@ function buildSyntheticParentRow(
     ),
     minimumRoas:
       contributionMarginRatio !== null && contributionMarginRatio > 0
-        ? 1 / contributionMarginRatio
+        ? 100 / contributionMarginRatio
         : null,
     name: parent.name,
     netLiquidSales: totals.netLiquidSales,
@@ -487,15 +507,13 @@ function buildSyntheticParentRow(
     revenue: totals.revenue,
     roiRatio,
     sales: totals.sales,
-    sellingPrice: weightedUnitMetric((row) => row.sellingPrice),
+    sellingPrice: sellingPriceAvg,
     shipping: totals.shipping,
     shippingOrFixedFeeSource: children[0]?.shippingOrFixedFeeSource,
-    shippingOrFixedFeeUnit: weightedUnitMetric(
-      (row) => row.shippingOrFixedFeeUnit ?? 0,
-    ),
+    shippingOrFixedFeeUnit: shippingOrFixedFeeUnitAvg,
     shippingUnit: weightedUnitMetric((row) => row.shippingUnit ?? 0),
     sku: parent.sku ?? children[0]?.sku ?? "",
-    taxPct: weightedUnitMetric((row) => row.taxPct),
+    taxPct: taxPctAvg,
     totalCommission: totals.totalCommission,
     totalPackagingCost: totals.totalPackagingCost,
     totalProductCost: totals.totalProductCost,
@@ -754,10 +772,15 @@ export function computeRowShippingOrFixedFeeTotal(row: ProductTableRow): number 
 }
 
 /**
- * Receita líquida de uma linha: faturamento menos a comissão total.
+ * Receita líquida de uma linha: faturamento menos comissão, frete/taxa fixa e embalagem.
  */
 export function computeRowNetRevenue(row: ProductTableRow): number {
-  return row.revenue - computeRowCommissionTotal(row) - computeRowShippingOrFixedFeeTotal(row);
+  return (
+    row.revenue
+    - computeRowCommissionTotal(row)
+    - computeRowShippingOrFixedFeeTotal(row)
+    - row.totalPackagingCost
+  );
 }
 
 const productDataGapLabels: Record<string, string> = {

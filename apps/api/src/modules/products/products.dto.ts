@@ -3,12 +3,14 @@ import {
   adCostUpdateSchema,
   manualExpenseFormSchema,
   manualExpenseUpdateSchema,
+  productBulkDeleteSchema,
   productCatalogFinanceUpdateSchema,
   productCostFormSchema,
   productCostUpdateSchema,
   productCatalogExportQuerySchema,
   productFormSchema,
   productAnalyticsQuerySchema,
+  productPerformanceListQuerySchema,
   productManualCreateSchema,
   productUpdateSchema,
 } from "@lucreii/validation";
@@ -17,11 +19,13 @@ import type {
   AdCostUpdateInput,
   ManualExpenseFormInput,
   ManualExpenseUpdateInput,
+  ProductBulkDeleteInput,
   ProductCatalogFinanceUpdateInput,
   ProductCostFormInput,
   ProductCostUpdateInput,
   ProductCatalogExportQueryInput,
   ProductAnalyticsQueryInput,
+  ProductPerformanceListQueryInput,
   ProductFormInput,
   ProductManualCreateInput,
   ProductUpdateInput,
@@ -68,13 +72,41 @@ export class ProductAnalyticsQueryDto implements ProductAnalyticsQueryInput {
   referenceMonth?: string;
 }
 
+export class ProductPerformanceListQueryDto
+  implements ProductPerformanceListQueryInput
+{
+  static schema = productPerformanceListQuerySchema;
+
+  marketplaces?: Array<"mercadolivre" | "shopee" | "shein">;
+  page?: number;
+  pageSize?: number;
+  referenceMonth?: string;
+  search?: string;
+  sortBy?:
+    | "channelLabel"
+    | "parentName"
+    | "variationName"
+    | "sales"
+    | "sellingPrice"
+    | "contributionMarginRatio"
+    | "totalProfit";
+  sortDirection?: "asc" | "desc";
+}
+
 export class ProductCatalogExportQueryDto
   implements ProductCatalogExportQueryInput
 {
   static schema = productCatalogExportQuerySchema;
 
+  ids?: string[];
   marketplaces?: Array<"mercadolivre" | "shopee" | "shein">;
   search?: string;
+}
+
+export class ProductBulkDeleteRequestDto implements ProductBulkDeleteInput {
+  static schema = productBulkDeleteSchema;
+
+  ids!: string[];
 }
 
 export class UpdateProductCatalogFinanceRequestDto

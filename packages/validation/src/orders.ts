@@ -47,6 +47,25 @@ export const orderListFiltersSchema = z.object({
   search: z.string().trim().min(1).optional(),
   provider: integrationProviderSchema.optional(),
   status: orderCanonicalStatusSchema.optional(),
+  orderedFrom: isoDateField("Ordered from").optional(),
+  orderedTo: isoDateField("Ordered to").optional(),
+  sortBy: z
+    .enum([
+      "provider",
+      "orderId",
+      "statusLabel",
+      "orderedAt",
+      "itemsSold",
+      "contributionMarginPercent",
+      "shippingAmount",
+      "tariffAmount",
+      "fixedCostAmount",
+      "totalProfitAmount",
+      "totalWithFees",
+    ])
+    .optional(),
+  sortDirection: z.enum(["asc", "desc"]).optional(),
+  includeSummary: z.coerce.boolean().optional(),
 });
 
 export const orderStatusOptionSchema = z.object({
@@ -71,6 +90,8 @@ export const orderListItemSchema = z.object({
   totalFees: decimalField("Total fees"),
   totalWithFees: decimalField("Total with fees"),
   totalWithoutFees: decimalField("Total without fees"),
+  contributionMarginPercent: decimalField("Contribution margin percent").nullable(),
+  totalProfitAmount: decimalField("Total profit amount").nullable(),
   itemsSold: z.number().int().min(0),
 });
 
@@ -117,6 +138,7 @@ export const orderCompositionSchema = z.object({
   productCostAmount: decimalField("Product cost amount"),
   marketplaceCommissionAmount: decimalField("Marketplace commission amount"),
   shippingOrFixedFeeAmount: decimalField("Shipping or fixed fee amount"),
+  refundBonusAmount: decimalField("Refund bonus amount"),
   packagingCostAmount: decimalField("Packaging cost amount"),
   hasIncompleteCostData: z.boolean(),
   missingLinkedItemsCount: z.number().int().min(0),

@@ -3,19 +3,12 @@
 import React, { act } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { productCatalogQueryKey } from "../hooks/use-product-data";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductTable } from "./product-table";
 import type { ProductTableRow } from "../types/products";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
-
-const { apiClientMocks } = vi.hoisted(() => ({
-  apiClientMocks: {
-    patch: vi.fn(),
-  },
-}));
 
 vi.mock("next/image", () => ({
   default: ({
@@ -37,18 +30,6 @@ vi.mock("next/link", () => ({
   }) => React.createElement("a", { href }, children),
 }));
 
-vi.mock("@/lib/api/client", () => ({
-  ApiClientError: class ApiClientError extends Error {
-    status: number;
-
-    constructor(message: string, status = 400) {
-      super(message);
-      this.status = status;
-    }
-  },
-  apiClient: apiClientMocks,
-}));
-
 function buildRow(index: number, overrides: Partial<ProductTableRow> = {}): ProductTableRow {
   return {
     actualRoas: 2.4,
@@ -58,7 +39,7 @@ function buildRow(index: number, overrides: Partial<ProductTableRow> = {}): Prod
     channelLabel: "mercadolivre",
     children: [],
     commissionPct: 16,
-    contributionMarginRatio: 0.18,
+    contributionMarginRatio: 18.45,
     coverImageUrl: "https://example.com/product.png",
     catalogGroupKey: null,
     displayName: `Produto ${index}`,
@@ -167,12 +148,8 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-beforeEach(() => {
-  apiClientMocks.patch.mockReset();
-});
-
 describe("ProductTable", () => {
-  it("renders one row per variation using parent name above variation label", () => {
+  it("renders one row per variation using combined product and variation title", () => {
     const rows = [
       buildRow(1, {
         catalogGroupKey: "mercadolivre:MLB123",
@@ -212,20 +189,16 @@ describe("ProductTable", () => {
 
     expect(document.querySelectorAll("tbody tr")).toHaveLength(2);
     const firstProductCell = document.querySelector("tbody tr td:nth-child(2)")!;
-    expect(firstProductCell.textContent).toContain("Produto 1");
-    expect(firstProductCell.textContent).toContain("Cor: Azul");
-    expect(firstProductCell.textContent!.indexOf("Produto 1")).toBeLessThan(
-      firstProductCell.textContent!.indexOf("Cor: Azul"),
-    );
+    expect(firstProductCell.textContent).toContain("Produto 1 | Cor: Azul");
 
     view.unmount();
   });
 
-  it("renders product name above variation when flat row swaps those values", () => {
+  it("renders combined title when flat row swaps product and variation values", () => {
     const rows = [
       buildRow(1, {
         displayName: "Cor: Azul",
-        name: "AcessÃ³rio De Celular - NÃ£o Ofertar",
+        name: "Acessório De Celular - Não Ofertar",
       }),
     ];
 
@@ -238,22 +211,18 @@ describe("ProductTable", () => {
     );
 
     const productCell = document.querySelector("tbody tr td:nth-child(2)")!;
-    expect(productCell.textContent).toContain("AcessÃ³rio De Celular - NÃ£o Ofertar");
-    expect(productCell.textContent).toContain("Cor: Azul");
-    expect(productCell.textContent!.indexOf("AcessÃ³rio De Celular - NÃ£o Ofertar")).toBeLessThan(
-      productCell.textContent!.indexOf("Cor: Azul"),
+    expect(productCell.textContent).toContain(
+      "Acessório De Celular - Não Ofertar | Cor: Azul",
     );
 
     view.unmount();
   });
 
-  it("shows cost alert count, catalog link, and green or orange currency icons", () => {
+  it("uses performance identity to avoid duplicate react keys for repeated product ids", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const rows = [
-      buildRow(1),
-      buildRow(2, {
-        packagingCost: 0,
-        unitCost: 0,
-      }),
+      buildRow(1, { id: "product_1", performanceId: "perf_1" }),
+      buildRow(2, { id: "product_1", performanceId: "perf_2", sku: "SKU-2" }),
     ];
 
     const view = renderWithClient(
@@ -264,14 +233,55 @@ describe("ProductTable", () => {
       />,
     );
 
-    expect(document.body.textContent).toContain("Você tem 1 produto para atualizar custos");
-    const catalogLink = Array.from(document.querySelectorAll("a")).find((link) =>
-      link.textContent?.includes("Ir para catálogo"),
-    ) as HTMLAnchorElement;
-    expect(catalogLink.getAttribute("href")).toBe("/app/products/catalog");
+    expect(errorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Encountered two children with the same key"),
+      expect.anything(),
+      expect.anything(),
+    );
 
-    const configured = document.querySelector('[data-testid="cost-status-2026-06-01:mercadolivre:SKU-1"]');
-    const pending = document.querySelector('[data-testid="cost-status-2026-06-01:mercadolivre:SKU-2"]');
+    view.unmount();
+    errorSpy.mockRestore();
+  });
+
+  it("resolves server-mode product titles even when row.name is empty", () => {
+    const rows = [
+      buildRow(1, {
+        displayName: "Acessório De Celular - Não Ofertar",
+        name: "",
+        variationLabel: "Cor: Azul",
+      }),
+    ];
+
+    const view = renderWithClient(
+      <ProductTable
+        onPageChange={() => {}}
+        pagination={{ currentPage: 1, pageSize: 10, totalItems: rows.length, totalPages: 1 }}
+        rows={rows}
+        serverMode
+      />,
+    );
+
+    const productCell = document.querySelector("tbody tr td:nth-child(2)")!;
+    expect(productCell.textContent).toContain(
+      "Acessório De Celular - Não Ofertar | Cor: Azul",
+    );
+
+    view.unmount();
+  });
+
+  it("renders green or orange currency icons based on cost configuration", () => {
+    const rows = [buildRow(1), buildRow(2, { packagingCost: 0, unitCost: 0 })];
+
+    const view = renderWithClient(
+      <ProductTable
+        onPageChange={() => {}}
+        pagination={{ currentPage: 1, pageSize: 10, totalItems: rows.length, totalPages: 1 }}
+        rows={rows}
+      />,
+    );
+
+    const configured = document.querySelector('[data-testid="cost-status-perf_1"]');
+    const pending = document.querySelector('[data-testid="cost-status-perf_2"]');
     expect(configured?.getAttribute("aria-label")).toBe("Precificado");
     expect(pending?.getAttribute("aria-label")).toBe("Não precificado");
     expect(configured?.getAttribute("title")).toBe("Precificado");
@@ -295,13 +305,15 @@ describe("ProductTable", () => {
       />,
     );
 
+    expect(document.body.textContent).toContain("Vendas");
     expect(document.body.textContent).toContain("PDV");
-    expect(document.body.textContent).toContain("Margem Contribui\u00e7\u00e3o");
+    expect(document.body.textContent).toContain("Margem Contribuição");
     expect(document.body.textContent).toContain("Lucro Total");
+    expect(document.body.textContent).toContain("18.45%");
     expect(document.body.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 78,03");
     expect(document.body.textContent).not.toContain("ROAS Real");
-    expect(document.body.textContent).not.toContain("Lucro Unit\u00e1rio");
-    expect(document.body.textContent).not.toContain("ROAS M\u00ednimo");
+    expect(document.body.textContent).not.toContain("Lucro Unitário");
+    expect(document.body.textContent).not.toContain("ROAS Mínimo");
 
     view.unmount();
   });
@@ -317,11 +329,6 @@ describe("ProductTable", () => {
     expect(document.body.textContent).toContain("Produto 11");
     expect(document.body.textContent).toContain("SKU-11");
     expect(document.querySelector('img[alt="Produto 11"]')).not.toBeNull();
-
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Composição")!);
-    expect(document.body.textContent).toContain("Composição de Preço");
-    expect(document.body.textContent).toContain("Comissão");
-    expect(document.body.textContent).toContain("Investimento em Publicidade");
 
     click(document.querySelector('[aria-label="Close"]')!);
 
@@ -358,57 +365,13 @@ describe("ProductTable", () => {
     expect(document.body.textContent).toContain("Visão Geral de Vendas");
     expect(document.body.textContent).toContain("Sem foto");
 
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Composição")!);
-    expect(document.body.textContent).toContain("Composição de Preço");
+    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Lucratividade")!);
+    expect(document.body.textContent).toContain("Lucratividade");
 
     keydown(document, "Escape");
 
-    expect(document.body.textContent).not.toContain("VisÃ£o Geral de Vendas");
+    expect(document.body.textContent).not.toContain("Visão Geral de Vendas");
     expect((document.querySelector('input[placeholder="Nome ou SKU do produto..."]') as HTMLInputElement).value).toBe("Produto 1");
-
-    view.unmount();
-  });
-
-  it("saves edited advertising cost from composition tab and invalidates analytics query", async () => {
-    apiClientMocks.patch.mockResolvedValue({
-      data: { id: "perf_1" },
-      error: null,
-    });
-
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        mutations: { retry: false },
-        queries: { retry: false },
-      },
-    });
-    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
-    const view = renderWithClient(
-      <ProductTable
-        onPageChange={() => {}}
-        pagination={{ currentPage: 1, pageSize: 10, totalItems: 1, totalPages: 1 }}
-        rows={[buildRow(1)]}
-      />,
-      queryClient,
-    );
-
-    click(document.querySelector("tbody tr")!);
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Composição")!);
-
-    const adsInput = document.querySelector('input[name="advertisingCost"]') as HTMLInputElement;
-    changeInputValue(adsInput, "240.00");
-
-    await act(async () => {
-      document.querySelector('button[type="submit"]')?.dispatchEvent(
-        new MouseEvent("click", { bubbles: true }),
-      );
-    });
-
-    expect(apiClientMocks.patch).toHaveBeenCalledWith("/performance/perf_1", {
-      body: {
-        advertisingCost: "240.00",
-      },
-    });
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: productCatalogQueryKey });
 
     view.unmount();
   });

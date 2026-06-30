@@ -385,4 +385,69 @@ describe("ShopeeProvider", () => {
     );
     expect(result.cursor).toBeNull();
   });
+
+  it("fetches only the notified order during automatic sync without cursor history", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1_718_184_000_000);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            response: {
+              order_list: [
+                {
+                  create_time: 1_718_000_000,
+                  currency: "BRL",
+                  item_list: [],
+                  order_sn: "ORDER-123",
+                  order_status: "READY_TO_SHIP",
+                  total_amount: 100,
+                  update_time: 1_718_184_000,
+                },
+              ],
+            },
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            response: {
+              order_income: {
+                commission_fee: 0,
+                final_shipping_fee: 0,
+                seller_transaction_fee: 0,
+                service_fee: 0,
+              },
+            },
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new ShopeeProvider(createEnv());
+
+    const result = await provider.syncOrders({
+      connection: createConnection() as never,
+      cursor: null,
+      notification: {
+        notificationId: "ORDER-123",
+        resource: "/orders/ORDER-123",
+        topic: "shopee:3",
+      },
+      organizationId: "org_1",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/api/v2/order/get_order_detail",
+    );
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "order_sn_list=ORDER-123",
+    );
+    expect(result.orders).toHaveLength(1);
+    expect(result.orders[0]?.externalOrderId).toBe("ORDER-123");
+    expect(result.cursor).toEqual({ updateTime: 1_718_184_000 });
+  });
 });
