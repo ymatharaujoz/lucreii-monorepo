@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { RefreshCw, AlertCircle } from "lucide-react";
+import { RefreshCw, AlertCircle, ChevronDown } from "lucide-react";
 import type { Company, IntegrationProviderSlug } from "@lucreii/types";
-import { Card, EmptyState, Skeleton, Button } from "@lucreii/ui";
+import { Card, EmptyState, Skeleton, Button, Dropdown } from "@lucreii/ui";
 import { ApiClientError } from "@/lib/api/client";
+import {
+  clampReferenceMonth,
+  formatReferenceMonthPtBr,
+  getSaoPauloCurrentReferenceMonth,
+  mergeDescendingReferenceMonthChoices,
+} from "@/lib/reference-month";
 import { containerVariants, fadeInVariants } from "@/lib/animations";
 import { SkeletonChart, SkeletonGrid } from "@/components/ui-premium/skeleton-grid";
 import { DashboardHeader } from "./dashboard-header";
@@ -21,6 +27,45 @@ import { useDashboardConnectionStatuses } from "../hooks/use-dashboard-connectio
 interface DashboardHomeProps {
   activeCompany: Company | null;
   companyName: string;
+}
+
+const REFERENCE_MONTH_HISTORY = 6;
+
+function ReferenceMonthToolbar({
+  onReferenceMonthChange,
+  options,
+  referenceMonth,
+}: {
+  onReferenceMonthChange: (value: string) => void;
+  options: readonly string[];
+  referenceMonth: string;
+}) {
+  const items = options.map((iso) => ({
+    id: iso,
+    label: formatReferenceMonthPtBr(iso),
+  }));
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-strong px-3 py-2 shadow-sm">
+      <span className="text-xs font-semibold uppercase tracking-wider text-accent">
+        Mês
+      </span>
+      <Dropdown
+        align="left"
+        items={items}
+        onSelect={(id) => onReferenceMonthChange(id)}
+        trigger={
+          <button
+            type="button"
+            className="flex h-7 items-center gap-1.5 rounded-md bg-surface px-2 text-sm font-semibold text-foreground transition-colors hover:bg-accent/5"
+          >
+            {formatReferenceMonthPtBr(referenceMonth)}
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        }
+      />
+    </div>
+  );
 }
 
 function LoadingDashboard() {
@@ -71,6 +116,16 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
 
 export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps) {
   const [providerFilter, setProviderFilter] = useState<IntegrationProviderSlug | null>(null);
+  const [referenceMonth, setReferenceMonthState] = useState(() => getSaoPauloCurrentReferenceMonth());
+  const referenceMonthOptions = useMemo(
+    () =>
+      mergeDescendingReferenceMonthChoices(
+        referenceMonth,
+        getSaoPauloCurrentReferenceMonth(),
+        REFERENCE_MONTH_HISTORY,
+      ),
+    [referenceMonth],
+  );
   const {
     ordersSummaryQuery,
     summaryQuery,
@@ -81,8 +136,17 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
     financialState,
     businessStatus,
     refetchAll,
-  } = useDashboardData(providerFilter);
+  } = useDashboardData(providerFilter, referenceMonth);
   const { syncStatusByProvider } = useDashboardConnectionStatuses();
+
+  const setReferenceMonth = (next: string) => {
+    const effective = clampReferenceMonth(next);
+    if (!effective) {
+      return;
+    }
+
+    setReferenceMonthState(effective);
+  };
 
   if (isLoading) {
     return <LoadingDashboard />;
@@ -101,26 +165,34 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
 
       <hr className="border-border" />
 
-      <div className="flex w-fit rounded-lg border border-border bg-surface-strong p-1">
-        {([
-          [null, "Todos"],
-          ["mercadolivre", "Mercado Livre"],
-          ["shopee", "Shopee"],
-          ["shein", "Shein"],
-        ] as const).map(([provider, label]) => (
-          <button
-            key={provider ?? "all"}
-            type="button"
-            onClick={() => setProviderFilter(provider)}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              providerFilter === provider
-                ? "bg-accent text-white"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <ReferenceMonthToolbar
+          onReferenceMonthChange={setReferenceMonth}
+          options={referenceMonthOptions}
+          referenceMonth={referenceMonth}
+        />
+
+        <div className="flex w-fit rounded-lg border border-border bg-surface-strong p-1">
+          {([
+            [null, "Todos"],
+            ["mercadolivre", "Mercado Livre"],
+            ["shopee", "Shopee"],
+            ["shein", "Shein"],
+          ] as const).map(([provider, label]) => (
+            <button
+              key={provider ?? "all"}
+              type="button"
+              onClick={() => setProviderFilter(provider)}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                providerFilter === provider
+                  ? "bg-accent text-white"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {profitabilityQuery.data && (

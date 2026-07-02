@@ -118,13 +118,15 @@ function buildRecentSync(
 
 afterEach(() => {
   document.body.innerHTML = "";
+  vi.useRealTimers();
   useDashboardDataMock.mockReset();
   useDashboardConnectionStatusesMock.mockReset();
 });
 
 describe("DashboardHome", () => {
   it("keeps provider-specific connection state after switching to Shopee tab", () => {
-    useDashboardDataMock.mockImplementation((provider: "mercadolivre" | "shopee" | null) => ({
+    useDashboardDataMock.mockImplementation(
+      (provider: "mercadolivre" | "shopee" | null, referenceMonth?: string) => ({
       businessStatus: "healthy",
       chartsQuery: {
         data:
@@ -155,7 +157,9 @@ describe("DashboardHome", () => {
       profitabilityQuery: { data: { channels: [], products: [] } },
       refetchAll: vi.fn(),
       summaryQuery: { data: { cards: [], summary: {} } },
-    }));
+      referenceMonth,
+    }),
+    );
 
     useDashboardConnectionStatusesMock.mockReturnValue({
       syncStatusByProvider: {
@@ -175,6 +179,60 @@ describe("DashboardHome", () => {
     );
 
     expect(document.body.textContent ?? "").toMatch(/ML:available\|\s*Shopee:provider_disconnected/);
+
+    view.unmount();
+  });
+
+  it("renders month selector with current month default and combines month with provider filter", () => {
+    useDashboardDataMock.mockImplementation(
+      (provider: "mercadolivre" | "shopee" | null, referenceMonth?: string) => ({
+        businessStatus: "healthy",
+        chartsQuery: { data: { channels: [], daily: [] } },
+        error: null,
+        financialState: "ready",
+        isLoading: false,
+        ordersSummaryQuery: {
+          data: {
+            summary: {
+              averageMargin: "0.10",
+              grossProfit: "100.00",
+              grossRevenue: "1000.00",
+              ordersCount: 2,
+              unitsSold: 3,
+            },
+          },
+        },
+        profitabilityQuery: { data: { channels: [], products: [] } },
+        refetchAll: vi.fn(),
+        summaryQuery: { data: { cards: [], summary: {} } },
+        referenceMonth,
+      }),
+    );
+
+    useDashboardConnectionStatusesMock.mockReturnValue({
+      syncStatusByProvider: {
+        mercadolivre: buildRecentSync("mercadolivre", "available"),
+        shopee: buildRecentSync("shopee", "provider_disconnected"),
+      },
+    });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
+
+    const view = mount(
+      <DashboardHome activeCompany={null} companyName="Lucreii" />,
+    );
+
+    expect(document.body.textContent ?? "").toContain("julho de 2026");
+    expect(useDashboardDataMock).toHaveBeenLastCalledWith(null, "2026-07-01");
+
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.trim() === "Shopee",
+      )!,
+    );
+
+    expect(useDashboardDataMock).toHaveBeenLastCalledWith("shopee", "2026-07-01");
 
     view.unmount();
   });

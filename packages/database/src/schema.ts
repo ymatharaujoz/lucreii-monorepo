@@ -715,6 +715,12 @@ export const externalOrders = pgTable(
     totalAmount: numeric("total_amount", { precision: 14, scale: 2 })
       .default("0")
       .notNull(),
+    refundBonusAmount: numeric("refund_bonus_amount", {
+      precision: 14,
+      scale: 2,
+    })
+      .default("0")
+      .notNull(),
     metadata: jsonb("metadata")
       .$type<Record<string, unknown>>()
       .default(sql`'{}'::jsonb`)

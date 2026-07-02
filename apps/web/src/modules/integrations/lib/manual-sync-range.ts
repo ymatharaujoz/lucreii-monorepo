@@ -15,6 +15,11 @@ export type ManualSyncDateBounds = {
   minDate: string;
 };
 
+const MANUAL_SYNC_OUTSIDE_WINDOW_ERROR =
+  "Periodo manual deve ficar dentro do ultimo mes.";
+const MANUAL_SYNC_MAX_RANGE_ERROR =
+  "Periodo manual nao pode exceder 1 mes.";
+
 function parseUtcDate(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   if (!year || !month || !day) {
@@ -71,7 +76,7 @@ export function getManualSyncDateBounds(
 
   return {
     maxDate: formatUtcDate(todayStart),
-    minDate: formatUtcDate(addUtcMonths(todayStart, -3)),
+    minDate: formatUtcDate(addUtcMonths(todayStart, -1)),
   };
 }
 
@@ -103,6 +108,14 @@ export function validateManualSyncRange(
     };
   }
 
+  const latestAllowedEndForStart = endOfUtcDay(addUtcMonths(startAt, 1));
+  if (endAt.getTime() > latestAllowedEndForStart.getTime()) {
+    return {
+      error: MANUAL_SYNC_MAX_RANGE_ERROR,
+      isValid: false,
+    };
+  }
+
   const bounds = getManualSyncDateBounds(nowIso);
   const minDate = parseUtcDate(bounds.minDate);
   const maxDate = parseUtcDate(bounds.maxDate);
@@ -119,7 +132,7 @@ export function validateManualSyncRange(
     endAt.getTime() > endOfUtcDay(maxDate).getTime()
   ) {
     return {
-      error: "Periodo manual deve ficar dentro dos ultimos 3 meses.",
+      error: MANUAL_SYNC_OUTSIDE_WINDOW_ERROR,
       isValid: false,
     };
   }

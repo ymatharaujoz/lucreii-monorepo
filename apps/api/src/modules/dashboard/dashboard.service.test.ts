@@ -87,7 +87,7 @@ describe("DashboardService", () => {
     };
     const service = new DashboardService(financeService as never, syncService as never);
 
-    await expect(service.readSummary("org_123", "company_123")).resolves.toEqual({
+    await expect(service.readSummary("org_123", "company_123", undefined, "2026-07-01")).resolves.toEqual({
       cards: expect.arrayContaining([
         expect.objectContaining({
           label: "Gross revenue",
@@ -105,7 +105,7 @@ describe("DashboardService", () => {
         netProfit: "220.00",
       }),
     });
-    await expect(service.readCharts("org_123", "company_123")).resolves.toEqual({
+    await expect(service.readCharts("org_123", "company_123", undefined, "2026-07-01")).resolves.toEqual({
       channels: [
         {
           channel: "mercadolivre",
@@ -131,7 +131,7 @@ describe("DashboardService", () => {
         }),
       }),
     );
-    await expect(service.readProfitability("org_123", "company_123")).resolves.toEqual({
+    await expect(service.readProfitability("org_123", "company_123", undefined, "2026-07-01")).resolves.toEqual({
       channels: [
         expect.objectContaining({
           channel: "mercadolivre",
@@ -153,11 +153,13 @@ describe("DashboardService", () => {
       "org_123",
       "company_123",
       undefined,
+      "2026-07-01",
     );
     expect(financeService.buildDashboardReadModel).toHaveBeenCalledWith(
       "org_123",
       "company_123",
       undefined,
+      "2026-07-01",
     );
     expect(syncService.getStatus).toHaveBeenCalledWith(
       "org_123",

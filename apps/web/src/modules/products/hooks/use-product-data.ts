@@ -5,6 +5,12 @@ import { useMemo, useState, useCallback } from "react";
 import type { ProductAnalyticsSnapshot } from "@lucreii/types";
 import { productAnalyticsSnapshotApiResponseSchema } from "@lucreii/validation";
 import { ApiClientError, apiClient } from "@/lib/api/client";
+import {
+  clampReferenceMonth,
+  formatReferenceMonthPtBr,
+  getSaoPauloCurrentReferenceMonth,
+  mergeDescendingReferenceMonthChoices,
+} from "@/lib/reference-month";
 import type { ProductCatalogData, PaginationState } from "../types/products";
 import {
   buildCatalogStats,
@@ -12,6 +18,12 @@ import {
   buildProductTableRows,
   determineFinancialState,
 } from "../calculations/product-insights";
+
+export {
+  formatReferenceMonthPtBr,
+  getSaoPauloCurrentReferenceMonth,
+  mergeDescendingReferenceMonthChoices,
+} from "@/lib/reference-month";
 
 export const productCatalogQueryKey = ["product-catalog-module"] as const;
 
@@ -27,72 +39,7 @@ function readSelectedCompanyIdFromBrowserCookie() {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
-export function getSaoPauloCurrentReferenceMonth(now = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    month: "2-digit",
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-  }).formatToParts(now);
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-
-  return year && month ? `${year}-${month}-01` : `${now.toISOString().slice(0, 7)}-01`;
-}
-
-const REFERENCE_MONTH_RE = /^\d{4}-\d{2}-01$/;
-
 /** Newest-first list of month starts (\`yyyy-mm-01\`) up to cap, length \`count\`. */
-export function enumerateRecentReferenceMonthsDescending(capIsoDay: string, count: number): string[] {
-  const ym = capIsoDay.slice(0, 7);
-  const parts = ym.split("-").map(Number);
-  let year = parts[0] ?? NaN;
-  let month = parts[1] ?? NaN;
-  if (!Number.isFinite(year) || !Number.isFinite(month)) {
-    return [];
-  }
-
-  const out: string[] = [];
-  let y = year;
-  let m = month;
-  for (let i = 0; i < count; i++) {
-    out.push(`${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-01`);
-    m -= 1;
-    if (m < 1) {
-      m = 12;
-      y -= 1;
-    }
-  }
-  return out;
-}
-
-export function formatReferenceMonthPtBr(referenceMonthIso: string) {
-  const ym = referenceMonthIso.slice(0, 7);
-  const bits = ym.split("-").map(Number);
-  const y = bits[0];
-  const mo = bits[1];
-  if (!Number.isFinite(y) || !Number.isFinite(mo)) {
-    return referenceMonthIso.slice(0, 7);
-  }
-
-  const midMonthUtc = new Date(Date.UTC(y, mo - 1, 15, 12, 0, 0));
-  return new Intl.DateTimeFormat("pt-BR", {
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Sao_Paulo",
-  }).format(midMonthUtc);
-}
-
-export function mergeDescendingReferenceMonthChoices(
-  current: string,
-  capIsoDay: string,
-  historyDepth: number,
-): string[] {
-  const capList = enumerateRecentReferenceMonthsDescending(capIsoDay, historyDepth);
-  const unique = new Set<string>(capList);
-  unique.add(current);
-  return [...unique].sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
-}
-
 export async function fetchProductCatalog(input?: { referenceMonth?: string }): Promise<ProductCatalogData> {
   const params = new URLSearchParams();
 
@@ -119,11 +66,10 @@ export function useProductData() {
   const [referenceMonth, setReferenceMonthState] = useState(() => getSaoPauloCurrentReferenceMonth());
 
   const setReferenceMonth = useCallback((next: string) => {
-    if (!REFERENCE_MONTH_RE.test(next)) {
+    const effective = clampReferenceMonth(next);
+    if (!effective) {
       return;
     }
-    const cap = getSaoPauloCurrentReferenceMonth();
-    const effective = next > cap ? cap : next;
     setReferenceMonthState(effective);
     setCurrentPage(1);
   }, []);

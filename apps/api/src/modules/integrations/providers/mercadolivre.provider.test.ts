@@ -45,6 +45,13 @@ function createSyncConnection() {
   };
 }
 
+function createJsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    headers: { "content-type": "application/json" },
+    status,
+  });
+}
+
 describe("MercadoLivreProvider", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -359,16 +366,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: 50, offset: 50, total: 1 },
-            results: [],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -779,16 +779,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: 50, offset: 50, total: 1 },
-            results: [],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 19.95 }],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -818,13 +811,16 @@ describe("MercadoLivreProvider", () => {
         amount: "12.00",
         feeType: "marketplace_commission",
       }),
-      expect.objectContaining({ amount: "19.95", feeType: "refund_bonus" }),
       expect.objectContaining({ amount: "19.95", feeType: "fixed_fee" }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result.orders[0]?.metadata).toMatchObject({
+      refundBonusAmount: "19.95",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/key/2026-05-01/group/MP/details",
     );
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/discounts");
     expect(
       (fetchMock.mock.calls[2]?.[1] as RequestInit | undefined)?.headers,
     ).toEqual(
@@ -924,6 +920,11 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          details: [{ amount: 3.5 }, { amount: 2.04 }],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -961,18 +962,15 @@ describe("MercadoLivreProvider", () => {
         amount: "14.50",
         feeType: "shipping_cost",
       }),
-      expect.objectContaining({
-        amount: "5.54",
-        feeType: "refund_bonus",
-        metadata: expect.objectContaining({
-          source: "billing.sale_fee.rebate",
-        }),
-      }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.orders[0]?.metadata).toMatchObject({
+      refundBonusAmount: "5.54",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
       "/billing/integration/periods/key/2026-05-01/group/MP/details",
     );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/discounts");
   });
 
   it("splits MELI gross sale_fee into commission net and fixed fee when billing details match the order fee", async () => {
@@ -1090,16 +1088,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: 50, offset: 50, total: 1 },
-            results: [],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 6.65 }],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -1131,13 +1122,12 @@ describe("MercadoLivreProvider", () => {
       }),
       expect.objectContaining({
         amount: "6.65",
-        feeType: "refund_bonus",
-      }),
-      expect.objectContaining({
-        amount: "6.65",
         feeType: "fixed_fee",
       }),
     ]);
+    expect(result.orders[0]?.metadata).toMatchObject({
+      refundBonusAmount: "6.65",
+    });
   });
 
   it("splits payment.marketplace_fee into commission net and fixed fee when billing details expose the breakdown", async () => {
@@ -1261,16 +1251,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: 50, offset: 50, total: 1 },
-            results: [],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 6.65 }],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -1302,13 +1285,12 @@ describe("MercadoLivreProvider", () => {
       }),
       expect.objectContaining({
         amount: "6.65",
-        feeType: "refund_bonus",
-      }),
-      expect.objectContaining({
-        amount: "6.65",
         feeType: "fixed_fee",
       }),
     ]);
+    expect(result.orders[0]?.metadata).toMatchObject({
+      refundBonusAmount: "6.65",
+    });
   });
 
   it("falls back to listing_prices when MELI billing details omit fee breakdown", async () => {
@@ -1414,18 +1396,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            limit: 1000,
-            offset: 0,
-            results: [],
-            total: 0,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 3.5 }, { amount: 1.25 }],
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -1496,13 +1469,14 @@ describe("MercadoLivreProvider", () => {
         }),
       }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/key/2026-06-01/group/MP/details",
     );
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
       "/sites/MLB/listing_prices",
     );
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain("/discounts");
   });
 
   it("preserves shipment shipping cost after hydrating order details", async () => {
@@ -1633,18 +1607,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            limit: 1000,
-            offset: 0,
-            results: [],
-            total: 0,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 3.5 }, { amount: 1.25 }],
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -1716,6 +1681,7 @@ describe("MercadoLivreProvider", () => {
     const totalOrders = 251;
     const pageSize = 50;
     const fetchMock = vi.fn();
+    const searchResponses = new Map<number, unknown>();
 
     for (let offset = 0; offset < totalOrders; offset += pageSize) {
       const pageOrders = Array.from(
@@ -1746,36 +1712,45 @@ describe("MercadoLivreProvider", () => {
         },
       );
 
-      fetchMock.mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: pageSize, offset, total: totalOrders },
-            results: pageOrders,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
-      );
-
-      if (offset === 0) {
-        fetchMock.mockResolvedValueOnce(
-          new Response(
-            JSON.stringify({
-              limit: 1000,
-              offset: 0,
-              results: [],
-              total: 0,
-            }),
-            {
-              headers: { "content-type": "application/json" },
-              status: 200,
-            },
-          ),
-        );
-      }
+      searchResponses.set(offset, {
+        paging: { limit: pageSize, offset, total: totalOrders },
+        results: pageOrders,
+      });
     }
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes("/orders/search")) {
+        const offset = Number(new URL(url).searchParams.get("offset") ?? "0");
+        const payload =
+          searchResponses.get(offset) ??
+          ({
+            paging: { limit: pageSize, offset, total: totalOrders },
+            results: [],
+          } satisfies {
+            paging: { limit: number; offset: number; total: number };
+            results: unknown[];
+          });
+
+        return createJsonResponse(payload);
+      }
+
+      if (url.includes("/billing/integration/periods/")) {
+        return createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        });
+      }
+
+      if (url.includes("/discounts")) {
+        return createJsonResponse({ details: [] });
+      }
+
+      throw new Error(`Unexpected fetch call in test: ${url}`);
+    });
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -1796,7 +1771,20 @@ describe("MercadoLivreProvider", () => {
       "order.date_created.to=2026-05-20T23%3A59%3A59.999Z",
     );
     expect(firstRequestUrl).not.toContain("order.date_created.from=");
-    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(fetchMock).toHaveBeenCalledTimes(258);
+    expect(
+      fetchMock.mock.calls.filter((call) =>
+        String(call[0]).includes("/orders/search"),
+      ),
+    ).toHaveLength(6);
+    expect(
+      fetchMock.mock.calls.filter((call) =>
+        String(call[0]).includes("/billing/integration/periods/"),
+      ),
+    ).toHaveLength(1);
+    expect(
+      fetchMock.mock.calls.filter((call) => String(call[0]).includes("/discounts")),
+    ).toHaveLength(totalOrders);
     expect(result.orders).toHaveLength(totalOrders);
     expect(result.orders[0]?.externalOrderId).toBe("1");
     expect(result.orders.at(-1)?.externalOrderId).toBe("251");
@@ -1933,18 +1921,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            limit: 1000,
-            offset: 0,
-            results: [],
-            total: 0,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 3.5 }, { amount: 1.25 }],
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -1975,18 +1954,17 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            limit: 1000,
-            offset: 0,
-            results: [],
-            total: 0,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          details: [],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -2039,18 +2017,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            limit: 1000,
-            offset: 0,
-            results: [],
-            total: 0,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 3.5 }, { amount: 1.25 }],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -2066,8 +2035,12 @@ describe("MercadoLivreProvider", () => {
       organizationId: "org_1",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/orders/123");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      "/billing/integration/periods/",
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/discounts");
     expect(result.orders).toHaveLength(1);
     expect(result.orders[0]?.externalOrderId).toBe("123");
     expect(result.cursor).toEqual({
@@ -2219,11 +2192,12 @@ describe("MercadoLivreProvider", () => {
         variationId: "456",
       }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/orders/123");
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/",
     );
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/discounts");
   });
 
   it("persists Mercado Livre pack_id and operation_id even when search fees are already complete", async () => {
@@ -2294,18 +2268,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            limit: 1000,
-            offset: 0,
-            results: [],
-            total: 0,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 3.5 }, { amount: 1.25 }],
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -2347,11 +2312,114 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.externalOrderId).toBe("2000017085667456");
     expect(result.orders[0]?.metadata).toMatchObject({
       operationId: "2000013674359901",
+      refundBonusAmount: "4.75",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
       "/billing/integration/periods/",
     );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/discounts");
+  });
+
+  it("falls back to zero refund bonus when order discounts request fails", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            paging: { limit: 50, offset: 0, total: 1 },
+            results: [
+              {
+                currency_id: "BRL",
+                date_closed: "2026-06-24T10:00:00.000-03:00",
+                date_created: "2026-06-24T09:30:00.000-03:00",
+                id: 2000017085667456,
+                order_items: [
+                  {
+                    item: {
+                      id: "MLB123",
+                      seller_sku: "SKU-1",
+                      title: "Produto",
+                    },
+                    quantity: 1,
+                    sale_fee: 20.64,
+                    unit_price: 100,
+                  },
+                ],
+                payments: [
+                  {
+                    fee_amount: 5.76,
+                    marketplace_fee: 20.64,
+                    shipping_cost: 0.6,
+                  },
+                ],
+                total_amount: 100,
+              },
+            ],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response("provider unavailable", {
+          headers: { "content-type": "text/plain" },
+          status: 500,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            limit: 1000,
+            offset: 0,
+            results: [
+              {
+                operation_id: 2000013674359901,
+                order_id: 2000017085667456,
+                sale_fee: {
+                  fee_amount: 20.64,
+                  gross: 20.64,
+                  net: 20.64,
+                },
+              },
+            ],
+            total: 1,
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          details: [],
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      organizationId: "org_1",
+    });
+
+    expect(result.orders[0]?.metadata).toMatchObject({
+      refundBonusAmount: "0.00",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it("persists Mercado Livre operation_id when billing details require pagination", async () => {
@@ -2439,30 +2507,17 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            limit: 1000,
-            offset: 0,
-            results: [],
-            total: 0,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: 50, offset: 50, total: 1 },
-            results: [],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -2477,8 +2532,10 @@ describe("MercadoLivreProvider", () => {
       operationId: "2000013674359901",
       packId: "2000013607301987",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain("from_id=cursor-1");
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("from_id=cursor-2");
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain("/discounts");
   });
 
   it("prefers billing row with operation_id when the same order_id appears multiple times", async () => {
@@ -2557,16 +2614,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: 50, offset: 50, total: 1 },
-            results: [],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 6.65 }],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -2714,16 +2764,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: 50, offset: 50, total: 1 },
-            results: [],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          details: [{ amount: 6.65 }],
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);

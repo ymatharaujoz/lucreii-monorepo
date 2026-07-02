@@ -23,9 +23,13 @@ const errorCopyMap: Record<string, { title: string; suggestion: string }> = {
     suggestion: "A data inicial deve ser anterior ou igual a data final.",
     title: "Intervalo invertido",
   },
-  "Periodo manual deve ficar dentro dos ultimos 3 meses.": {
+  "Periodo manual deve ficar dentro do ultimo mes.": {
     suggestion: "Selecione datas mais recentes, dentro da janela permitida.",
-    title: "Fora da janela de 3 meses",
+    title: "Fora da janela de 1 mes",
+  },
+  "Periodo manual nao pode exceder 1 mes.": {
+    suggestion: "Reduza intervalo para no maximo 1 mes calendario.",
+    title: "Acima de 1 mes",
   },
 };
 

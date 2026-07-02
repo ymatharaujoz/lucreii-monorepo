@@ -29,29 +29,29 @@ const errorCases: Array<{
   {
     error: "Selecione data inicial e final.",
     expectedSuggestion:
-      "Preencha ambos os campos para habilitar a sincronização manual.",
-    expectedTitle: "Datas obrigatórias",
+      "Preencha ambos os campos para habilitar a sincronizacao manual.",
+    expectedTitle: "Datas obrigatorias",
   },
   {
-    error: "Período inválido.",
+    error: "Periodo invalido.",
     expectedSuggestion: "Revise as datas selecionadas e tente novamente.",
-    expectedTitle: "Formato inválido",
+    expectedTitle: "Formato invalido",
   },
   {
-    error: "Data inicial não pode ser maior que data final.",
-    expectedSuggestion: "A data inicial deve ser anterior ou igual à data final.",
+    error: "Data inicial nao pode ser maior que data final.",
+    expectedSuggestion: "A data inicial deve ser anterior ou igual a data final.",
     expectedTitle: "Intervalo invertido",
   },
   {
-    error: "Período manual deve ficar dentro dos últimos 30 dias.",
+    error: "Periodo manual deve ficar dentro do ultimo mes.",
     expectedSuggestion:
       "Selecione datas mais recentes, dentro da janela permitida.",
-    expectedTitle: "Fora da janela de 30 dias",
+    expectedTitle: "Fora da janela de 1 mes",
   },
   {
-    error: "Período manual não pode ultrapassar 1 mês.",
-    expectedSuggestion: "Reduza o intervalo para no máximo 1 mês.",
-    expectedTitle: "Período muito longo",
+    error: "Periodo manual nao pode exceder 1 mes.",
+    expectedSuggestion: "Reduza intervalo para no maximo 1 mes calendario.",
+    expectedTitle: "Acima de 1 mes",
   },
 ];
 
@@ -80,14 +80,14 @@ describe("ManualSyncRangeErrorBanner", () => {
     );
 
     const text = container.textContent ?? "";
-    expect(text).toContain("Período inválido");
-    expect(text).toContain("Revise o período selecionado e tente novamente.");
+    expect(text).toContain("Periodo invalido");
+    expect(text).toContain("Revise o periodo selecionado e tente novamente.");
     expect(text).toContain("Algum erro desconhecido.");
   });
 
   it("exposes role=alert and aria-live=polite for assistive tech", () => {
     const { container } = mount(
-      <ManualSyncRangeErrorBanner error="Período inválido." />,
+      <ManualSyncRangeErrorBanner error="Periodo invalido." />,
     );
 
     const alert = container.querySelector('[role="alert"]');
@@ -98,7 +98,7 @@ describe("ManualSyncRangeErrorBanner", () => {
   it("applies the describedById to the banner root", () => {
     const { container } = mount(
       <ManualSyncRangeErrorBanner
-        error="Período inválido."
+        error="Periodo invalido."
         describedById="manual-sync-range-error"
       />,
     );

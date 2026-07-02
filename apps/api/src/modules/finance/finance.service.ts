@@ -30,7 +30,7 @@ import type {
   DashboardSummaryMetrics,
 } from "@lucreii/types";
 import type { IntegrationProviderSlug } from "@lucreii/types";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 
 type ProductCostRow = Pick<ProductCost, "amount" | "createdAt" | "effectiveFrom">;
@@ -90,6 +90,18 @@ export function toMetricDate(value: Date | string | null | undefined) {
   }
 
   return value.slice(0, 10);
+}
+
+export function buildReferenceMonthRange(referenceMonth: string) {
+  const [year, month] = referenceMonth.slice(0, 7).split("-").map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) {
+    return null;
+  }
+
+  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+  const end = new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1, 0, 0, 0, 0));
+
+  return { end, start };
 }
 
 function isMissingExternalProductReviewColumns(error: unknown) {
@@ -280,7 +292,11 @@ export class FinanceService {
     organizationId: string,
     companyId: string,
     provider?: IntegrationProviderSlug,
+    referenceMonth?: string,
   ): Promise<FinanceSnapshot> {
+    const referenceMonthRange = referenceMonth
+      ? buildReferenceMonthRange(referenceMonth)
+      : null;
     const [productRows, orderRows, adCostRows, expenseRows, externalProductRows] = await Promise.all([
       this.db.query.products.findMany({
         orderBy: (table) => [desc(table.createdAt)],
@@ -299,16 +315,14 @@ export class FinanceService {
       this.db.query.externalOrders.findMany({
         orderBy: (table) => [desc(table.orderedAt), desc(table.createdAt)],
         where: (table) =>
-          provider
-            ? and(
-                eq(table.organizationId, organizationId),
-                eq(table.companyId, companyId),
-                eq(table.provider, provider),
-              )
-            : and(
-                eq(table.organizationId, organizationId),
-                eq(table.companyId, companyId),
-              ),
+          and(
+            eq(table.organizationId, organizationId),
+            eq(table.companyId, companyId),
+            ...(provider ? [eq(table.provider, provider)] : []),
+            ...(referenceMonthRange
+              ? [gte(table.orderedAt, referenceMonthRange.start), lt(table.orderedAt, referenceMonthRange.end)]
+              : []),
+          ),
         with: {
           fees: true,
           items: true,
@@ -317,16 +331,17 @@ export class FinanceService {
       this.db.query.adCosts.findMany({
         orderBy: (table) => [desc(table.spentAt), desc(table.createdAt)],
         where: (table) =>
-          provider
-            ? and(
-                eq(table.organizationId, organizationId),
-                eq(table.companyId, companyId),
-                eq(table.channel, provider),
-              )
-            : and(
-                eq(table.organizationId, organizationId),
-                eq(table.companyId, companyId),
-              ),
+          and(
+            eq(table.organizationId, organizationId),
+            eq(table.companyId, companyId),
+            ...(provider ? [eq(table.channel, provider)] : []),
+            ...(referenceMonthRange
+              ? [
+                  gte(table.spentAt, referenceMonthRange.start.toISOString().slice(0, 10)),
+                  lt(table.spentAt, referenceMonthRange.end.toISOString().slice(0, 10)),
+                ]
+              : []),
+          ),
       }),
       this.db.query.manualExpenses.findMany({
         orderBy: (table) => [desc(table.incurredAt), desc(table.createdAt)],
@@ -334,6 +349,12 @@ export class FinanceService {
           and(
             eq(table.organizationId, organizationId),
             eq(table.companyId, companyId),
+            ...(referenceMonthRange
+              ? [
+                  gte(table.incurredAt, referenceMonthRange.start.toISOString().slice(0, 10)),
+                  lt(table.incurredAt, referenceMonthRange.end.toISOString().slice(0, 10)),
+                ]
+              : []),
           ),
       }),
       this.readExternalProductsForFinance(organizationId, companyId),
@@ -375,11 +396,13 @@ export class FinanceService {
     organizationId: string,
     companyId: string,
     provider?: IntegrationProviderSlug,
+    referenceMonth?: string,
   ): Promise<DashboardReadModel> {
     const snapshot = await this.buildFinanceSnapshot(
       organizationId,
       companyId,
       provider,
+      referenceMonth,
     );
     const overview = buildFinanceOverview(snapshot);
     const productProfitability = buildProductProfitabilityMetrics(snapshot);
@@ -448,8 +471,9 @@ export class FinanceService {
     organizationId: string,
     companyId: string,
     provider?: IntegrationProviderSlug,
+    referenceMonth?: string,
   ): Promise<DashboardSummaryMetrics> {
-    return (await this.buildDashboardReadModel(organizationId, companyId, provider))
+    return (await this.buildDashboardReadModel(organizationId, companyId, provider, referenceMonth))
       .summary;
   }
 

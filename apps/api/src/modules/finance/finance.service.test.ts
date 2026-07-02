@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { dailyMetrics, productMetrics } from "@lucreii/database";
-import { FinanceService, normalizeSku, selectLatestProductCost, toMetricDate } from "./finance.service";
+import {
+  buildReferenceMonthRange,
+  FinanceService,
+  normalizeSku,
+  selectLatestProductCost,
+  toMetricDate,
+} from "./finance.service";
 
 type TransactionMock = {
   delete: ReturnType<typeof vi.fn>;
@@ -100,6 +106,13 @@ describe("finance service helpers", () => {
     expect(toMetricDate(new Date("2026-04-28T10:00:00.000Z"))).toBe("2026-04-28");
     expect(toMetricDate("2026-04-29T10:00:00.000Z")).toBe("2026-04-29");
     expect(toMetricDate(null)).toBeNull();
+  });
+
+  it("builds UTC monthly boundaries from a reference month", () => {
+    expect(buildReferenceMonthRange("2026-07-01")).toEqual({
+      start: new Date("2026-07-01T00:00:00.000Z"),
+      end: new Date("2026-08-01T00:00:00.000Z"),
+    });
   });
 });
 
@@ -646,6 +659,112 @@ describe("FinanceService", () => {
         netProfit: "15.00",
         organizationId: "org_123",
         productId: "product_1",
+      }),
+    ]);
+  });
+
+  it("filters finance snapshot facts to the selected reference month", async () => {
+    const { db, service } = createFinanceServiceFixture();
+    const externalProductsSelectWhere = vi.fn().mockResolvedValue([
+      {
+        externalProductId: "MLB-001",
+        id: "external_product_1",
+        linkedProductId: null,
+        metadata: {},
+        provider: "mercadolivre",
+        sku: "ABC-1",
+        title: "Product One",
+      },
+    ]);
+    const externalProductsSelectFrom = vi.fn(() => ({
+      where: externalProductsSelectWhere,
+    }));
+    db.select.mockReturnValue({
+      from: externalProductsSelectFrom,
+    });
+    db.query.products.findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-07-10T10:00:00.000Z"),
+        id: "product_1",
+        images: [],
+        isActive: true,
+        name: "Product One",
+        organizationId: "org_123",
+        productCosts: [
+          {
+            amount: "20.00",
+            createdAt: new Date("2026-07-01T10:00:00.000Z"),
+            effectiveFrom: "2026-07-01",
+          },
+        ],
+        sellingPrice: "100.00",
+        sku: "ABC-1",
+      },
+    ]);
+    db.query.externalOrders.findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-07-10T10:00:00.000Z"),
+        fees: [{ amount: "10.00", feeType: "marketplace", id: "fee_1" }],
+        id: "order_in",
+        items: [
+          {
+            externalProductId: "external_product_1",
+            id: "item_1",
+            quantity: 1,
+            totalPrice: "100.00",
+            unitPrice: "100.00",
+          },
+        ],
+        orderedAt: new Date("2026-07-10T10:00:00.000Z"),
+        provider: "mercadolivre",
+        totalAmount: "100.00",
+      },
+    ]);
+    db.query.adCosts.findMany.mockResolvedValue([
+      {
+        amount: "5.00",
+        channel: "mercadolivre",
+        createdAt: new Date("2026-07-10T10:00:00.000Z"),
+        currency: "BRL",
+        id: "ad_in",
+        notes: null,
+        organizationId: "org_123",
+        productId: "product_1",
+        spentAt: "2026-07-10",
+        updatedAt: new Date("2026-07-10T10:00:00.000Z"),
+      },
+    ]);
+    db.query.manualExpenses.findMany.mockResolvedValue([
+      {
+        amount: "12.00",
+        category: "operations",
+        createdAt: new Date("2026-07-10T10:00:00.000Z"),
+        currency: "BRL",
+        id: "expense_in",
+        incurredAt: "2026-07-10",
+        notes: null,
+        organizationId: "org_123",
+        updatedAt: new Date("2026-07-10T10:00:00.000Z"),
+      },
+    ]);
+
+    const readModel = await service.buildDashboardReadModel(
+      "org_123",
+      "company_123",
+      undefined,
+      "2026-07-01",
+    );
+
+    expect(readModel.summary).toEqual(
+      expect.objectContaining({
+        grossRevenue: "100.00",
+        totalAdCosts: "5.00",
+        totalManualExpenses: "12.00",
+      }),
+    );
+    expect(readModel.daily).toEqual([
+      expect.objectContaining({
+        metricDate: "2026-07-10",
       }),
     ]);
   });

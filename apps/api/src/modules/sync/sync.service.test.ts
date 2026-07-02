@@ -545,20 +545,66 @@ describe("SyncService", () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it("rejects manual ranges older than the rolling 3-month window", async () => {
+  it("rejects manual ranges older than the rolling 1-month window", async () => {
     vi.setSystemTime(new Date("2026-06-22T12:30:00.000Z"));
-    const { service } = createService();
+    const { db, service } = createService();
+
+    db.query.marketplaceConnections.findFirst.mockResolvedValue({
+      accessToken: "token",
+      createdAt: new Date("2026-05-01T11:00:00.000Z"),
+      externalAccountId: "seller_123",
+      id: "conn_123",
+      lastSyncedAt: null,
+      metadata: {},
+      companyId: "company_123",
+      organizationId: "org_123",
+      provider: "mercadolivre",
+      refreshToken: "refresh",
+      status: "connected",
+      tokenExpiresAt: new Date("2026-07-03T11:00:00.000Z"),
+      updatedAt: new Date("2026-05-01T11:00:00.000Z"),
+    });
+    db.query.syncRuns.findFirst.mockResolvedValue(null);
 
     await expect(
       service.runSync("org_123", "company_123", "user_123", "mercadolivre", {
-        endDate: "2026-03-21",
-        startDate: "2026-03-20",
+        endDate: "2026-05-21",
+        startDate: "2026-05-20",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it("accepts manual ranges longer than one month when still inside the last 3 months", async () => {
+  it("rejects manual ranges longer than one month", async () => {
     vi.setSystemTime(new Date("2026-06-27T12:30:00.000Z"));
+    const { db, service } = createService();
+
+    db.query.marketplaceConnections.findFirst.mockResolvedValue({
+      accessToken: "token",
+      createdAt: new Date("2026-05-01T11:00:00.000Z"),
+      externalAccountId: "seller_123",
+      id: "conn_123",
+      lastSyncedAt: null,
+      metadata: {},
+      companyId: "company_123",
+      organizationId: "org_123",
+      provider: "mercadolivre",
+      refreshToken: "refresh",
+      status: "connected",
+      tokenExpiresAt: new Date("2026-07-03T11:00:00.000Z"),
+      updatedAt: new Date("2026-05-01T11:00:00.000Z"),
+    });
+    db.query.syncRuns.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.runSync("org_123", "company_123", "user_123", "mercadolivre", {
+        endDate: "2026-06-27",
+        startDate: "2026-05-26",
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it("accepts manual ranges at the exact 1-month calendar limit", async () => {
+    vi.setSystemTime(new Date("2026-02-28T12:30:00.000Z"));
     const { db, service } = createService();
 
     db.query.marketplaceConnections.findFirst.mockResolvedValue({
@@ -588,8 +634,8 @@ describe("SyncService", () => {
 
     await expect(
       service.runSync("org_123", "company_123", "user_123", "mercadolivre", {
-        endDate: "2026-06-27",
-        startDate: "2026-03-27",
+        endDate: "2026-02-28",
+        startDate: "2026-01-31",
       }),
     ).resolves.toEqual(
       expect.objectContaining({
@@ -955,6 +1001,135 @@ describe("SyncService", () => {
         quantity: 1,
       }),
     ]);
+  });
+
+  it("persists refund bonus amount on external orders during upsert", async () => {
+    const { db, service } = createService();
+    let insertedOrder: Record<string, unknown> | null = null;
+    let externalOrderConflictSet: Record<string, unknown> | null = null;
+
+    db.insert = vi.fn().mockImplementation(() => ({
+      values: vi.fn().mockImplementation((value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalOrderId" in value &&
+          (value as { externalOrderId?: unknown }).externalOrderId === "order_1"
+        ) {
+          insertedOrder = value as Record<string, unknown>;
+          return {
+            onConflictDoUpdate: vi.fn().mockImplementation((payload) => {
+              externalOrderConflictSet = (
+                payload as { set: Record<string, unknown> }
+              ).set;
+              return {
+                returning: vi.fn().mockResolvedValue([{ id: "ext_order_1" }]),
+              };
+            }),
+          };
+        }
+
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalProductId" in value &&
+          (value as { externalProductId?: unknown }).externalProductId ===
+            "product_ext_1"
+        ) {
+          return {
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: "ext_prod_1" }]),
+            }),
+          };
+        }
+
+        return {
+          returning: vi.fn().mockResolvedValue([]),
+        };
+      }),
+    }));
+
+    await (
+      service as unknown as {
+        persistSyncResult: (input: {
+          companyId: string;
+          connection: { id: string };
+          organizationId: string;
+          providerSlug: "mercadolivre";
+          syncResult: {
+            orders: Array<{
+              currency: string;
+              externalOrderId: string;
+              fees: unknown[];
+              items: Array<{
+                externalProductId: string;
+                quantity: number;
+                totalPrice: string;
+                unitPrice: string;
+              }>;
+              metadata: { refundBonusAmount: string };
+              orderedAt: string;
+              status: string;
+              totalAmount: string;
+            }>;
+            products: Array<{
+              externalProductId: string;
+              metadata: Record<string, unknown>;
+              sku: string;
+              title: string;
+            }>;
+          };
+          syncRunId: string;
+        }) => Promise<unknown>;
+      }
+    ).persistSyncResult({
+      companyId: "company_1",
+      connection: { id: "conn_1" },
+      organizationId: "org_1",
+      providerSlug: "mercadolivre",
+      syncResult: {
+        orders: [
+          {
+            currency: "BRL",
+            externalOrderId: "order_1",
+            fees: [],
+            items: [
+              {
+                externalProductId: "product_ext_1",
+                quantity: 1,
+                totalPrice: "100.00",
+                unitPrice: "100.00",
+              },
+            ],
+            metadata: { refundBonusAmount: "4.75" },
+            orderedAt: "2026-05-01T10:00:00.000Z",
+            status: "paid",
+            totalAmount: "100.00",
+          },
+        ],
+        products: [
+          {
+            externalProductId: "product_ext_1",
+            metadata: {},
+            sku: "SKU-1",
+            title: "Produto 1",
+          },
+        ],
+      },
+      syncRunId: "sync_1",
+    });
+
+    expect(insertedOrder).toEqual(
+      expect.objectContaining({
+        externalOrderId: "order_1",
+        refundBonusAmount: "4.75",
+      }),
+    );
+    expect(externalOrderConflictSet).toEqual(
+      expect.objectContaining({
+        refundBonusAmount: "4.75",
+      }),
+    );
   });
 
   it("preserves previously imported fallback sku when order sync payload has null sku", async () => {
