@@ -65,11 +65,13 @@ export class DashboardService {
     organizationId: string,
     companyId: string,
     provider?: IntegrationProviderSlug,
+    referenceMonth?: string,
   ): Promise<DashboardSummaryResponse> {
     const summary = await this.financeService.readSummaryMetrics(
       organizationId,
       companyId,
       provider,
+      referenceMonth,
     );
 
     return {
@@ -82,11 +84,13 @@ export class DashboardService {
     organizationId: string,
     companyId: string,
     provider?: IntegrationProviderSlug,
+    referenceMonth?: string,
   ): Promise<DashboardChartsResponse> {
     const readModel = await this.financeService.buildDashboardReadModel(
       organizationId,
       companyId,
       provider,
+      referenceMonth,
     );
 
     return {
@@ -118,11 +122,13 @@ export class DashboardService {
     organizationId: string,
     companyId: string,
     provider?: IntegrationProviderSlug,
+    referenceMonth?: string,
   ): Promise<DashboardProfitabilityResponse> {
     const readModel = await this.financeService.buildDashboardReadModel(
       organizationId,
       companyId,
       provider,
+      referenceMonth,
     );
 
     return {

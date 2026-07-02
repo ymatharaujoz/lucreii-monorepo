@@ -169,6 +169,28 @@ function buildOrderMetadata(order: {
   return metadata;
 }
 
+function readOrderRefundBonusAmount(
+  metadata: Record<string, unknown> | null | undefined,
+) {
+  if (!metadata || typeof metadata !== "object") {
+    return "0.00";
+  }
+
+  const rawValue = metadata.refundBonusAmount;
+  if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+    return rawValue.toFixed(2);
+  }
+
+  if (typeof rawValue === "string") {
+    const parsed = Number(rawValue);
+    if (Number.isFinite(parsed)) {
+      return parsed.toFixed(2);
+    }
+  }
+
+  return "0.00";
+}
+
 function normalizeRunOrigin(
   value: Record<string, unknown> | null | undefined,
 ): SyncRunOrigin {
@@ -194,6 +216,11 @@ type ManualSyncRequest = {
   startDate: string;
   endDate: string;
 };
+
+const MANUAL_SYNC_OUTSIDE_WINDOW_ERROR =
+  "Periodo manual deve ficar dentro do ultimo mes.";
+const MANUAL_SYNC_MAX_RANGE_ERROR =
+  "Periodo manual nao pode exceder 1 mes.";
 
 function parseDateOnlyAsUtc(value: string) {
   const [year, month, day] = value.split("-").map(Number);
@@ -1111,6 +1138,11 @@ export class SyncService {
       );
     }
 
+    const latestAllowedEndForStart = endOfUtcDay(addUtcMonths(startAtDate, 1));
+    if (endAtDate.getTime() > latestAllowedEndForStart.getTime()) {
+      throw new BadRequestException(MANUAL_SYNC_MAX_RANGE_ERROR);
+    }
+
     const now = new Date();
     const todayStart = new Date(
       Date.UTC(
@@ -1123,16 +1155,14 @@ export class SyncService {
         0,
       ),
     );
-    const oldestAllowedStart = addUtcMonths(todayStart, -3);
+    const oldestAllowedStart = addUtcMonths(todayStart, -1);
     const newestAllowedEnd = endOfUtcDay(todayStart);
 
     if (
       startAtDate.getTime() < oldestAllowedStart.getTime() ||
       endAtDate.getTime() > newestAllowedEnd.getTime()
     ) {
-      throw new BadRequestException(
-        "Periodo manual deve ficar dentro dos ultimos 3 meses.",
-      );
+      throw new BadRequestException(MANUAL_SYNC_OUTSIDE_WINDOW_ERROR);
     }
 
     return {
@@ -1417,6 +1447,7 @@ export class SyncService {
 
       for (const order of input.syncResult.orders) {
         const orderMetadata = buildOrderMetadata(order);
+        const refundBonusAmount = readOrderRefundBonusAmount(orderMetadata);
         const [storedOrder] = await tx
           .insert(externalOrders)
           .values({
@@ -1427,6 +1458,7 @@ export class SyncService {
             orderedAt: order.orderedAt ? new Date(order.orderedAt) : null,
             organizationId: input.organizationId,
             provider: input.providerSlug,
+            refundBonusAmount,
             status: order.status,
             syncRunId: input.syncRunId,
             totalAmount: order.totalAmount,
@@ -1439,6 +1471,7 @@ export class SyncService {
               metadata: orderMetadata,
               orderedAt: order.orderedAt ? new Date(order.orderedAt) : null,
               status: order.status,
+              refundBonusAmount,
               syncRunId: input.syncRunId,
               totalAmount: order.totalAmount,
               updatedAt: new Date(),

@@ -15,6 +15,7 @@ import {
   dashboardSummaryApiResponseSchema,
 } from "@lucreii/validation";
 import { ApiClientError, apiClient } from "@/lib/api/client";
+import { buildReferenceMonthDateRange } from "@/lib/reference-month";
 import { fetchOrders } from "@/modules/orders/hooks/use-orders-data";
 import { deriveBusinessStatus, determineDashboardFinancialState } from "../calculations/financial-state";
 
@@ -35,25 +36,41 @@ function readSelectedCompanyIdFromBrowserCookie() {
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
-function dashboardUrl(path: string, provider?: IntegrationProviderSlug | null) {
-  return provider ? `${path}?provider=${provider}` : path;
+function dashboardUrl(
+  path: string,
+  provider?: IntegrationProviderSlug | null,
+  referenceMonth?: string,
+) {
+  const params = new URLSearchParams();
+
+  if (provider) {
+    params.set("provider", provider);
+  }
+
+  if (referenceMonth) {
+    params.set("referenceMonth", referenceMonth);
+  }
+
+  return params.size > 0 ? `${path}?${params.toString()}` : path;
 }
 
 export async function fetchDashboardSummary(
   providerOrLegacy?: IntegrationProviderSlug | boolean | null,
+  referenceMonth?: string,
 ): Promise<DashboardSummaryResponse> {
   const provider = typeof providerOrLegacy === "string" ? providerOrLegacy : null;
   return apiClient.getValidatedData(
-    dashboardUrl("/dashboard/summary", provider),
+    dashboardUrl("/dashboard/summary", provider, referenceMonth),
     dashboardSummaryApiResponseSchema,
   );
 }
 
 export async function fetchDashboardCharts(
   provider?: IntegrationProviderSlug | null,
+  referenceMonth?: string,
 ): Promise<DashboardChartsResponse> {
   return apiClient.getValidatedData(
-    dashboardUrl("/dashboard/charts", provider),
+    dashboardUrl("/dashboard/charts", provider, referenceMonth),
     dashboardChartsApiResponseSchema,
   );
 }
@@ -69,40 +86,52 @@ export async function fetchDashboardRecentSync(
 
 export async function fetchDashboardProfitability(
   provider?: IntegrationProviderSlug | null,
+  referenceMonth?: string,
 ): Promise<DashboardProfitabilityResponse> {
   return apiClient.getValidatedData(
-    dashboardUrl("/dashboard/profitability", provider),
+    dashboardUrl("/dashboard/profitability", provider, referenceMonth),
     dashboardProfitabilityApiResponseSchema,
   );
 }
 
-export function useDashboardData(provider: IntegrationProviderSlug | null = null) {
+export function useDashboardData(
+  provider: IntegrationProviderSlug | null = null,
+  referenceMonth?: string,
+) {
   const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
+  const monthRange = referenceMonth ? buildReferenceMonthDateRange(referenceMonth) : null;
   const ordersSummaryQuery = useQuery({
     queryFn: () =>
       fetchOrders({
+        ...(monthRange ?? {}),
         page: 1,
         pageSize: 1,
         ...(provider ? { provider } : {}),
       }),
-    queryKey: [...dashboardOrdersSummaryQueryKey, selectedCompanyId, provider],
+    queryKey: [
+      ...dashboardOrdersSummaryQueryKey,
+      selectedCompanyId,
+      provider,
+      monthRange?.orderedFrom ?? "",
+      monthRange?.orderedTo ?? "",
+    ],
     retry: 2,
   });
   const summaryQuery = useQuery({
-    queryFn: () => fetchDashboardSummary(provider),
-    queryKey: [...dashboardSummaryQueryKey, selectedCompanyId, provider],
+    queryFn: () => fetchDashboardSummary(provider, referenceMonth),
+    queryKey: [...dashboardSummaryQueryKey, selectedCompanyId, provider, referenceMonth ?? ""],
     retry: 2,
   });
 
   const chartsQuery = useQuery({
-    queryFn: () => fetchDashboardCharts(provider),
-    queryKey: [...dashboardChartsQueryKey, selectedCompanyId, provider],
+    queryFn: () => fetchDashboardCharts(provider, referenceMonth),
+    queryKey: [...dashboardChartsQueryKey, selectedCompanyId, provider, referenceMonth ?? ""],
     retry: 2,
   });
 
   const profitabilityQuery = useQuery({
-    queryFn: () => fetchDashboardProfitability(provider),
-    queryKey: [...dashboardProfitabilityQueryKey, selectedCompanyId, provider],
+    queryFn: () => fetchDashboardProfitability(provider, referenceMonth),
+    queryKey: [...dashboardProfitabilityQueryKey, selectedCompanyId, provider, referenceMonth ?? ""],
     retry: 2,
   });
 
@@ -125,6 +154,7 @@ export function useDashboardData(provider: IntegrationProviderSlug | null = null
     financialState,
     businessStatus,
     refetchAll() {
+      ordersSummaryQuery.refetch();
       summaryQuery.refetch();
       chartsQuery.refetch();
       profitabilityQuery.refetch();

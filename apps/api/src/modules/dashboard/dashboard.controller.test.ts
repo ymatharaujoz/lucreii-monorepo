@@ -99,11 +99,16 @@ describe("dashboard controller", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/dashboard/summary?provider=shopee",
+      url: "/dashboard/summary?provider=shopee&referenceMonth=2026-07-01",
     });
 
     expect(response.statusCode).toBe(200);
-    expect(dashboardService.readSummary).toHaveBeenCalledWith("org_123", "company_123", "shopee");
+    expect(dashboardService.readSummary).toHaveBeenCalledWith(
+      "org_123",
+      "company_123",
+      "shopee",
+      "2026-07-01",
+    );
     expect(response.json()).toEqual({
       data: expect.objectContaining({
         cards: [],
@@ -166,7 +171,7 @@ describe("dashboard controller", () => {
     const [chartsResponse, recentSyncResponse, profitabilityResponse] = await Promise.all([
       app.inject({
         method: "GET",
-        url: "/dashboard/charts",
+        url: "/dashboard/charts?referenceMonth=2026-07-01",
       }),
       app.inject({
         method: "GET",
@@ -174,7 +179,7 @@ describe("dashboard controller", () => {
       }),
       app.inject({
         method: "GET",
-        url: "/dashboard/profitability",
+        url: "/dashboard/profitability?referenceMonth=2026-07-01",
       }),
     ]);
 
@@ -185,6 +190,7 @@ describe("dashboard controller", () => {
       "org_123",
       "company_123",
       undefined,
+      "2026-07-01",
     );
     expect(dashboardService.readRecentSync).toHaveBeenCalledWith(
       "org_123",
@@ -195,7 +201,44 @@ describe("dashboard controller", () => {
       "org_123",
       "company_123",
       undefined,
+      "2026-07-01",
     );
+  });
+
+  it("rejects invalid referenceMonth query values", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: {
+        id: "org_123",
+        name: "Org",
+        role: "owner",
+        slug: "org",
+      },
+      selectedCompanyId: "company_123",
+      session: {
+        expiresAt: new Date("2026-04-22T00:00:00.000Z"),
+        id: "session_123",
+      },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(entitlementsService, "requireActiveEntitlement").mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/dashboard/summary?referenceMonth=2026-07-10",
+    });
+
+    expect(response.statusCode).toBe(400);
   });
 
   it("rejects unauthenticated requests", async () => {

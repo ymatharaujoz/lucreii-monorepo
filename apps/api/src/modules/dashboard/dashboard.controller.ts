@@ -9,9 +9,11 @@ import { DashboardService } from "./dashboard.service";
 class DashboardProviderQueryDto {
   static schema = z.object({
     provider: z.enum(["mercadolivre", "shopee", "shein"]).optional(),
+    referenceMonth: z.string().trim().regex(/^\d{4}-\d{2}-01$/).optional(),
   });
 
   provider?: "mercadolivre" | "shopee" | "shein";
+  referenceMonth?: string;
 }
 
 @Controller("dashboard")
@@ -33,6 +35,7 @@ export class DashboardController {
         authContext.organization!.id,
         companyId,
         query.provider,
+        query.referenceMonth,
       ),
       error: null,
     };
@@ -49,6 +52,7 @@ export class DashboardController {
         authContext.organization!.id,
         companyId,
         query.provider,
+        query.referenceMonth,
       ),
       error: null,
     };
@@ -81,6 +85,7 @@ export class DashboardController {
         authContext.organization!.id,
         companyId,
         query.provider,
+        query.referenceMonth,
       ),
       error: null,
     };

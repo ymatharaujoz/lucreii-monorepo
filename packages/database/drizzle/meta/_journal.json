@@ -148,6 +148,13 @@
       "when": 1782126000000,
       "tag": "0020_product_monthly_performance_product_link",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1782950400000,
+      "tag": "0021_external_orders_refund_bonus_amount",
+      "breakpoints": true
     }
   ]
 }

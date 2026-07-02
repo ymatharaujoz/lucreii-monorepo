@@ -405,10 +405,10 @@ function buildOrderBaseMetrics(order: OrderRow) {
   const fixedCostAmount =
     sumFeesByPredicate(order.fees, (fee) => fee.feeType === "fixed_fee") ||
     readMetadataMoney(metadata, "fixedCostAmount");
-  const refundBonusAmount = sumFeesByPredicate(
-    order.fees,
-    (fee) => fee.feeType === "refund_bonus",
-  );
+  const refundBonusAmount =
+    order.refundBonusAmount !== null && order.refundBonusAmount !== undefined
+      ? toNumber(order.refundBonusAmount)
+      : sumFeesByPredicate(order.fees, (fee) => fee.feeType === "refund_bonus");
   const totalFees =
     shippingAmount + tariffAmount + fixedCostAmount - refundBonusAmount;
   const totalWithoutFees = Math.max(0, totalWithFees - totalFees);
