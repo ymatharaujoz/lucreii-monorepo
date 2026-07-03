@@ -135,12 +135,6 @@ type MercadoLivreOrderResponse = {
 
 type MercadoLivreOrderDetailResponse = MercadoLivreOrderResponse;
 
-type MercadoLivreOrderDiscountsResponse = {
-  details?: unknown[];
-  discounts?: unknown[];
-  results?: unknown[];
-};
-
 type MercadoLivreShipmentCostsResponse = {
   receiver?: {
     cost?: number;
@@ -180,6 +174,10 @@ type MercadoLivrePaymentResponse = {
   charges_details?: MercadoLivrePaymentFinancialDetail[];
   fee_details?: MercadoLivrePaymentFinancialDetail[];
   id?: number | string;
+  net_received_amount?: number | string;
+  transaction_details?: {
+    net_received_amount?: number | string;
+  };
 };
 
 type MercadoLivreShippingCostResolution = {
@@ -243,7 +241,9 @@ type MercadoLivreFinancialAdjustment = {
   originalDescription: string | null;
   originalType: string | null;
   rawPayload: Record<string, unknown> | null;
-  source: "billing/integration/periods" | "orders/discounts";
+  source:
+    | "billing/integration/periods"
+    | "payment.transaction_details.net_received_amount";
 };
 
 type MercadoLivreBillingDetailResponse = {
@@ -509,125 +509,66 @@ function readBillingFinancialAdjustment(
   return null;
 }
 
-function readNestedDiscountAmount(value: unknown): number {
-  if (!value) {
-    return 0;
+function readPaymentNetReceivedAmount(payload: MercadoLivrePaymentResponse) {
+  const candidates = [
+    payload.transaction_details?.net_received_amount,
+    payload.net_received_amount,
+  ];
+
+  for (const candidate of candidates) {
+    const amount = readPositiveBillingNumber(candidate);
+    if (amount !== null) {
+      return amount;
+    }
   }
 
-  const directAmount = readPositiveBillingNumber(value);
-  if (directAmount !== null) {
-    return directAmount;
-  }
+  return null;
+}
 
-  if (Array.isArray(value)) {
-    return value.reduce(
-      (sum, entry) => sum + readNestedDiscountAmount(entry),
-      0,
-    );
-  }
-
-  if (typeof value !== "object") {
-    return 0;
-  }
-
-  const record = value as Record<string, unknown>;
-  return Object.entries(record).reduce((sum, [key, entry]) => {
-    if (/id$/i.test(key)) {
+function sumFeeAmountsByType(
+  fees: IntegrationSyncFee[],
+  feeType: IntegrationSyncFee["feeType"],
+) {
+  return fees.reduce((sum, fee) => {
+    if (fee.feeType !== feeType) {
       return sum;
     }
 
-    return sum + readNestedDiscountAmount(entry);
+    const amount = Number(fee.amount);
+    return Number.isFinite(amount) ? sum + amount : sum;
   }, 0);
 }
 
-function readOrderDiscountDescription(value: unknown): string | null {
-  if (!value || typeof value !== "object") {
+function deriveNetTotalRefundBonus(input: {
+  fees: IntegrationSyncFee[];
+  netReceivedAmount: number;
+  operationId: string | null;
+  rawPayload: Record<string, unknown> | null;
+  totalAmount: number;
+}): MercadoLivreFinancialAdjustment | null {
+  const marketplaceCommissionAmount = sumFeeAmountsByType(
+    input.fees,
+    "marketplace_commission",
+  );
+  const shippingAmount = sumFeeAmountsByType(input.fees, "shipping_cost");
+  const expectedNetAmount = roundMoneyNumber(
+    input.totalAmount - marketplaceCommissionAmount - shippingAmount,
+  );
+  const refundBonusAmount = roundMoneyNumber(
+    input.netReceivedAmount - expectedNetAmount,
+  );
+
+  if (refundBonusAmount < 0.01) {
     return null;
   }
-
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const description = readOrderDiscountDescription(entry);
-      if (description) {
-        return description;
-      }
-    }
-
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  for (const key of ["description", "detail", "name", "reason", "label"]) {
-    const entry = record[key];
-    if (typeof entry === "string" && entry.trim().length > 0) {
-      return entry;
-    }
-  }
-
-  for (const entry of Object.values(record)) {
-    const description = readOrderDiscountDescription(entry);
-    if (description) {
-      return description;
-    }
-  }
-
-  return null;
-}
-
-function readOrderDiscountType(value: unknown): string | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const type = readOrderDiscountType(entry);
-      if (type) {
-        return type;
-      }
-    }
-
-    return null;
-  }
-
-  const record = value as Record<string, unknown>;
-  for (const key of ["type", "detail_type", "event_type", "subtype"]) {
-    const entry = record[key];
-    if (typeof entry === "string" && entry.trim().length > 0) {
-      return entry;
-    }
-  }
-
-  for (const entry of Object.values(record)) {
-    const type = readOrderDiscountType(entry);
-    if (type) {
-      return type;
-    }
-  }
-
-  return null;
-}
-
-function readOrderDiscountFinancialAdjustment(
-  payload: MercadoLivreOrderDiscountsResponse,
-): MercadoLivreFinancialAdjustment | null {
-  const amount = readMercadoLivreOrderDiscountAmount(payload);
-  if (amount <= 0) {
-    return null;
-  }
-
-  const sanitizedPayload = sanitizeProviderPayload(payload);
 
   return {
-    amount,
-    operationId: null,
-    originalDescription: readOrderDiscountDescription(payload),
-    originalType: readOrderDiscountType(payload),
-    rawPayload:
-      sanitizedPayload && typeof sanitizedPayload === "object"
-        ? sanitizedPayload
-        : null,
-    source: "orders/discounts",
+    amount: refundBonusAmount,
+    operationId: input.operationId,
+    originalDescription: "Derived from Mercado Livre net total",
+    originalType: "net_total_difference",
+    rawPayload: input.rawPayload,
+    source: "payment.transaction_details.net_received_amount",
   };
 }
 
@@ -871,68 +812,6 @@ function buildMercadoLivreVariationLabel(
     .filter((value): value is string => value !== null);
 
   return labels.length > 0 ? labels.join(", ") : null;
-}
-
-function readMercadoLivreOrderDiscountAmount(value: unknown): number {
-  if (!value) {
-    return 0;
-  }
-
-  if (Array.isArray(value)) {
-    return value.reduce(
-      (sum, entry) => sum + readMercadoLivreOrderDiscountAmount(entry),
-      0,
-    );
-  }
-
-  if (typeof value !== "object") {
-    return 0;
-  }
-
-  const record = value as Record<string, unknown>;
-  const nestedCollectionKeys = ["details", "discounts", "results", "items"];
-  const nestedCollectionAmount = nestedCollectionKeys.reduce((sum, key) => {
-    const entry = record[key];
-    return Array.isArray(entry)
-      ? sum + readMercadoLivreOrderDiscountAmount(entry)
-      : sum;
-  }, 0);
-
-  if (nestedCollectionAmount > 0) {
-    return nestedCollectionAmount;
-  }
-
-  const directAmountKeys = [
-    "amount",
-    "amounts",
-    "cashback_amount",
-    "coupon_amount",
-    "discount_amount",
-    "total_amount",
-  ];
-  const directAmount = directAmountKeys.reduce((sum, key) => {
-    const entry = record[key];
-    return sum + readNestedDiscountAmount(entry);
-  }, 0);
-
-  if (directAmount > 0) {
-    return directAmount;
-  }
-
-  const nestedObjectKeys = [
-    "campaign",
-    "cashback",
-    "coupon",
-    "meli",
-    "mercadolibre",
-    "seller",
-  ];
-  return nestedObjectKeys.reduce((sum, key) => {
-    const entry = record[key];
-    return entry && typeof entry === "object"
-      ? sum + readMercadoLivreOrderDiscountAmount(entry)
-      : sum;
-  }, 0);
 }
 
 function toOptionalString(value: number | string | null | undefined) {
@@ -1992,16 +1871,21 @@ export class MercadoLivreProvider implements IntegrationProvider {
       },
     );
 
-    const { fees, operationId, refundBonusAdjustment } =
-      await this.resolveOrderFees(order, input);
-    const fallbackDiscountAdjustment = refundBonusAdjustment
-      ? null
-      : await this.fetchOrderDiscountAdjustment({
-          accessToken: input.accessToken,
-          orderId: externalOrderId,
-        });
+    const { fees, operationId } = await this.resolveOrderFees(order, input);
+    const netReceivedAmount = await this.fetchOrderNetReceivedAmount({
+      accessToken: input.accessToken,
+      order,
+    });
     const financialAdjustment =
-      refundBonusAdjustment ?? fallbackDiscountAdjustment;
+      netReceivedAmount && typeof order.total_amount === "number"
+        ? deriveNetTotalRefundBonus({
+            fees,
+            netReceivedAmount: netReceivedAmount.amount,
+            operationId,
+            rawPayload: netReceivedAmount.rawPayload,
+            totalAmount: order.total_amount,
+          })
+        : null;
     const refundBonusAmount = financialAdjustment
       ? toDecimalString(financialAdjustment.amount)
       : "0.00";
@@ -2043,39 +1927,6 @@ export class MercadoLivreProvider implements IntegrationProvider {
       status: order.status ?? "imported",
       totalAmount: toDecimalString(order.total_amount),
     };
-  }
-
-  private async fetchOrderDiscountAdjustment(input: {
-    accessToken: string;
-    orderId: string;
-  }) {
-    if (!input.orderId.trim()) {
-      return null;
-    }
-
-    try {
-      const response = await this.fetchWithRetry(
-        `https://api.mercadolibre.com/orders/${encodeURIComponent(input.orderId)}/discounts`,
-        {
-          headers: {
-            Authorization: `Bearer ${input.accessToken}`,
-            accept: "application/json",
-          },
-          method: "GET",
-        },
-      );
-      const payload = (await parseProviderResponse(response)) as
-        | MercadoLivreOrderDiscountsResponse
-        | string;
-
-      if (!response.ok || typeof payload === "string") {
-        return null;
-      }
-
-      return readOrderDiscountFinancialAdjustment(payload);
-    } catch {
-      return null;
-    }
   }
 
   private async resolveOrderFees(
@@ -2753,6 +2604,41 @@ export class MercadoLivreProvider implements IntegrationProvider {
         (typeof payment.shipping_cost === "number" ? payment.shipping_cost : 0)
       );
     }, 0);
+  }
+
+  private async fetchOrderNetReceivedAmount(input: {
+    accessToken: string;
+    order: MercadoLivreOrderResponse;
+  }) {
+    for (const payment of input.order.payments ?? []) {
+      if (payment.id === undefined || payment.id === null) {
+        continue;
+      }
+
+      const paymentDetail = await this.fetchPaymentDetails({
+        accessToken: input.accessToken,
+        paymentId: String(payment.id),
+      });
+
+      if (!paymentDetail) {
+        continue;
+      }
+
+      const amount = readPaymentNetReceivedAmount(paymentDetail);
+      if (amount !== null) {
+        const sanitizedPayload = sanitizeProviderPayload(paymentDetail);
+
+        return {
+          amount,
+          rawPayload:
+            sanitizedPayload && typeof sanitizedPayload === "object"
+              ? sanitizedPayload
+              : null,
+        };
+      }
+    }
+
+    return null;
   }
 
   private async fetchPaymentShippingCost(input: {

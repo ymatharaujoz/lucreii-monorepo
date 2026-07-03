@@ -230,7 +230,6 @@ describe("MercadoLivreProvider", () => {
           },
         ),
       );
-
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(provider.exchangeCode("auth-code")).resolves.toEqual(
@@ -401,10 +400,12 @@ describe("MercadoLivreProvider", () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          details: [],
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
         }),
       );
-
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await provider.syncOrders({
@@ -1011,11 +1012,6 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          details: [{ amount: 19.95 }],
-        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -1047,11 +1043,10 @@ describe("MercadoLivreProvider", () => {
           feeType: "marketplace_commission",
         }),
         expect.objectContaining({ amount: "19.95", feeType: "fixed_fee" }),
-        expect.objectContaining({ amount: "19.95", feeType: "refund_bonus" }),
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "19.95",
+      refundBonusAmount: "0.00",
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
@@ -1142,6 +1137,9 @@ describe("MercadoLivreProvider", () => {
             },
           ],
           id: 7654321,
+          transaction_details: {
+            net_received_amount: 79.04,
+          },
         }),
       )
       .mockResolvedValueOnce(
@@ -1169,13 +1167,7 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          details: [{ amount: 3.5 }, { amount: 2.04 }],
-        }),
       );
-
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await provider.syncOrders({
@@ -1273,6 +1265,9 @@ describe("MercadoLivreProvider", () => {
             },
           ],
           id: 7654321,
+          transaction_details: {
+            net_received_amount: 80.75,
+          },
         }),
       )
       .mockResolvedValueOnce(
@@ -1317,16 +1312,15 @@ describe("MercadoLivreProvider", () => {
           feeType: "refund_bonus",
           metadata: expect.objectContaining({
             operationId: "987654",
-            originalDescription: "Estorno Mercado Livre",
-            originalType: "estorno",
+            originalDescription: "Derived from Mercado Livre net total",
+            originalType: "net_total_difference",
             rawPayload: expect.objectContaining({
-              order_id: 123,
-              sale_fee: expect.objectContaining({
-                discount: 7.25,
-                discount_reason: "Estorno Mercado Livre",
+              id: 7654321,
+              transaction_details: expect.objectContaining({
+                net_received_amount: 80.75,
               }),
             }),
-            source: "billing/integration/periods",
+            source: "payment.transaction_details.net_received_amount",
           }),
         }),
       ]),
@@ -1337,7 +1331,7 @@ describe("MercadoLivreProvider", () => {
     );
   });
 
-  it("imports order discounts and bonuses as refund bonus when billing has no adjustment", async () => {
+  it("derives refund bonus from Mercado Livre net total difference", async () => {
     const provider = createProvider();
     const fetchMock = vi
       .fn()
@@ -1382,6 +1376,9 @@ describe("MercadoLivreProvider", () => {
             },
           ],
           id: 7654321,
+          transaction_details: {
+            net_received_amount: 25.98,
+          },
         }),
       )
       .mockResolvedValueOnce(
@@ -1391,21 +1388,7 @@ describe("MercadoLivreProvider", () => {
           results: [],
           total: 0,
         }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          details: [
-            {
-              amounts: {
-                mercadolibre: "2.50",
-              },
-              description: "Descontos e bônus",
-              type: "discounts_and_bonuses",
-            },
-          ],
-        }),
       );
-
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await provider.syncOrders({
@@ -1424,24 +1407,93 @@ describe("MercadoLivreProvider", () => {
           amount: "2.50",
           feeType: "refund_bonus",
           metadata: expect.objectContaining({
-            originalDescription: "Descontos e bônus",
-            originalType: "discounts_and_bonuses",
-            rawPayload: expect.objectContaining({
-              details: expect.arrayContaining([
-                expect.objectContaining({
-                  description: "Descontos e bônus",
-                  type: "discounts_and_bonuses",
-                }),
-              ]),
-            }),
-            source: "orders/discounts",
+            originalDescription: "Derived from Mercado Livre net total",
+            originalType: "net_total_difference",
+            source: "payment.transaction_details.net_received_amount",
           }),
         }),
       ]),
     );
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
-      "/orders/166560537274/discounts",
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not derive refund bonus when Mercado Livre net total has no difference", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          paging: { limit: 50, offset: 0, total: 1 },
+          results: [
+            {
+              currency_id: "BRL",
+              date_closed: "2026-06-30T10:00:00.000-03:00",
+              id: 166560537275,
+              order_items: [
+                {
+                  item: {
+                    id: "MLB123",
+                    seller_sku: "SKU-1",
+                    title: "Produto",
+                  },
+                  quantity: 1,
+                  unit_price: 41.8,
+                },
+              ],
+              payments: [
+                {
+                  fee_amount: 1,
+                  id: 7654321,
+                  marketplace_fee: 5.22,
+                },
+              ],
+              total_amount: 41.8,
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          charges_details: [
+            {
+              amount: 13.1,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
+          transaction_details: {
+            net_received_amount: 23.48,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      organizationId: "org_1",
+    });
+
+    expect(result.orders[0]?.metadata).toMatchObject({
+      refundBonusAmount: "0.00",
+    });
+    expect(result.orders[0]?.fees).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          feeType: "refund_bonus",
+        }),
+      ]),
     );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("splits MELI gross sale_fee into commission net and fixed fee when billing details match the order fee", async () => {
@@ -1596,11 +1648,10 @@ describe("MercadoLivreProvider", () => {
           amount: "6.65",
           feeType: "fixed_fee",
         }),
-        expect.objectContaining({ amount: "6.65", feeType: "refund_bonus" }),
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "6.65",
+      refundBonusAmount: "0.00",
     });
   });
 
@@ -1762,11 +1813,10 @@ describe("MercadoLivreProvider", () => {
           amount: "6.65",
           feeType: "fixed_fee",
         }),
-        expect.objectContaining({ amount: "6.65", feeType: "refund_bonus" }),
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "6.65",
+      refundBonusAmount: "0.00",
     });
   });
 
@@ -1874,7 +1924,10 @@ describe("MercadoLivreProvider", () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          details: [{ amount: 3.5 }, { amount: 1.25 }],
+          details: [
+            { amounts: { mercadolibre: 3.5 } },
+            { amounts: { mercadolibre: 1.25 } },
+          ],
         }),
       )
       .mockResolvedValueOnce(
@@ -1946,14 +1999,13 @@ describe("MercadoLivreProvider", () => {
         }),
       }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/key/2026-06-01/group/MP/details",
     );
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
       "/sites/MLB/listing_prices",
     );
-    expect(String(fetchMock.mock.calls[4]?.[0])).toContain("/discounts");
   });
 
   it("preserves shipment shipping cost after hydrating order details", async () => {
@@ -2085,7 +2137,10 @@ describe("MercadoLivreProvider", () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          details: [{ amount: 3.5 }, { amount: 1.25 }],
+          details: [
+            { amounts: { mercadolibre: 3.5 } },
+            { amounts: { mercadolibre: 1.25 } },
+          ],
         }),
       )
       .mockResolvedValueOnce(
@@ -2235,10 +2290,6 @@ describe("MercadoLivreProvider", () => {
         });
       }
 
-      if (url.includes("/discounts")) {
-        return createJsonResponse({ details: [] });
-      }
-
       throw new Error(`Unexpected fetch call in test: ${url}`);
     });
 
@@ -2260,7 +2311,7 @@ describe("MercadoLivreProvider", () => {
       "order.date_created.to=2026-05-20T23%3A59%3A59.999Z",
     );
     expect(firstRequestUrl).not.toContain("order.date_created.from=");
-    expect(fetchMock).toHaveBeenCalledTimes(259);
+    expect(fetchMock).toHaveBeenCalledTimes(8);
     expect(
       fetchMock.mock.calls.filter((call) =>
         String(call[0]).includes("/orders/search"),
@@ -2271,11 +2322,6 @@ describe("MercadoLivreProvider", () => {
         String(call[0]).includes("/billing/integration/periods/"),
       ),
     ).toHaveLength(1);
-    expect(
-      fetchMock.mock.calls.filter((call) =>
-        String(call[0]).includes("/discounts"),
-      ),
-    ).toHaveLength(totalOrders);
     expect(result.orders).toHaveLength(totalOrders);
     expect(result.orders[0]?.externalOrderId).toBe("1");
     expect(result.orders.at(-1)?.externalOrderId).toBe("251");
@@ -2379,10 +2425,6 @@ describe("MercadoLivreProvider", () => {
         });
       }
 
-      if (url.includes("/discounts")) {
-        return createJsonResponse({ details: [] });
-      }
-
       throw new Error(`Unexpected fetch call in test: ${url}`);
     });
 
@@ -2446,7 +2488,10 @@ describe("MercadoLivreProvider", () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          details: [{ amount: 3.5 }, { amount: 1.25 }],
+          details: [
+            { amounts: { mercadolibre: 3.5 } },
+            { amounts: { mercadolibre: 1.25 } },
+          ],
         }),
       )
       .mockResolvedValueOnce(
@@ -2542,7 +2587,18 @@ describe("MercadoLivreProvider", () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          details: [{ amount: 3.5 }, { amount: 1.25 }],
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
         }),
       );
 
@@ -2561,10 +2617,10 @@ describe("MercadoLivreProvider", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/orders/123");
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/orders/123");
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/",
     );
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/discounts");
     expect(result.orders).toHaveLength(1);
     expect(result.orders[0]?.externalOrderId).toBe("123");
     expect(result.cursor).toEqual({
@@ -2707,7 +2763,6 @@ describe("MercadoLivreProvider", () => {
         feeType: "marketplace_commission",
       }),
       expect.objectContaining({ amount: "3.00", feeType: "fixed_fee" }),
-      expect.objectContaining({ amount: "7.00", feeType: "shipping_cost" }),
     ]);
     expect(result.orders[0]?.items).toEqual([
       expect.objectContaining({
@@ -2716,12 +2771,11 @@ describe("MercadoLivreProvider", () => {
         variationId: "456",
       }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/orders/123");
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/",
     );
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/discounts");
   });
 
   it("persists Mercado Livre pack_id and operation_id even when search fees are already complete", async () => {
@@ -2778,6 +2832,9 @@ describe("MercadoLivreProvider", () => {
             },
           ],
           id: 7654321,
+          transaction_details: {
+            net_received_amount: 83.51,
+          },
         }),
       )
       .mockResolvedValueOnce(
@@ -2803,11 +2860,6 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          details: [{ amount: 3.5 }, { amount: 1.25 }],
-        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -2851,17 +2903,16 @@ describe("MercadoLivreProvider", () => {
       operationId: "2000013674359901",
       refundBonusAmount: "4.75",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
       "https://api.mercadopago.com/v1/payments/7654321",
     );
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/",
     );
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/discounts");
   });
 
-  it("falls back to zero refund bonus when order discounts request fails", async () => {
+  it("keeps zero refund bonus when net total is unavailable", async () => {
     const provider = createProvider();
     const fetchMock = vi
       .fn()
@@ -2940,14 +2991,7 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
-      )
-      .mockResolvedValueOnce(
-        new Response("provider unavailable", {
-          headers: { "content-type": "text/plain" },
-          status: 400,
-        }),
       );
-
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await provider.syncOrders({
@@ -2959,7 +3003,7 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.metadata).toMatchObject({
       refundBonusAmount: "0.00",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("persists Mercado Livre operation_id when billing details require pagination", async () => {
@@ -3085,10 +3129,9 @@ describe("MercadoLivreProvider", () => {
       operationId: "2000013674359901",
       packId: "2000013607301987",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain("from_id=cursor-1");
     expect(String(fetchMock.mock.calls[4]?.[0])).toContain("from_id=cursor-2");
-    expect(String(fetchMock.mock.calls[5]?.[0])).toContain("/discounts");
   });
 
   it("prefers billing row with operation_id when the same order_id appears multiple times", async () => {
