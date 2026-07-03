@@ -157,6 +157,16 @@ type MercadoLivreShipmentDetailResponse = {
   };
 };
 
+type MercadoLivreShippingCostResolution = {
+  amount: number;
+  source:
+    | "order.shipping_cost"
+    | "payment.shipping_cost"
+    | "shipment_costs.senders"
+    | "shipment_detail.order_cost"
+    | "shipment_detail.shipping_option.cost";
+};
+
 type MercadoLivreOrderItemResponse = {
   item?: {
     category_id?: string;
@@ -1872,15 +1882,20 @@ export class MercadoLivreProvider implements IntegrationProvider {
       }
     }
 
-    const shippingCost = await this.resolveShippingCost(order, input, options);
+    const shippingCost = await this.resolveShippingCostWithSource(
+      order,
+      input,
+      options,
+    );
 
-    if (shippingCost > 0) {
+    if (shippingCost && shippingCost.amount > 0) {
       fees.push({
-        amount: toDecimalString(shippingCost),
+        amount: toDecimalString(shippingCost.amount),
         currency: order.currency_id ?? "BRL",
         feeType: "shipping_cost",
         metadata: {
           shipmentId: order.shipping?.id ? String(order.shipping.id) : null,
+          source: shippingCost.source,
         },
       });
     }
@@ -1913,6 +1928,25 @@ export class MercadoLivreProvider implements IntegrationProvider {
       skipShipmentLookup?: boolean;
     } = {},
   ) {
+    const shippingCost = await this.resolveShippingCostWithSource(
+      order,
+      input,
+      options,
+    );
+
+    return shippingCost?.amount ?? 0;
+  }
+
+  private async resolveShippingCostWithSource(
+    order: MercadoLivreOrderResponse,
+    input: {
+      accessToken: string;
+      sellerAccountId: string;
+    },
+    options: {
+      skipShipmentLookup?: boolean;
+    } = {},
+  ): Promise<MercadoLivreShippingCostResolution | null> {
     const shipmentId = order.shipping?.id ? String(order.shipping.id) : null;
 
     if (shipmentId && !options.skipShipmentLookup) {
@@ -1940,12 +1974,18 @@ export class MercadoLivreProvider implements IntegrationProvider {
     );
 
     if (paymentShippingCost > 0) {
-      return paymentShippingCost;
+      return {
+        amount: paymentShippingCost,
+        source: "payment.shipping_cost",
+      };
     }
 
     return typeof order.shipping_cost === "number" && order.shipping_cost > 0
-      ? order.shipping_cost
-      : 0;
+      ? {
+          amount: order.shipping_cost,
+          source: "order.shipping_cost",
+        }
+      : null;
   }
 
   private async fetchOrderDetails(input: {
@@ -2252,7 +2292,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
     accessToken: string;
     sellerAccountId: string;
     shipmentId: string;
-  }) {
+  }): Promise<MercadoLivreShippingCostResolution | null> {
     const response = await this.fetchWithRetry(
       `https://api.mercadolibre.com/shipments/${input.shipmentId}/costs`,
       {
@@ -2270,22 +2310,32 @@ export class MercadoLivreProvider implements IntegrationProvider {
       | string;
 
     if (response.ok && typeof payload !== "string") {
-      const matchedSender =
-        payload.senders?.find(
-          (sender) => String(sender.user_id ?? "") === input.sellerAccountId,
-        ) ??
-        payload.senders?.[0] ??
-        null;
+      const senders = payload.senders ?? [];
+      const matchedSender = senders.find(
+        (sender) => String(sender.user_id ?? "") === input.sellerAccountId,
+      );
 
       if (typeof matchedSender?.cost === "number" && matchedSender.cost > 0) {
-        return matchedSender.cost;
+        return {
+          amount: matchedSender.cost,
+          source: "shipment_costs.senders",
+        };
       }
 
+      const hasSenderUserIds = senders.some(
+        (sender) => sender.user_id !== undefined && sender.user_id !== null,
+      );
+      const firstSender = senders[0] ?? null;
+
       if (
-        typeof payload.receiver?.cost === "number" &&
-        payload.receiver.cost > 0
+        !hasSenderUserIds &&
+        typeof firstSender?.cost === "number" &&
+        firstSender.cost > 0
       ) {
-        return payload.receiver.cost;
+        return {
+          amount: firstSender.cost,
+          source: "shipment_costs.senders",
+        };
       }
     }
 
@@ -2312,12 +2362,18 @@ export class MercadoLivreProvider implements IntegrationProvider {
       typeof shipmentDetail.order_cost === "number" &&
       shipmentDetail.order_cost > 0
     ) {
-      return shipmentDetail.order_cost;
+      return {
+        amount: shipmentDetail.order_cost,
+        source: "shipment_detail.order_cost",
+      };
     }
 
     return typeof shipmentDetail.shipping_option?.cost === "number" &&
       shipmentDetail.shipping_option.cost > 0
-      ? shipmentDetail.shipping_option.cost
+      ? {
+          amount: shipmentDetail.shipping_option.cost,
+          source: "shipment_detail.shipping_option.cost",
+        }
       : null;
   }
 

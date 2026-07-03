@@ -52,6 +52,26 @@ function createJsonResponse(payload: unknown, status = 200) {
   });
 }
 
+type MercadoLivreProviderWithShippingResolver = {
+  fetchShipmentSellerCost(input: unknown): Promise<unknown>;
+  resolveShippingCost(
+    order: unknown,
+    input: {
+      accessToken: string;
+      sellerAccountId: string;
+    },
+    options?: {
+      skipShipmentLookup?: boolean;
+    },
+  ): Promise<number>;
+};
+
+function withShippingResolver(
+  provider: MercadoLivreProvider,
+): MercadoLivreProviderWithShippingResolver {
+  return provider as unknown as MercadoLivreProviderWithShippingResolver;
+}
+
 describe("MercadoLivreProvider", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -399,7 +419,13 @@ describe("MercadoLivreProvider", () => {
         feeType: "marketplace_commission",
       }),
       expect.objectContaining({ amount: "3.00", feeType: "fixed_fee" }),
-      expect.objectContaining({ amount: "9.00", feeType: "shipping_cost" }),
+      expect.objectContaining({
+        amount: "9.00",
+        feeType: "shipping_cost",
+        metadata: expect.objectContaining({
+          source: "shipment_costs.senders",
+        }),
+      }),
     ]);
     expect(result.orders[0]?.items).toEqual([
       expect.objectContaining({
@@ -601,11 +627,12 @@ describe("MercadoLivreProvider", () => {
       WEB_APP_ORIGIN: "http://localhost:3000",
     });
 
+    const providerWithShippingResolver = withShippingResolver(provider);
     const fetchShipmentSellerCostSpy = vi
-      .spyOn(provider as any, "fetchShipmentSellerCost")
+      .spyOn(providerWithShippingResolver, "fetchShipmentSellerCost")
       .mockResolvedValue(null);
 
-    const shippingCost = await (provider as any).resolveShippingCost(
+    const shippingCost = await providerWithShippingResolver.resolveShippingCost(
       {
         payments: [{ shipping_cost: 7 }],
         shipping: { id: 999 },
@@ -618,6 +645,78 @@ describe("MercadoLivreProvider", () => {
 
     expect(fetchShipmentSellerCostSpy).toHaveBeenCalledOnce();
     expect(shippingCost).toBe(7);
+  });
+
+  it("ignores buyer shipment cost and falls back to seller shipment detail cost", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          receiver: { cost: 18.99 },
+          senders: [{ cost: 0, user_id: 123456 }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          id: 999,
+          order_cost: 6.55,
+          shipping_option: {
+            cost: 18.99,
+          },
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const shippingCost = await withShippingResolver(provider).resolveShippingCost(
+      {
+        payments: [{ shipping_cost: 18.99 }],
+        shipping: { id: 999 },
+      },
+      {
+        accessToken: "token_123",
+        sellerAccountId: "123456",
+      },
+    );
+
+    expect(shippingCost).toBe(6.55);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/shipments/999/costs",
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/shipments/999");
+  });
+
+  it("does not use the first shipment sender when another sender user id is present", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          senders: [{ cost: 18.99, user_id: 999999 }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          id: 999,
+          order_cost: 6.55,
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const shippingCost = await withShippingResolver(provider).resolveShippingCost(
+      {
+        payments: [],
+        shipping: { id: 999 },
+      },
+      {
+        accessToken: "token_123",
+        sellerAccountId: "123456",
+      },
+    );
+
+    expect(shippingCost).toBe(6.55);
   });
 
   it("falls back to order.shipping_cost when shipment and payment shipping data are unavailable", async () => {
@@ -645,11 +744,12 @@ describe("MercadoLivreProvider", () => {
       WEB_APP_ORIGIN: "http://localhost:3000",
     });
 
+    const providerWithShippingResolver = withShippingResolver(provider);
     const fetchShipmentSellerCostSpy = vi
-      .spyOn(provider as any, "fetchShipmentSellerCost")
+      .spyOn(providerWithShippingResolver, "fetchShipmentSellerCost")
       .mockResolvedValue(null);
 
-    const shippingCost = await (provider as any).resolveShippingCost(
+    const shippingCost = await providerWithShippingResolver.resolveShippingCost(
       {
         payments: [],
         shipping_cost: 5,
@@ -1765,7 +1865,6 @@ describe("MercadoLivreProvider", () => {
     });
 
     const firstRequestUrl = fetchMock.mock.calls[0]?.[0].toString() ?? "";
-    const requestUrls = fetchMock.mock.calls.map((call) => call[0].toString());
 
     expect(firstRequestUrl).toContain(
       "order.date_created.to=2026-05-20T23%3A59%3A59.999Z",
