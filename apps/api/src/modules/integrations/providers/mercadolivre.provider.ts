@@ -117,6 +117,7 @@ type MercadoLivreOrderResponse = {
   pack_id?: number | string;
   payments?: Array<{
     fee_amount?: number;
+    id?: number | string;
     marketplace_fee?: number;
     shipping_cost?: number;
   }>;
@@ -157,11 +158,36 @@ type MercadoLivreShipmentDetailResponse = {
   };
 };
 
+type MercadoLivrePaymentFinancialDetail = {
+  amount?: number;
+  amounts?: {
+    paid?: number;
+    original?: number;
+    refunded?: number;
+    total?: number;
+  };
+  collector?: string;
+  description?: string;
+  detail?: string;
+  fee_payer?: string;
+  name?: string;
+  reason?: string;
+  type?: string;
+  value?: number;
+};
+
+type MercadoLivrePaymentResponse = {
+  charges_details?: MercadoLivrePaymentFinancialDetail[];
+  fee_details?: MercadoLivrePaymentFinancialDetail[];
+  id?: number | string;
+};
+
 type MercadoLivreShippingCostResolution = {
   amount: number;
+  metadata?: Record<string, unknown>;
   source:
-    | "order.shipping_cost"
-    | "payment.shipping_cost"
+    | "payment.charges_details.shipping"
+    | "payment.fee_details.shipping"
     | "shipment_costs.senders"
     | "shipment_detail.order_cost"
     | "shipment_detail.shipping_option.cost";
@@ -365,6 +391,164 @@ function readBillingRefundBonus(
   for (const candidate of candidates) {
     if (typeof candidate === "number" && candidate > 0) {
       return candidate;
+    }
+  }
+
+  return null;
+}
+
+function roundMoneyNumber(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function isAlmostEqualMoney(left: number, right: number) {
+  return Math.abs(left - right) < 0.01;
+}
+
+function readPaymentFinancialDetailAmount(
+  detail: MercadoLivrePaymentFinancialDetail,
+) {
+  const candidates = [
+    detail.amount,
+    detail.value,
+    detail.amounts?.original,
+    detail.amounts?.paid,
+    detail.amounts?.total,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return Math.abs(candidate);
+    }
+  }
+
+  return null;
+}
+
+function readPositivePaymentFinancialDetailAmount(
+  detail: MercadoLivrePaymentFinancialDetail,
+) {
+  const amount = readPaymentFinancialDetailAmount(detail);
+
+  return amount === null ? null : Math.abs(amount);
+}
+
+function normalizeFinancialDetailText(
+  detail: MercadoLivrePaymentFinancialDetail,
+) {
+  return [
+    detail.collector,
+    detail.description,
+    detail.detail,
+    detail.fee_payer,
+    detail.name,
+    detail.reason,
+    detail.type,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+function isShippingFinancialDetail(detail: MercadoLivrePaymentFinancialDetail) {
+  const text = normalizeFinancialDetailText(detail);
+
+  return (
+    text.includes("shipping") ||
+    text.includes("shipment") ||
+    text.includes("envio") ||
+    text.includes("envios") ||
+    text.includes("frete") ||
+    text.includes("mercado_envios") ||
+    text.includes("mercado envios")
+  );
+}
+
+function isBuyerShippingFinancialDetail(
+  detail: MercadoLivrePaymentFinancialDetail,
+) {
+  const text = normalizeFinancialDetailText(detail);
+
+  if (
+    text.includes("tarifa") ||
+    text.includes("tariff") ||
+    text.includes("fee")
+  ) {
+    return false;
+  }
+
+  return (
+    text.includes("pagamento") ||
+    text.includes("payment") ||
+    text.includes("buyer") ||
+    text.includes("buyer_shipping") ||
+    text.includes("paid_by_buyer")
+  );
+}
+
+function readPaymentShippingCostBreakdown(
+  payload: MercadoLivrePaymentResponse,
+  paymentId: string,
+  fallbackBuyerShippingAmount = 0,
+): MercadoLivreShippingCostResolution | null {
+  const sources = [
+    {
+      details: payload.charges_details ?? [],
+      source: "payment.charges_details.shipping" as const,
+    },
+    {
+      details: payload.fee_details ?? [],
+      source: "payment.fee_details.shipping" as const,
+    },
+  ];
+
+  for (const source of sources) {
+    let buyerShippingAmount = 0;
+    let grossShippingTariffAmount = 0;
+
+    for (const detail of source.details) {
+      if (!isShippingFinancialDetail(detail)) {
+        continue;
+      }
+
+      const amount = readPositivePaymentFinancialDetailAmount(detail);
+      if (amount === null || amount <= 0) {
+        continue;
+      }
+
+      if (isBuyerShippingFinancialDetail(detail)) {
+        buyerShippingAmount += amount;
+      } else {
+        grossShippingTariffAmount += amount;
+      }
+    }
+
+    if (
+      buyerShippingAmount <= 0 &&
+      fallbackBuyerShippingAmount > 0 &&
+      grossShippingTariffAmount > fallbackBuyerShippingAmount
+    ) {
+      buyerShippingAmount = fallbackBuyerShippingAmount;
+    }
+
+    const amount = roundMoneyNumber(
+      Math.max(0, grossShippingTariffAmount - buyerShippingAmount),
+    );
+
+    if (amount > 0) {
+      return {
+        amount,
+        metadata: {
+          buyerShippingAmount: roundMoneyNumber(buyerShippingAmount),
+          grossShippingTariffAmount: roundMoneyNumber(
+            grossShippingTariffAmount,
+          ),
+          paymentId,
+        },
+        source: source.source,
+      };
     }
   }
 
@@ -586,6 +770,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
   private readonly billingDetailCache = new Map<
     string,
     Promise<MercadoLivreBillingDetailResponse | null>
+  >();
+  private readonly paymentDetailCache = new Map<
+    string,
+    Promise<MercadoLivrePaymentResponse | null>
   >();
 
   constructor(private readonly env: ApiRuntimeEnv) {}
@@ -1894,6 +2082,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
         currency: order.currency_id ?? "BRL",
         feeType: "shipping_cost",
         metadata: {
+          ...shippingCost.metadata,
           shipmentId: order.shipping?.id ? String(order.shipping.id) : null,
           source: shippingCost.source,
         },
@@ -1948,6 +2137,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
     } = {},
   ): Promise<MercadoLivreShippingCostResolution | null> {
     const shipmentId = order.shipping?.id ? String(order.shipping.id) : null;
+    const buyerShippingAmount = this.readBuyerShippingAmount(order);
 
     if (shipmentId && !options.skipShipmentLookup) {
       const shipmentCost = await this.fetchShipmentSellerCost({
@@ -1961,30 +2151,21 @@ export class MercadoLivreProvider implements IntegrationProvider {
       }
     }
 
-    const paymentShippingCost = (order.payments ?? []).reduce(
-      (sum, payment) => {
-        return (
-          sum +
-          (typeof payment.shipping_cost === "number"
-            ? payment.shipping_cost
-            : 0)
-        );
-      },
-      0,
-    );
+    const paymentShippingCost = await this.fetchPaymentShippingCost({
+      accessToken: input.accessToken,
+      order,
+    });
 
-    if (paymentShippingCost > 0) {
-      return {
-        amount: paymentShippingCost,
-        source: "payment.shipping_cost",
-      };
+    if (paymentShippingCost !== null) {
+      return paymentShippingCost;
     }
 
-    return typeof order.shipping_cost === "number" && order.shipping_cost > 0
-      ? {
-          amount: order.shipping_cost,
-          source: "order.shipping_cost",
-        }
+    return shipmentId && !options.skipShipmentLookup
+      ? await this.fetchShipmentDetailSellerCost({
+          accessToken: input.accessToken,
+          buyerShippingAmount,
+          shipmentId,
+        })
       : null;
   }
 
@@ -2288,6 +2469,84 @@ export class MercadoLivreProvider implements IntegrationProvider {
     };
   }
 
+  private readBuyerShippingAmount(order: MercadoLivreOrderResponse) {
+    return (order.payments ?? []).reduce((sum, payment) => {
+      return (
+        sum +
+        (typeof payment.shipping_cost === "number" ? payment.shipping_cost : 0)
+      );
+    }, 0);
+  }
+
+  private async fetchPaymentShippingCost(input: {
+    accessToken: string;
+    order: MercadoLivreOrderResponse;
+  }): Promise<MercadoLivreShippingCostResolution | null> {
+    for (const payment of input.order.payments ?? []) {
+      if (payment.id === undefined || payment.id === null) {
+        continue;
+      }
+
+      const paymentId = String(payment.id);
+      const paymentDetail = await this.fetchPaymentDetails({
+        accessToken: input.accessToken,
+        paymentId,
+      });
+
+      if (!paymentDetail) {
+        continue;
+      }
+
+      const shippingCost = readPaymentShippingCostBreakdown(
+        paymentDetail,
+        paymentId,
+        typeof payment.shipping_cost === "number" ? payment.shipping_cost : 0,
+      );
+
+      if (shippingCost !== null) {
+        return shippingCost;
+      }
+    }
+
+    return null;
+  }
+
+  private async fetchPaymentDetails(input: {
+    accessToken: string;
+    paymentId: string;
+  }) {
+    const cacheKey = input.paymentId;
+    let payloadPromise = this.paymentDetailCache.get(cacheKey);
+
+    if (!payloadPromise) {
+      payloadPromise = (async () => {
+        const response = await this.fetchWithRetry(
+          `https://api.mercadopago.com/v1/payments/${encodeURIComponent(input.paymentId)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${input.accessToken}`,
+              accept: "application/json",
+            },
+            method: "GET",
+          },
+        );
+
+        const payload = (await parseProviderResponse(response)) as
+          | MercadoLivrePaymentResponse
+          | string;
+
+        if (!response.ok || typeof payload === "string") {
+          return null;
+        }
+
+        return payload;
+      })();
+      this.paymentDetailCache.set(cacheKey, payloadPromise);
+    }
+
+    return payloadPromise;
+  }
+
   private async fetchShipmentSellerCost(input: {
     accessToken: string;
     sellerAccountId: string;
@@ -2339,6 +2598,14 @@ export class MercadoLivreProvider implements IntegrationProvider {
       }
     }
 
+    return null;
+  }
+
+  private async fetchShipmentDetailSellerCost(input: {
+    accessToken: string;
+    buyerShippingAmount: number;
+    shipmentId: string;
+  }): Promise<MercadoLivreShippingCostResolution | null> {
     const shipmentDetailResponse = await this.fetchWithRetry(
       `https://api.mercadolibre.com/shipments/${input.shipmentId}`,
       {
@@ -2360,7 +2627,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
 
     if (
       typeof shipmentDetail.order_cost === "number" &&
-      shipmentDetail.order_cost > 0
+      shipmentDetail.order_cost > 0 &&
+      !isAlmostEqualMoney(shipmentDetail.order_cost, input.buyerShippingAmount)
     ) {
       return {
         amount: shipmentDetail.order_cost,
@@ -2369,7 +2637,11 @@ export class MercadoLivreProvider implements IntegrationProvider {
     }
 
     return typeof shipmentDetail.shipping_option?.cost === "number" &&
-      shipmentDetail.shipping_option.cost > 0
+      shipmentDetail.shipping_option.cost > 0 &&
+      !isAlmostEqualMoney(
+        shipmentDetail.shipping_option.cost,
+        input.buyerShippingAmount,
+      )
       ? {
           amount: shipmentDetail.shipping_option.cost,
           source: "shipment_detail.shipping_option.cost",

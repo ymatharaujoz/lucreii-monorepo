@@ -64,6 +64,20 @@ type MercadoLivreProviderWithShippingResolver = {
       skipShipmentLookup?: boolean;
     },
   ): Promise<number>;
+  resolveShippingCostWithSource(
+    order: unknown,
+    input: {
+      accessToken: string;
+      sellerAccountId: string;
+    },
+    options?: {
+      skipShipmentLookup?: boolean;
+    },
+  ): Promise<{
+    amount: number;
+    metadata?: Record<string, unknown>;
+    source: string;
+  } | null>;
 };
 
 function withShippingResolver(
@@ -602,7 +616,7 @@ describe("MercadoLivreProvider", () => {
     ]);
   });
 
-  it("falls back to payment shipping_cost when shipment seller cost is unavailable", async () => {
+  it("does not fall back to payment shipping_cost when shipment seller cost is unavailable", async () => {
     const provider = new MercadoLivreProvider({
       API_DB_POOL_MAX: 5,
       API_HOST: "127.0.0.1",
@@ -644,7 +658,7 @@ describe("MercadoLivreProvider", () => {
     );
 
     expect(fetchShipmentSellerCostSpy).toHaveBeenCalledOnce();
-    expect(shippingCost).toBe(7);
+    expect(shippingCost).toBe(0);
   });
 
   it("ignores buyer shipment cost and falls back to seller shipment detail cost", async () => {
@@ -687,6 +701,115 @@ describe("MercadoLivreProvider", () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/shipments/999");
   });
 
+  it("uses payment charge details to derive seller shipping cost instead of buyer shipping payment", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        charges_details: [
+          {
+            amounts: {
+              original: 23.54,
+            },
+            name: "Tarifa por envios no Mercado Livre",
+            type: "shipping",
+          },
+          {
+            amounts: {
+              original: 16.99,
+            },
+            name: "Pagamento do Mercado Envios",
+            type: "shipping",
+          },
+        ],
+        fee_details: [],
+        id: 7654321,
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const shippingCost =
+      await withShippingResolver(provider).resolveShippingCostWithSource(
+        {
+          payments: [{ id: 7654321, shipping_cost: 16.99 }],
+        },
+        {
+          accessToken: "token_123",
+          sellerAccountId: "123456",
+        },
+      );
+
+    expect(shippingCost).toEqual({
+      amount: 6.55,
+      metadata: {
+        buyerShippingAmount: 16.99,
+        grossShippingTariffAmount: 23.54,
+        paymentId: "7654321",
+      },
+      source: "payment.charges_details.shipping",
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://api.mercadopago.com/v1/payments/7654321",
+    );
+  });
+
+  it("subtracts order buyer shipping payment when payment details only expose the gross shipping tariff", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        charges_details: [
+          {
+            amount: -23.54,
+            description:
+              "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
+            type: "shipping",
+          },
+        ],
+        id: 7654321,
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const shippingCost =
+      await withShippingResolver(provider).resolveShippingCostWithSource(
+        {
+          payments: [{ id: 7654321, shipping_cost: 16.99 }],
+        },
+        {
+          accessToken: "token_123",
+          sellerAccountId: "123456",
+        },
+      );
+
+    expect(shippingCost).toEqual({
+      amount: 6.55,
+      metadata: {
+        buyerShippingAmount: 16.99,
+        grossShippingTariffAmount: 23.54,
+        paymentId: "7654321",
+      },
+      source: "payment.charges_details.shipping",
+    });
+  });
+
+  it("does not treat buyer payment shipping_cost as seller shipping cost without payment details", async () => {
+    const provider = createProvider();
+
+    const shippingCost =
+      await withShippingResolver(provider).resolveShippingCostWithSource(
+        {
+          payments: [{ shipping_cost: 16.99 }],
+        },
+        {
+          accessToken: "token_123",
+          sellerAccountId: "123456",
+        },
+      );
+
+    expect(shippingCost).toBeNull();
+  });
+
   it("does not use the first shipment sender when another sender user id is present", async () => {
     const provider = createProvider();
     const fetchMock = vi
@@ -719,7 +842,7 @@ describe("MercadoLivreProvider", () => {
     expect(shippingCost).toBe(6.55);
   });
 
-  it("falls back to order.shipping_cost when shipment and payment shipping data are unavailable", async () => {
+  it("does not fall back to order.shipping_cost when shipment and payment shipping data are unavailable", async () => {
     const provider = new MercadoLivreProvider({
       API_DB_POOL_MAX: 5,
       API_HOST: "127.0.0.1",
@@ -761,7 +884,7 @@ describe("MercadoLivreProvider", () => {
     );
 
     expect(fetchShipmentSellerCostSpy).not.toHaveBeenCalled();
-    expect(shippingCost).toBe(5);
+    expect(shippingCost).toBe(0);
   });
 
   it("uses billing provisions to persist fixed fee when the payment payload omits fee_amount", async () => {
@@ -981,6 +1104,7 @@ describe("MercadoLivreProvider", () => {
                 payments: [
                   {
                     fee_amount: 19.95,
+                    id: 7654321,
                     marketplace_fee: 12,
                     shipping_cost: 14.5,
                   },
@@ -994,6 +1118,18 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          charges_details: [
+            {
+              amount: 14.5,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -1066,11 +1202,14 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.metadata).toMatchObject({
       refundBonusAmount: "5.54",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
+      "https://api.mercadopago.com/v1/payments/7654321",
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/key/2026-05-01/group/MP/details",
     );
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/discounts");
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/discounts");
   });
 
   it("splits MELI gross sale_fee into commission net and fixed fee when billing details match the order fee", async () => {
@@ -1806,7 +1945,7 @@ describe("MercadoLivreProvider", () => {
                 unit_price: 100,
               },
             ],
-            payments: [{ fee_amount: 3, shipping_cost: 5 }],
+            payments: [{ fee_amount: 3, id: 7654321, shipping_cost: 5 }],
             total_amount: 100,
           };
         },
@@ -1834,6 +1973,19 @@ describe("MercadoLivreProvider", () => {
           });
 
         return createJsonResponse(payload);
+      }
+
+      if (url.includes("api.mercadopago.com/v1/payments/7654321")) {
+        return createJsonResponse({
+          charges_details: [
+            {
+              amount: 5,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
+        });
       }
 
       if (url.includes("/billing/integration/periods/")) {
@@ -1870,7 +2022,7 @@ describe("MercadoLivreProvider", () => {
       "order.date_created.to=2026-05-20T23%3A59%3A59.999Z",
     );
     expect(firstRequestUrl).not.toContain("order.date_created.from=");
-    expect(fetchMock).toHaveBeenCalledTimes(258);
+    expect(fetchMock).toHaveBeenCalledTimes(259);
     expect(
       fetchMock.mock.calls.filter((call) =>
         String(call[0]).includes("/orders/search"),
@@ -1893,73 +2045,106 @@ describe("MercadoLivreProvider", () => {
   it("includes manual sync orders created before range when they close within range", async () => {
     const provider = createProvider();
 
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: 50, offset: 0, total: 2 },
-            results: [
-              {
-                currency_id: "BRL",
-                date_closed: "2026-05-15T10:00:00.000Z",
-                date_created: "2026-05-01T10:00:00.000Z",
-                id: 123,
-                order_items: [
-                  {
-                    item: {
-                      id: "MLB123",
-                      seller_sku: "SKU-1",
-                      title: "Produto 1",
-                    },
-                    quantity: 1,
-                    sale_fee: 10,
-                    unit_price: 100,
+    const fetchMock = vi.fn();
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes("/orders/search") && url.includes("offset=0")) {
+        return createJsonResponse({
+          paging: { limit: 50, offset: 0, total: 2 },
+          results: [
+            {
+              currency_id: "BRL",
+              date_closed: "2026-05-15T10:00:00.000Z",
+              date_created: "2026-05-01T10:00:00.000Z",
+              id: 123,
+              order_items: [
+                {
+                  item: {
+                    id: "MLB123",
+                    seller_sku: "SKU-1",
+                    title: "Produto 1",
                   },
-                ],
-                payments: [{ fee_amount: 3, shipping_cost: 5 }],
-                total_amount: 100,
-              },
-              {
-                currency_id: "BRL",
-                date_closed: "2026-05-25T10:00:00.000Z",
-                date_created: "2026-05-25T10:00:00.000Z",
-                id: 124,
-                order_items: [
-                  {
-                    item: {
-                      id: "MLB124",
-                      seller_sku: "SKU-2",
-                      title: "Produto 2",
-                    },
-                    quantity: 1,
-                    sale_fee: 12,
-                    unit_price: 200,
+                  quantity: 1,
+                  sale_fee: 10,
+                  unit_price: 100,
+                },
+              ],
+              payments: [{ fee_amount: 3, id: 7654321, shipping_cost: 5 }],
+              total_amount: 100,
+            },
+            {
+              currency_id: "BRL",
+              date_closed: "2026-05-25T10:00:00.000Z",
+              date_created: "2026-05-25T10:00:00.000Z",
+              id: 124,
+              order_items: [
+                {
+                  item: {
+                    id: "MLB124",
+                    seller_sku: "SKU-2",
+                    title: "Produto 2",
                   },
-                ],
-                payments: [{ fee_amount: 4, shipping_cost: 6 }],
-                total_amount: 200,
-              },
-            ],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            paging: { limit: 50, offset: 50, total: 2 },
-            results: [],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
-      );
+                  quantity: 1,
+                  sale_fee: 12,
+                  unit_price: 200,
+                },
+              ],
+              payments: [{ fee_amount: 4, id: 7654322, shipping_cost: 6 }],
+              total_amount: 200,
+            },
+          ],
+        });
+      }
+
+      if (url.includes("api.mercadopago.com/v1/payments/7654321")) {
+        return createJsonResponse({
+          charges_details: [
+            {
+              amount: 5,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
+        });
+      }
+
+      if (url.includes("api.mercadopago.com/v1/payments/7654322")) {
+        return createJsonResponse({
+          charges_details: [
+            {
+              amount: 6,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654322,
+        });
+      }
+
+      if (url.includes("offset=50")) {
+        return createJsonResponse({
+          paging: { limit: 50, offset: 50, total: 2 },
+          results: [],
+        });
+      }
+
+      if (url.includes("/billing/integration/periods/")) {
+        return createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        });
+      }
+
+      if (url.includes("/discounts")) {
+        return createJsonResponse({ details: [] });
+      }
+
+      throw new Error(`Unexpected fetch call in test: ${url}`);
+    });
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -2328,6 +2513,7 @@ describe("MercadoLivreProvider", () => {
                 payments: [
                   {
                     fee_amount: 5.76,
+                    id: 7654321,
                     marketplace_fee: 20.64,
                     shipping_cost: 0.6,
                   },
@@ -2341,6 +2527,18 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          charges_details: [
+            {
+              amount: 0.6,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -2413,11 +2611,14 @@ describe("MercadoLivreProvider", () => {
       operationId: "2000013674359901",
       refundBonusAmount: "4.75",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
+      "https://api.mercadopago.com/v1/payments/7654321",
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/",
     );
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/discounts");
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("/discounts");
   });
 
   it("falls back to zero refund bonus when order discounts request fails", async () => {
@@ -2449,6 +2650,7 @@ describe("MercadoLivreProvider", () => {
                 payments: [
                   {
                     fee_amount: 5.76,
+                    id: 7654321,
                     marketplace_fee: 20.64,
                     shipping_cost: 0.6,
                   },
@@ -2464,9 +2666,15 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response("provider unavailable", {
-          headers: { "content-type": "text/plain" },
-          status: 500,
+        createJsonResponse({
+          charges_details: [
+            {
+              amount: 0.6,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
         }),
       )
       .mockResolvedValueOnce(
@@ -2494,16 +2702,9 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        createJsonResponse({
-          limit: 1000,
-          offset: 0,
-          results: [],
-          total: 0,
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          details: [],
+        new Response("provider unavailable", {
+          headers: { "content-type": "text/plain" },
+          status: 400,
         }),
       );
 
@@ -2551,6 +2752,7 @@ describe("MercadoLivreProvider", () => {
                 payments: [
                   {
                     fee_amount: 5.76,
+                    id: 7654321,
                     marketplace_fee: 20.64,
                     shipping_cost: 0.6,
                   },
@@ -2564,6 +2766,18 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          charges_details: [
+            {
+              amount: 0.6,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -2631,10 +2845,10 @@ describe("MercadoLivreProvider", () => {
       operationId: "2000013674359901",
       packId: "2000013607301987",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("from_id=cursor-1");
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("from_id=cursor-2");
-    expect(String(fetchMock.mock.calls[4]?.[0])).toContain("/discounts");
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("from_id=cursor-1");
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain("from_id=cursor-2");
+    expect(String(fetchMock.mock.calls[5]?.[0])).toContain("/discounts");
   });
 
   it("prefers billing row with operation_id when the same order_id appears multiple times", async () => {
@@ -2666,6 +2880,7 @@ describe("MercadoLivreProvider", () => {
                 payments: [
                   {
                     fee_amount: 5.76,
+                    id: 7654321,
                     marketplace_fee: 20.64,
                     shipping_cost: 0.6,
                   },
@@ -2679,6 +2894,18 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          charges_details: [
+            {
+              amount: 0.6,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
