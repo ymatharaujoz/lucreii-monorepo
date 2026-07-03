@@ -1337,6 +1337,113 @@ describe("MercadoLivreProvider", () => {
     );
   });
 
+  it("imports order discounts and bonuses as refund bonus when billing has no adjustment", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          paging: { limit: 50, offset: 0, total: 1 },
+          results: [
+            {
+              currency_id: "BRL",
+              date_closed: "2026-06-30T10:00:00.000-03:00",
+              id: 166560537274,
+              order_items: [
+                {
+                  item: {
+                    id: "MLB123",
+                    seller_sku: "SKU-1",
+                    title: "Produto",
+                  },
+                  quantity: 1,
+                  unit_price: 41.8,
+                },
+              ],
+              payments: [
+                {
+                  fee_amount: 1,
+                  id: 7654321,
+                  marketplace_fee: 5.22,
+                },
+              ],
+              total_amount: 41.8,
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          charges_details: [
+            {
+              amount: 13.1,
+              name: "Tarifa por envios no Mercado Livre",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          details: [
+            {
+              amounts: {
+                mercadolibre: "2.50",
+              },
+              description: "Descontos e bônus",
+              type: "discounts_and_bonuses",
+            },
+          ],
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      organizationId: "org_1",
+    });
+
+    expect(result.orders[0]?.items).toHaveLength(1);
+    expect(result.orders[0]?.metadata).toMatchObject({
+      refundBonusAmount: "2.50",
+    });
+    expect(result.orders[0]?.fees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amount: "2.50",
+          feeType: "refund_bonus",
+          metadata: expect.objectContaining({
+            originalDescription: "Descontos e bônus",
+            originalType: "discounts_and_bonuses",
+            rawPayload: expect.objectContaining({
+              details: expect.arrayContaining([
+                expect.objectContaining({
+                  description: "Descontos e bônus",
+                  type: "discounts_and_bonuses",
+                }),
+              ]),
+            }),
+            source: "orders/discounts",
+          }),
+        }),
+      ]),
+    );
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
+      "/orders/166560537274/discounts",
+    );
+  });
+
   it("splits MELI gross sale_fee into commission net and fixed fee when billing details match the order fee", async () => {
     const provider = new MercadoLivreProvider({
       API_DB_POOL_MAX: 5,
