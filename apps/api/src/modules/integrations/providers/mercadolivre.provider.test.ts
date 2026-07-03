@@ -53,6 +53,7 @@ function createJsonResponse(payload: unknown, status = 200) {
 }
 
 type MercadoLivreProviderWithShippingResolver = {
+  fetchShipmentCosts(input: unknown): Promise<unknown>;
   fetchShipmentSellerCost(input: unknown): Promise<unknown>;
   resolveShippingCost(
     order: unknown,
@@ -647,9 +648,9 @@ describe("MercadoLivreProvider", () => {
     });
 
     const providerWithShippingResolver = withShippingResolver(provider);
-    const fetchShipmentSellerCostSpy = vi
-      .spyOn(providerWithShippingResolver, "fetchShipmentSellerCost")
-      .mockResolvedValue(null);
+    const fetchShipmentCostsSpy = vi
+      .spyOn(providerWithShippingResolver, "fetchShipmentCosts")
+      .mockResolvedValue({ buyerShippingAmount: 0, sellerCost: null });
 
     const shippingCost = await providerWithShippingResolver.resolveShippingCost(
       {
@@ -662,7 +663,7 @@ describe("MercadoLivreProvider", () => {
       },
     );
 
-    expect(fetchShipmentSellerCostSpy).toHaveBeenCalledOnce();
+    expect(fetchShipmentCostsSpy).toHaveBeenCalledOnce();
     expect(shippingCost).toBe(0);
   });
 
@@ -800,6 +801,62 @@ describe("MercadoLivreProvider", () => {
       },
       source: "payment.charges_details.shipping",
     });
+  });
+
+  it("subtracts shipment receiver cost from gross payment shipping tariff", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          receiver: { cost: 10.99 },
+          senders: [{ cost: 0, user_id: 123456 }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          charges_details: [
+            {
+              amount: -16.64,
+              description:
+                "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
+              type: "shipping",
+            },
+          ],
+          id: 7654321,
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const shippingCost = await withShippingResolver(
+      provider,
+    ).resolveShippingCostWithSource(
+      {
+        payments: [{ id: 7654321 }],
+        shipping: { id: 999 },
+      },
+      {
+        accessToken: "token_123",
+        sellerAccountId: "123456",
+      },
+    );
+
+    expect(shippingCost).toEqual({
+      amount: 5.65,
+      metadata: {
+        buyerShippingAmount: 10.99,
+        grossShippingTariffAmount: 16.64,
+        paymentId: "7654321",
+      },
+      source: "payment.charges_details.shipping",
+    });
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/shipments/999/costs",
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
+      "https://api.mercadopago.com/v1/payments/7654321",
+    );
   });
 
   it("does not treat buyer payment shipping_cost as seller shipping cost without payment details", async () => {

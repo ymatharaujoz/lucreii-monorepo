@@ -191,6 +191,11 @@ type MercadoLivreShippingCostResolution = {
     | "shipment_detail.shipping_option.cost";
 };
 
+type MercadoLivreShipmentCostLookup = {
+  buyerShippingAmount: number;
+  sellerCost: MercadoLivreShippingCostResolution | null;
+};
+
 type MercadoLivreOrderItemResponse = {
   item?: {
     category_id?: string;
@@ -2262,22 +2267,28 @@ export class MercadoLivreProvider implements IntegrationProvider {
     } = {},
   ): Promise<MercadoLivreShippingCostResolution | null> {
     const shipmentId = order.shipping?.id ? String(order.shipping.id) : null;
-    const buyerShippingAmount = this.readBuyerShippingAmount(order);
+    let buyerShippingAmount = this.readBuyerShippingAmount(order);
 
     if (shipmentId && !options.skipShipmentLookup) {
-      const shipmentCost = await this.fetchShipmentSellerCost({
+      const shipmentCost = await this.fetchShipmentCosts({
         accessToken: input.accessToken,
         sellerAccountId: input.sellerAccountId,
         shipmentId,
       });
 
-      if (shipmentCost !== null) {
-        return shipmentCost;
+      buyerShippingAmount = Math.max(
+        buyerShippingAmount,
+        shipmentCost.buyerShippingAmount,
+      );
+
+      if (shipmentCost.sellerCost !== null) {
+        return shipmentCost.sellerCost;
       }
     }
 
     const paymentShippingCost = await this.fetchPaymentShippingCost({
       accessToken: input.accessToken,
+      fallbackBuyerShippingAmount: buyerShippingAmount,
       order,
     });
 
@@ -2643,6 +2654,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
 
   private async fetchPaymentShippingCost(input: {
     accessToken: string;
+    fallbackBuyerShippingAmount: number;
     order: MercadoLivreOrderResponse;
   }): Promise<MercadoLivreShippingCostResolution | null> {
     for (const payment of input.order.payments ?? []) {
@@ -2663,7 +2675,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
       const shippingCost = readPaymentShippingCostBreakdown(
         paymentDetail,
         paymentId,
-        typeof payment.shipping_cost === "number" ? payment.shipping_cost : 0,
+        Math.max(
+          input.fallbackBuyerShippingAmount,
+          typeof payment.shipping_cost === "number" ? payment.shipping_cost : 0,
+        ),
       );
 
       if (shippingCost !== null) {
@@ -2715,6 +2730,20 @@ export class MercadoLivreProvider implements IntegrationProvider {
     sellerAccountId: string;
     shipmentId: string;
   }): Promise<MercadoLivreShippingCostResolution | null> {
+    return (
+      await this.fetchShipmentCosts({
+        accessToken: input.accessToken,
+        sellerAccountId: input.sellerAccountId,
+        shipmentId: input.shipmentId,
+      })
+    ).sellerCost;
+  }
+
+  private async fetchShipmentCosts(input: {
+    accessToken: string;
+    sellerAccountId: string;
+    shipmentId: string;
+  }): Promise<MercadoLivreShipmentCostLookup> {
     const response = await this.fetchWithRetry(
       `https://api.mercadolibre.com/shipments/${input.shipmentId}/costs`,
       {
@@ -2732,6 +2761,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
       | string;
 
     if (response.ok && typeof payload !== "string") {
+      const buyerShippingAmount =
+        typeof payload.receiver?.cost === "number" && payload.receiver.cost > 0
+          ? payload.receiver.cost
+          : 0;
       const senders = payload.senders ?? [];
       const matchedSender = senders.find(
         (sender) => String(sender.user_id ?? "") === input.sellerAccountId,
@@ -2739,8 +2772,11 @@ export class MercadoLivreProvider implements IntegrationProvider {
 
       if (typeof matchedSender?.cost === "number" && matchedSender.cost > 0) {
         return {
-          amount: matchedSender.cost,
-          source: "shipment_costs.senders",
+          buyerShippingAmount,
+          sellerCost: {
+            amount: matchedSender.cost,
+            source: "shipment_costs.senders",
+          },
         };
       }
 
@@ -2755,13 +2791,24 @@ export class MercadoLivreProvider implements IntegrationProvider {
         firstSender.cost > 0
       ) {
         return {
-          amount: firstSender.cost,
-          source: "shipment_costs.senders",
+          buyerShippingAmount,
+          sellerCost: {
+            amount: firstSender.cost,
+            source: "shipment_costs.senders",
+          },
         };
       }
+
+      return {
+        buyerShippingAmount,
+        sellerCost: null,
+      };
     }
 
-    return null;
+    return {
+      buyerShippingAmount: 0,
+      sellerCost: null,
+    };
   }
 
   private async fetchShipmentDetailSellerCost(input: {
