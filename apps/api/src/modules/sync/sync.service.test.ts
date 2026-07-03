@@ -525,9 +525,11 @@ describe("SyncService", () => {
     });
     expect(
       Object.prototype.hasOwnProperty.call(
-        (db.update.mock.results[0]?.value.set.mock.calls[0]?.[0] as {
-          metadata?: Record<string, unknown>;
-        })?.metadata ?? {},
+        (
+          db.update.mock.results[0]?.value.set.mock.calls[0]?.[0] as {
+            metadata?: Record<string, unknown>;
+          }
+        )?.metadata ?? {},
         "resultCursor",
       ),
     ).toBe(false);
@@ -1130,6 +1132,164 @@ describe("SyncService", () => {
         refundBonusAmount: "4.75",
       }),
     );
+  });
+
+  it("persists refund bonus financial adjustment fee metadata during upsert", async () => {
+    const { db, service } = createService();
+    const insertedFees: Array<Record<string, unknown>> = [];
+
+    db.insert = vi.fn().mockImplementation(() => ({
+      values: vi.fn().mockImplementation((value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "feeType" in value &&
+          (value as { feeType?: unknown }).feeType === "refund_bonus"
+        ) {
+          insertedFees.push(value as Record<string, unknown>);
+          return {
+            returning: vi.fn().mockResolvedValue([]),
+          };
+        }
+
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalOrderId" in value &&
+          (value as { externalOrderId?: unknown }).externalOrderId === "order_1"
+        ) {
+          return {
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: "ext_order_1" }]),
+            }),
+          };
+        }
+
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalProductId" in value &&
+          (value as { externalProductId?: unknown }).externalProductId ===
+            "product_ext_1"
+        ) {
+          return {
+            onConflictDoUpdate: vi.fn().mockReturnValue({
+              returning: vi.fn().mockResolvedValue([{ id: "ext_prod_1" }]),
+            }),
+          };
+        }
+
+        return {
+          returning: vi.fn().mockResolvedValue([]),
+        };
+      }),
+    }));
+
+    await (
+      service as unknown as {
+        persistSyncResult: (input: {
+          companyId: string;
+          connection: { id: string };
+          organizationId: string;
+          providerSlug: "mercadolivre";
+          syncResult: {
+            orders: Array<{
+              currency: string;
+              externalOrderId: string;
+              fees: Array<{
+                amount: string;
+                currency: string;
+                feeType: string;
+                metadata: Record<string, unknown>;
+              }>;
+              items: Array<{
+                externalProductId: string;
+                quantity: number;
+                totalPrice: string;
+                unitPrice: string;
+              }>;
+              metadata: { refundBonusAmount: string };
+              orderedAt: string;
+              status: string;
+              totalAmount: string;
+            }>;
+            products: Array<{
+              externalProductId: string;
+              metadata: Record<string, unknown>;
+              sku: string;
+              title: string;
+            }>;
+          };
+          syncRunId: string;
+        }) => Promise<unknown>;
+      }
+    ).persistSyncResult({
+      companyId: "company_1",
+      connection: { id: "conn_1" },
+      organizationId: "org_1",
+      providerSlug: "mercadolivre",
+      syncResult: {
+        orders: [
+          {
+            currency: "BRL",
+            externalOrderId: "order_1",
+            fees: [
+              {
+                amount: "7.25",
+                currency: "BRL",
+                feeType: "refund_bonus",
+                metadata: {
+                  operationId: "987654",
+                  originalDescription: "Estorno Mercado Livre",
+                  originalType: "estorno",
+                  rawPayload: { order_id: 123 },
+                  source: "billing/integration/periods",
+                },
+              },
+            ],
+            items: [
+              {
+                externalProductId: "product_ext_1",
+                quantity: 1,
+                totalPrice: "100.00",
+                unitPrice: "100.00",
+              },
+            ],
+            metadata: { refundBonusAmount: "7.25" },
+            orderedAt: "2026-05-01T10:00:00.000Z",
+            status: "paid",
+            totalAmount: "100.00",
+          },
+        ],
+        products: [
+          {
+            externalProductId: "product_ext_1",
+            metadata: {},
+            sku: "SKU-1",
+            title: "Produto 1",
+          },
+        ],
+      },
+      syncRunId: "sync_1",
+    });
+
+    expect(insertedFees).toEqual([
+      expect.objectContaining({
+        amount: "7.25",
+        currency: "BRL",
+        externalOrderId: "ext_order_1",
+        feeType: "refund_bonus",
+        metadata: expect.objectContaining({
+          operationId: "987654",
+          originalDescription: "Estorno Mercado Livre",
+          originalType: "estorno",
+          rawPayload: { order_id: 123 },
+          source: "billing/integration/periods",
+        }),
+        organizationId: "org_1",
+        provider: "mercadolivre",
+      }),
+    ]);
   });
 
   it("preserves previously imported fallback sku when order sync payload has null sku", async () => {
