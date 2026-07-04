@@ -982,6 +982,38 @@ function compareOrderListItems(
 ) {
   const leftValue = getOrderListSortValue(left, key);
   const rightValue = getOrderListSortValue(right, key);
+
+  const primaryResult = compareOrderSortValues(leftValue, rightValue, direction);
+  if (primaryResult !== 0) {
+    return primaryResult;
+  }
+
+  const orderedAtResult = compareOrderSortValues(
+    left.orderedAt ?? "",
+    right.orderedAt ?? "",
+    "desc",
+  );
+  if (orderedAtResult !== 0) {
+    return orderedAtResult;
+  }
+
+  const createdAtResult = compareOrderSortValues(
+    left.createdAt,
+    right.createdAt,
+    "desc",
+  );
+  if (createdAtResult !== 0) {
+    return createdAtResult;
+  }
+
+  return right.id.localeCompare(left.id);
+}
+
+function compareOrderSortValues(
+  leftValue: string | number | null | undefined,
+  rightValue: string | number | null | undefined,
+  direction: "asc" | "desc",
+) {
   const leftNull = leftValue === null || leftValue === undefined;
   const rightNull = rightValue === null || rightValue === undefined;
 
@@ -1008,6 +1040,22 @@ function compareOrderListItems(
     : rightNumber - leftNumber;
 }
 
+function readPositiveInteger(value: unknown, fallback: number) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim().length > 0
+        ? Number(value)
+        : fallback;
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  const integer = Math.trunc(parsed);
+  return integer > 0 ? integer : fallback;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly mercadoLivrePackIdCache = new Map<
@@ -1031,10 +1079,8 @@ export class OrdersService {
     filters: OrderListFilters = {},
   ): Promise<OrdersListResponse> {
     const companyId = this.requireSelectedCompanyId(authContext);
-    const page = Number.isFinite(filters.page) ? Math.trunc(filters.page ?? 1) : 1;
-    const pageSize = Number.isFinite(filters.pageSize)
-      ? Math.trunc(filters.pageSize ?? 20)
-      : 20;
+    const page = readPositiveInteger(filters.page, 1);
+    const pageSize = readPositiveInteger(filters.pageSize, 20);
     const includeSummary = filters.includeSummary ?? true;
     const sortBy = filters.sortBy ?? "orderedAt";
     const sortDirection = filters.sortDirection ?? "desc";
@@ -1072,19 +1118,50 @@ export class OrdersService {
       }),
     ]);
 
-    if (canPageInDatabase && typeof (this.db as { select?: unknown }).select === "function") {
+    if (
+      canPageInDatabase &&
+      typeof (this.db as { select?: unknown }).select === "function"
+    ) {
       const orderByClause =
         sortBy === "provider"
           ? sortDirection === "asc"
-            ? [asc(externalOrders.provider), desc(externalOrders.orderedAt), desc(externalOrders.createdAt)]
-            : [desc(externalOrders.provider), desc(externalOrders.orderedAt), desc(externalOrders.createdAt)]
+            ? [
+                asc(externalOrders.provider),
+                desc(externalOrders.orderedAt),
+                desc(externalOrders.createdAt),
+                desc(externalOrders.id),
+              ]
+            : [
+                desc(externalOrders.provider),
+                desc(externalOrders.orderedAt),
+                desc(externalOrders.createdAt),
+                desc(externalOrders.id),
+              ]
           : sortBy === "orderId"
             ? sortDirection === "asc"
-              ? [asc(externalOrders.externalOrderId), desc(externalOrders.orderedAt), desc(externalOrders.createdAt)]
-              : [desc(externalOrders.externalOrderId), desc(externalOrders.orderedAt), desc(externalOrders.createdAt)]
+              ? [
+                  asc(externalOrders.externalOrderId),
+                  desc(externalOrders.orderedAt),
+                  desc(externalOrders.createdAt),
+                  desc(externalOrders.id),
+                ]
+              : [
+                  desc(externalOrders.externalOrderId),
+                  desc(externalOrders.orderedAt),
+                  desc(externalOrders.createdAt),
+                  desc(externalOrders.id),
+                ]
             : sortDirection === "asc"
-              ? [asc(externalOrders.orderedAt), asc(externalOrders.createdAt)]
-              : [desc(externalOrders.orderedAt), desc(externalOrders.createdAt)];
+              ? [
+                  asc(externalOrders.orderedAt),
+                  desc(externalOrders.createdAt),
+                  desc(externalOrders.id),
+                ]
+              : [
+                  desc(externalOrders.orderedAt),
+                  desc(externalOrders.createdAt),
+                  desc(externalOrders.id),
+                ];
       const [{ count: totalItems }] = await this.db
         .select({
           count: sql<number>`count(*)`,

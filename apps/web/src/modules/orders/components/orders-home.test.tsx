@@ -519,10 +519,119 @@ describe("OrdersHome", () => {
   });
 
   it("changes to page 2 when pagination is used", () => {
-    useOrdersListMock
-      .mockReturnValueOnce({
+    useOrdersListMock.mockImplementation((filters?: { page?: number }) => ({
+      data: {
+        summary: {
+          averageMargin: "0.29",
+          grossProfit: "57.00",
+          grossRevenue: "200.00",
+          ordersCount: 1,
+          unitsSold: 2,
+        },
+        availableStatuses: [
+          { label: "Pagamento aprovado", value: "paid" },
+        ],
+        items:
+          filters?.page === 2
+            ? [
+                {
+                  contributionMarginPercent: "15.00",
+                  createdAt: "2026-06-21T12:00:00.000Z",
+                  currency: "BRL",
+                  displayOrderId: "MLB-SALE-9002",
+                  fixedCostAmount: "1.00",
+                  id: "order_row_2",
+                  itemsSold: 1,
+                  orderDate: "2026-06-21",
+                  orderId: "MLB-1002",
+                  orderedAt: "2026-06-21T10:15:00.000Z",
+                  provider: "mercadolivre",
+                  skus: ["SKU-9"],
+                  shippingAmount: "5.00",
+                  sourceStatus: "paid",
+                  status: "paid",
+                  statusLabel: "Pagamento aprovado",
+                  tariffAmount: "4.00",
+                  totalFees: "10.00",
+                  totalProfitAmount: "12.00",
+                  totalWithFees: "80.00",
+                  totalWithoutFees: "70.00",
+                },
+              ]
+            : [
+                {
+                  contributionMarginPercent: "46.00",
+                  createdAt: "2026-06-20T12:00:00.000Z",
+                  currency: "BRL",
+                  displayOrderId: "MLB-SALE-9001",
+                  fixedCostAmount: "3.00",
+                  id: "order_row_1",
+                  itemsSold: 2,
+                  orderDate: "2026-06-20",
+                  orderId: "MLB-1001",
+                  orderedAt: "2026-06-20T10:15:00.000Z",
+                  provider: "mercadolivre",
+                  skus: ["SKU-1"],
+                  shippingAmount: "20.00",
+                  sourceStatus: "paid",
+                  status: "paid",
+                  statusLabel: "Pagamento aprovado",
+                  tariffAmount: "10.00",
+                  totalFees: "33.00",
+                  totalProfitAmount: "92.00",
+                  totalWithFees: "200.00",
+                  totalWithoutFees: "167.00",
+                },
+              ],
+        page: filters?.page ?? 1,
+        pageSize: 20,
+        totalItems: 21,
+        totalPages: 2,
+      },
+      error: null,
+      isLoading: false,
+    }));
+
+    const view = mount(<OrdersHome />);
+
+    expect(text()).toContain("MLB-SALE-9001");
+    expect(text()).not.toContain("MLB-SALE-9002");
+
+    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "2")!);
+
+    expect(useOrdersListMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        page: 2,
+      }),
+    );
+    expect(text()).toContain("MLB-SALE-9002");
+    expect(text()).not.toContain("MLB-SALE-9001");
+
+    view.unmount();
+  });
+
+  it("shows table error state instead of keeping stale rows when paginated query fails", () => {
+    useOrdersListMock.mockImplementation((filters?: { page?: number }) => {
+      if (filters?.page === 2) {
+        return {
+          data: undefined,
+          error: new Error("No content"),
+          isLoading: false,
+        };
+      }
+
+      return {
         data: {
-          ...useOrdersListMock.mock.results[0]?.value?.data,
+          summary: {
+            averageMargin: "0.29",
+            grossProfit: "57.00",
+            grossRevenue: "200.00",
+            ordersCount: 1,
+            unitsSold: 2,
+          },
+          availableStatuses: [
+            { label: "Pagamento aprovado", value: "paid" },
+          ],
           items: [
             {
               contributionMarginPercent: "46.00",
@@ -555,38 +664,17 @@ describe("OrdersHome", () => {
         },
         error: null,
         isLoading: false,
-      })
-      .mockReturnValue({
-        data: {
-          summary: {
-            averageMargin: "0.29",
-            grossProfit: "57.00",
-            grossRevenue: "200.00",
-            ordersCount: 1,
-            unitsSold: 2,
-          },
-          availableStatuses: [
-            { label: "Pagamento aprovado", value: "paid" },
-          ],
-          items: [],
-          page: 2,
-          pageSize: 20,
-          totalItems: 21,
-          totalPages: 2,
-        },
-        error: null,
-        isLoading: false,
-      });
+      };
+    });
 
     const view = mount(<OrdersHome />);
 
+    expect(text()).toContain("MLB-SALE-9001");
+
     click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "2")!);
 
-    expect(useOrdersListMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        page: 2,
-      }),
-    );
+    expect(text()).toContain("Nao foi possivel carregar os pedidos.");
+    expect(text()).not.toContain("MLB-SALE-9001");
 
     view.unmount();
   });

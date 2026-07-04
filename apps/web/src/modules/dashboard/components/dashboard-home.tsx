@@ -55,13 +55,10 @@ function ReferenceMonthToolbar({
         items={items}
         onSelect={(id) => onReferenceMonthChange(id)}
         trigger={
-          <button
-            type="button"
-            className="flex h-7 items-center gap-1.5 rounded-md bg-surface px-2 text-sm font-semibold text-foreground transition-colors hover:bg-accent/5"
-          >
+          <div className="flex h-7 items-center gap-1.5 rounded-md bg-surface px-2 text-sm font-semibold text-foreground transition-colors hover:bg-accent/5">
             {formatReferenceMonthPtBr(referenceMonth)}
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
+          </div>
         }
       />
     </div>

@@ -1896,7 +1896,7 @@ export function ProductsShell({
                 >
                   {marketplaceImportResult.found} produto
                   {marketplaceImportResult.found !== 1 ? "s" : ""} do {selectedMarketplaceMeta?.catalogLabel ?? "marketplace"}
-                  processado{marketplaceImportResult.found !== 1 ? "s" : ""}
+                   processado{marketplaceImportResult.found !== 1 ? "s" : ""}
                 </motion.p>
               </motion.div>
 
