@@ -2520,6 +2520,216 @@ describe("OrdersService", () => {
     expect(result.items[0]?.orderId).toBe("MLB-1001");
   });
 
+  it("coerces string pagination filters before slicing results", async () => {
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-20T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-1001",
+              metadata: {},
+              orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-20T12:00:00.000Z"),
+              totalAmount: "200.00",
+              items: [],
+              fees: [],
+            },
+            {
+              id: "order_row_2",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-21T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-1002",
+              metadata: {},
+              orderedAt: new Date("2026-06-21T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-21T12:00:00.000Z"),
+              totalAmount: "150.00",
+              items: [],
+              fees: [],
+            },
+          ]),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        page: "2",
+        pageSize: "1",
+      } as never,
+    );
+
+    expect(result.page).toBe(2);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.orderId).toBe("MLB-1001");
+  });
+
+  it("uses a stable id tie-breaker when orders share timestamps before pagination", async () => {
+    const sharedOrderedAt = new Date("2026-06-21T10:15:00.000Z");
+    const sharedCreatedAt = new Date("2026-06-21T12:00:00.000Z");
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: sharedCreatedAt,
+              currency: "BRL",
+              externalOrderId: "MLB-1001",
+              metadata: {},
+              orderedAt: sharedOrderedAt,
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: sharedCreatedAt,
+              totalAmount: "200.00",
+              items: [],
+              fees: [],
+            },
+            {
+              id: "order_row_2",
+              companyId: "company_123",
+              createdAt: sharedCreatedAt,
+              currency: "BRL",
+              externalOrderId: "MLB-1002",
+              metadata: {},
+              orderedAt: sharedOrderedAt,
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: sharedCreatedAt,
+              totalAmount: "150.00",
+              items: [],
+              fees: [],
+            },
+          ]),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        page: 1,
+        pageSize: 1,
+      },
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.orderId).toBe("MLB-1002");
+  });
+
+  it("uses offset and a stable id tie-breaker in optimized database pagination", async () => {
+    const countWhereMock = vi.fn().mockResolvedValue([{ count: 2 }]);
+    const countFromMock = vi.fn().mockReturnValue({ where: countWhereMock });
+    const pageOffsetMock = vi.fn().mockResolvedValue([{ id: "order_row_1" }]);
+    const pageLimitMock = vi.fn().mockReturnValue({ offset: pageOffsetMock });
+    const pageOrderByMock = vi.fn().mockReturnValue({ limit: pageLimitMock });
+    const pageWhereMock = vi.fn().mockReturnValue({ orderBy: pageOrderByMock });
+    const pageFromMock = vi.fn().mockReturnValue({ where: pageWhereMock });
+    const selectMock = vi
+      .fn()
+      .mockReturnValueOnce({ from: countFromMock })
+      .mockReturnValueOnce({ from: pageFromMock });
+    const db = {
+      select: selectMock,
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-21T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-1001",
+              metadata: {},
+              orderedAt: new Date("2026-06-21T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-21T12:00:00.000Z"),
+              totalAmount: "200.00",
+              items: [],
+              fees: [],
+            },
+          ]),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        includeSummary: false,
+        page: 2,
+        pageSize: 1,
+      },
+    );
+
+    expect(pageOffsetMock).toHaveBeenCalledWith(1);
+    expect(pageOrderByMock.mock.calls[0]).toHaveLength(3);
+    expect(result.items[0]?.orderId).toBe("MLB-1001");
+  });
+
   it("aggregates unique order skus on list rows", async () => {
     const db = {
       query: {

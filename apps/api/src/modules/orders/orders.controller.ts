@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Inject,
+  InternalServerErrorException,
   Param,
   Patch,
   Query,
@@ -30,19 +32,28 @@ export class OrdersController {
   ) {}
 
   @Get()
+  @HttpCode(200)
   async listOrders(
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,
     @Query() query: OrderListFiltersDto,
   ) {
+    const data = await this.ordersService.listOrders(
+      {
+        organizationId: authContext.organization!.id,
+        selectedCompanyId: authContext.selectedCompanyId ?? null,
+        userId: authContext.user.id,
+      },
+      query,
+    );
+
+    if (!data || typeof data !== "object") {
+      throw new InternalServerErrorException(
+        "Orders list response payload is missing.",
+      );
+    }
+
     return {
-      data: await this.ordersService.listOrders(
-        {
-          organizationId: authContext.organization!.id,
-          selectedCompanyId: authContext.selectedCompanyId ?? null,
-          userId: authContext.user.id,
-        },
-        query,
-      ),
+      data,
       error: null,
     };
   }
