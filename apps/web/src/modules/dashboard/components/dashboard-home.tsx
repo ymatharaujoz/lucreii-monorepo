@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { RefreshCw, AlertCircle, ChevronDown } from "lucide-react";
+import { RefreshCw, AlertCircle, ChevronDown, Calendar } from "lucide-react";
 import type { Company, IntegrationProviderSlug } from "@lucreii/types";
 import { Card, EmptyState, Skeleton, Button, Dropdown } from "@lucreii/ui";
 import { ApiClientError } from "@/lib/api/client";
@@ -46,22 +46,30 @@ function ReferenceMonthToolbar({
   }));
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-strong px-3 py-2 shadow-sm">
-      <span className="text-xs font-semibold uppercase tracking-wider text-accent">
-        Mês
-      </span>
-      <Dropdown
-        align="left"
-        items={items}
-        onSelect={(id) => onReferenceMonthChange(id)}
-        trigger={
-          <div className="flex h-7 items-center gap-1.5 rounded-md bg-surface px-2 text-sm font-semibold text-foreground transition-colors hover:bg-accent/5">
+    <Dropdown
+      align="left"
+      items={items}
+      onSelect={(id) => onReferenceMonthChange(id)}
+      trigger={
+        <div className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[var(--radius-md)] border border-border bg-background pl-2.5 pr-2.5 text-xs font-semibold text-foreground transition-all duration-[var(--transition-fast)] outline-none hover:border-border-strong hover:shadow-[var(--shadow-xs)]">
+          <Calendar className="h-3.5 w-3.5 shrink-0 text-accent" />
+          <span className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 md:inline">
+            Mês de Referência
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 md:hidden">
+            Mês
+          </span>
+          <span
+            aria-hidden
+            className="h-3 w-px shrink-0 bg-border/70"
+          />
+          <span className="font-semibold text-foreground text-xs leading-none">
             {formatReferenceMonthPtBr(referenceMonth)}
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </div>
-        }
-      />
-    </div>
+          </span>
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-[var(--transition-fast)]" />
+        </div>
+      }
+    />
   );
 }
 
@@ -169,7 +177,7 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
           referenceMonth={referenceMonth}
         />
 
-        <div className="flex w-fit rounded-lg border border-border bg-surface-strong p-1">
+        <div className="flex w-fit rounded-xl border border-border bg-surface-strong p-1 shadow-[var(--shadow-xs)]">
           {([
             [null, "Todos"],
             ["mercadolivre", "Mercado Livre"],
@@ -180,9 +188,9 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
               key={provider ?? "all"}
               type="button"
               onClick={() => setProviderFilter(provider)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all duration-[var(--transition-fast)] ${
                 providerFilter === provider
-                  ? "bg-accent text-white"
+                  ? "bg-accent text-accent-foreground shadow-[var(--shadow-xs)]"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >

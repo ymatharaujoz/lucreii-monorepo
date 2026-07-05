@@ -313,150 +313,132 @@ export function DashboardFinancialIndicators({
       </div>
 
       <motion.div variants={itemVariants}>
-        <Card variant="default" padding="md">
-          <div className="flex flex-col gap-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] bg-accent/10">
-                    <Settings2 className="h-4 w-4 text-accent" />
+        <Card 
+          variant="outlined" 
+          className="px-4 py-3 bg-surface-elevated/40 border border-border/80 rounded-xl shadow-[var(--shadow-xs)] hover:border-border-strong transition-all duration-300 backdrop-blur-xs"
+        >
+          {isEditing ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center w-full">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center flex-1 min-w-0">
+                <div className="flex items-center gap-2 min-w-0 sm:max-w-[200px] flex-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 shrink-0">
+                    Custo Fixo
+                  </span>
+                  <div className="relative flex-1 min-w-0">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-accent bg-accent-soft px-1.5 py-0.5 rounded-md select-none z-10">
+                      R$
+                    </span>
+                    <Input
+                      autoFocus
+                      className="h-9 rounded-xl bg-background border border-border pl-10 pr-3 text-right text-xs font-semibold text-foreground shadow-[var(--shadow-xs)] hover:border-border-strong focus:border-accent/50 focus:ring-2 focus:ring-accent/15 focus:outline-none"
+                      inputMode="decimal"
+                      onChange={(event) => setFixedCostInput(event.target.value)}
+                      placeholder="0,00"
+                      type="text"
+                      value={fixedCostInput}
+                    />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground">Custo e Imposto</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {activeCompany
-                        ? activeCompany.razaoSocial
-                        : "Nenhuma empresa ativa disponivel"}
-                    </p>
+                </div>
+
+                <span aria-hidden className="hidden sm:block h-4 w-px bg-border/60" />
+
+                <div className="flex items-center gap-2 min-w-0 sm:max-w-[180px] flex-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 shrink-0">
+                    Imposto
+                  </span>
+                  <div className="relative flex-1 min-w-0">
+                    <Input
+                      className="h-9 rounded-xl bg-background border border-border pl-3 pr-10 text-right text-xs font-semibold text-foreground shadow-[var(--shadow-xs)] hover:border-border-strong focus:border-accent/50 focus:ring-2 focus:ring-accent/15 focus:outline-none"
+                      inputMode="decimal"
+                      onChange={(event) => setTaxPercentInput(event.target.value)}
+                      placeholder="0,00"
+                      type="text"
+                      value={taxPercentInput}
+                    />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-accent bg-accent-soft px-1.5 py-0.5 rounded-md select-none z-10">
+                      %
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {!isEditing && (
+              {feedbackMessage && (
+                <p className="text-xs font-medium text-muted-foreground self-center px-2">{feedbackMessage}</p>
+              )}
+
+              <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
                 <Button
-                  variant="secondary"
+                  variant="ghost"
                   size="sm"
-                  disabled={!activeCompany}
+                  disabled={isSaving}
+                  className="rounded-xl px-3 py-1.5 text-xs font-semibold hover:bg-foreground/5 h-9"
+                  onClick={cancelEditing}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  loading={isSaving}
+                  className="rounded-xl bg-gradient-to-r from-accent to-accent-strong hover:from-accent-strong hover:to-accent px-4 py-1.5 text-xs font-bold text-white shadow-sm transition-all hover:-translate-y-0.5 active:scale-97 h-9"
                   onClick={() => {
-                    setFeedbackMessage(null);
-                    setFixedCostInput(formatCurrencyInput(fixedCost));
-                    setTaxPercentInput(formatCurrencyInput(taxPercent));
-                    setIsEditing(true);
+                    void saveCompanyDefaults();
                   }}
                 >
-                  <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                  Editar
+                  Salvar
                 </Button>
-              )}
+              </div>
             </div>
-
-            {isEditing ? (
-              <div className="flex flex-col gap-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      <DollarSign className="h-3.5 w-3.5" />
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center justify-between w-full">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center flex-1">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/8 text-accent">
+                    <DollarSign className="h-4 w-4" />
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
                       Custo Fixo
-                    </label>
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
-                        R$
-                      </span>
-                      <Input
-                        autoFocus
-                        className="pl-9 text-right text-base font-semibold tabular-nums"
-                        inputMode="decimal"
-                        onChange={(event) => setFixedCostInput(event.target.value)}
-                        placeholder="0,00"
-                        type="text"
-                        value={fixedCostInput}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Valor de custos operacionais fixos
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      <Percent className="h-3.5 w-3.5" />
-                      Imposto
-                    </label>
-                    <div className="relative">
-                      <Input
-                        className="pr-9 text-right text-base font-semibold tabular-nums"
-                        inputMode="decimal"
-                        onChange={(event) => setTaxPercentInput(event.target.value)}
-                        placeholder="0,00"
-                        type="text"
-                        value={taxPercentInput}
-                      />
-                      <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
-                        %
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Alíquota de impostos sobre os produtos
-                    </p>
-                  </div>
-                </div>
-
-                {feedbackMessage && (
-                  <p className="text-xs font-medium text-muted-foreground">{feedbackMessage}</p>
-                )}
-
-                <div className="flex items-center justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={isSaving}
-                    onClick={cancelEditing}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    size="sm"
-                    loading={isSaving}
-                    onClick={() => {
-                      void saveCompanyDefaults();
-                    }}
-                  >
-                    Salvar alterações
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-border/60 bg-surface-strong px-4 py-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] bg-foreground/5">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Custo Fixo
-                    </p>
-                    <p className="text-lg font-semibold tracking-tight text-foreground tabular-nums">
+                    </span>
+                    <span className="text-sm font-semibold tracking-tight text-foreground tabular-nums">
                       {formatMoney(fixedCost)}
-                    </p>
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-border/60 bg-surface-strong px-4 py-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] bg-foreground/5">
-                    <Percent className="h-4 w-4 text-muted-foreground" />
+                <span aria-hidden className="hidden sm:block h-4 w-px bg-border/60" />
+
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/8 text-accent">
+                    <Percent className="h-4 w-4" />
                   </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
                       Imposto
-                    </p>
-                    <p className="text-lg font-semibold tracking-tight text-foreground tabular-nums">
+                    </span>
+                    <span className="text-sm font-semibold tracking-tight text-foreground tabular-nums">
                       {formatCurrencyInput(taxPercent)}%
-                    </p>
+                    </span>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!activeCompany}
+                className="rounded-xl px-4 py-1.5 text-xs font-semibold border border-border bg-surface-strong/60 text-foreground transition-all hover:border-border-strong active:scale-97 sm:ml-auto shrink-0"
+                onClick={() => {
+                  setFeedbackMessage(null);
+                  setFixedCostInput(formatCurrencyInput(fixedCost));
+                  setTaxPercentInput(formatCurrencyInput(taxPercent));
+                  setIsEditing(true);
+                }}
+              >
+                <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                Editar
+              </Button>
+            </div>
+          )}
         </Card>
       </motion.div>
     </motion.div>
