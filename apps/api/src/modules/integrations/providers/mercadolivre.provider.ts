@@ -164,6 +164,7 @@ type MercadoLivreShipmentDetailResponse = {
   order_cost?: number;
   shipping_option?: {
     cost?: number;
+    list_cost?: number | string;
   };
 };
 
@@ -202,6 +203,7 @@ type MercadoLivreShippingCostResolution = {
     | "payment.charges_details.shipping"
     | "payment.fee_details.shipping"
     | "shipment_costs.senders"
+    | "shipment_detail.shipping_option.list_cost"
     | "shipment_detail.order_cost"
     | "shipment_detail.shipping_option.cost";
 };
@@ -471,6 +473,21 @@ function hasBillingAdjustmentText(result: MercadoLivreBillingDetailResult) {
 }
 
 function readPositiveBillingNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function readPositiveMoneyNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) {
     return value;
   }
@@ -3088,6 +3105,19 @@ export class MercadoLivreProvider implements IntegrationProvider {
 
     if (!shipmentDetailResponse.ok || typeof shipmentDetail === "string") {
       return null;
+    }
+
+    const listCostAmount = readPositiveMoneyNumber(
+      shipmentDetail.shipping_option?.list_cost,
+    );
+    if (listCostAmount !== null) {
+      return {
+        amount: roundMoneyNumber(listCostAmount),
+        metadata: {
+          listCostAmount: roundMoneyNumber(listCostAmount),
+        },
+        source: "shipment_detail.shipping_option.list_cost",
+      };
     }
 
     if (

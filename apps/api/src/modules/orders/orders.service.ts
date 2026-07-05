@@ -16,7 +16,14 @@ import type {
   ProductFinanceDefaults,
   ProductImage,
 } from "@lucreii/database";
-import { externalOrders, marketplaceConnections } from "@lucreii/database";
+import {
+  externalFees,
+  externalOrderItems,
+  externalOrders,
+  externalProducts,
+  marketplaceConnections,
+  products,
+} from "@lucreii/database";
 import type {
   OrderCanonicalStatus,
   OrderComposition,
@@ -71,6 +78,18 @@ type OrderRowShallow = ExternalOrder & {
       externalProduct: ExternalProduct | null;
     }
   >;
+};
+
+type MercadoLivreOrderDetailResponse = {
+  shipping?: {
+    id?: number | string;
+  };
+};
+
+type MercadoLivreShipmentDetailResponse = {
+  shipping_option?: {
+    list_cost?: number | string;
+  };
 };
 
 type OrderSortKey = NonNullable<OrderListFilters["sortBy"]>;
@@ -196,6 +215,40 @@ function includesIgnoreCase(haystack: string | null | undefined, needle: string)
   }
 
   return haystack.toLowerCase().includes(needle.toLowerCase());
+}
+
+function matchesOrderSearch(
+  order: Pick<OrderListItem, "orderId" | "displayOrderId" | "skus">,
+  needle: string,
+) {
+  return (
+    includesIgnoreCase(order.orderId, needle) ||
+    includesIgnoreCase(order.displayOrderId, needle) ||
+    order.skus.some((sku) => includesIgnoreCase(sku, needle))
+  );
+}
+
+function buildOrderSearchWhere(searchNeedle: string) {
+  const normalizedNeedle = `%${searchNeedle.toUpperCase()}%`;
+
+  return sql`(
+    upper(trim(${externalOrders.externalOrderId})) like ${normalizedNeedle}
+    or upper(trim(coalesce(${externalOrders.metadata} ->> 'packId', ''))) like ${normalizedNeedle}
+    or upper(trim(coalesce(${externalOrders.metadata} ->> 'operationId', ''))) like ${normalizedNeedle}
+    or exists (
+      select 1
+      from ${externalOrderItems}
+      left join ${externalProducts}
+        on ${externalOrderItems.externalProductId} = ${externalProducts.id}
+      left join ${products}
+        on ${externalProducts.linkedProductId} = ${products.id}
+      where ${externalOrderItems.externalOrderId} = ${externalOrders.id}
+        and (
+          upper(trim(coalesce(${products.sku}, ''))) like ${normalizedNeedle}
+          or upper(trim(coalesce(${externalProducts.sku}, ''))) like ${normalizedNeedle}
+        )
+    )
+  )`;
 }
 
 function isOrderWithinRange(
@@ -440,7 +493,9 @@ function buildOrderFinancialMetrics(
   );
   const shippingOrFixedFeeAmount = readOverrideMoney(
     compositionOverrides.shippingOrFixedFeeAmount,
-    baseMetrics.shippingAmount + baseMetrics.fixedCostAmount,
+    baseMetrics.shippingAmount > 0
+      ? baseMetrics.shippingAmount
+      : baseMetrics.fixedCostAmount,
   );
   const marketplaceCommissionAmount = readOverrideMoney(
     compositionOverrides.marketplaceCommissionAmount,
@@ -583,6 +638,35 @@ function readMercadoLivreOperationId(
   return operationId && operationId.length > 0 ? operationId : null;
 }
 
+function readMercadoLivreShipmentId(
+  metadata: Record<string, unknown> | null | undefined,
+) {
+  const shipmentId =
+    metadata && typeof metadata.shipmentId === "string"
+      ? metadata.shipmentId.trim()
+      : null;
+
+  return shipmentId && shipmentId.length > 0 ? shipmentId : null;
+}
+
+function readMercadoLivreShippingListCostAmount(
+  metadata: Record<string, unknown> | null | undefined,
+) {
+  const value = metadata?.listCostAmount;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
 function shouldRefreshMercadoLivrePackId(
   order: Pick<OrderRowShallow, "metadata">,
 ) {
@@ -608,6 +692,29 @@ function shouldRefreshMercadoLivreOperationId(
   }
 
   return operationId === order.externalOrderId;
+}
+
+function shouldRefreshMercadoLivreShippingRatio(
+  order: Pick<OrderRowShallow, "fees" | "provider">,
+) {
+  if (order.provider !== "mercadolivre") {
+    return false;
+  }
+
+  const shippingFee = order.fees.find((fee) => fee.feeType === "shipping_cost");
+  if (!shippingFee) {
+    return false;
+  }
+
+  const metadata =
+    shippingFee.metadata && typeof shippingFee.metadata === "object"
+      ? (shippingFee.metadata as Record<string, unknown>)
+      : null;
+
+  return (
+    metadata?.source !== "shipment_detail.shipping_option.list_cost" ||
+    readMercadoLivreShippingListCostAmount(metadata) === null
+  );
 }
 
 function toBillingPeriodKey(value: Date | string | null | undefined) {
@@ -1089,14 +1196,7 @@ export class OrdersService {
       eq(externalOrders.organizationId, authContext.organizationId),
       eq(externalOrders.companyId, companyId),
       ...(filters.provider ? [eq(externalOrders.provider, filters.provider)] : []),
-      ...(searchNeedle
-        ? [
-            sql`(
-              upper(trim(${externalOrders.externalOrderId})) like ${`%${searchNeedle.toUpperCase()}%`}
-              or upper(trim(coalesce(${externalOrders.metadata} ->> 'operationId', ''))) like ${`%${searchNeedle.toUpperCase()}%`}
-            )`,
-          ]
-        : []),
+      ...(searchNeedle ? [buildOrderSearchWhere(searchNeedle)] : []),
       ...(filters.orderedFrom
         ? [sql`${externalOrders.orderedAt}::date >= ${filters.orderedFrom}`]
         : []),
@@ -1262,15 +1362,8 @@ export class OrdersService {
         row,
       }))
       .filter(({ item }) => {
-        if (filters.search) {
-          const matchesOrderId = includesIgnoreCase(item.orderId, filters.search);
-          const matchesDisplayOrderId = includesIgnoreCase(
-            item.displayOrderId,
-            filters.search,
-          );
-          if (!matchesOrderId && !matchesDisplayOrderId) {
-            return false;
-          }
+        if (filters.search && !matchesOrderSearch(item, filters.search)) {
+          return false;
         }
 
         if (filters.status && item.status !== filters.status) {
@@ -1323,16 +1416,7 @@ export class OrdersService {
       ...(normalizedFilters.provider
         ? [eq(externalOrders.provider, normalizedFilters.provider)]
         : []),
-      ...(searchNeedle
-        ? [
-            sql`(
-              upper(trim(${externalOrders.externalOrderId})) like ${`%${searchNeedle.toUpperCase()}%`}
-              or upper(trim(coalesce(${externalOrders.metadata} ->> 'packId', ''))) like ${`%${searchNeedle.toUpperCase()}%`}
-              or upper(trim(coalesce(${externalOrders.metadata} ->> 'packId', ''))) like ${`%${searchNeedle.toUpperCase()}%`}
-              or upper(trim(coalesce(${externalOrders.metadata} ->> 'operationId', ''))) like ${`%${searchNeedle.toUpperCase()}%`}
-            )`,
-          ]
-        : []),
+      ...(searchNeedle ? [buildOrderSearchWhere(searchNeedle)] : []),
       ...(normalizedFilters.orderedFrom
         ? [sql`${externalOrders.orderedAt}::date >= ${normalizedFilters.orderedFrom}`]
         : []),
@@ -1386,18 +1470,11 @@ export class OrdersService {
           return false;
         }
 
-        if (normalizedFilters.search) {
-          const matchesOrderId = includesIgnoreCase(
-            item.orderId,
-            normalizedFilters.search,
-          );
-          const matchesDisplayOrderId = includesIgnoreCase(
-            item.displayOrderId,
-            normalizedFilters.search,
-          );
-          if (!matchesOrderId && !matchesDisplayOrderId) {
-            return false;
-          }
+        if (
+          normalizedFilters.search &&
+          !matchesOrderSearch(item, normalizedFilters.search)
+        ) {
+          return false;
         }
 
         if (normalizedFilters.status && item.status !== normalizedFilters.status) {
@@ -1479,10 +1556,15 @@ export class OrdersService {
       companyId,
       [row as OrderRowShallow],
     );
-    const [hydratedRow] = await this.hydrateLinkedProducts(
+    const [shippingBackfilledRow] = await this.backfillMercadoLivreShippingRatios(
       authContext,
       companyId,
       [backfilledRow],
+    );
+    const [hydratedRow] = await this.hydrateLinkedProducts(
+      authContext,
+      companyId,
+      [shippingBackfilledRow],
     );
 
     return {
@@ -1591,15 +1673,8 @@ export class OrdersService {
         buildOrderFinancialMetrics(row, taxRateDefault),
       );
 
-      if (filters.search) {
-        const matchesOrderId = includesIgnoreCase(listItem.orderId, filters.search);
-        const matchesDisplayOrderId = includesIgnoreCase(
-          listItem.displayOrderId,
-          filters.search,
-        );
-        if (!matchesOrderId && !matchesDisplayOrderId) {
-          return false;
-        }
+      if (filters.search && !matchesOrderSearch(listItem, filters.search)) {
+        return false;
       }
 
       if (filters.status && listItem.status !== filters.status) {
@@ -1944,6 +2019,175 @@ export class OrdersService {
     return updatedRows;
   }
 
+  private async backfillMercadoLivreShippingRatios(
+    authContext: TenantContext,
+    companyId: string,
+    rows: OrderRowShallow[],
+  ): Promise<OrderRowShallow[]> {
+    if (!this.env || rows.length === 0) {
+      return rows;
+    }
+
+    const targets = rows.filter((row) =>
+      shouldRefreshMercadoLivreShippingRatio(row),
+    );
+    if (targets.length === 0) {
+      return rows;
+    }
+
+    const connections = await this.db.query.marketplaceConnections.findMany({
+      where: (table) =>
+        and(
+          eq(table.organizationId, authContext.organizationId),
+          eq(table.companyId, companyId),
+          eq(table.provider, "mercadolivre"),
+        ),
+    });
+    const connectionById = new Map(
+      connections.map((connection) => [connection.id, connection] as const),
+    );
+    const fallbackConnection =
+      connections.find(
+        (connection) =>
+          connection.provider === "mercadolivre" &&
+          connection.status === "connected" &&
+          Boolean(connection.accessToken),
+      ) ?? null;
+
+    const refreshedConnectionById = new Map<string, MarketplaceConnection>();
+    const getConnectionForRow = async (row: OrderRowShallow) => {
+      const rawConnection =
+        (row.marketplaceConnectionId
+          ? connectionById.get(row.marketplaceConnectionId)
+          : null) ?? fallbackConnection;
+      if (
+        !rawConnection ||
+        rawConnection.provider !== "mercadolivre" ||
+        rawConnection.status !== "connected" ||
+        !rawConnection.accessToken
+      ) {
+        return null;
+      }
+
+      const cached = refreshedConnectionById.get(rawConnection.id);
+      if (cached) {
+        return cached;
+      }
+
+      const refreshed = await this.refreshMercadoLivreConnectionIfNeeded(
+        rawConnection,
+      );
+      refreshedConnectionById.set(rawConnection.id, refreshed);
+      return refreshed;
+    };
+
+    const ratioByRowId = new Map<
+      string,
+      {
+        ratioAmount: number;
+        shipmentId: string;
+      }
+    >();
+
+    for (const row of targets) {
+      const connection = await getConnectionForRow(row);
+      if (!connection) {
+        continue;
+      }
+
+      const shippingFee = row.fees.find((fee) => fee.feeType === "shipping_cost");
+      if (!shippingFee) {
+        continue;
+      }
+
+      const feeMetadata =
+        shippingFee.metadata && typeof shippingFee.metadata === "object"
+          ? { ...(shippingFee.metadata as Record<string, unknown>) }
+          : {};
+      let shipmentId = readMercadoLivreShipmentId(feeMetadata);
+      if (!shipmentId) {
+        shipmentId = await this.fetchMercadoLivreShipmentId({
+          accessToken: connection.accessToken!,
+          orderId: row.externalOrderId,
+        });
+      }
+
+      if (!shipmentId) {
+        continue;
+      }
+
+      const listCostAmount = await this.fetchMercadoLivreShipmentListCost({
+        accessToken: connection.accessToken!,
+        shipmentId,
+      });
+      if (listCostAmount === null) {
+        continue;
+      }
+
+      ratioByRowId.set(row.id, {
+        ratioAmount: listCostAmount,
+        shipmentId,
+      });
+    }
+
+    if (ratioByRowId.size === 0) {
+      return rows;
+    }
+
+    const updatedRows = await Promise.all(
+      rows.map(async (row) => {
+        const shippingRatio = ratioByRowId.get(row.id);
+        if (!shippingRatio) {
+          return row;
+        }
+
+        const nextFees = await Promise.all(
+          row.fees.map(async (fee) => {
+            if (fee.feeType !== "shipping_cost") {
+              return fee;
+            }
+
+            const metadata =
+              fee.metadata && typeof fee.metadata === "object"
+                ? { ...(fee.metadata as Record<string, unknown>) }
+                : {};
+            metadata.listCostAmount = shippingRatio.ratioAmount;
+            metadata.shipmentId = shippingRatio.shipmentId;
+            metadata.source = "shipment_detail.shipping_option.list_cost";
+
+            await this.db
+              .update(externalFees)
+              .set({
+                amount: shippingRatio.ratioAmount.toFixed(2),
+                metadata,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(externalFees.id, fee.id),
+                  eq(externalFees.organizationId, authContext.organizationId),
+                ),
+              );
+
+            return {
+              ...fee,
+              amount: shippingRatio.ratioAmount.toFixed(2),
+              metadata,
+              updatedAt: new Date(),
+            };
+          }),
+        );
+
+        return {
+          ...row,
+          fees: nextFees,
+        };
+      }),
+    );
+
+    return updatedRows;
+  }
+
   private async fetchMercadoLivrePackIds(input: {
     accessToken: string;
     forceRefresh?: boolean;
@@ -2160,6 +2404,76 @@ export class OrdersService {
     }
 
     return cachedPromise;
+  }
+
+  private async fetchMercadoLivreShipmentId(input: {
+    accessToken: string;
+    orderId: string;
+  }) {
+    const response = await fetch(
+      `https://api.mercadolibre.com/orders/${encodeURIComponent(input.orderId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${input.accessToken}`,
+          accept: "application/json",
+        },
+        method: "GET",
+      },
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      return null;
+    }
+
+    const payload = (await response.json()) as MercadoLivreOrderDetailResponse;
+    const shipmentId = payload.shipping?.id;
+
+    return shipmentId !== undefined && shipmentId !== null
+      ? String(shipmentId)
+      : null;
+  }
+
+  private async fetchMercadoLivreShipmentListCost(input: {
+    accessToken: string;
+    shipmentId: string;
+  }) {
+    const response = await fetch(
+      `https://api.mercadolibre.com/shipments/${encodeURIComponent(input.shipmentId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${input.accessToken}`,
+          accept: "application/json",
+        },
+        method: "GET",
+      },
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("application/json")) {
+      return null;
+    }
+
+    const payload = (await response.json()) as MercadoLivreShipmentDetailResponse;
+    const rawListCost = payload.shipping_option?.list_cost;
+    const listCost =
+      typeof rawListCost === "number"
+        ? rawListCost
+        : typeof rawListCost === "string"
+          ? Number(rawListCost)
+          : null;
+
+    return listCost !== null && Number.isFinite(listCost) && listCost > 0
+      ? listCost
+      : null;
   }
 
   private async refreshMercadoLivreConnectionIfNeeded(

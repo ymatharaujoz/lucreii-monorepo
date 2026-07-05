@@ -1312,6 +1312,90 @@ describe("MercadoLivreProvider", () => {
     expect(shippingCost).toBe(6.55);
   });
 
+  it("prefers shipment shipping_option.list_cost over legacy shipment detail amounts", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          receiver: { cost: 0 },
+          senders: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          id: 999,
+          order_cost: 18.99,
+          shipping_option: {
+            cost: 17.45,
+            list_cost: 6.55,
+          },
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const shippingCost = await withShippingResolver(
+      provider,
+    ).resolveShippingCostWithSource(
+      {
+        payments: [],
+        shipping: { id: 999 },
+      },
+      {
+        accessToken: "token_123",
+        sellerAccountId: "123456",
+      },
+    );
+
+    expect(shippingCost).toEqual({
+      amount: 6.55,
+      metadata: {
+        listCostAmount: 6.55,
+      },
+      source: "shipment_detail.shipping_option.list_cost",
+    });
+  });
+
+  it("falls back to legacy shipment detail amounts when shipping_option.list_cost is missing", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          receiver: { cost: 0 },
+          senders: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          id: 999,
+          shipping_option: {},
+          order_cost: 6.55,
+        }),
+      );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const shippingCost = await withShippingResolver(
+      provider,
+    ).resolveShippingCostWithSource(
+      {
+        payments: [],
+        shipping: { id: 999 },
+      },
+      {
+        accessToken: "token_123",
+        sellerAccountId: "123456",
+      },
+    );
+
+    expect(shippingCost).toEqual({
+      amount: 6.55,
+      source: "shipment_detail.order_cost",
+    });
+  });
+
   it("does not fall back to order.shipping_cost when shipment and payment shipping data are unavailable", async () => {
     const provider = new MercadoLivreProvider({
       API_DB_POOL_MAX: 5,
