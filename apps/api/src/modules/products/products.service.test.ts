@@ -3403,6 +3403,230 @@ describe("ProductsService", () => {
     ]);
   });
 
+  it("groups Mercado Livre MLBU user products under the shared family id parent", async () => {
+    const { db, financeService, service } = createService();
+
+    db.query.companies.findMany.mockResolvedValue([
+      {
+        id: "company_1",
+        isActive: true,
+        taxRateDefault: "0.120000",
+      },
+    ]);
+    db.query.products.findMany
+      .mockResolvedValueOnce([
+        {
+          companyId: "company_1",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          financeDefaults: null,
+          id: "product_family",
+          images: [],
+          isActive: true,
+          name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+          organizationId: "org_1",
+          sellingPrice: "189.90",
+          sku: "ML-FAMILY-BOOT-1",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        {
+          companyId: "company_1",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          financeDefaults: null,
+          id: "product_mlbu_111",
+          images: [],
+          isActive: true,
+          name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+          organizationId: "org_1",
+          sellingPrice: "189.90",
+          sku: "ML-MLBU111-AUTO",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        {
+          companyId: "company_1",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          financeDefaults: null,
+          id: "product_mlbu_222",
+          images: [],
+          isActive: true,
+          name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+          organizationId: "org_1",
+          sellingPrice: "189.90",
+          sku: "ML-MLBU222-AUTO",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          companyId: "company_1",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          id: "product_family",
+          isActive: true,
+          name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+          organizationId: "org_1",
+          sellingPrice: "189.90",
+          sku: "ML-FAMILY-BOOT-1",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        {
+          companyId: "company_1",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          id: "product_mlbu_111",
+          isActive: true,
+          name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+          organizationId: "org_1",
+          sellingPrice: "189.90",
+          sku: "ML-MLBU111-AUTO",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+        {
+          companyId: "company_1",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          id: "product_mlbu_222",
+          isActive: true,
+          name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+          organizationId: "org_1",
+          sellingPrice: "189.90",
+          sku: "ML-MLBU222-AUTO",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+      ]);
+    db.query.productCosts.findMany.mockResolvedValue([]);
+    db.query.adCosts.findMany.mockResolvedValue([]);
+    db.query.manualExpenses.findMany.mockResolvedValue([]);
+    db.query.productMonthlyPerformance.findMany.mockResolvedValue([]);
+    financeService.buildFinanceSnapshot.mockResolvedValue({
+      adCosts: [],
+      manualExpenses: [],
+      monthlyPerformance: [],
+      orders: [],
+      productCosts: [],
+      products: [],
+    });
+    financeService.materializeOrganizationMetrics.mockResolvedValue(undefined);
+    db.query.productCosts.findFirst.mockResolvedValue(null);
+    db.query.externalProducts.findMany.mockResolvedValue([]);
+    vi.mocked(listSyncedProductsReadModel).mockResolvedValue([
+      {
+        externalProductId: "FAMILY-BOOT-1",
+        fixedFee: "0.00",
+        grossRevenue: "0.00",
+        id: "external_family",
+        lastOrderedAt: null,
+        latestUnitPrice: null,
+        linkedProduct: {
+          id: "product_family",
+          isActive: true,
+          name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+          sku: "ML-FAMILY-BOOT-1",
+        },
+        marketplaceCommission: "0.00",
+        metadata: {
+          itemId: "FAMILY-BOOT-1",
+          source: "mercadolivre-user-product-family",
+          variationId: null,
+        },
+        netMarketplaceTake: "0.00",
+        orderCount: 0,
+        provider: "mercadolivre",
+        reviewStatus: "linked_to_existing_product",
+        shippingCost: "0.00",
+        sku: "ML-FAMILY-BOOT-1",
+        suggestedMatches: [],
+        title: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+        unitsSold: 0,
+      } as never,
+      {
+        externalProductId: "MLBU111",
+        fixedFee: "0.00",
+        grossRevenue: "0.00",
+        id: "external_mlbu_111",
+        lastOrderedAt: null,
+        latestUnitPrice: null,
+        linkedProduct: {
+          id: "product_mlbu_111",
+          isActive: true,
+          name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+          sku: "ML-MLBU111-AUTO",
+        },
+        marketplaceCommission: "0.00",
+        metadata: {
+          itemId: "FAMILY-BOOT-1",
+          source: "mercadolivre-user-product",
+          userProductId: "MLBU111",
+          variationId: "MLBU111",
+        },
+        netMarketplaceTake: "0.00",
+        orderCount: 0,
+        provider: "mercadolivre",
+        reviewStatus: "linked_to_existing_product",
+        shippingCost: "0.00",
+        sku: "828011PRETA35",
+        suggestedMatches: [],
+        title: "MLBU111",
+        unitsSold: 0,
+      } as never,
+      {
+        externalProductId: "MLBU222",
+        fixedFee: "0.00",
+        grossRevenue: "0.00",
+        id: "external_mlbu_222",
+        lastOrderedAt: null,
+        latestUnitPrice: null,
+        linkedProduct: {
+          id: "product_mlbu_222",
+          isActive: true,
+          name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
+          sku: "ML-MLBU222-AUTO",
+        },
+        marketplaceCommission: "0.00",
+        metadata: {
+          itemId: "FAMILY-BOOT-1",
+          source: "mercadolivre-user-product",
+          userProductId: "MLBU222",
+          variationId: "MLBU222",
+        },
+        netMarketplaceTake: "0.00",
+        orderCount: 0,
+        provider: "mercadolivre",
+        reviewStatus: "linked_to_existing_product",
+        shippingCost: "0.00",
+        sku: "828011CAFE37",
+        suggestedMatches: [],
+        title: "MLBU222",
+        unitsSold: 0,
+      } as never,
+    ]);
+
+    const snapshot = await service.getAnalyticsSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+
+    expect(snapshot.products).toEqual([
+      expect.objectContaining({
+        catalogGroupKey: "mercadolivre:FAMILY-BOOT-1",
+        catalogRole: "parent",
+        children: [
+          expect.objectContaining({
+            catalogRole: "child",
+            id: "product_mlbu_111",
+            parentProductId: "product_family",
+            sku: "828011PRETA35",
+            variationLabel: "MLBU111",
+          }),
+          expect.objectContaining({
+            catalogRole: "child",
+            id: "product_mlbu_222",
+            parentProductId: "product_family",
+            sku: "828011CAFE37",
+            variationLabel: "MLBU222",
+          }),
+        ],
+        id: "product_family",
+      }),
+    ]);
+  });
+
   it("replicates catalog finance updates from parent product to linked Mercado Livre variations", async () => {
     const { db, financeService, service } = createService();
     const txUpdate = vi.fn().mockReturnValue({

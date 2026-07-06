@@ -116,6 +116,13 @@ export type OrderLineItem = {
   totalPrice: string;
 };
 
+export type OrderShippingBreakdown = {
+  buyerShippingPaymentAmount: string;
+  grossShippingTariffAmount: string;
+  netShippingAmount: string;
+  source: string | null;
+};
+
 export type OrderComposition = {
   revenueAmount: string;
   netRevenueAmount: string;
@@ -123,6 +130,7 @@ export type OrderComposition = {
   taxRateDefault: string | null;
   productCostAmount: string;
   marketplaceCommissionAmount: string;
+  shippingBreakdown?: OrderShippingBreakdown | null;
   shippingOrFixedFeeAmount: string;
   refundBonusAmount: string;
   packagingCostAmount: string;

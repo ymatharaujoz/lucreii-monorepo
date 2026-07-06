@@ -22,10 +22,19 @@ import {
   Truck,
   X,
 } from "lucide-react";
-import { Badge, Button, Card, Dropdown, EmptyState, Modal, cn } from "@lucreii/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Dropdown,
+  EmptyState,
+  Modal,
+  cn,
+} from "@lucreii/ui";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { StatusBadge } from "@/components/ui-premium/status-badge";
 import { MultiSelectDropdown } from "@/components/ui-premium/multi-select-dropdown";
+import { DateRangePicker } from "@/components/ui-premium/date-range-picker";
 import { slideInUpVariants } from "@/lib/animations";
 import type {
   IntegrationProviderSlug,
@@ -78,7 +87,13 @@ type ItemSortKey = "displayName" | "unitPrice" | "quantity";
 
 type DetailTabKey = "items" | "composition";
 
-type StatusType = "active" | "inactive" | "pending" | "warning" | "error" | "success";
+type StatusType =
+  | "active"
+  | "inactive"
+  | "pending"
+  | "warning"
+  | "error"
+  | "success";
 
 function formatMoney(value: string | null | undefined) {
   const parsed = Number(value ?? 0);
@@ -220,7 +235,9 @@ function getSortValue(
     case "totalWithFees":
       return Number(row.totalWithFees);
     case "totalProfitAmount":
-      return row.totalProfitAmount === null ? null : Number(row.totalProfitAmount);
+      return row.totalProfitAmount === null
+        ? null
+        : Number(row.totalProfitAmount);
     case "itemsSold":
       return row.itemsSold;
     default:
@@ -463,12 +480,18 @@ function CompositionMetric({
   icon,
   label,
   value,
+  details,
   negative = false,
   variant = "default",
 }: {
   icon: ReactNode;
   label: string;
   value: ReactNode;
+  details?: Array<{
+    label: string;
+    negative?: boolean;
+    value: string;
+  }>;
   negative?: boolean;
   variant?: "default" | "highlight";
 }) {
@@ -496,6 +519,29 @@ function CompositionMetric({
         {negative ? <span>-</span> : null}
         {value}
       </div>
+      {details && details.length > 0 ? (
+        <div className="mt-3 space-y-2 border-t border-border/40 pt-3">
+          {details.map((detail) => (
+            <div
+              className="flex items-start justify-between gap-3 text-xs leading-snug"
+              key={detail.label}
+            >
+              <span className="max-w-[70%] text-muted-foreground">
+                {detail.label}
+              </span>
+              <span
+                className={cn(
+                  "shrink-0 whitespace-nowrap font-medium tabular-nums",
+                  detail.negative ? "text-red-600" : "text-foreground",
+                )}
+              >
+                {detail.negative ? "-" : null}
+                {formatMoney(detail.value)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -530,6 +576,25 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
         <CompositionMetric
           icon={<Truck className="h-4 w-4" />}
           label="Frete / Taxa Fixa"
+          details={
+            composition.shippingBreakdown
+              ? [
+                  {
+                    label:
+                      "Pagamento do Mercado Envios (por conta do comprador)",
+                    value:
+                      composition.shippingBreakdown.buyerShippingPaymentAmount,
+                  },
+                  {
+                    label:
+                      "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
+                    negative: true,
+                    value:
+                      composition.shippingBreakdown.grossShippingTariffAmount,
+                  },
+                ]
+              : undefined
+          }
           value={formatMoney(composition.shippingOrFixedFeeAmount)}
           negative
         />
@@ -578,14 +643,17 @@ function buildStatusDropdownItems(
   ];
 }
 
-export function OrdersHome() { 
-  const [page, setPage] = useState(1); 
-  const [search, setSearch] = useState(""); 
-  const [searchDraft, setSearchDraft] = useState(""); 
+export function OrdersHome() {
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searchDraft, setSearchDraft] = useState("");
   const [orderedFrom, setOrderedFrom] = useState("");
   const [orderedTo, setOrderedTo] = useState("");
-  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]); 
-  const [selectedStatus, setSelectedStatus] = useState<OrderCanonicalStatus | null>(null);
+  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>(
+    [],
+  );
+  const [selectedStatus, setSelectedStatus] =
+    useState<OrderCanonicalStatus | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -600,6 +668,59 @@ export function OrdersHome() {
   } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+
+  const dateRangeLabelForPill = useMemo(() => {
+    if (!orderedFrom && !orderedTo) return "";
+    
+    const getTodayString = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    const getYesterdayString = () => {
+      const d = new Date();
+      d.setDate(d.getDate() - 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    const getDaysAgoString = (days: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - days);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+    const getFirstDayOfThisMonth = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    };
+    const getFirstDayOfLastMonth = () => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    };
+    const getLastDayOfLastMonth = () => {
+      const d = new Date();
+      d.setDate(0);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+
+    if (orderedFrom === getTodayString() && orderedTo === getTodayString()) return "Hoje";
+    if (orderedFrom === getYesterdayString() && orderedTo === getYesterdayString()) return "Ontem";
+    if (orderedFrom === getDaysAgoString(6) && orderedTo === getTodayString()) return "Últimos 7 dias";
+    if (orderedFrom === getDaysAgoString(29) && orderedTo === getTodayString()) return "Últimos 30 dias";
+    if (orderedFrom === getFirstDayOfThisMonth() && orderedTo === getTodayString()) return "Este mês";
+    if (orderedFrom === getFirstDayOfLastMonth() && orderedTo === getLastDayOfLastMonth()) return "Mês passado";
+
+    const formatLabel = (dateStr: string) => {
+      if (!dateStr) return "";
+      const parts = dateStr.split("-");
+      if (parts.length !== 3) return dateStr;
+      const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+      return `${parts[2]} ${months[parseInt(parts[1], 10) - 1]}`;
+    };
+    
+    if (orderedFrom && orderedTo) {
+      return `${formatLabel(orderedFrom)} — ${formatLabel(orderedTo)}`;
+    }
+    return orderedFrom ? `Desde ${formatLabel(orderedFrom)}` : `Até ${formatLabel(orderedTo)}`;
+  }, [orderedFrom, orderedTo]);
 
   const provider =
     selectedMarketplaces.length === 1 ? selectedMarketplaces[0] : "";
@@ -629,7 +750,10 @@ export function OrdersHome() {
     }
   }, [modalOpen]);
 
-  const rows = useMemo(() => listQuery.data?.items ?? [], [listQuery.data?.items]);
+  const rows = useMemo(
+    () => listQuery.data?.items ?? [],
+    [listQuery.data?.items],
+  );
   const availableStatuses = listQuery.data?.availableStatuses ?? [];
   const totalPages = listQuery.data?.totalPages ?? 1;
   const currentPage = listQuery.data?.page ?? page;
@@ -638,29 +762,30 @@ export function OrdersHome() {
     selectedOrderIds.includes(id),
   ).length;
   const allVisibleSelected =
-    visibleOrderIds.length > 0 && selectedVisibleCount === visibleOrderIds.length;
+    visibleOrderIds.length > 0 &&
+    selectedVisibleCount === visibleOrderIds.length;
 
   const hasActiveFilters =
-    search.trim().length > 0 || 
-    selectedMarketplaces.length > 0 || 
+    search.trim().length > 0 ||
+    selectedMarketplaces.length > 0 ||
     selectedStatus !== null ||
     orderedFrom.length > 0 ||
-    orderedTo.length > 0; 
- 
-  const activeFilterCount = 
-    (search.trim() ? 1 : 0) + 
-    selectedMarketplaces.length + 
+    orderedTo.length > 0;
+
+  const activeFilterCount =
+    (search.trim() ? 1 : 0) +
+    selectedMarketplaces.length +
     (selectedStatus ? 1 : 0) +
     (orderedFrom ? 1 : 0) +
-    (orderedTo ? 1 : 0); 
- 
-  const clearAllFilters = () => { 
-    setSearch(""); 
-    setSearchDraft(""); 
+    (orderedTo ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setSearchDraft("");
     setOrderedFrom("");
     setOrderedTo("");
-    setSelectedMarketplaces([]); 
-    setSelectedStatus(null); 
+    setSelectedMarketplaces([]);
+    setSelectedStatus(null);
     setPage(1);
   };
 
@@ -750,17 +875,22 @@ export function OrdersHome() {
   };
 
   const selectedStatusLabel =
-    availableStatuses.find((option) => option.value === selectedStatus)?.label ??
-    "Todos os status";
+    availableStatuses.find((option) => option.value === selectedStatus)
+      ?.label ?? "Todos os status";
 
   return (
     <div className="space-y-6">
       <motion.div variants={slideInUpVariants} className="flex min-h-0 flex-1">
-        <Card padding="lg" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <Card
+          padding="lg"
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        >
           <div className="mb-4 flex shrink-0 items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-foreground">Pedidos</h3>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Pedidos
+                </h3>
                 {hasActiveFilters ? (
                   <motion.span
                     initial={{ opacity: 0, scale: 0.85 }}
@@ -769,7 +899,8 @@ export function OrdersHome() {
                     className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent ring-1 ring-inset ring-accent/20"
                   >
                     <span className="h-1 w-1 rounded-full bg-accent" />
-                    {activeFilterCount} {activeFilterCount === 1 ? "ativo" : "ativos"}
+                    {activeFilterCount}{" "}
+                    {activeFilterCount === 1 ? "ativo" : "ativos"}
                   </motion.span>
                 ) : null}
               </div>
@@ -826,107 +957,188 @@ export function OrdersHome() {
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 className="mb-3 shrink-0 overflow-hidden"
               >
-              <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--radius-lg)] border border-border/60 bg-gradient-to-r from-surface/60 via-surface-strong/50 to-surface/60 p-1.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
-                <form
-                  className="relative flex min-w-[260px] flex-[1.5] items-center"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    applyFilters();
-                  }}
-                >
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
-                  <input
-                    type="text"
-                    value={searchDraft}
-                    onChange={(event) => setSearchDraft(event.target.value)}
-                    placeholder="Buscar pedido por ID"
-                    className="h-8 w-full min-w-0 rounded-[var(--radius-md)] border border-transparent bg-background pl-9 pr-9 text-sm text-foreground transition-all duration-[var(--transition-fast)] hover:border-border/60 focus:border-accent/60 focus:bg-background focus:outline-none focus:ring-2 focus:ring-accent/20"
+                <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-strong/50 p-1.5 shadow-[var(--shadow-xs)]">
+                  <form
+                    className="relative flex min-w-[260px] flex-[1.5] items-center"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      applyFilters();
+                    }}
+                  >
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
+                    <input
+                      type="text"
+                      value={searchDraft}
+                      onChange={(event) => setSearchDraft(event.target.value)}
+                      placeholder="Buscar por ID ou SKU..."
+                      className="h-8 w-full min-w-0 rounded-[var(--radius-md)] border border-border bg-background pl-9 pr-9 text-xs font-medium text-foreground transition-all duration-[var(--transition-fast)] hover:border-border-strong focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/15"
+                    />
+                    {searchDraft ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchDraft("");
+                          setSearch("");
+                          setPage(1);
+                        }}
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+                  </form>
+
+                  <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
+
+                  <MultiSelectDropdown
+                    align="left"
+                    emptyLabel="Todos os canais"
+                    label="Canais"
+                    onChange={(next) => {
+                      setSelectedMarketplaces(next);
+                      setPage(1);
+                    }}
+                    options={PROVIDER_FILTER_OPTIONS.map((option) => ({
+                      id: option.value,
+                      label: option.label,
+                      swatch: option.swatch,
+                    }))}
+                    selected={selectedMarketplaces}
+                    triggerIcon={<Store className="h-3.5 w-3.5" />}
                   />
-                  {searchDraft ? (
+
+                  <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
+
+                  <DateRangePicker
+                    from={orderedFrom}
+                    to={orderedTo}
+                    onChange={(fromStr, toStr) => {
+                      setOrderedFrom(fromStr);
+                      setOrderedTo(toStr);
+                      setPage(1);
+                    }}
+                  />
+
+                  <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
+
+                  <Dropdown
+                    align="left"
+                    items={buildStatusDropdownItems(
+                      availableStatuses,
+                      selectedStatus,
+                    )}
+                    onSelect={(id) => {
+                      setSelectedStatus(
+                        id === "all" ? null : (id as OrderCanonicalStatus),
+                      );
+                      setPage(1);
+                    }}
+                    trigger={
+                      <div
+                        className={cn(
+                          "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] border bg-background pl-2.5 pr-2.5 text-sm transition-all duration-[var(--transition-fast)]",
+                          selectedStatus
+                            ? "border-accent/40 text-foreground ring-1 ring-inset ring-accent/15"
+                            : "border-border text-foreground hover:border-border-strong",
+                        )}
+                      >
+                        <SlidersHorizontal
+                          className={cn(
+                            "h-3.5 w-3.5 shrink-0 transition-colors",
+                            selectedStatus
+                              ? "text-accent"
+                              : "text-muted-foreground/70",
+                          )}
+                        />
+                        <span className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 md:inline">
+                          Status
+                        </span>
+                        <span
+                          aria-hidden
+                          className="hidden h-3 w-px shrink-0 bg-border/70 md:inline-block"
+                        />
+                        <span className="max-w-[140px] truncate font-medium text-foreground">
+                          {selectedStatusLabel === "Todos os status"
+                            ? "Todos"
+                            : selectedStatusLabel}
+                        </span>
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      </div>
+                    }
+                  />
+
+                  <div className="flex-1" />
+
+                  {hasActiveFilters ? (
+                    <button
+                      type="button"
+                      onClick={clearAllFilters}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                      Limpar
+                    </button>
+                  ) : null}
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {hasActiveFilters ? (
+              <motion.div
+                initial={{ opacity: 0, y: -4, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -4, height: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="mt-1 mb-4 flex flex-wrap items-center gap-1.5 overflow-hidden"
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mr-1 select-none">
+                  Filtros ativos:
+                </span>
+                
+                {search && (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">Busca:</span>
+                    <span>"{search}"</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setSearchDraft("");
                         setSearch("");
+                        setSearchDraft("");
                         setPage(1);
                       }}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
+                      className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <X className="h-3 w-3" />
                     </button>
-                  ) : null}
-                </form>
+                  </div>
+                )}
 
-                <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
+                {selectedMarketplaces.map((m) => {
+                  const label = PROVIDER_LABELS[m as IntegrationProviderSlug] ?? m;
+                  return (
+                    <div key={m} className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
+                      <span className="text-muted-foreground text-[10px] uppercase font-semibold">Canal:</span>
+                      <span>{label}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMarketplaces(selectedMarketplaces.filter((item) => item !== m));
+                          setPage(1);
+                        }}
+                        className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
 
-                <MultiSelectDropdown
-                  align="left"
-                  emptyLabel="Todos os canais"
-                  label="Canais"
-                  onChange={(next) => {
-                    setSelectedMarketplaces(next);
-                    setPage(1);
-                  }}
-                  options={PROVIDER_FILTER_OPTIONS.map((option) => ({
-                    id: option.value,
-                    label: option.label,
-                    swatch: option.swatch,
-                  }))}
-                  selected={selectedMarketplaces}
-                  triggerIcon={<Store className="h-3.5 w-3.5" />}
-                />
-
-                <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
-
-                <div
-                  className={cn(
-                    "group flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] border bg-background pl-2.5 pr-1.5 transition-all duration-[var(--transition-fast)]",
-                    orderedFrom || orderedTo
-                      ? "border-accent/40 ring-1 ring-inset ring-accent/15"
-                      : "border-border hover:border-border-strong focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/20",
-                  )}
-                >
-                  <CalendarRange
-                    className={cn(
-                      "h-3.5 w-3.5 shrink-0 transition-colors",
-                      orderedFrom || orderedTo
-                        ? "text-accent"
-                        : "text-muted-foreground/70 group-focus-within:text-accent",
-                    )}
-                  />
-                  <span className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 sm:inline">
-                    Data do Pedido
-                  </span>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 sm:hidden">
-                    Data
-                  </span>
-                  <input
-                    aria-label="Data inicial do pedido"
-                    type="date"
-                    value={orderedFrom}
-                    onChange={(event) => {
-                      setOrderedFrom(event.target.value);
-                      setPage(1);
-                    }}
-                    className="h-6 min-w-[110px] cursor-pointer rounded-sm border-0 bg-transparent px-1 text-xs font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-foreground/5 focus-visible:bg-foreground/5 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 [&::-webkit-calendar-picker-indicator]:transition-opacity hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus-visible:[&::-webkit-calendar-picker-indicator]:opacity-100 dark:[color-scheme:dark]"
-                  />
-                  <span
-                    aria-hidden
-                    className="select-none text-[10px] font-medium text-muted-foreground/50"
-                  >
-                    →
-                  </span>
-                  <input
-                    aria-label="Data final do pedido"
-                    type="date"
-                    value={orderedTo}
-                    onChange={(event) => {
-                      setOrderedTo(event.target.value);
-                      setPage(1);
-                    }}
-                    className="h-6 min-w-[110px] cursor-pointer rounded-sm border-0 bg-transparent px-1 text-xs font-medium text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-foreground/5 focus-visible:bg-foreground/5 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 [&::-webkit-calendar-picker-indicator]:transition-opacity hover:[&::-webkit-calendar-picker-indicator]:opacity-100 focus-visible:[&::-webkit-calendar-picker-indicator]:opacity-100 dark:[color-scheme:dark]"
-                  />
-                  {orderedFrom || orderedTo ? (
+                {(orderedFrom || orderedTo) && (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">Período:</span>
+                    <span>{dateRangeLabelForPill}</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -934,69 +1146,38 @@ export function OrdersHome() {
                         setOrderedTo("");
                         setPage(1);
                       }}
-                      className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground"
-                      aria-label="Limpar período"
+                      className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     >
                       <X className="h-3 w-3" />
                     </button>
-                  ) : null}
-                </div>
+                  </div>
+                )}
 
-                <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" /> 
-
-                <Dropdown
-                  align="left"
-                  items={buildStatusDropdownItems(availableStatuses, selectedStatus)}
-                  onSelect={(id) => {
-                    setSelectedStatus(id === "all" ? null : (id as OrderCanonicalStatus));
-                    setPage(1);
-                  }}
-                  trigger={
-                    <div
-                      className={cn(
-                        "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-md)] border bg-background pl-2.5 pr-2.5 text-sm transition-all duration-[var(--transition-fast)]",
-                        selectedStatus
-                          ? "border-accent/40 text-foreground ring-1 ring-inset ring-accent/15"
-                          : "border-border text-foreground hover:border-border-strong",
-                      )}
+                {selectedStatus && (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">Status:</span>
+                    <span>{selectedStatusLabel}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedStatus(null);
+                        setPage(1);
+                      }}
+                      className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     >
-                      <SlidersHorizontal
-                        className={cn(
-                          "h-3.5 w-3.5 shrink-0 transition-colors",
-                          selectedStatus ? "text-accent" : "text-muted-foreground/70",
-                        )}
-                      />
-                      <span className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 md:inline">
-                        Status
-                      </span>
-                      <span
-                        aria-hidden
-                        className="hidden h-3 w-px shrink-0 bg-border/70 md:inline-block"
-                      />
-                      <span className="max-w-[140px] truncate font-medium text-foreground">
-                        {selectedStatusLabel === "Todos os status"
-                          ? "Todos"
-                          : selectedStatusLabel}
-                      </span>
-                      <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    </div>
-                  }
-                />
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
 
-                <div className="flex-1" />
-
-                {hasActiveFilters ? (
-                  <button
-                    type="button"
-                    onClick={clearAllFilters}
-                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
-                  >
-                    <X className="h-3 w-3" />
-                    Limpar
-                  </button>
-                ) : null}
-              </div>
-            </motion.div>
+                <button
+                  type="button"
+                  onClick={clearAllFilters}
+                  className="text-[11px] font-bold text-accent hover:text-accent-strong transition-colors ml-1 cursor-pointer"
+                >
+                  Limpar todos
+                </button>
+              </motion.div>
             ) : null}
           </AnimatePresence>
 
@@ -1043,7 +1224,9 @@ export function OrdersHome() {
                           </motion.span>
                         </AnimatePresence>
                         <span className="font-medium text-foreground">
-                          {selectedOrderIds.length === 1 ? "selecionado" : "selecionados"}
+                          {selectedOrderIds.length === 1
+                            ? "selecionado"
+                            : "selecionados"}
                         </span>
                       </div>
                     </div>
@@ -1118,25 +1301,56 @@ export function OrdersHome() {
                       type="checkbox"
                     />
                   </th>
-                  <OrderSortableHeader column="provider" onSort={handleSort} sortConfig={sortConfig}>
+                  <OrderSortableHeader
+                    column="provider"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Canal
                   </OrderSortableHeader>
-                  <OrderSortableHeader column="orderId" onSort={handleSort} sortConfig={sortConfig}>
+                  <OrderSortableHeader
+                    column="orderId"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     ID da Venda
                   </OrderSortableHeader>
-                  <OrderSortableHeader column="statusLabel" onSort={handleSort} sortConfig={sortConfig}>
+                  <OrderSortableHeader
+                    column="statusLabel"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Status
                   </OrderSortableHeader>
-                  <OrderSortableHeader column="orderedAt" onSort={handleSort} sortConfig={sortConfig}>
+                  <OrderSortableHeader
+                    column="orderedAt"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Data do Pedido
                   </OrderSortableHeader>
-                  <OrderSortableHeader column="totalWithFees" align="right" onSort={handleSort} sortConfig={sortConfig}>
+                  <OrderSortableHeader
+                    column="totalWithFees"
+                    align="right"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Faturamento
                   </OrderSortableHeader>
-                  <OrderSortableHeader column="contributionMarginPercent" align="right" onSort={handleSort} sortConfig={sortConfig}>
+                  <OrderSortableHeader
+                    column="contributionMarginPercent"
+                    align="right"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Margem de Contribuição
                   </OrderSortableHeader>
-                  <OrderSortableHeader column="totalProfitAmount" align="right" onSort={handleSort} sortConfig={sortConfig}>
+                  <OrderSortableHeader
+                    column="totalProfitAmount"
+                    align="right"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Lucro Total
                   </OrderSortableHeader>
                 </tr>

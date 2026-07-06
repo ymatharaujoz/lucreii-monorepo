@@ -184,4 +184,23 @@ describe("createApiClient", () => {
       }),
     );
   });
+
+  it("throws an ApiContractError when a protected endpoint responds with 204 no content", async () => {
+    const client = createApiClient({
+      baseUrl: "http://localhost:4000",
+      fetchFn: async () =>
+        new Response(null, {
+          status: 204,
+        }),
+    });
+
+    await expect(
+      client.getValidatedData("/dashboard/summary", dashboardSummaryApiResponseSchema),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "ApiContractError",
+        path: "/dashboard/summary",
+      }),
+    );
+  });
 });

@@ -87,6 +87,25 @@ describe("orders controller", () => {
     });
 
     expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/json");
+    expect(response.json()).toEqual({
+      data: {
+        summary: {
+          averageMargin: "0.00",
+          grossProfit: "0.00",
+          grossRevenue: "0.00",
+          ordersCount: 0,
+          unitsSold: 0,
+        },
+        availableStatuses: [],
+        items: [],
+        page: 1,
+        pageSize: 10,
+        totalItems: 0,
+        totalPages: 1,
+      },
+      error: null,
+    });
     expect(ordersService.listOrders).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: "org_123",
@@ -312,6 +331,196 @@ describe("orders controller", () => {
         ids: ["order_1", "order_2"],
         provider: "mercadolivre",
         search: "MLB",
+      }),
+    );
+  });
+
+  it("returns page 2 payload as json instead of no-content", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: { id: "org_123", name: "Org", role: "owner", slug: "org" },
+      selectedCompanyId: "company_123",
+      session: { expiresAt: new Date("2026-06-20T00:00:00.000Z"), id: "session_123" },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(entitlementsService, "requireActiveEntitlement").mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(ordersService, "listOrders").mockResolvedValueOnce({
+      summary: {
+        averageMargin: "0.00",
+        grossProfit: "0.00",
+        grossRevenue: "0.00",
+        ordersCount: 0,
+        unitsSold: 0,
+      },
+      availableStatuses: [],
+      items: [
+        {
+          contributionMarginPercent: null,
+          createdAt: "2026-06-21T12:00:00.000Z",
+          currency: "BRL",
+          displayOrderId: "MLB-SALE-1002",
+          fixedCostAmount: "0.00",
+          id: "order_row_2",
+          itemsSold: 1,
+          orderDate: "2026-06-21",
+          orderId: "MLB-1002",
+          orderedAt: "2026-06-21T10:15:00.000Z",
+          provider: "mercadolivre",
+          skus: [],
+          shippingAmount: "0.00",
+          sourceStatus: "paid",
+          status: "paid",
+          statusLabel: "Pagamento aprovado",
+          tariffAmount: "0.00",
+          totalFees: "0.00",
+          totalProfitAmount: null,
+          totalWithFees: "150.00",
+          totalWithoutFees: "150.00",
+        },
+      ],
+      page: 2,
+      pageSize: 20,
+      totalItems: 21,
+      totalPages: 2,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/orders?page=2&pageSize=20&includeSummary=false",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/json");
+    expect(response.json()).toEqual({
+      data: {
+        summary: {
+          averageMargin: "0.00",
+          grossProfit: "0.00",
+          grossRevenue: "0.00",
+          ordersCount: 0,
+          unitsSold: 0,
+        },
+        availableStatuses: [],
+        items: [
+          expect.objectContaining({
+            displayOrderId: "MLB-SALE-1002",
+            id: "order_row_2",
+          }),
+        ],
+        page: 2,
+        pageSize: 20,
+        totalItems: 21,
+        totalPages: 2,
+      },
+      error: null,
+    });
+  });
+
+  it("returns empty out-of-range pages as json instead of 204", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: { id: "org_123", name: "Org", role: "owner", slug: "org" },
+      selectedCompanyId: "company_123",
+      session: { expiresAt: new Date("2026-06-20T00:00:00.000Z"), id: "session_123" },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(entitlementsService, "requireActiveEntitlement").mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(ordersService, "listOrders").mockResolvedValueOnce({
+      summary: {
+        averageMargin: "0.00",
+        grossProfit: "0.00",
+        grossRevenue: "0.00",
+        ordersCount: 0,
+        unitsSold: 0,
+      },
+      availableStatuses: [],
+      items: [],
+      page: 2,
+      pageSize: 20,
+      totalItems: 21,
+      totalPages: 2,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/orders?page=99&pageSize=20&includeSummary=false",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/json");
+    expect(response.json()).toEqual({
+      data: {
+        summary: {
+          averageMargin: "0.00",
+          grossProfit: "0.00",
+          grossRevenue: "0.00",
+          ordersCount: 0,
+          unitsSold: 0,
+        },
+        availableStatuses: [],
+        items: [],
+        page: 2,
+        pageSize: 20,
+        totalItems: 21,
+        totalPages: 2,
+      },
+      error: null,
+    });
+  });
+
+  it("fails loudly when service omits orders payload", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: { id: "org_123", name: "Org", role: "owner", slug: "org" },
+      selectedCompanyId: "company_123",
+      session: { expiresAt: new Date("2026-06-20T00:00:00.000Z"), id: "session_123" },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(entitlementsService, "requireActiveEntitlement").mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(ordersService, "listOrders").mockResolvedValueOnce(undefined as never);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/orders?page=2&pageSize=20&includeSummary=false",
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          message: "Orders list response payload is missing.",
+          statusCode: 500,
+        }),
       }),
     );
   });

@@ -77,20 +77,23 @@ export const orderExportQuerySchema = orderListFiltersSchema
     sortDirection: true,
   })
   .extend({
-    ids: z.preprocess((value) => {
-      if (Array.isArray(value)) {
-        return value;
-      }
+    ids: z.preprocess(
+      (value) => {
+        if (Array.isArray(value)) {
+          return value;
+        }
 
-      if (typeof value !== "string") {
-        return [];
-      }
+        if (typeof value !== "string") {
+          return [];
+        }
 
-      return value
-        .split(",")
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-    }, z.array(z.string().trim().min(1)).default([])),
+        return value
+          .split(",")
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0);
+      },
+      z.array(z.string().trim().min(1)).default([]),
+    ),
   });
 
 export const orderStatusOptionSchema = z.object({
@@ -117,7 +120,9 @@ export const orderListItemSchema = z.object({
   totalFees: decimalField("Total fees"),
   totalWithFees: decimalField("Total with fees"),
   totalWithoutFees: decimalField("Total without fees"),
-  contributionMarginPercent: decimalField("Contribution margin percent").nullable(),
+  contributionMarginPercent: decimalField(
+    "Contribution margin percent",
+  ).nullable(),
   totalProfitAmount: decimalField("Total profit amount").nullable(),
   itemsSold: z.number().int().min(0),
 });
@@ -142,7 +147,9 @@ export const ordersListResponseSchema = z.object({
 
 export const orderLineItemSchema = z.object({
   channel: integrationProviderSchema,
-  contributionMarginPercent: decimalField("Contribution margin percent").nullable(),
+  contributionMarginPercent: decimalField(
+    "Contribution margin percent",
+  ).nullable(),
   displayName: z.string().trim().min(1),
   id: z.string().trim().min(1),
   linkedProductId: z.string().trim().min(1).nullable(),
@@ -157,6 +164,13 @@ export const orderLineItemSchema = z.object({
   totalPrice: decimalField("Total price"),
 });
 
+export const orderShippingBreakdownSchema = z.object({
+  buyerShippingPaymentAmount: decimalField("Buyer shipping payment amount"),
+  grossShippingTariffAmount: decimalField("Gross shipping tariff amount"),
+  netShippingAmount: decimalField("Net shipping amount"),
+  source: z.string().trim().min(1).nullable(),
+});
+
 export const orderCompositionSchema = z.object({
   revenueAmount: decimalField("Revenue amount"),
   netRevenueAmount: decimalField("Net revenue amount"),
@@ -164,6 +178,7 @@ export const orderCompositionSchema = z.object({
   taxRateDefault: taxRateField("Tax rate default").nullable(),
   productCostAmount: decimalField("Product cost amount"),
   marketplaceCommissionAmount: decimalField("Marketplace commission amount"),
+  shippingBreakdown: orderShippingBreakdownSchema.nullable().optional(),
   shippingOrFixedFeeAmount: decimalField("Shipping or fixed fee amount"),
   refundBonusAmount: decimalField("Refund bonus amount"),
   packagingCostAmount: decimalField("Packaging cost amount"),
@@ -186,11 +201,14 @@ export const orderCompositionUpdateSchema = z.object({
   packagingCostAmount: decimalField("Packaging cost amount"),
 });
 
-export const ordersListApiResponseSchema =
-  createApiSuccessResponseSchema(ordersListResponseSchema);
+export const ordersListApiResponseSchema = createApiSuccessResponseSchema(
+  ordersListResponseSchema,
+);
 export const orderDetailsApiResponseSchema =
   createApiSuccessResponseSchema(orderDetailsSchema);
 
 export type OrderListFiltersInput = z.infer<typeof orderListFiltersSchema>;
 export type OrderExportQueryInput = z.infer<typeof orderExportQuerySchema>;
-export type OrderCompositionUpdateInput = z.infer<typeof orderCompositionUpdateSchema>;
+export type OrderCompositionUpdateInput = z.infer<
+  typeof orderCompositionUpdateSchema
+>;

@@ -4,6 +4,35 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SyncControlCard } from "./sync-control-card";
+
+vi.mock("@/components/ui-premium/date-range-picker", () => ({
+  DateRangePicker: ({ from, to, onChange, minDate, maxDate, hasRangeError, rangeErrorId }: any) => (
+    <div>
+      <input
+        id="manual-sync-start"
+        type="date"
+        min={minDate}
+        max={maxDate}
+        aria-invalid={hasRangeError ? "true" : "false"}
+        aria-describedby={hasRangeError ? rangeErrorId : undefined}
+        className={hasRangeError ? "border-error" : ""}
+        value={from}
+        onChange={(e) => onChange(e.target.value, to)}
+      />
+      <input
+        id="manual-sync-end"
+        type="date"
+        min={minDate}
+        max={maxDate}
+        aria-invalid={hasRangeError ? "true" : "false"}
+        aria-describedby={hasRangeError ? rangeErrorId : undefined}
+        className={hasRangeError ? "border-error" : ""}
+        value={to}
+        onChange={(e) => onChange(from, e.target.value)}
+      />
+    </div>
+  ),
+}));
 import type { SyncStatusResponse } from "../types/integrations";
 
 declare global {

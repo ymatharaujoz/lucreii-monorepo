@@ -428,7 +428,10 @@ function toSyncedProductRecord(
     }
   }
 
-  const preferredSku = toPreferredSku(row.linkedProduct?.sku, row.sku);
+  const preferredSku =
+    row.provider === "mercadolivre"
+      ? toPreferredSku(row.sku, row.linkedProduct?.sku)
+      : toPreferredSku(row.linkedProduct?.sku, row.sku);
 
   return {
     externalProductId: row.externalProductId,

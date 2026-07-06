@@ -5,8 +5,9 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OrdersHome } from "./orders-home";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const useOrdersListMock = vi.hoisted(() => vi.fn());
 const useOrderDetailsMock = vi.hoisted(() => vi.fn());
@@ -16,6 +17,23 @@ vi.mock("../hooks/use-orders-data", () => ({
   downloadOrdersExport: downloadOrdersExportMock,
   useOrderDetails: useOrderDetailsMock,
   useOrdersList: useOrdersListMock,
+}));
+
+vi.mock("@/components/ui-premium/date-range-picker", () => ({
+  DateRangePicker: ({ from, to, onChange }: any) => (
+    <div>
+      <input
+        type="date"
+        value={from}
+        onChange={(e) => onChange(e.target.value, to)}
+      />
+      <input
+        type="date"
+        value={to}
+        onChange={(e) => onChange(from, e.target.value)}
+      />
+    </div>
+  ),
 }));
 
 function mount(node: React.ReactNode) {
@@ -185,8 +203,16 @@ describe("OrdersHome", () => {
   it("renders status dropdown options from API", () => {
     const view = mount(<OrdersHome />);
 
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Filtros"))!);
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Status"))!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Filtros"),
+      )!,
+    );
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Status"),
+      )!,
+    );
 
     expect(text()).toContain("Pagamento aprovado");
     expect(text()).toContain("Cancelado");
@@ -198,7 +224,11 @@ describe("OrdersHome", () => {
     const view = mount(<OrdersHome />);
 
     click(document.querySelector('tr[role="button"]')!);
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Compos"))!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Compos"),
+      )!,
+    );
 
     const content = text();
 
@@ -217,6 +247,82 @@ describe("OrdersHome", () => {
     const impostoValueOrder = content.indexOf("Imposto");
     expect(impostoCardOrder).toBeGreaterThan(-1);
     expect(impostoValueOrder).toBeGreaterThan(impostoCardOrder);
+
+    view.unmount();
+  });
+
+  it("shows Mercado Livre shipping payment breakdown in composition tab", () => {
+    useOrderDetailsMock.mockReturnValue({
+      data: {
+        composition: {
+          hasIncompleteCostData: true,
+          marketplaceCommissionAmount: "2.46",
+          missingCostItemsCount: 0,
+          missingLinkedItemsCount: 0,
+          netRevenueAmount: "11.98",
+          packagingCostAmount: "0.00",
+          productCostAmount: "0.00",
+          refundBonusAmount: "1.13",
+          revenueAmount: "18.96",
+          shippingBreakdown: {
+            buyerShippingPaymentAmount: "10.99",
+            grossShippingTariffAmount: "16.64",
+            netShippingAmount: "5.65",
+            source: "payment.charges_details.shipping",
+          },
+          shippingOrFixedFeeAmount: "5.65",
+          taxAmount: "0.00",
+          taxRateDefault: "0.000000",
+        },
+        items: [],
+        order: {
+          contributionMarginPercent: null,
+          createdAt: "2026-06-20T12:00:00.000Z",
+          currency: "BRL",
+          displayOrderId: "2000013564480079",
+          fixedCostAmount: "0.00",
+          id: "order_row_1",
+          itemsSold: 1,
+          orderDate: "2026-06-20",
+          orderId: "2000013564480079",
+          orderedAt: "2026-06-20T10:15:00.000Z",
+          provider: "mercadolivre",
+          skus: [],
+          shippingAmount: "5.65",
+          sourceStatus: "paid",
+          status: "paid",
+          statusLabel: "Pagamento aprovado",
+          tariffAmount: "2.46",
+          totalFees: "8.11",
+          totalProfitAmount: null,
+          totalWithFees: "18.96",
+          totalWithoutFees: "10.85",
+        },
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const view = mount(<OrdersHome />);
+
+    click(document.querySelector('tr[role="button"]')!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Compos"),
+      )!,
+    );
+
+    const content = text();
+    expect(content).toContain("Frete / Taxa Fixa");
+    expect(content).toContain("-R$ 5,65");
+    expect(content).toContain(
+      "Pagamento do Mercado Envios (por conta do comprador)",
+    );
+    expect(content).toContain("R$ 10,99");
+    expect(content).toContain(
+      "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
+    );
+    expect(content).toContain("-R$ 16,64");
 
     view.unmount();
   });
@@ -285,7 +391,11 @@ describe("OrdersHome", () => {
     const view = mount(<OrdersHome />);
 
     click(document.querySelector('tr[role="button"]')!);
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Compos"))!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Compos"),
+      )!,
+    );
 
     const content = text();
     expect(content).toContain("R$ 3,54");
@@ -299,7 +409,10 @@ describe("OrdersHome", () => {
     click(document.querySelector('tr[role="button"]')!);
 
     const modalTable = document.querySelectorAll("table")[1];
-    const modalContent = (modalTable?.textContent ?? "").replace(/\u00a0/g, " ");
+    const modalContent = (modalTable?.textContent ?? "").replace(
+      /\u00a0/g,
+      " ",
+    );
 
     expect(modalContent).toContain("Produto");
     expect(modalContent).toContain("Preço de Venda");
@@ -375,9 +488,7 @@ describe("OrdersHome", () => {
           ordersCount: 1,
           unitsSold: 2,
         },
-        availableStatuses: [
-          { label: "Pagamento aprovado", value: "paid" },
-        ],
+        availableStatuses: [{ label: "Pagamento aprovado", value: "paid" }],
         items: [
           {
             contributionMarginPercent: "-10.50",
@@ -412,11 +523,11 @@ describe("OrdersHome", () => {
     });
 
     const view = mount(<OrdersHome />);
-    const negativeMargin = Array.from(document.querySelectorAll("td")).find((cell) =>
-      cell.textContent?.includes("-10,50%"),
+    const negativeMargin = Array.from(document.querySelectorAll("td")).find(
+      (cell) => cell.textContent?.includes("-10,50%"),
     );
-    const negativeProfit = Array.from(document.querySelectorAll("td")).find((cell) =>
-      cell.textContent?.includes("3,14"),
+    const negativeProfit = Array.from(document.querySelectorAll("td")).find(
+      (cell) => cell.textContent?.includes("3,14"),
     );
 
     expect(negativeMargin?.className).toContain("text-red");
@@ -429,15 +540,20 @@ describe("OrdersHome", () => {
     const view = mount(<OrdersHome />);
 
     click(document.querySelector('tr[role="button"]')!);
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Compos"))!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Compos"),
+      )!,
+    );
 
     const inputs = Array.from(document.querySelectorAll("input"));
-    const editableInputs = inputs.filter((input) =>
-      input.getAttribute("aria-label")?.includes("Estornos") ||
-      input.getAttribute("aria-label")?.includes("Custo") ||
-      input.getAttribute("aria-label")?.includes("Comissão") ||
-      input.getAttribute("aria-label")?.includes("Frete") ||
-      input.getAttribute("aria-label")?.includes("Embalagem"),
+    const editableInputs = inputs.filter(
+      (input) =>
+        input.getAttribute("aria-label")?.includes("Estornos") ||
+        input.getAttribute("aria-label")?.includes("Custo") ||
+        input.getAttribute("aria-label")?.includes("Comissão") ||
+        input.getAttribute("aria-label")?.includes("Frete") ||
+        input.getAttribute("aria-label")?.includes("Embalagem"),
     );
 
     expect(editableInputs).toHaveLength(0);
@@ -451,13 +567,17 @@ describe("OrdersHome", () => {
     expect(content).toContain("Embalagem");
     expect(content).toContain("Imposto");
 
-    const negativeValueDivs = Array.from(document.querySelectorAll("div.text-red-600.tabular-nums"));
+    const negativeValueDivs = Array.from(
+      document.querySelectorAll("div.text-red-600.tabular-nums"),
+    );
     expect(negativeValueDivs.length).toBeGreaterThanOrEqual(5);
     negativeValueDivs.forEach((div) => {
       expect(div.textContent?.trim().startsWith("-")).toBe(true);
     });
 
-    const allValueDivs = Array.from(document.querySelectorAll("div.tabular-nums"));
+    const allValueDivs = Array.from(
+      document.querySelectorAll("div.tabular-nums"),
+    );
     const nonNegativeValueDivs = allValueDivs.filter(
       (div) => !div.className.includes("text-red-600"),
     );
@@ -491,9 +611,15 @@ describe("OrdersHome", () => {
   it("passes ordered date range filters to list query and clears them", () => {
     const view = mount(<OrdersHome />);
 
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Filtros"))!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Filtros"),
+      )!,
+    );
 
-    const dateInputs = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    const dateInputs = Array.from(
+      document.querySelectorAll('input[type="date"]'),
+    ) as HTMLInputElement[];
     const [orderedFromInput, orderedToInput] = dateInputs;
 
     changeInputValue(orderedFromInput, "2026-06-01");
@@ -506,7 +632,11 @@ describe("OrdersHome", () => {
       }),
     );
 
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.includes("Limpar"))!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Limpar"),
+      )!,
+    );
 
     expect(useOrdersListMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -519,10 +649,119 @@ describe("OrdersHome", () => {
   });
 
   it("changes to page 2 when pagination is used", () => {
-    useOrdersListMock
-      .mockReturnValueOnce({
+    useOrdersListMock.mockImplementation((filters?: { page?: number }) => ({
+      data: {
+        summary: {
+          averageMargin: "0.29",
+          grossProfit: "57.00",
+          grossRevenue: "200.00",
+          ordersCount: 1,
+          unitsSold: 2,
+        },
+        availableStatuses: [{ label: "Pagamento aprovado", value: "paid" }],
+        items:
+          filters?.page === 2
+            ? [
+                {
+                  contributionMarginPercent: "15.00",
+                  createdAt: "2026-06-21T12:00:00.000Z",
+                  currency: "BRL",
+                  displayOrderId: "MLB-SALE-9002",
+                  fixedCostAmount: "1.00",
+                  id: "order_row_2",
+                  itemsSold: 1,
+                  orderDate: "2026-06-21",
+                  orderId: "MLB-1002",
+                  orderedAt: "2026-06-21T10:15:00.000Z",
+                  provider: "mercadolivre",
+                  skus: ["SKU-9"],
+                  shippingAmount: "5.00",
+                  sourceStatus: "paid",
+                  status: "paid",
+                  statusLabel: "Pagamento aprovado",
+                  tariffAmount: "4.00",
+                  totalFees: "10.00",
+                  totalProfitAmount: "12.00",
+                  totalWithFees: "80.00",
+                  totalWithoutFees: "70.00",
+                },
+              ]
+            : [
+                {
+                  contributionMarginPercent: "46.00",
+                  createdAt: "2026-06-20T12:00:00.000Z",
+                  currency: "BRL",
+                  displayOrderId: "MLB-SALE-9001",
+                  fixedCostAmount: "3.00",
+                  id: "order_row_1",
+                  itemsSold: 2,
+                  orderDate: "2026-06-20",
+                  orderId: "MLB-1001",
+                  orderedAt: "2026-06-20T10:15:00.000Z",
+                  provider: "mercadolivre",
+                  skus: ["SKU-1"],
+                  shippingAmount: "20.00",
+                  sourceStatus: "paid",
+                  status: "paid",
+                  statusLabel: "Pagamento aprovado",
+                  tariffAmount: "10.00",
+                  totalFees: "33.00",
+                  totalProfitAmount: "92.00",
+                  totalWithFees: "200.00",
+                  totalWithoutFees: "167.00",
+                },
+              ],
+        page: filters?.page ?? 1,
+        pageSize: 20,
+        totalItems: 21,
+        totalPages: 2,
+      },
+      error: null,
+      isLoading: false,
+    }));
+
+    const view = mount(<OrdersHome />);
+
+    expect(text()).toContain("MLB-SALE-9001");
+    expect(text()).not.toContain("MLB-SALE-9002");
+
+    click(
+      Array.from(document.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === "2",
+      )!,
+    );
+
+    expect(useOrdersListMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        page: 2,
+      }),
+    );
+    expect(text()).toContain("MLB-SALE-9002");
+    expect(text()).not.toContain("MLB-SALE-9001");
+
+    view.unmount();
+  });
+
+  it("shows table error state instead of keeping stale rows when paginated query fails", () => {
+    useOrdersListMock.mockImplementation((filters?: { page?: number }) => {
+      if (filters?.page === 2) {
+        return {
+          data: undefined,
+          error: new Error("No content"),
+          isLoading: false,
+        };
+      }
+
+      return {
         data: {
-          ...useOrdersListMock.mock.results[0]?.value?.data,
+          summary: {
+            averageMargin: "0.29",
+            grossProfit: "57.00",
+            grossRevenue: "200.00",
+            ordersCount: 1,
+            unitsSold: 2,
+          },
+          availableStatuses: [{ label: "Pagamento aprovado", value: "paid" }],
           items: [
             {
               contributionMarginPercent: "46.00",
@@ -555,38 +794,21 @@ describe("OrdersHome", () => {
         },
         error: null,
         isLoading: false,
-      })
-      .mockReturnValue({
-        data: {
-          summary: {
-            averageMargin: "0.29",
-            grossProfit: "57.00",
-            grossRevenue: "200.00",
-            ordersCount: 1,
-            unitsSold: 2,
-          },
-          availableStatuses: [
-            { label: "Pagamento aprovado", value: "paid" },
-          ],
-          items: [],
-          page: 2,
-          pageSize: 20,
-          totalItems: 21,
-          totalPages: 2,
-        },
-        error: null,
-        isLoading: false,
-      });
+      };
+    });
 
     const view = mount(<OrdersHome />);
 
-    click(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "2")!);
+    expect(text()).toContain("MLB-SALE-9001");
 
-    expect(useOrdersListMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        page: 2,
-      }),
+    click(
+      Array.from(document.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === "2",
+      )!,
     );
+
+    expect(text()).toContain("Nao foi possivel carregar os pedidos.");
+    expect(text()).not.toContain("MLB-SALE-9001");
 
     view.unmount();
   });
@@ -601,9 +823,7 @@ describe("OrdersHome", () => {
           ordersCount: 2,
           unitsSold: 3,
         },
-        availableStatuses: [
-          { label: "Pagamento aprovado", value: "paid" },
-        ],
+        availableStatuses: [{ label: "Pagamento aprovado", value: "paid" }],
         items: [
           {
             contributionMarginPercent: "46.00",
@@ -663,14 +883,20 @@ describe("OrdersHome", () => {
 
     const view = mount(<OrdersHome />);
 
-    click(document.querySelector('input[aria-label="Selecionar pedidos visiveis"]')!);
+    click(
+      document.querySelector(
+        'input[aria-label="Selecionar pedidos visiveis"]',
+      )!,
+    );
 
     expect(text()).toContain("2selecionados");
 
     await act(async () => {
-      click(Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("Exportar selecionados"),
-      )!);
+      click(
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Exportar selecionados"),
+        )!,
+      );
       await Promise.resolve();
     });
 
@@ -686,9 +912,11 @@ describe("OrdersHome", () => {
     const view = mount(<OrdersHome />);
 
     await act(async () => {
-      click(Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("Exportar"),
-      )!);
+      click(
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Exportar"),
+        )!,
+      );
       await Promise.resolve();
     });
 

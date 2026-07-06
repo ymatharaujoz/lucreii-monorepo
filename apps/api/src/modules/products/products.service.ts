@@ -144,6 +144,7 @@ type MercadoLivreCatalogGroup = {
   parentSyntheticId: string | null;
   parentTitle: string | null;
   representativeProductId: string | null;
+  skuByProductId: Map<string, string | null>;
   variationLabelByProductId: Map<string, string | null>;
 };
 
@@ -3623,10 +3624,14 @@ export class ProductsService {
         ) ?? null;
 
       const variationLabelByProductId = new Map<string, string | null>();
+      const skuByProductId = new Map<string, string | null>();
 
       for (const entry of childEntries) {
         if (entry.productId && entry.variationLabel) {
           variationLabelByProductId.set(entry.productId, entry.variationLabel);
+        }
+        if (entry.productId && entry.sku) {
+          skuByProductId.set(entry.productId, entry.sku);
         }
       }
 
@@ -3645,6 +3650,7 @@ export class ProductsService {
         parentTitle: parentEntry?.title ?? explicitParent?.title ?? null,
         representativeProductId:
           explicitParent?.productId ?? childEntries[0]?.productId ?? null,
+        skuByProductId,
         variationLabelByProductId,
       });
     }
@@ -3660,6 +3666,7 @@ export class ProductsService {
     derivedFromProvider?: ProductListItem["derivedFromProvider"];
     isSyntheticParent?: boolean;
     parentProductId?: string | null;
+    sku?: string | null;
     variationLabel?: string | null;
   }): ProductListItem {
     return {
@@ -3671,6 +3678,7 @@ export class ProductsService {
       isSyntheticParent: input.isSyntheticParent ?? false,
       parentProductId:
         input.parentProductId === undefined ? null : input.parentProductId,
+      sku: input.sku ?? input.base.sku,
       variationLabel:
         input.variationLabel === undefined ? null : input.variationLabel,
     };
@@ -3741,6 +3749,7 @@ export class ProductsService {
               derivedFromProvider: "mercadolivre",
               isSyntheticParent: false,
               parentProductId: group.parentProductId,
+              sku: group.skuByProductId.get(childProduct.id) ?? null,
               variationLabel:
                 group.variationLabelByProductId.get(childProduct.id) ?? null,
             }),
@@ -3786,6 +3795,7 @@ export class ProductsService {
               derivedFromProvider: "mercadolivre",
               isSyntheticParent: false,
               parentProductId: childGroup.parentSyntheticId,
+              sku: childGroup.skuByProductId.get(childProduct.id) ?? null,
               variationLabel:
                 childGroup.variationLabelByProductId.get(childProduct.id) ??
                 null,
