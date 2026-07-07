@@ -43,7 +43,11 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { utils, write } from "xlsx";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
-import { MercadoLivreProvider } from "@/modules/integrations/providers/mercadolivre.provider";
+import {
+  MercadoLivreProvider,
+  readMercadoLivreBillingOrderShippingCost,
+  type MercadoLivreBillingOrderDetailsResponse,
+} from "@/modules/integrations/providers/mercadolivre.provider";
 
 type TenantContext = {
   organizationId: string;
@@ -87,7 +91,9 @@ type MercadoLivreOrderDetailResponse = {
 };
 
 type MercadoLivreShipmentDetailResponse = {
+  order_cost?: number | string;
   shipping_option?: {
+    cost?: number | string;
     list_cost?: number | string;
   };
 };
@@ -147,6 +153,10 @@ function toNumber(value: string | number | null | undefined) {
 
 function toMoney(value: string | number | null | undefined) {
   return toNumber(value).toFixed(2);
+}
+
+function roundMoneyNumber(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function parseMoneyToCents(value: string | number | null | undefined) {
@@ -389,6 +399,64 @@ function readMetadataMoney(
   return 0;
 }
 
+function readMetadataMoneyString(
+  metadata: Record<string, unknown>,
+  key: string,
+) {
+  const value = metadata[key];
+
+  if (typeof value !== "string" && typeof value !== "number") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : null;
+}
+
+function buildOrderShippingBreakdown(
+  fees: ExternalFee[],
+): OrderComposition["shippingBreakdown"] {
+  const shippingFee = fees.find((fee) => fee.feeType === "shipping_cost");
+  const metadata =
+    shippingFee?.metadata && typeof shippingFee.metadata === "object"
+      ? (shippingFee.metadata as Record<string, unknown>)
+      : null;
+
+  if (!metadata) {
+    return null;
+  }
+
+  const buyerShippingPaymentAmount =
+    readMetadataMoneyString(metadata, "shipping_buyer_paid") ??
+    readMetadataMoneyString(metadata, "buyerShippingAmount");
+  const grossShippingTariffAmount =
+    readMetadataMoneyString(metadata, "shipping_seller_fee") ??
+    readMetadataMoneyString(metadata, "grossShippingTariffAmount");
+  const netShippingAmount = readMetadataMoneyString(
+    metadata,
+    "shipping_net_amount",
+  );
+  const source =
+    typeof metadata.source === "string" && metadata.source.trim().length > 0
+      ? metadata.source.trim()
+      : null;
+
+  if (
+    !buyerShippingPaymentAmount ||
+    !grossShippingTariffAmount ||
+    !netShippingAmount
+  ) {
+    return null;
+  }
+
+  return {
+    buyerShippingPaymentAmount,
+    grossShippingTariffAmount,
+    netShippingAmount,
+    source,
+  };
+}
+
 function toCatalogGroupKey(itemId: string) {
   return `mercadolivre:${itemId}`;
 }
@@ -556,6 +624,7 @@ function buildOrderFinancialMetrics(
     totalProfitAmount === null || revenueAmount <= 0
       ? null
       : (totalProfitAmount / revenueAmount) * 100;
+  const shippingBreakdown = buildOrderShippingBreakdown(order.fees);
 
   return {
     composition: {
@@ -568,6 +637,7 @@ function buildOrderFinancialMetrics(
       productCostAmount: productCostAmount.toFixed(2),
       refundBonusAmount: refundBonusAmount.toFixed(2),
       revenueAmount: revenueAmount.toFixed(2),
+      ...(shippingBreakdown ? { shippingBreakdown } : {}),
       shippingOrFixedFeeAmount: shippingOrFixedFeeAmount.toFixed(2),
       taxAmount: taxAmount.toFixed(2),
       taxRateDefault:
@@ -710,6 +780,10 @@ function shouldRefreshMercadoLivreShippingRatio(
     shippingFee.metadata && typeof shippingFee.metadata === "object"
       ? (shippingFee.metadata as Record<string, unknown>)
       : null;
+
+  if (metadata?.source === "billing/integration/group/ML/order/details") {
+    return readMetadataMoney(metadata, "shipping_seller_fee") <= 0;
+  }
 
   return (
     metadata?.source !== "shipment_detail.shipping_option.list_cost" ||
@@ -1173,6 +1247,10 @@ export class OrdersService {
     string,
     Promise<Map<string, string>>
   >();
+  private readonly billingOrderShippingDetailCache = new Map<
+    string,
+    Promise<MercadoLivreBillingOrderDetailsResponse | null>
+  >();
 
   constructor(
     @Inject(DATABASE_CLIENT)
@@ -1296,15 +1374,21 @@ export class OrdersService {
       const orderedRows = ids
         .map((id) => rowById.get(id) ?? null)
         .filter((row): row is OrderRowShallow => row !== null);
-      const backfilledRows = await this.backfillMercadoLivreOperationIds(
+      const operationBackfilledRows = await this.backfillMercadoLivreOperationIds(
         authContext,
         companyId,
         orderedRows,
       );
+      const shippingBillingBackfilledRows =
+        await this.backfillMercadoLivreBillingShippingCosts(
+          authContext,
+          companyId,
+          operationBackfilledRows,
+        );
       const hydratedRows = await this.hydrateLinkedProducts(
         authContext,
         companyId,
-        backfilledRows,
+        shippingBillingBackfilledRows,
       );
       const items = hydratedRows.map((row) =>
         toOrderListItem(
@@ -1343,15 +1427,21 @@ export class OrdersService {
         },
       },
     });
-    const backfilledRows = await this.backfillMercadoLivreOperationIds(
+    const operationBackfilledRows = await this.backfillMercadoLivreOperationIds(
       authContext,
       companyId,
       rows as OrderRowShallow[],
     );
+    const shippingBillingBackfilledRows =
+      await this.backfillMercadoLivreBillingShippingCosts(
+        authContext,
+        companyId,
+        operationBackfilledRows,
+      );
     const hydratedRows = await this.hydrateLinkedProducts(
       authContext,
       companyId,
-      backfilledRows,
+      shippingBillingBackfilledRows,
     );
     const mapped = hydratedRows
       .map((row) => ({
@@ -1551,15 +1641,21 @@ export class OrdersService {
       throw new NotFoundException("Order not found.");
     }
 
-    const [backfilledRow] = await this.backfillMercadoLivreOperationIds(
+    const [operationBackfilledRow] = await this.backfillMercadoLivreOperationIds(
       authContext,
       companyId,
       [row as OrderRowShallow],
     );
+    const [shippingBillingBackfilledRow] =
+      await this.backfillMercadoLivreBillingShippingCosts(
+        authContext,
+        companyId,
+        [operationBackfilledRow],
+      );
     const [shippingBackfilledRow] = await this.backfillMercadoLivreShippingRatios(
       authContext,
       companyId,
-      [backfilledRow],
+      [shippingBillingBackfilledRow],
     );
     const [hydratedRow] = await this.hydrateLinkedProducts(
       authContext,
@@ -2084,7 +2180,9 @@ export class OrdersService {
     const ratioByRowId = new Map<
       string,
       {
-        ratioAmount: number;
+        buyerPaidAmount: number;
+        grossTariffAmount: number;
+        netAmount: number;
         shipmentId: string;
       }
     >();
@@ -2116,16 +2214,31 @@ export class OrdersService {
         continue;
       }
 
-      const listCostAmount = await this.fetchMercadoLivreShipmentListCost({
+      const shipmentBreakdown = await this.fetchMercadoLivreShipmentBreakdown({
         accessToken: connection.accessToken!,
         shipmentId,
       });
-      if (listCostAmount === null) {
+      if (shipmentBreakdown === null) {
         continue;
       }
 
+      const fallbackBuyerPaid = readMetadataMoney(
+        feeMetadata,
+        "shipping_buyer_paid",
+      );
+      const buyerPaidAmount = Math.max(
+        fallbackBuyerPaid,
+        shipmentBreakdown.buyerPaidAmount,
+      );
+      const netAmount = Math.max(
+        0,
+        roundMoneyNumber(shipmentBreakdown.grossTariffAmount - buyerPaidAmount),
+      );
+
       ratioByRowId.set(row.id, {
-        ratioAmount: listCostAmount,
+        buyerPaidAmount,
+        grossTariffAmount: shipmentBreakdown.grossTariffAmount,
+        netAmount,
         shipmentId,
       });
     }
@@ -2151,14 +2264,21 @@ export class OrdersService {
               fee.metadata && typeof fee.metadata === "object"
                 ? { ...(fee.metadata as Record<string, unknown>) }
                 : {};
-            metadata.listCostAmount = shippingRatio.ratioAmount;
+            metadata.listCostAmount = shippingRatio.grossTariffAmount;
             metadata.shipmentId = shippingRatio.shipmentId;
+            metadata.shipping_buyer_paid = toMoney(shippingRatio.buyerPaidAmount);
+            metadata.shipping_net_amount = toMoney(
+              shippingRatio.buyerPaidAmount - shippingRatio.grossTariffAmount,
+            );
+            metadata.shipping_seller_fee = toMoney(
+              shippingRatio.grossTariffAmount,
+            );
             metadata.source = "shipment_detail.shipping_option.list_cost";
 
             await this.db
               .update(externalFees)
               .set({
-                amount: shippingRatio.ratioAmount.toFixed(2),
+                amount: shippingRatio.netAmount.toFixed(2),
                 metadata,
                 updatedAt: new Date(),
               })
@@ -2171,8 +2291,190 @@ export class OrdersService {
 
             return {
               ...fee,
-              amount: shippingRatio.ratioAmount.toFixed(2),
+              amount: shippingRatio.netAmount.toFixed(2),
               metadata,
+              updatedAt: new Date(),
+            };
+          }),
+        );
+
+        return {
+          ...row,
+          fees: nextFees,
+        };
+      }),
+    );
+
+    return updatedRows;
+  }
+
+  private async backfillMercadoLivreBillingShippingCosts(
+    authContext: TenantContext,
+    companyId: string,
+    rows: OrderRowShallow[],
+  ): Promise<OrderRowShallow[]> {
+    if (!this.env || rows.length === 0) {
+      return rows;
+    }
+
+    const targets = rows.filter((row) => {
+      if (row.provider !== "mercadolivre") {
+        return false;
+      }
+
+      const shippingFee = row.fees.find((fee) => fee.feeType === "shipping_cost");
+      if (!shippingFee) {
+        return false;
+      }
+
+      const metadata =
+        shippingFee.metadata && typeof shippingFee.metadata === "object"
+          ? (shippingFee.metadata as Record<string, unknown>)
+          : null;
+
+      if (metadata?.source !== "billing/integration/group/ML/order/details") {
+        return true;
+      }
+
+      return (
+        readMetadataMoney(metadata, "shipping_buyer_paid") > 0 &&
+        readMetadataMoney(metadata, "shipping_seller_fee") <= 0
+      );
+    });
+
+    if (targets.length === 0) {
+      return rows;
+    }
+
+    const connections = await this.db.query.marketplaceConnections.findMany({
+      where: (table) =>
+        and(
+          eq(table.organizationId, authContext.organizationId),
+          eq(table.companyId, companyId),
+          eq(table.provider, "mercadolivre"),
+        ),
+    });
+    const connectionById = new Map(
+      connections.map((connection) => [connection.id, connection] as const),
+    );
+    const fallbackConnection =
+      connections.find(
+        (connection) =>
+          connection.provider === "mercadolivre" &&
+          connection.status === "connected" &&
+          Boolean(connection.accessToken),
+      ) ?? null;
+
+    const refreshedConnectionById = new Map<string, MarketplaceConnection>();
+    const getConnectionForRow = async (row: OrderRowShallow) => {
+      const rawConnection =
+        (row.marketplaceConnectionId
+          ? connectionById.get(row.marketplaceConnectionId)
+          : null) ?? fallbackConnection;
+      if (
+        !rawConnection ||
+        rawConnection.provider !== "mercadolivre" ||
+        rawConnection.status !== "connected" ||
+        !rawConnection.accessToken
+      ) {
+        return null;
+      }
+
+      const cached = refreshedConnectionById.get(rawConnection.id);
+      if (cached) {
+        return cached;
+      }
+
+      const refreshed = await this.refreshMercadoLivreConnectionIfNeeded(
+        rawConnection,
+      );
+      refreshedConnectionById.set(rawConnection.id, refreshed);
+      return refreshed;
+    };
+
+    const billingShippingByRowId = new Map<
+      string,
+      {
+        amount: string;
+        metadata: Record<string, unknown>;
+      }
+    >();
+
+    for (const row of targets) {
+      const connection = await getConnectionForRow(row);
+      if (!connection) {
+        continue;
+      }
+
+      const shippingFee = row.fees.find((fee) => fee.feeType === "shipping_cost");
+      if (!shippingFee) {
+        continue;
+      }
+
+      const billingShippingCost =
+        await this.fetchMercadoLivreBillingOrderShippingCost({
+          accessToken: connection.accessToken!,
+          orderId: row.externalOrderId,
+        });
+
+      if (!billingShippingCost) {
+        continue;
+      }
+
+      const existingMetadata =
+        shippingFee.metadata && typeof shippingFee.metadata === "object"
+          ? { ...(shippingFee.metadata as Record<string, unknown>) }
+          : {};
+
+      billingShippingByRowId.set(row.id, {
+        amount: billingShippingCost.amount.toFixed(2),
+        metadata: {
+          ...existingMetadata,
+          ...billingShippingCost.metadata,
+          shipmentId:
+            readMercadoLivreShipmentId(existingMetadata) ??
+            existingMetadata.shipmentId ??
+            null,
+          source: billingShippingCost.source,
+        },
+      });
+    }
+
+    if (billingShippingByRowId.size === 0) {
+      return rows;
+    }
+
+    const updatedRows = await Promise.all(
+      rows.map(async (row) => {
+        const billingShipping = billingShippingByRowId.get(row.id);
+        if (!billingShipping) {
+          return row;
+        }
+
+        const nextFees = await Promise.all(
+          row.fees.map(async (fee) => {
+            if (fee.feeType !== "shipping_cost") {
+              return fee;
+            }
+
+            await this.db
+              .update(externalFees)
+              .set({
+                amount: billingShipping.amount,
+                metadata: billingShipping.metadata,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(externalFees.id, fee.id),
+                  eq(externalFees.organizationId, authContext.organizationId),
+                ),
+              );
+
+            return {
+              ...fee,
+              amount: billingShipping.amount,
+              metadata: billingShipping.metadata,
               updatedAt: new Date(),
             };
           }),
@@ -2438,7 +2740,7 @@ export class OrdersService {
       : null;
   }
 
-  private async fetchMercadoLivreShipmentListCost(input: {
+  private async fetchMercadoLivreShipmentBreakdown(input: {
     accessToken: string;
     shipmentId: string;
   }) {
@@ -2463,6 +2765,13 @@ export class OrdersService {
     }
 
     const payload = (await response.json()) as MercadoLivreShipmentDetailResponse;
+    const rawBuyerPaid = payload.shipping_option?.cost;
+    const buyerPaid =
+      typeof rawBuyerPaid === "number"
+        ? rawBuyerPaid
+        : typeof rawBuyerPaid === "string"
+          ? Number(rawBuyerPaid)
+          : 0;
     const rawListCost = payload.shipping_option?.list_cost;
     const listCost =
       typeof rawListCost === "number"
@@ -2472,8 +2781,67 @@ export class OrdersService {
           : null;
 
     return listCost !== null && Number.isFinite(listCost) && listCost > 0
-      ? listCost
+      ? {
+          buyerPaidAmount:
+            Number.isFinite(buyerPaid) && buyerPaid > 0 ? buyerPaid : 0,
+          grossTariffAmount: listCost,
+        }
       : null;
+  }
+
+  private async fetchMercadoLivreBillingOrderShippingCost(input: {
+    accessToken: string;
+    orderId: string;
+  }) {
+    const cacheKey = `${input.accessToken}:${input.orderId}`;
+    let payloadPromise = this.billingOrderShippingDetailCache.get(cacheKey);
+
+    if (!payloadPromise) {
+      payloadPromise = (async () => {
+        const url = new URL(
+          "https://api.mercadolibre.com/billing/integration/group/ML/order/details",
+        );
+        url.searchParams.set("order_ids", input.orderId);
+
+        let response: Response | null = null;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          response = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${input.accessToken}`,
+              accept: "application/json",
+              "x-version": "2",
+            },
+            method: "GET",
+          });
+
+          if (response.status !== 429 && response.status < 500) {
+            break;
+          }
+        }
+
+        if (!response?.ok) {
+          return null;
+        }
+
+        const contentType = response.headers.get("content-type") ?? "";
+        if (!contentType.includes("application/json")) {
+          return null;
+        }
+
+        return (await response.json()) as MercadoLivreBillingOrderDetailsResponse;
+      })();
+      this.billingOrderShippingDetailCache.set(cacheKey, payloadPromise);
+    }
+
+    const payload = await payloadPromise;
+    if (!payload) {
+      return null;
+    }
+
+    return readMercadoLivreBillingOrderShippingCost({
+      orderId: input.orderId,
+      payload,
+    });
   }
 
   private async refreshMercadoLivreConnectionIfNeeded(

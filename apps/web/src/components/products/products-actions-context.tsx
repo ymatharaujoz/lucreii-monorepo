@@ -8,13 +8,13 @@ import type {
   SyncedProductRecord,
 } from "@lucreii/types";
 
-
 export type FeedbackTone = "critical" | "neutral";
 
 export type SyncedProductMutationInput = {
   action: "ignore" | "import" | "link";
   externalProductId: string;
   productId?: string;
+  provider?: "mercadolivre" | "shopee" | "shein";
 };
 
 export interface ProductsActionsContextValue {
@@ -60,7 +60,7 @@ export function useProductsActions() {
   const ctx = useContext(ProductsActionsContext);
   if (!ctx) {
     throw new Error(
-      "useProductsActions must be used within a ProductsActionsProvider"
+      "useProductsActions must be used within a ProductsActionsProvider",
     );
   }
   return ctx;

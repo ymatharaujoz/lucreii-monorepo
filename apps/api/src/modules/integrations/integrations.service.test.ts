@@ -107,7 +107,9 @@ describe("IntegrationsService", () => {
       },
     ]);
 
-    await expect(service.listConnections("org_1", "company_1")).resolves.toEqual([
+    await expect(
+      service.listConnections("org_1", "company_1"),
+    ).resolves.toEqual([
       expect.objectContaining({
         connectedAccountLabel: "SELLER123",
         displayName: "Mercado Livre",
@@ -1101,7 +1103,12 @@ describe("IntegrationsService", () => {
     });
 
     await expect(
-      service.importSyncedProduct("org_1", "company_1", "mercadolivre", "MLB-1"),
+      service.importSyncedProduct(
+        "org_1",
+        "company_1",
+        "mercadolivre",
+        "MLB-1",
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
@@ -1126,16 +1133,16 @@ describe("IntegrationsService", () => {
     productsService.createProduct.mockResolvedValue({
       id: "product_2",
     });
-    vi
-      .spyOn(
-        service as unknown as {
-          buildSyncedProductActionResult: (...args: unknown[]) => Promise<unknown>;
-        },
-        "buildSyncedProductActionResult",
-      )
-      .mockResolvedValue({
-        message: "Produto sincronizado importado para o catálogo",
-      } as never);
+    vi.spyOn(
+      service as unknown as {
+        buildSyncedProductActionResult: (
+          ...args: unknown[]
+        ) => Promise<unknown>;
+      },
+      "buildSyncedProductActionResult",
+    ).mockResolvedValue({
+      message: "Produto sincronizado importado para o catálogo",
+    } as never);
     db.update = vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue(undefined),
@@ -1143,7 +1150,12 @@ describe("IntegrationsService", () => {
     });
 
     await expect(
-      service.importSyncedProduct("org_1", "company_1", "mercadolivre", "MLB-2"),
+      service.importSyncedProduct(
+        "org_1",
+        "company_1",
+        "mercadolivre",
+        "MLB-2",
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
         message: "Produto sincronizado importado para o catálogo",
@@ -1245,7 +1257,9 @@ describe("IntegrationsService", () => {
       .mockResolvedValueOnce({ id: "product_child_2" });
     vi.spyOn(
       service as unknown as {
-        buildSyncedProductActionResult: (...args: unknown[]) => Promise<unknown>;
+        buildSyncedProductActionResult: (
+          ...args: unknown[]
+        ) => Promise<unknown>;
       },
       "buildSyncedProductActionResult",
     ).mockResolvedValue({
@@ -1254,7 +1268,12 @@ describe("IntegrationsService", () => {
     db.update = createUpdateMock();
 
     await expect(
-      service.importSyncedProduct("org_1", "company_1", "mercadolivre", "MLB-200:2"),
+      service.importSyncedProduct(
+        "org_1",
+        "company_1",
+        "mercadolivre",
+        "MLB-200:2",
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
         message: "Produto sincronizado importado para o catÃ¡logo",
@@ -1290,6 +1309,156 @@ describe("IntegrationsService", () => {
       }),
     );
     expect(syncService.rematerializeProviderMetrics).toHaveBeenCalledTimes(1);
+  });
+
+  it("imports the full Shopee model family when a model is selected", async () => {
+    const { db, productsService, service, syncService } = createService();
+    const importCatalogByExternalProductId = vi.fn().mockResolvedValue([
+      {
+        externalProductId: "101:501",
+        images: ["https://cf.shopee.com.br/file/img-1"],
+        isActive: true,
+        metadata: { itemId: 101, modelId: "501" },
+        sellingPrice: "99.90",
+        sku: "SKU-AZUL",
+        title: "Camiseta Shopee - Azul",
+      },
+      {
+        externalProductId: "101:502",
+        images: ["https://cf.shopee.com.br/file/img-1"],
+        isActive: true,
+        metadata: { itemId: 101, modelId: "502" },
+        sellingPrice: "109.90",
+        sku: "SKU-PRETA",
+        title: "Camiseta Shopee - Preta",
+      },
+    ]);
+
+    (service as unknown as { providers: unknown[] }).providers = [
+      {
+        displayName: "Shopee",
+        importCatalogByExternalProductId,
+        provider: "shopee",
+      },
+    ];
+    db.query.externalProducts.findFirst.mockResolvedValue({
+      createdAt: new Date("2026-05-01T10:00:00.000Z"),
+      externalProductId: "101:501",
+      id: "external_model_501",
+      linkedProduct: null,
+      linkedProductId: null,
+      marketplaceConnectionId: "conn_1",
+      metadata: { itemId: 101, modelId: 501 },
+      orderItems: [],
+      organizationId: "org_1",
+      provider: "shopee",
+      reviewStatus: "unreviewed",
+      sku: "SKU-AZUL",
+      title: "Camiseta Shopee - Azul",
+      updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+    });
+    db.query.marketplaceConnections.findFirst.mockResolvedValue({
+      accessToken: "token",
+      externalAccountId: "987654",
+      id: "conn_1",
+      organizationId: "org_1",
+      provider: "shopee",
+      status: "connected",
+      tokenExpiresAt: null,
+    });
+    db.query.externalProducts.findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        externalProductId: "101:501",
+        id: "external_model_501",
+        linkedProduct: null,
+        linkedProductId: null,
+        marketplaceConnectionId: "conn_1",
+        metadata: { itemId: 101, modelId: 501 },
+        orderItems: [],
+        organizationId: "org_1",
+        provider: "shopee",
+        reviewStatus: "unreviewed",
+        sku: "SKU-AZUL",
+        title: "Camiseta Shopee - Azul",
+        updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+      },
+      {
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        externalProductId: "101:502",
+        id: "external_model_502",
+        linkedProduct: null,
+        linkedProductId: null,
+        marketplaceConnectionId: "conn_1",
+        metadata: { itemId: 101, modelId: 502 },
+        orderItems: [],
+        organizationId: "org_1",
+        provider: "shopee",
+        reviewStatus: "unreviewed",
+        sku: "SKU-PRETA",
+        title: "Camiseta Shopee - Preta",
+        updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+      },
+    ]);
+    db.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+    productsService.createProduct
+      .mockResolvedValueOnce({ id: "product_model_501" })
+      .mockResolvedValueOnce({ id: "product_model_502" });
+    vi.spyOn(
+      service as unknown as {
+        buildSyncedProductActionResult: (
+          ...args: unknown[]
+        ) => Promise<unknown>;
+      },
+      "buildSyncedProductActionResult",
+    ).mockResolvedValue({
+      message: "Produto sincronizado importado para o catÃƒÂ¡logo",
+    } as never);
+    db.update = createUpdateMock();
+
+    await expect(
+      service.importSyncedProduct("org_1", "company_1", "shopee", "101:501"),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        message: "Produto sincronizado importado para o catÃƒÂ¡logo",
+      }),
+    );
+
+    expect(importCatalogByExternalProductId).toHaveBeenCalledWith({
+      connection: expect.objectContaining({
+        externalAccountId: "987654",
+        provider: "shopee",
+      }),
+      externalProductId: "101:501",
+      organizationId: "org_1",
+    });
+    expect(productsService.createProduct).toHaveBeenCalledTimes(2);
+    expect(productsService.createProduct).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({
+        name: "Camiseta Shopee - Azul",
+        sku: "SKU-AZUL",
+      }),
+    );
+    expect(productsService.createProduct).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({
+        name: "Camiseta Shopee - Preta",
+        sku: "SKU-PRETA",
+      }),
+    );
+    expect(syncService.rematerializeProviderMetrics).toHaveBeenCalledWith({
+      companyId: "company_1",
+      organizationId: "org_1",
+      providerSlug: "shopee",
+      userId: null,
+    });
   });
 
   it("imports the full Mercado Livre family when the parent is selected", async () => {
@@ -1367,7 +1536,9 @@ describe("IntegrationsService", () => {
       .mockResolvedValueOnce({ id: "product_child_2" });
     vi.spyOn(
       service as unknown as {
-        buildSyncedProductActionResult: (...args: unknown[]) => Promise<unknown>;
+        buildSyncedProductActionResult: (
+          ...args: unknown[]
+        ) => Promise<unknown>;
       },
       "buildSyncedProductActionResult",
     ).mockResolvedValue({
@@ -1376,7 +1547,12 @@ describe("IntegrationsService", () => {
     db.update = createUpdateMock();
 
     await expect(
-      service.importSyncedProduct("org_1", "company_1", "mercadolivre", "MLB-210"),
+      service.importSyncedProduct(
+        "org_1",
+        "company_1",
+        "mercadolivre",
+        "MLB-210",
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
         message: "Produto sincronizado importado para o catÃ¡logo",
@@ -1526,7 +1702,9 @@ describe("IntegrationsService", () => {
       .mockResolvedValueOnce({ id: "product_child_5" });
     vi.spyOn(
       service as unknown as {
-        buildSyncedProductActionResult: (...args: unknown[]) => Promise<unknown>;
+        buildSyncedProductActionResult: (
+          ...args: unknown[]
+        ) => Promise<unknown>;
       },
       "buildSyncedProductActionResult",
     ).mockResolvedValue({
@@ -1534,10 +1712,12 @@ describe("IntegrationsService", () => {
     } as never);
     db.update = createUpdateMock();
     (
-      (service as unknown as { providers: Array<Record<string, unknown>> }).providers.find(
-        (entry) => entry.provider === "mercadolivre",
-      ) as {
-        importCatalogByExternalProductId?: (...args: unknown[]) => Promise<unknown>;
+      (
+        service as unknown as { providers: Array<Record<string, unknown>> }
+      ).providers.find((entry) => entry.provider === "mercadolivre") as {
+        importCatalogByExternalProductId?: (
+          ...args: unknown[]
+        ) => Promise<unknown>;
       }
     ).importCatalogByExternalProductId = vi.fn().mockResolvedValue([
       {
@@ -1597,7 +1777,12 @@ describe("IntegrationsService", () => {
     ]);
 
     await expect(
-      service.importSyncedProduct("org_1", "company_1", "mercadolivre", "MLB-300:1"),
+      service.importSyncedProduct(
+        "org_1",
+        "company_1",
+        "mercadolivre",
+        "MLB-300:1",
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
         message: "Produto sincronizado importado para o catÃ¡logo",
@@ -1683,10 +1868,14 @@ describe("IntegrationsService", () => {
         updatedAt: new Date("2026-05-01T12:00:00.000Z"),
       },
     ]);
-    productsService.createProduct.mockResolvedValueOnce({ id: "product_parent" });
+    productsService.createProduct.mockResolvedValueOnce({
+      id: "product_parent",
+    });
     vi.spyOn(
       service as unknown as {
-        buildSyncedProductActionResult: (...args: unknown[]) => Promise<unknown>;
+        buildSyncedProductActionResult: (
+          ...args: unknown[]
+        ) => Promise<unknown>;
       },
       "buildSyncedProductActionResult",
     ).mockResolvedValue({
@@ -1695,7 +1884,12 @@ describe("IntegrationsService", () => {
     db.update = createUpdateMock();
 
     await expect(
-      service.importSyncedProduct("org_1", "company_1", "mercadolivre", "MLB-201:2"),
+      service.importSyncedProduct(
+        "org_1",
+        "company_1",
+        "mercadolivre",
+        "MLB-201:2",
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
         message: "Produto sincronizado importado para o catÃ¡logo",
@@ -1777,19 +1971,28 @@ describe("IntegrationsService", () => {
     ]);
     vi.spyOn(
       service as unknown as {
-        buildSyncedProductActionResult: (...args: unknown[]) => Promise<unknown>;
+        buildSyncedProductActionResult: (
+          ...args: unknown[]
+        ) => Promise<unknown>;
       },
       "buildSyncedProductActionResult",
     ).mockResolvedValue({
-      message: "Esta familia de produtos sincronizados ja esta importada ou vinculada ao catalogo",
+      message:
+        "Esta familia de produtos sincronizados ja esta importada ou vinculada ao catalogo",
     } as never);
     db.update = createUpdateMock();
 
     await expect(
-      service.importSyncedProduct("org_1", "company_1", "mercadolivre", "MLB-202:1"),
+      service.importSyncedProduct(
+        "org_1",
+        "company_1",
+        "mercadolivre",
+        "MLB-202:1",
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
-        message: "Esta familia de produtos sincronizados ja esta importada ou vinculada ao catalogo",
+        message:
+          "Esta familia de produtos sincronizados ja esta importada ou vinculada ao catalogo",
       }),
     );
     expect(productsService.createProduct).not.toHaveBeenCalled();

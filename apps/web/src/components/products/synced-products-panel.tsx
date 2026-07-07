@@ -138,8 +138,8 @@ export function SyncedProductsPanel() {
                       {formatMoney(item.grossRevenue)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Comissao: {formatMoney(item.marketplaceCommission)} ·
-                      Taxa fixa: {formatMoney(item.fixedFee)} · Frete:{" "}
+                      Comissao: {formatMoney(item.marketplaceCommission)} · Taxa
+                      fixa: {formatMoney(item.fixedFee)} · Frete:{" "}
                       {formatMoney(item.shippingCost)}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -153,18 +153,12 @@ export function SyncedProductsPanel() {
                       <SectionMessage>
                         Vinculado automaticamente por SKU a{" "}
                         {linkedProduct!.name}
-                        {linkedProduct!.sku
-                          ? ` (${linkedProduct!.sku})`
-                          : ""}
-                        .
+                        {linkedProduct!.sku ? ` (${linkedProduct!.sku})` : ""}.
                       </SectionMessage>
                     ) : linkedProduct ? (
                       <SectionMessage>
                         Vinculado a {linkedProduct.name}
-                        {linkedProduct.sku
-                          ? ` (${linkedProduct.sku})`
-                          : ""}
-                        .
+                        {linkedProduct.sku ? ` (${linkedProduct.sku})` : ""}.
                       </SectionMessage>
                     ) : null}
                     {hasDuplicateSkuWarning ? (
@@ -174,14 +168,13 @@ export function SyncedProductsPanel() {
                       </SectionMessage>
                     ) : item.suggestedMatches.length > 0 ? (
                       <SectionMessage>
-                        Sugestao principal:{" "}
-                        {item.suggestedMatches[0]?.name}
+                        Sugestao principal: {item.suggestedMatches[0]?.name}
                         {item.suggestedMatches[0]?.sku
                           ? ` (${item.suggestedMatches[0]?.sku})`
                           : ""}{" "}
                         por{" "}
                         {translateSuggestedMatchReason(
-                          item.suggestedMatches[0]?.reason ?? "sku_exact"
+                          item.suggestedMatches[0]?.reason ?? "sku_exact",
                         )}
                         .
                       </SectionMessage>
@@ -227,6 +220,7 @@ export function SyncedProductsPanel() {
                                 externalProductId: item.externalProductId,
                                 productId:
                                   linkSelections[item.externalProductId],
+                                provider: item.provider,
                               })
                             }
                             type="button"
@@ -240,6 +234,7 @@ export function SyncedProductsPanel() {
                               syncedProductMutation.mutate({
                                 action: "import",
                                 externalProductId: item.externalProductId,
+                                provider: item.provider,
                               })
                             }
                             type="button"
@@ -252,6 +247,7 @@ export function SyncedProductsPanel() {
                               syncedProductMutation.mutate({
                                 action: "ignore",
                                 externalProductId: item.externalProductId,
+                                provider: item.provider,
                               })
                             }
                             type="button"

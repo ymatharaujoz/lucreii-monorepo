@@ -178,8 +178,11 @@ describe("ShopeeProvider", () => {
                       item_id: 101,
                       item_name: "Produto Shopee",
                       item_sku: "SKU-1",
+                      model_id: 501,
+                      model_name: "Azul",
                       model_discounted_price: 100,
                       model_quantity_purchased: 2,
+                      model_sku: "SKU-AZUL",
                     },
                   ],
                   order_sn: "ORDER-1",
@@ -232,8 +235,25 @@ describe("ShopeeProvider", () => {
       expect.objectContaining({ amount: "4.00", feeType: "fixed_fee" }),
       expect.objectContaining({ amount: "15.00", feeType: "shipping_cost" }),
     ]);
+    expect(result.orders[0]?.items[0]).toEqual(
+      expect.objectContaining({
+        externalProductId: "101:501",
+        metadata: { itemId: 101, modelId: 501 },
+        sku: "SKU-AZUL",
+        title: "Produto Shopee - Azul",
+        variationId: "501",
+      }),
+    );
     expect(result.products[0]).toEqual(
-      expect.objectContaining({ externalProductId: "101", sku: "SKU-1" }),
+      expect.objectContaining({
+        externalProductId: "101:501",
+        metadata: {
+          itemId: 101,
+          modelId: 501,
+          source: "shopee-order-item",
+        },
+        sku: "SKU-AZUL",
+      }),
     );
   });
 
@@ -346,6 +366,81 @@ describe("ShopeeProvider", () => {
         sellingPrice: "109.90",
         sku: "SKU-PRETA",
         title: "Camiseta Shopee - Preta",
+      }),
+    ]);
+  });
+
+  it("imports the full Shopee model family by external product id", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(1_718_184_000_000);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            response: {
+              item_list: [
+                {
+                  image: {
+                    image_url_list: ["https://cf.shopee.com.br/file/img-1"],
+                  },
+                  item_id: 101,
+                  item_name: "Camiseta Shopee",
+                  item_sku: "SKU-PAI",
+                  item_status: "NORMAL",
+                  has_model: true,
+                },
+              ],
+            },
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            response: {
+              has_next_page: false,
+              model: [
+                {
+                  model_id: 501,
+                  model_name: "Azul",
+                  model_sku: "SKU-AZUL",
+                  price_info: [{ current_price: 99.9 }],
+                },
+                {
+                  model_id: 502,
+                  model_name: "Preta",
+                  model_sku: "SKU-PRETA",
+                  price_info: [{ current_price: 109.9 }],
+                },
+              ],
+              next_offset: 0,
+            },
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new ShopeeProvider(createEnv());
+
+    const result = await provider.importCatalogByExternalProductId!({
+      connection: createConnection() as never,
+      externalProductId: "101:501",
+      organizationId: "org_1",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("item_id_list=101");
+    expect(result).toEqual([
+      expect.objectContaining({
+        externalProductId: "101:501",
+        metadata: { itemId: 101, modelId: "501" },
+        sku: "SKU-AZUL",
+      }),
+      expect.objectContaining({
+        externalProductId: "101:502",
+        metadata: { itemId: 101, modelId: "502" },
+        sku: "SKU-PRETA",
       }),
     ]);
   });

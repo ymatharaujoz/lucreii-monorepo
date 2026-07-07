@@ -621,18 +621,19 @@ export function ProductsShell({
 
   const syncedProductMutation = useMutation({
     mutationFn: async (input: SyncedProductMutationInput) => {
+      const provider = input.provider ?? "mercadolivre";
       if (input.action === "import") {
         return apiClient.post<{ data: SyncedProductActionResult; error: null }>(
-          `/integrations/mercadolivre/products/${input.externalProductId}/import`,
+          `/integrations/${provider}/products/${input.externalProductId}/import`,
         );
       }
       if (input.action === "ignore") {
         return apiClient.post<{ data: SyncedProductActionResult; error: null }>(
-          `/integrations/mercadolivre/products/${input.externalProductId}/ignore`,
+          `/integrations/${provider}/products/${input.externalProductId}/ignore`,
         );
       }
       return apiClient.post<{ data: SyncedProductActionResult; error: null }>(
-        `/integrations/mercadolivre/products/${input.externalProductId}/link`,
+        `/integrations/${provider}/products/${input.externalProductId}/link`,
         { body: { productId: input.productId } },
       );
     },
@@ -1440,13 +1441,13 @@ export function ProductsShell({
           <Card>
             <div className="space-y-1.5">
               <p className="text-xs font-bold uppercase tracking-wider text-accent">
-                Mercado Livre
+                Marketplaces
               </p>
               <h2 className="text-lg font-semibold text-foreground">
                 Produtos sincronizados para revisao
               </h2>
               <p className="max-w-2xl text-sm text-muted-foreground">
-                Itens sincronizados do Mercado Livre chegam primeiro como
+                Itens sincronizados dos marketplaces chegam primeiro como
                 candidatos de revisao. Voce decide se vira um novo produto
                 interno, um vinculo com um produto existente ou fica ignorado
                 por enquanto.

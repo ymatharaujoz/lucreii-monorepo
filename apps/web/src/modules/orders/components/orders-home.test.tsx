@@ -267,8 +267,8 @@ describe("OrdersHome", () => {
           shippingBreakdown: {
             buyerShippingPaymentAmount: "10.99",
             grossShippingTariffAmount: "16.64",
-            netShippingAmount: "5.65",
-            source: "payment.charges_details.shipping",
+            netShippingAmount: "-5.65",
+            source: "billing/integration/group/ML/order/details",
           },
           shippingOrFixedFeeAmount: "5.65",
           taxAmount: "0.00",
