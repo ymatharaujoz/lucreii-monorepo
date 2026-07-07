@@ -238,13 +238,20 @@ function matchesOrderSearch(
   );
 }
 
+function buildDisplayOrderIdSearchExpression() {
+  return sql`coalesce(
+    nullif(trim(${externalOrders.metadata} ->> 'packId'), ''),
+    nullif(trim(${externalOrders.metadata} ->> 'operationId'), ''),
+    trim(${externalOrders.externalOrderId})
+  )`;
+}
+
 function buildOrderSearchWhere(searchNeedle: string) {
   const normalizedNeedle = `%${searchNeedle.toUpperCase()}%`;
 
   return sql`(
-    upper(trim(${externalOrders.externalOrderId})) like ${normalizedNeedle}
+    upper(${buildDisplayOrderIdSearchExpression()}) like ${normalizedNeedle}
     or upper(trim(coalesce(${externalOrders.metadata} ->> 'packId', ''))) like ${normalizedNeedle}
-    or upper(trim(coalesce(${externalOrders.metadata} ->> 'operationId', ''))) like ${normalizedNeedle}
     or exists (
       select 1
       from ${externalOrderItems}

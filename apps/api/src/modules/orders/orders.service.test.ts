@@ -4302,6 +4302,168 @@ describe("OrdersService", () => {
     expect(result.items[0]?.skus).toEqual(["SKU-1", "SKU-2"]);
   });
 
+  it("uses displayOrderId in database search filters for paginated list queries", async () => {
+    const whereCalls: string[] = [];
+    const serializeSql = (value: unknown): string => {
+      if (value === null || value === undefined) {
+        return "";
+      }
+
+      if (typeof value === "string" || typeof value === "number") {
+        return String(value);
+      }
+
+      if (Array.isArray(value)) {
+        return value.map((chunk) => serializeSql(chunk)).join("");
+      }
+
+      if (typeof value !== "object") {
+        return "";
+      }
+
+      if ("queryChunks" in value) {
+        return serializeSql((value as { queryChunks: unknown[] }).queryChunks);
+      }
+
+      if ("value" in value) {
+        return serializeSql((value as { value: unknown }).value);
+      }
+
+      if ("name" in value) {
+        return String((value as { name: unknown }).name);
+      }
+
+      return "";
+    };
+    const createSelectBuilder = (
+      result: unknown,
+      options: { resolveOnWhere?: boolean } = {},
+    ) => ({
+      from() {
+        return this;
+      },
+      where(whereClause: unknown) {
+        whereCalls.push(serializeSql(whereClause));
+        return options.resolveOnWhere ? Promise.resolve(result) : this;
+      },
+      orderBy() {
+        return this;
+      },
+      limit() {
+        return this;
+      },
+      offset() {
+        return Promise.resolve(result);
+      },
+    });
+
+    const db = {
+      select: vi.fn().mockImplementation((selection: Record<string, unknown>) => {
+        if ("count" in selection) {
+          return createSelectBuilder([{ count: 1 }], { resolveOnWhere: true });
+        }
+
+        return createSelectBuilder([{ id: "order_row_1" }]);
+      }),
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.120000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-20T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-ORDER-1001",
+              metadata: { operationId: "MLB-SALE-9001" },
+              orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-20T12:00:00.000Z"),
+              totalAmount: "200.00",
+              items: [
+                {
+                  id: "item_1",
+                  quantity: 1,
+                  totalPrice: "120.00",
+                  unitPrice: "120.00",
+                  externalProduct: {
+                    id: "ext_prod_1",
+                    linkedProductId: null,
+                    sku: "SKU-1",
+                    title: "Produto 1",
+                  },
+                },
+              ],
+              fees: [],
+            },
+            {
+              id: "order_row_2",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-21T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "SHP-ORDER-1002",
+              metadata: { operationId: "SHP-SALE-9002" },
+              orderedAt: new Date("2026-06-21T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "shopee",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-21T12:00:00.000Z"),
+              totalAmount: "80.00",
+              items: [
+                {
+                  id: "item_2",
+                  quantity: 1,
+                  totalPrice: "80.00",
+                  unitPrice: "80.00",
+                  externalProduct: {
+                    id: "ext_prod_2",
+                    linkedProductId: null,
+                    sku: "SKU-9",
+                    title: "Produto 9",
+                  },
+                },
+              ],
+              fees: [],
+            },
+          ]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        search: "SALE-9001",
+      },
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.id).toBe("order_row_1");
+    expect(result.items[0]?.displayOrderId).toBe("MLB-SALE-9001");
+    expect(result.items[0]?.orderId).toBe("MLB-ORDER-1001");
+    expect(whereCalls).toHaveLength(2);
+    expect(whereCalls.join("\n")).toContain("coalesce");
+    expect(whereCalls.join("\n")).toContain("packId");
+    expect(whereCalls.join("\n")).toContain("operationId");
+  });
+
   it("exports filtered orders as xlsx rows and restricts export to selected ids", async () => {
     const db = {
       query: {
@@ -4391,7 +4553,7 @@ describe("OrdersService", () => {
       {
         ids: ["order_row_1"],
         provider: "mercadolivre",
-        search: "MLB",
+        search: "SALE-9001",
       },
     );
 

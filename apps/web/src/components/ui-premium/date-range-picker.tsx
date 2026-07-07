@@ -142,9 +142,23 @@ export function DateRangePicker({
         left = window.innerWidth - 450;
       }
 
+      // Height of the calendar menu is 350px
+      const calendarHeight = 350;
+      let top = rect.bottom + 8;
+
+      if (top + calendarHeight > window.innerHeight) {
+        // If it doesn't fit below, check if it fits above
+        if (rect.top - 8 - calendarHeight > 0) {
+          top = rect.top - 8 - calendarHeight;
+        } else {
+          // If it fits neither, position it relative to viewport bottom with some padding
+          top = Math.max(10, window.innerHeight - calendarHeight - 10);
+        }
+      }
+
       setPosition({
         left,
-        top: rect.bottom + 8,
+        top,
         width: rect.width,
       });
     }
