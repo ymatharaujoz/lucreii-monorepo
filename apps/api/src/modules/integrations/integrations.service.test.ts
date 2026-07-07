@@ -1073,6 +1073,100 @@ describe("IntegrationsService", () => {
     expect(db.update).not.toHaveBeenCalled();
   });
 
+  it("treats MLBU synced products as variations when metadata carries family_id grouping", async () => {
+    const { db, service } = createService();
+    db.update = createUpdateMock();
+
+    db.select
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            orderBy: vi.fn().mockResolvedValue([
+              {
+                createdAt: new Date("2026-05-01T10:00:00.000Z"),
+                externalProductId: "840907750180115",
+                id: "external_family",
+                linkedProductId: null,
+                marketplaceConnectionId: "conn_1",
+                metadata: {
+                  itemId: "840907750180115",
+                  source: "mercadolivre-user-product-family",
+                  variationId: null,
+                },
+                organizationId: "org_1",
+                companyId: "company_1",
+                provider: "mercadolivre",
+                reviewStatus: "unreviewed",
+                sku: "828011Preta37",
+                title: "Bota Feminina Via Uno",
+                updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+              },
+              {
+                createdAt: new Date("2026-05-01T10:00:00.000Z"),
+                externalProductId: "MLBU3845002628",
+                id: "external_child",
+                linkedProductId: null,
+                marketplaceConnectionId: "conn_1",
+                metadata: {
+                  itemId: "840907750180115",
+                  source: "mercadolivre-user-product",
+                  userProductId: "MLBU3845002628",
+                  variationId: "MLBU3845002628",
+                },
+                organizationId: "org_1",
+                companyId: "company_1",
+                provider: "mercadolivre",
+                reviewStatus: "unreviewed",
+                sku: "828011Preta37",
+                title: "Cor: Preto, Tamanho: 37 BR",
+                updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+              },
+            ]),
+          }),
+        }),
+      })
+      .mockReturnValueOnce({
+        from: vi.fn().mockReturnValue({
+          leftJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+    db.query.products.findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-04-29T10:00:00.000Z"),
+        id: "product_child",
+        isActive: true,
+        name: "Bota Feminina Preta 37",
+        organizationId: "org_1",
+        sellingPrice: "189.90",
+        sku: "828011Preta37",
+        updatedAt: new Date("2026-04-29T10:00:00.000Z"),
+      },
+    ]);
+
+    await expect(
+      service.listSyncedProducts("org_1", "company_1", "mercadolivre"),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        externalProductId: "840907750180115",
+        linkedProduct: null,
+        reviewStatus: "unreviewed",
+        suggestedMatches: [],
+      }),
+      expect.objectContaining({
+        externalProductId: "MLBU3845002628",
+        linkedProduct: expect.objectContaining({
+          id: "product_child",
+          sku: "828011Preta37",
+        }),
+        reviewStatus: "linked_to_existing_product",
+        suggestedMatches: [],
+      }),
+    ]);
+    expect(db.update).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects importing a synced product already linked to an existing catalog item", async () => {
     const { db, service } = createService();
 

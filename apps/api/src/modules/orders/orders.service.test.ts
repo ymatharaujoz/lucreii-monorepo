@@ -2965,6 +2965,105 @@ describe("OrdersService", () => {
     );
   });
 
+  it("returns Mercado Livre MLBU items with parent plus variation display name", async () => {
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.120000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "product_1",
+              name: "Bota Feminina Via Uno",
+              financeDefaults: {
+                packagingCost: "4.00",
+              },
+              images: [],
+              productCosts: [
+                {
+                  amount: "21.50",
+                  createdAt: new Date("2026-06-01T00:00:00.000Z"),
+                  effectiveFrom: new Date("2026-06-01T00:00:00.000Z"),
+                },
+              ],
+            },
+          ]),
+        },
+        externalOrders: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "order_row_1",
+            companyId: "company_123",
+            createdAt: new Date("2026-06-20T12:00:00.000Z"),
+            currency: "BRL",
+            externalOrderId: "ML-1001",
+            metadata: {},
+            orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+            organizationId: "org_123",
+            provider: "mercadolivre",
+            status: "paid",
+            syncRunId: null,
+            updatedAt: new Date("2026-06-20T12:00:00.000Z"),
+            totalAmount: "120.00",
+            items: [
+              {
+                id: "item_1",
+                quantity: 2,
+                totalPrice: "120.00",
+                unitPrice: "60.00",
+                externalProduct: {
+                  id: "ext_prod_child",
+                  linkedProductId: "product_1",
+                  externalProductId: "MLBU3845002628",
+                  linkedProduct: {
+                    id: "product_1",
+                    name: "Bota Feminina Via Uno",
+                  },
+                  metadata: {
+                    itemId: "840907750180115",
+                    source: "mercadolivre-user-product",
+                    userProductId: "MLBU3845002628",
+                    variationId: "MLBU3845002628",
+                  },
+                  provider: "mercadolivre",
+                  sku: "828011Preta37",
+                  title: "Cor: Preto, Tamanho: 37 BR",
+                },
+              },
+            ],
+            fees: [],
+          }),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+
+    await expect(
+      service.getOrderDetails(
+        {
+          organizationId: "org_123",
+          selectedCompanyId: "company_123",
+          userId: "user_123",
+        },
+        "order_row_1",
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({
+            displayName: "Cor: Preto, Tamanho: 37 BR | Bota Feminina Via Uno",
+            productName: "Cor: Preto, Tamanho: 37 BR",
+            sku: "828011Preta37",
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("rates fees proportionally across multiple items in order details", async () => {
     const db = {
       query: {

@@ -820,8 +820,10 @@ export class IntegrationsService {
         : undefined;
 
       if (!matchedProduct) {
-        const skuMatches =
-          productsBySku.get(normalizeSku(catalogProduct.sku) ?? "") ?? [];
+        const catalogSku = normalizeSku(catalogProduct.sku);
+        const skuMatches = catalogSku
+          ? (productsBySku.get(catalogSku) ?? [])
+          : [];
         if (skuMatches.length > 1) {
           result.conflicts.push({
             externalProductId: catalogProduct.externalProductId,
@@ -952,9 +954,10 @@ export class IntegrationsService {
         });
 
         productsById.set(storedProduct.id, storedProduct);
-        productsBySku.set(normalizeSku(storedProduct.sku) ?? "", [
-          storedProduct,
-        ]);
+        const storedSku = normalizeSku(storedProduct.sku);
+        if (storedSku) {
+          productsBySku.set(storedSku, [storedProduct]);
+        }
         externalProductsById.set(catalogProduct.externalProductId, {
           ...externalProduct,
           externalProductId: catalogProduct.externalProductId,
@@ -1108,8 +1111,10 @@ export class IntegrationsService {
         : undefined;
 
       if (!matchedProduct) {
-        const skuMatches =
-          productsBySku.get(normalizeSku(catalogProduct.sku) ?? "") ?? [];
+        const catalogSku = normalizeSku(catalogProduct.sku);
+        const skuMatches = catalogSku
+          ? (productsBySku.get(catalogSku) ?? [])
+          : [];
         if (skuMatches.length > 1) {
           result.conflicts.push({
             externalProductId: catalogProduct.externalProductId,
@@ -1246,9 +1251,10 @@ export class IntegrationsService {
           normalizeSku(matchedProduct?.sku) !== normalizeSku(storedProduct.sku);
 
         productsById.set(storedProduct.id, storedProduct);
-        productsBySku.set(normalizeSku(storedProduct.sku) ?? "", [
-          storedProduct,
-        ]);
+        const storedSku = normalizeSku(storedProduct.sku);
+        if (storedSku) {
+          productsBySku.set(storedSku, [storedProduct]);
+        }
         externalProductsById.set(catalogProduct.externalProductId, {
           ...externalProduct,
           externalProductId: catalogProduct.externalProductId,

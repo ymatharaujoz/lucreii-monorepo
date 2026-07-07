@@ -24,7 +24,7 @@ export type IntegrationConnectionRecord = {
 export type MarketplaceCatalogImportIssue = {
   externalProductId: string;
   message: string;
-  sku: string;
+  sku: string | null;
 };
 
 export type MarketplaceCatalogImportResult = {

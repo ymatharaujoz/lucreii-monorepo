@@ -49,10 +49,15 @@ type MercadoLivreItemAttribute = {
   id?: string;
   name?: string;
   value_name?: string | null;
+  values?: Array<{
+    name?: string | null;
+  }>;
 };
 
 type MercadoLivreItemResponse = {
   attributes?: MercadoLivreItemAttribute[];
+  catalog_listing?: boolean;
+  catalog_product_id?: string | number | null;
   id?: string;
   pictures?: MercadoLivreItemPicture[];
   price?: number;
@@ -60,7 +65,24 @@ type MercadoLivreItemResponse = {
   seller_sku?: string | null;
   status?: string;
   title?: string;
+  user_product_id?: string | number | null;
   variations?: MercadoLivreItemVariation[];
+};
+
+type MercadoLivreUserProductResponse = {
+  attributes?: MercadoLivreItemAttribute[];
+  family_id?: string | number;
+  family_name?: string;
+  id?: string | number;
+  pictures?: MercadoLivreItemPicture[];
+  seller_sku?: string | null;
+  siblings?: Array<{
+    attributes?: MercadoLivreItemAttribute[];
+    id?: string | number;
+    pictures?: MercadoLivreItemPicture[];
+    seller_sku?: string | null;
+  }>;
+  status?: string;
 };
 
 type MercadoLivreVariationDetailResponse = {
@@ -201,6 +223,7 @@ type MercadoLivreOrderItemResponse = {
   item?: {
     category_id?: string;
     id?: number | string;
+    seller_custom_field?: string | null;
     variation_id?: number | string;
     seller_sku?: string;
     title?: string;
@@ -901,6 +924,26 @@ function deriveMercadoLivreSiteId(itemId: number | string | null | undefined) {
   return /^[A-Z]{3}$/.test(prefix) ? prefix : null;
 }
 
+function normalizeMercadoLivreManualSku(value: string | null | undefined) {
+  const sku = value?.trim();
+  if (!sku) {
+    return null;
+  }
+
+  const normalized = sku.toUpperCase();
+  const isInternalSku =
+    /^ML-\d+(?:-MLBU\d+)?$/.test(normalized) ||
+    /^ML-(?:MLB|MLBU)[A-Z0-9:-]+$/.test(normalized) ||
+    /^(?:MLB|MLBU)\d+$/.test(normalized);
+
+  return isInternalSku ? null : sku;
+}
+
+function normalizeMercadoLivreSku(value: string | null | undefined) {
+  const sku = value?.trim();
+  return sku ? sku : null;
+}
+
 function readMercadoLivreAttributeSku(
   attributes: MercadoLivreItemAttribute[] | undefined,
 ) {
@@ -912,7 +955,10 @@ function readMercadoLivreAttributeSku(
       continue;
     }
 
-    const value = attribute.value_name?.trim();
+    const value =
+      attribute.value_name?.trim() ??
+      attribute.values?.[0]?.name?.trim() ??
+      null;
     if (value) {
       return value;
     }
@@ -940,6 +986,43 @@ function buildMercadoLivreVariationLabel(
   return labels.length > 0 ? labels.join(", ") : null;
 }
 
+function readMercadoLivreAttributeValue(
+  attributes: MercadoLivreItemAttribute[] | undefined,
+  targetId: string,
+) {
+  const normalizedTargetId = targetId.trim().toUpperCase();
+
+  for (const attribute of attributes ?? []) {
+    if (attribute.id?.trim().toUpperCase() !== normalizedTargetId) {
+      continue;
+    }
+
+    const value = normalizeMercadoLivreManualSku(
+      attribute.value_name?.trim() ??
+      attribute.values?.[0]?.name?.trim() ??
+      null,
+    );
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function buildMercadoLivreUserProductLabel(
+  attributes: MercadoLivreItemAttribute[] | undefined,
+) {
+  const color = readMercadoLivreAttributeValue(attributes, "COLOR");
+  const size = readMercadoLivreAttributeValue(attributes, "SIZE");
+  const labels = [
+    color ? `Cor: ${color}` : null,
+    size ? `Tamanho: ${size}` : null,
+  ].filter((value): value is string => value !== null);
+
+  return labels.length > 0 ? labels.join(", ") : null;
+}
+
 function toOptionalString(value: number | string | null | undefined) {
   if (value === null || value === undefined) {
     return null;
@@ -947,6 +1030,43 @@ function toOptionalString(value: number | string | null | undefined) {
 
   const normalized = String(value).trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeMercadoLivrePictureUrls(
+  pictures: MercadoLivreItemPicture[] | undefined,
+) {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  for (const picture of pictures ?? []) {
+    const url = picture.secure_url ?? picture.url ?? "";
+    if (!url.startsWith("https://") || seen.has(url)) {
+      continue;
+    }
+
+    seen.add(url);
+    urls.push(url);
+  }
+
+  return urls;
+}
+
+function dedupeCatalogProductsByExternalProductId(
+  products: IntegrationCatalogProduct[],
+) {
+  const deduped: IntegrationCatalogProduct[] = [];
+  const seen = new Set<string>();
+
+  for (const product of products) {
+    if (seen.has(product.externalProductId)) {
+      continue;
+    }
+
+    seen.add(product.externalProductId);
+    deduped.push(product);
+  }
+
+  return deduped;
 }
 
 function toTimestamp(value: string | null | undefined) {
@@ -1272,45 +1392,72 @@ export class MercadoLivreProvider implements IntegrationProvider {
       });
 
       for (const item of itemBatch) {
-        const variationDetailsById = await this.fetchVariationDetails({
-          accessToken,
-          item,
-        });
-        products.push(...this.normalizeCatalogItem(item, variationDetailsById));
+        products.push(
+          ...(await this.normalizeCatalogProductsFromItem({
+            accessToken,
+            item,
+          })),
+        );
       }
     }
 
-    return products;
+    return dedupeCatalogProductsByExternalProductId(products);
   }
 
   async importCatalogByExternalProductId(
     input: IntegrationCatalogSingleItemImportContext,
   ): Promise<IntegrationCatalogProduct[]> {
     const accessToken = input.connection.accessToken;
-    const itemId = input.externalProductId.split(":")[0]?.trim() ?? "";
+    const accountId = input.connection.externalAccountId;
+    const externalProductId = input.externalProductId.trim();
 
-    if (!accessToken || !itemId) {
+    if (!accessToken || !externalProductId) {
       throw new IntegrationProviderError(
         "Mercado Livre connection is missing the account token required for catalog import.",
         "callback_invalid",
       );
     }
 
-    const [item] = await this.fetchCatalogItems({
+    if (
+      externalProductId.startsWith("MLB") &&
+      !externalProductId.startsWith("MLBU")
+    ) {
+      const [item] = await this.fetchCatalogItems({
+        accessToken,
+        itemIds: [externalProductId],
+      });
+
+      if (!item) {
+        return [];
+      }
+
+      return this.normalizeCatalogProductsFromItem({
+        accessToken,
+        item,
+      });
+    }
+
+    if (!accountId) {
+      throw new IntegrationProviderError(
+        "Mercado Livre connection is missing the seller account required for family catalog import.",
+        "callback_invalid",
+      );
+    }
+
+    const resolvedItem = await this.resolveUserProductBackedCatalogItem({
       accessToken,
-      itemIds: [itemId],
+      accountId,
+      externalProductId,
     });
 
-    if (!item) {
+    if (!resolvedItem) {
       return [];
     }
 
-    const variationDetailsById = await this.fetchVariationDetails({
-      accessToken,
-      item,
+    return this.normalizeMercadoLivreUserProductFamily({
+      item: resolvedItem.item,
+      userProduct: resolvedItem.userProduct,
     });
-
-    return this.normalizeCatalogItem(item, variationDetailsById);
   }
 
   async syncOrders(
@@ -1579,6 +1726,210 @@ export class MercadoLivreProvider implements IntegrationProvider {
     );
   }
 
+  private readMercadoLivreItemUserProductId(item: MercadoLivreItemResponse) {
+    const candidates = [item.user_product_id, item.catalog_product_id];
+
+    for (const candidate of candidates) {
+      const normalized = toOptionalString(candidate);
+      if (normalized?.startsWith("MLBU")) {
+        return normalized;
+      }
+    }
+
+    return null;
+  }
+
+  private async fetchUserProduct(input: {
+    accessToken: string;
+    userProductId: string;
+  }) {
+    const response = await this.fetchWithRetry(
+      `https://api.mercadolibre.com/user-products/${encodeURIComponent(input.userProductId)}`,
+      {
+        headers: { Authorization: `Bearer ${input.accessToken}` },
+      },
+    );
+    const payload = (await parseProviderResponse(response)) as
+      | MercadoLivreUserProductResponse
+      | string;
+
+    if (!response.ok || typeof payload === "string" || !payload.id) {
+      throw new IntegrationProviderError(
+        `Mercado Livre user product lookup failed.${typeof payload === "string" ? ` ${payload}` : ""}`,
+        "remote_request_failed",
+      );
+    }
+
+    return payload;
+  }
+
+  private async resolveUserProductBackedCatalogItem(input: {
+    accessToken: string;
+    accountId: string;
+    externalProductId: string;
+  }) {
+    const targetUserProductId = input.externalProductId.startsWith("MLBU")
+      ? input.externalProductId
+      : null;
+    const targetFamilyId =
+      targetUserProductId === null ? input.externalProductId : null;
+    const itemIds = await this.fetchCatalogItemIds({
+      accessToken: input.accessToken,
+      accountId: input.accountId,
+    });
+
+    for (let offset = 0; offset < itemIds.length; offset += 20) {
+      const itemBatch = await this.fetchCatalogItems({
+        accessToken: input.accessToken,
+        itemIds: itemIds.slice(offset, offset + 20),
+      });
+
+      for (const item of itemBatch) {
+        const userProductId = this.readMercadoLivreItemUserProductId(item);
+        if (!userProductId) {
+          continue;
+        }
+
+        if (targetUserProductId && userProductId !== targetUserProductId) {
+          continue;
+        }
+
+        const userProduct = await this.fetchUserProduct({
+          accessToken: input.accessToken,
+          userProductId,
+        });
+        const familyId = toOptionalString(userProduct.family_id);
+        const resolvedUserProductId = toOptionalString(userProduct.id);
+
+        if (
+          (targetUserProductId && resolvedUserProductId === targetUserProductId) ||
+          (targetFamilyId && familyId === targetFamilyId)
+        ) {
+          return {
+            item,
+            userProduct,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private async normalizeCatalogProductsFromItem(input: {
+    accessToken: string;
+    item: MercadoLivreItemResponse;
+  }) {
+    const userProductId = this.readMercadoLivreItemUserProductId(input.item);
+    if (userProductId) {
+      const userProduct = await this.fetchUserProduct({
+        accessToken: input.accessToken,
+        userProductId,
+      });
+      return this.normalizeMercadoLivreUserProductFamily({
+        item: input.item,
+        userProduct,
+      });
+    }
+
+    const variationDetailsById = await this.fetchVariationDetails({
+      accessToken: input.accessToken,
+      item: input.item,
+    });
+
+    return this.normalizeCatalogItem(input.item, variationDetailsById);
+  }
+
+  private normalizeMercadoLivreUserProductFamily(input: {
+    item: MercadoLivreItemResponse | null;
+    userProduct: MercadoLivreUserProductResponse;
+  }): IntegrationCatalogProduct[] {
+    const familyId =
+      toOptionalString(input.userProduct.family_id) ??
+      toOptionalString(input.userProduct.id);
+    if (!familyId) {
+      return [];
+    }
+
+    const familyName =
+      input.userProduct.family_name?.trim() ||
+      input.item?.title?.trim() ||
+      `Produto Mercado Livre ${familyId}`;
+    const legacyItemId = toOptionalString(input.item?.id);
+    const isActive =
+      input.item?.status === "active" || input.userProduct.status === "active";
+    const images = normalizeMercadoLivrePictureUrls([
+      ...(input.userProduct.pictures ?? []),
+      ...(input.item?.pictures ?? []),
+    ]);
+    const sellingPrice = toDecimalString(input.item?.price);
+    const siblings = input.userProduct.siblings?.length
+      ? input.userProduct.siblings
+      : [
+          {
+            attributes: input.userProduct.attributes,
+            id: input.userProduct.id,
+            pictures: input.userProduct.pictures,
+            seller_sku: input.userProduct.seller_sku,
+          },
+        ];
+    const products: IntegrationCatalogProduct[] = [
+      {
+        externalProductId: familyId,
+        images,
+        isActive,
+        metadata: {
+          familyName,
+          ...(legacyItemId ? { legacyItemId } : {}),
+          itemId: familyId,
+          source: "mercadolivre-user-product-family",
+          variationId: null,
+        },
+        sellingPrice,
+        sku: `ML-${familyId}`,
+        title: familyName,
+      },
+    ];
+    const seenUserProductIds = new Set<string>();
+
+    for (const sibling of siblings) {
+      const userProductId = toOptionalString(sibling.id);
+      if (!userProductId || seenUserProductIds.has(userProductId)) {
+        continue;
+      }
+
+      seenUserProductIds.add(userProductId);
+      const attributes = sibling.attributes ?? [];
+      const color = readMercadoLivreAttributeValue(attributes, "COLOR");
+      const size = readMercadoLivreAttributeValue(attributes, "SIZE");
+      const title = buildMercadoLivreUserProductLabel(attributes) ?? userProductId;
+      const siblingImages = normalizeMercadoLivrePictureUrls(sibling.pictures);
+
+      products.push({
+        externalProductId: userProductId,
+        images: siblingImages.length > 0 ? siblingImages : images,
+        isActive,
+        metadata: {
+          ...(color ? { color } : {}),
+          itemId: familyId,
+          ...(legacyItemId ? { legacyItemId } : {}),
+          ...(size ? { size } : {}),
+          source: "mercadolivre-user-product",
+          userProductId,
+          variationId: userProductId,
+        },
+        sellingPrice,
+        sku:
+          readMercadoLivreAttributeSku(attributes) ??
+          normalizeMercadoLivreSku(sibling.seller_sku) ??
+          `ML-${userProductId}`,
+        title,
+      });
+    }
+
+    return products;
+  }
+
   private resolveCatalogItemSku(
     item: MercadoLivreItemResponse,
     variationId: string | null,
@@ -1608,6 +1959,52 @@ export class MercadoLivreProvider implements IntegrationProvider {
     });
   }
 
+  private resolveUserProductOrderSku(userProduct: MercadoLivreUserProductResponse) {
+    const sellerSkuAttribute = (userProduct.attributes ?? []).find(
+      (attribute) => attribute.id?.trim().toUpperCase() === "SELLER_SKU",
+    );
+
+    return (
+      normalizeMercadoLivreManualSku(sellerSkuAttribute?.values?.[0]?.name) ??
+      readMercadoLivreAttributeSku(userProduct.attributes)
+    );
+  }
+
+  private async resolveOrderItemCatalogSku(input: {
+    accessToken: string;
+    item: MercadoLivreItemResponse;
+    variationId: string | null;
+  }) {
+    const userProductId = this.readMercadoLivreItemUserProductId(input.item);
+    if (userProductId) {
+      const userProduct = await this.fetchUserProduct({
+        accessToken: input.accessToken,
+        userProductId,
+      });
+      return this.resolveUserProductOrderSku(userProduct);
+    }
+
+    if (input.variationId) {
+      const variation = (input.item.variations ?? []).find(
+        (entry) => toOptionalString(entry.id) === input.variationId,
+      );
+
+      return (
+        normalizeMercadoLivreManualSku(variation?.seller_custom_field) ??
+        normalizeMercadoLivreManualSku(variation?.seller_sku) ??
+        normalizeMercadoLivreSku(variation?.seller_sku) ??
+        (input.item.id ? `ML-${input.item.id}-${input.variationId}` : null)
+      );
+    }
+
+    return (
+      normalizeMercadoLivreManualSku(input.item.seller_custom_field) ??
+      normalizeMercadoLivreManualSku(input.item.seller_sku) ??
+      normalizeMercadoLivreSku(input.item.seller_sku) ??
+      (input.item.id ? `ML-${input.item.id}` : null)
+    );
+  }
+
   private async resolveMissingOrderSkus(input: {
     accessToken: string;
     orderItems: MercadoLivreOrderItemResponse[];
@@ -1622,7 +2019,11 @@ export class MercadoLivreProvider implements IntegrationProvider {
           return itemId && variationId ? `${itemId}:${variationId}` : itemId;
         })(),
         itemId: toOptionalString(item.item?.id),
-        sku: item.item?.seller_sku?.trim() || null,
+        sku:
+          normalizeMercadoLivreManualSku(item.item?.seller_sku) ||
+          normalizeMercadoLivreManualSku(item.item?.seller_custom_field) ||
+          normalizeMercadoLivreSku(item.item?.seller_sku) ||
+          null,
         variationId: toOptionalString(
           item.item?.variation_id ?? item.variation_id,
         ),
@@ -1663,10 +2064,15 @@ export class MercadoLivreProvider implements IntegrationProvider {
         continue;
       }
 
-      resolvedSkus.set(
-        item.externalProductId,
-        this.resolveCatalogItemSku(catalogItem, item.variationId),
-      );
+      const resolvedSku = await this.resolveOrderItemCatalogSku({
+        accessToken: input.accessToken,
+        item: catalogItem,
+        variationId: item.variationId,
+      });
+
+      if (resolvedSku) {
+        resolvedSkus.set(item.externalProductId, resolvedSku);
+      }
     }
 
     return resolvedSkus;
@@ -1763,9 +2169,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
     sellerSku?: string | null;
   }) {
     return (
-      input.sellerSku?.trim() ??
+      normalizeMercadoLivreManualSku(input.sellerSku) ??
       readMercadoLivreAttributeSku(input.attributes) ??
-      input.sellerCustomField?.trim() ??
+      normalizeMercadoLivreManualSku(input.sellerCustomField) ??
+      normalizeMercadoLivreSku(input.sellerSku) ??
       input.fallbackSku
     );
   }
@@ -1778,8 +2185,9 @@ export class MercadoLivreProvider implements IntegrationProvider {
   }) {
     return (
       readMercadoLivreAttributeSku(input.attributes) ??
-      input.sellerSku?.trim() ??
-      input.sellerCustomField?.trim() ??
+      normalizeMercadoLivreManualSku(input.sellerSku) ??
+      normalizeMercadoLivreManualSku(input.sellerCustomField) ??
+      normalizeMercadoLivreSku(input.sellerSku) ??
       input.fallbackSku
     );
   }
@@ -1969,7 +2377,9 @@ export class MercadoLivreProvider implements IntegrationProvider {
               ? `ML-${itemId}`
               : null;
         const sku =
-          item.item?.seller_sku?.trim() ||
+          normalizeMercadoLivreManualSku(item.item?.seller_sku) ||
+          normalizeMercadoLivreManualSku(item.item?.seller_custom_field) ||
+          normalizeMercadoLivreSku(item.item?.seller_sku) ||
           (externalProductId
             ? resolvedSkuByExternalProductId.get(externalProductId)
             : null) ||
