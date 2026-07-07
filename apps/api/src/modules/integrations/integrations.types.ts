@@ -46,7 +46,7 @@ export type IntegrationCatalogProduct = {
   isActive: boolean;
   metadata: Record<string, unknown>;
   sellingPrice: string;
-  sku: string;
+  sku: string | null;
   title: string;
 };
 

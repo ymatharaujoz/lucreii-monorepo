@@ -627,6 +627,95 @@ describe("FinanceService", () => {
     ]);
   });
 
+  it("resolves MLBU variation profitability names as parent plus variation", async () => {
+    const { db, service } = createFinanceServiceFixture();
+    const externalProductsSelectWhere = vi.fn().mockResolvedValue([
+      {
+        externalProductId: "840907750180115",
+        id: "external_parent",
+        linkedProductId: null,
+        metadata: {
+          itemId: "840907750180115",
+          source: "mercadolivre-user-product-family",
+          variationId: null,
+        },
+        provider: "mercadolivre",
+        sku: "ML-840907750180115",
+        title: "Bota Feminina Via Uno",
+      },
+      {
+        externalProductId: "MLBU3845002628",
+        id: "external_child",
+        linkedProductId: "product_child",
+        metadata: {
+          itemId: "840907750180115",
+          source: "mercadolivre-user-product",
+          userProductId: "MLBU3845002628",
+          variationId: "MLBU3845002628",
+        },
+        provider: "mercadolivre",
+        sku: "828011Preta37",
+        title: "Cor: Preto, Tamanho: 37 BR",
+      },
+    ]);
+    const externalProductsSelectFrom = vi.fn(() => ({
+      where: externalProductsSelectWhere,
+    }));
+    db.select.mockReturnValue({
+      from: externalProductsSelectFrom,
+    });
+    db.query.products.findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-04-28T10:00:00.000Z"),
+        id: "product_child",
+        images: [],
+        isActive: true,
+        name: "Cor: Preto, Tamanho: 37 BR",
+        organizationId: "org_123",
+        productCosts: [
+          {
+            amount: "10.00",
+            createdAt: new Date("2026-04-20T10:00:00.000Z"),
+            effectiveFrom: "2026-04-20",
+          },
+        ],
+        sellingPrice: "30.00",
+        sku: "828011Preta37",
+      },
+    ]);
+    db.query.externalOrders.findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-04-28T10:00:00.000Z"),
+        fees: [],
+        id: "order_1",
+        items: [
+          {
+            externalProductId: "external_child",
+            id: "item_1",
+            quantity: 1,
+            totalPrice: "30.00",
+            unitPrice: "30.00",
+          },
+        ],
+        orderedAt: new Date("2026-04-28T10:00:00.000Z"),
+        provider: "mercadolivre",
+        totalAmount: "30.00",
+      },
+    ]);
+    db.query.adCosts.findMany.mockResolvedValue([]);
+    db.query.manualExpenses.findMany.mockResolvedValue([]);
+
+    const readModel = await service.buildDashboardReadModel("org_123", "company_123");
+
+    expect(readModel.productProfitability).toEqual([
+      expect.objectContaining({
+        productId: "product_child",
+        productName: "Bota Feminina Via Uno | Cor: Preto, Tamanho: 37 BR",
+        sku: "828011Preta37",
+      }),
+    ]);
+  });
+
   it("re-materializes daily and product metrics deterministically for the organization", async () => {
     const { dailyInsertValues, db, deleteWhere, productInsertValues, service, tx } =
       createFinanceServiceFixture();

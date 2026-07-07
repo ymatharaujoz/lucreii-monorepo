@@ -667,7 +667,7 @@ describe("MercadoLivreProvider", () => {
     ]);
   });
 
-  it("enriches missing order item sku from MELI item details before falling back to ML id", async () => {
+  it("enriches missing order item sku from legacy MELI variation seller_custom_field before falling back to ML id", async () => {
     const provider = createProvider();
     const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
       const url = String(input);
@@ -866,13 +866,425 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.items).toEqual([
       expect.objectContaining({
         externalProductId: "MLB123:456",
-        sku: "CALCAPRETA39",
+        sku: "LEGACY-456",
       }),
     ]);
     expect(result.products).toEqual([
       expect.objectContaining({
         externalProductId: "MLB123:456",
-        sku: "CALCAPRETA39",
+        sku: "LEGACY-456",
+      }),
+    ]);
+  });
+
+  it("prefers seller_custom_field from order item when seller_sku is missing", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+
+      if (url.includes("/orders/search")) {
+        if (url.includes("offset=50")) {
+          return Promise.resolve(
+            createJsonResponse({
+              paging: { limit: 50, offset: 50, total: 1 },
+              results: [],
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          createJsonResponse({
+            paging: { limit: 50, offset: 0, total: 1 },
+            results: [
+              {
+                currency_id: "BRL",
+                date_closed: "2026-05-14T10:00:00.000-03:00",
+                id: 123,
+                order_items: [
+                  {
+                    item: {
+                      id: "MLB123",
+                      seller_custom_field: "ORDER-LEGACY-123",
+                      seller_sku: null,
+                      title: "Produto",
+                    },
+                    quantity: 1,
+                    sale_fee: 10.54,
+                    unit_price: 29.9,
+                  },
+                ],
+                payments: [{ fee_amount: 3, shipping_cost: 7 }],
+                shipping: { id: 999 },
+                total_amount: 29.9,
+              },
+            ],
+          }),
+        );
+      }
+
+      if (url.includes("/orders/123")) {
+        return Promise.resolve(
+          createJsonResponse({
+            currency_id: "BRL",
+            date_closed: "2026-05-14T10:00:00.000-03:00",
+            id: 123,
+            order_items: [
+              {
+                item: {
+                  id: "MLB123",
+                  seller_custom_field: "ORDER-LEGACY-123",
+                  seller_sku: null,
+                  title: "Produto",
+                },
+                quantity: 1,
+                sale_fee: 10.54,
+                unit_price: 29.9,
+              },
+            ],
+            payments: [{ fee_amount: 3, shipping_cost: 7 }],
+            shipping: { id: 999 },
+            total_amount: 29.9,
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/periods")) {
+        return Promise.resolve(
+          createJsonResponse({
+            limit: 1000,
+            offset: 0,
+            results: [],
+            total: 0,
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        return Promise.resolve(createJsonResponse({ details: [] }));
+      }
+
+      if (url.includes("/shipments/999/costs")) {
+        return Promise.resolve(
+          createJsonResponse({
+            senders: [{ cost: 9, user_id: 123456 }],
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      organizationId: "org_1",
+    });
+
+    expect(result.orders[0]?.items).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB123",
+        sku: "ORDER-LEGACY-123",
+      }),
+    ]);
+    expect(result.products).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB123",
+        sku: "ORDER-LEGACY-123",
+      }),
+    ]);
+  });
+
+  it("falls back to legacy MELI item seller_custom_field when item has no variations", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+
+      if (url.includes("/orders/search")) {
+        if (url.includes("offset=50")) {
+          return Promise.resolve(
+            createJsonResponse({
+              paging: { limit: 50, offset: 50, total: 1 },
+              results: [],
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          createJsonResponse({
+            paging: { limit: 50, offset: 0, total: 1 },
+            results: [
+              {
+                currency_id: "BRL",
+                date_closed: "2026-05-14T10:00:00.000-03:00",
+                id: 123,
+                order_items: [
+                  {
+                    item: {
+                      id: "MLB123",
+                      seller_custom_field: null,
+                      seller_sku: null,
+                      title: "Produto",
+                    },
+                    quantity: 1,
+                    sale_fee: 10.54,
+                    unit_price: 29.9,
+                  },
+                ],
+                payments: [{ fee_amount: 3, shipping_cost: 7 }],
+                shipping: { id: 999 },
+                total_amount: 29.9,
+              },
+            ],
+          }),
+        );
+      }
+
+      if (url.includes("/orders/123")) {
+        return Promise.resolve(
+          createJsonResponse({
+            currency_id: "BRL",
+            date_closed: "2026-05-14T10:00:00.000-03:00",
+            id: 123,
+            order_items: [
+              {
+                item: {
+                  id: "MLB123",
+                  seller_custom_field: null,
+                  seller_sku: null,
+                  title: "Produto",
+                },
+                quantity: 1,
+                sale_fee: 10.54,
+                unit_price: 29.9,
+              },
+            ],
+            payments: [{ fee_amount: 3, shipping_cost: 7 }],
+            shipping: { id: 999 },
+            total_amount: 29.9,
+          }),
+        );
+      }
+
+      if (url.startsWith("https://api.mercadolibre.com/items?ids=MLB123")) {
+        return Promise.resolve(
+          createJsonResponse([
+            {
+              code: 200,
+              body: {
+                attributes: [],
+                id: "MLB123",
+                seller_custom_field: "ITEM-LEGACY-123",
+                seller_sku: "ITEM-SKU-123",
+                title: "Produto",
+                variations: [],
+              },
+            },
+          ]),
+        );
+      }
+
+      if (url.includes("/billing/integration/periods")) {
+        return Promise.resolve(
+          createJsonResponse({
+            limit: 1000,
+            offset: 0,
+            results: [],
+            total: 0,
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        return Promise.resolve(createJsonResponse({ details: [] }));
+      }
+
+      if (url.includes("/shipments/999/costs")) {
+        return Promise.resolve(
+          createJsonResponse({
+            senders: [{ cost: 9, user_id: 123456 }],
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      organizationId: "org_1",
+    });
+
+    expect(result.orders[0]?.items).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB123",
+        sku: "ITEM-LEGACY-123",
+      }),
+    ]);
+    expect(result.products).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB123",
+        sku: "ITEM-LEGACY-123",
+      }),
+    ]);
+  });
+
+  it("falls back to user product SELLER_SKU attribute when order item SKU fields are missing", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+
+      if (url.includes("/orders/search")) {
+        if (url.includes("offset=50")) {
+          return Promise.resolve(
+            createJsonResponse({
+              paging: { limit: 50, offset: 50, total: 1 },
+              results: [],
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          createJsonResponse({
+            paging: { limit: 50, offset: 0, total: 1 },
+            results: [
+              {
+                currency_id: "BRL",
+                date_closed: "2026-05-14T10:00:00.000-03:00",
+                id: 123,
+                order_items: [
+                  {
+                    item: {
+                      id: "MLB123",
+                      seller_custom_field: null,
+                      seller_sku: null,
+                      title: "Produto novo",
+                    },
+                    quantity: 1,
+                    sale_fee: 10.54,
+                    unit_price: 29.9,
+                  },
+                ],
+                payments: [{ fee_amount: 3, shipping_cost: 7 }],
+                shipping: { id: 999 },
+                total_amount: 29.9,
+              },
+            ],
+          }),
+        );
+      }
+
+      if (url.includes("/orders/123")) {
+        return Promise.resolve(
+          createJsonResponse({
+            currency_id: "BRL",
+            date_closed: "2026-05-14T10:00:00.000-03:00",
+            id: 123,
+            order_items: [
+              {
+                item: {
+                  id: "MLB123",
+                  seller_custom_field: null,
+                  seller_sku: null,
+                  title: "Produto novo",
+                },
+                quantity: 1,
+                sale_fee: 10.54,
+                unit_price: 29.9,
+              },
+            ],
+            payments: [{ fee_amount: 3, shipping_cost: 7 }],
+            shipping: { id: 999 },
+            total_amount: 29.9,
+          }),
+        );
+      }
+
+      if (url.startsWith("https://api.mercadolibre.com/items?ids=MLB123")) {
+        return Promise.resolve(
+          createJsonResponse([
+            {
+              code: 200,
+              body: {
+                catalog_listing: true,
+                id: "MLB123",
+                seller_custom_field: null,
+                seller_sku: null,
+                title: "Produto novo",
+                user_product_id: "MLBU123",
+                variations: [],
+              },
+            },
+          ]),
+        );
+      }
+
+      if (url === "https://api.mercadolibre.com/user-products/MLBU123") {
+        return Promise.resolve(
+          createJsonResponse({
+            attributes: [
+              {
+                id: "SELLER_SKU",
+                values: [{ name: "UP-SELLER-SKU-123" }],
+              },
+            ],
+            family_id: "840907750180115",
+            id: "MLBU123",
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/periods")) {
+        return Promise.resolve(
+          createJsonResponse({
+            limit: 1000,
+            offset: 0,
+            results: [],
+            total: 0,
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        return Promise.resolve(createJsonResponse({ details: [] }));
+      }
+
+      if (url.includes("/shipments/999/costs")) {
+        return Promise.resolve(
+          createJsonResponse({
+            senders: [{ cost: 9, user_id: 123456 }],
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      organizationId: "org_1",
+    });
+
+    expect(
+      fetchMock.mock.calls.map((call) => String(call[0])),
+    ).toContain("https://api.mercadolibre.com/user-products/MLBU123");
+    expect(result.orders[0]?.items).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB123",
+        sku: "UP-SELLER-SKU-123",
+      }),
+    ]);
+    expect(result.products).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB123",
+        sku: "UP-SELLER-SKU-123",
       }),
     ]);
   });
@@ -4036,6 +4448,115 @@ describe("MercadoLivreProvider", () => {
     ]);
   });
 
+  it("falls back to Mercado Livre generated SKU when manual SKU is missing", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn((input: string | URL) => {
+      const url = String(input);
+
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=active") &&
+        !url.includes("scroll_id=")
+      ) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: ["MLBPAI1"],
+            scroll_id: "active-next",
+          }),
+        );
+      }
+
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=active") &&
+        url.includes("scroll_id=active-next")
+      ) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [],
+            scroll_id: "active-next",
+          }),
+        );
+      }
+
+      if (url.includes("/users/seller-1/items/search?") && url.includes("status=paused")) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [],
+            scroll_id: "paused-next",
+          }),
+        );
+      }
+
+      if (url === "https://api.mercadolibre.com/items?ids=MLBPAI1") {
+        return Promise.resolve(
+          createJsonResponse([
+            {
+              code: 200,
+              body: {
+                attributes: [],
+                id: "MLBPAI1",
+                pictures: [],
+                price: 39.9,
+                seller_custom_field: null,
+                seller_sku: "ML-4981879561056207",
+                status: "active",
+                title: "Produto Pai",
+                variations: [
+                  {
+                    attributes: [],
+                    id: 101,
+                    price: 39.9,
+                    seller_custom_field: null,
+                    seller_sku: "ML-4981879561056207-MLBU3945398229",
+                    attribute_combinations: [
+                      { name: "Cor", value_name: "Preto" },
+                    ],
+                  },
+                ],
+              },
+            },
+          ]),
+        );
+      }
+
+      if (url === "https://api.mercadolibre.com/items/MLBPAI1/variations/101") {
+        return Promise.resolve(
+          createJsonResponse({
+            attributes: [],
+            id: 101,
+            price: 39.9,
+            seller_custom_field: null,
+            seller_sku: "ML-4981879561056207-MLBU3945398229",
+            attribute_combinations: [{ name: "Cor", value_name: "Preto" }],
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.importCatalog({
+      connection: {
+        accessToken: "access-token",
+        externalAccountId: "seller-1",
+      } as never,
+      organizationId: "org-1",
+    });
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLBPAI1",
+        sku: "ML-4981879561056207",
+      }),
+      expect.objectContaining({
+        externalProductId: "MLBPAI1:101",
+        sku: "ML-4981879561056207-MLBU3945398229",
+      }),
+    ]);
+  });
+
   it("imports active and paused listings, expanding variations with stable SKUs and pictures", async () => {
     const provider = new MercadoLivreProvider({
       API_PUBLIC_BASE_URL: "http://localhost:4000",
@@ -4189,6 +4710,34 @@ describe("MercadoLivreProvider", () => {
           ]),
           { status: 200, headers: { "content-type": "application/json" } },
         ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          id: 101,
+          price: 64.9,
+          seller_custom_field: "CAM-RED-M",
+          attributes: [
+            {
+              id: "SELLER_SKU",
+              value_name: "SKU-001-RED-M",
+            },
+          ],
+          picture_ids: ["PIC-RED"],
+          attribute_combinations: [
+            { name: "Cor", value_name: "Vermelho" },
+            { name: "Tamanho", value_name: "M" },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          id: 102,
+          price: 69.9,
+          seller_custom_field: null,
+          attributes: [],
+          picture_ids: ["PIC-BLUE"],
+          attribute_combinations: [{ name: "Cor", value_name: "Azul" }],
+        }),
       );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -4250,7 +4799,7 @@ describe("MercadoLivreProvider", () => {
         title: "Garrafa",
       },
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("status=active");
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain("status=paused");
     expect(String(fetchMock.mock.calls[4]?.[0])).not.toContain("attributes=");
@@ -4443,6 +4992,447 @@ describe("MercadoLivreProvider", () => {
         metadata: { itemId: "MLB900", variationId: "13" },
         sku: "ML-MLB900-13",
       }),
+    ]);
+  });
+
+  it("imports new Mercado Livre user-product families even when item variations are empty", async () => {
+    const provider = new MercadoLivreProvider({
+      API_PUBLIC_BASE_URL: "http://localhost:4000",
+      AUTH_SESSION_SECRET: "secret",
+      BETTER_AUTH_SECRET: "secret",
+      BETTER_AUTH_URL: "http://localhost:4000",
+      MERCADOLIVRE_CLIENT_ID: "client-id",
+      MERCADOLIVRE_CLIENT_SECRET: "client-secret",
+      MERCADOLIVRE_REDIRECT_URI:
+        "http://localhost:4000/integrations/mercadolivre/callback",
+      MERCADOLIVRE_USE_PKCE: false,
+      NODE_ENV: "test",
+      WEB_APP_ORIGIN: "http://localhost:3000",
+    } as never);
+
+    const fetchMock = vi.fn((input: string | URL) => {
+      const url = String(input);
+
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=active") &&
+        !url.includes("scroll_id=")
+      ) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: ["MLBNEW1"],
+            scroll_id: "active-next",
+          }),
+        );
+      }
+
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=active") &&
+        url.includes("scroll_id=active-next")
+      ) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [],
+            scroll_id: "active-next",
+          }),
+        );
+      }
+
+      if (url.includes("/users/seller-1/items/search?") && url.includes("status=paused")) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [],
+            scroll_id: "paused-next",
+          }),
+        );
+      }
+
+      if (url === "https://api.mercadolibre.com/items?ids=MLBNEW1") {
+        return Promise.resolve(
+          createJsonResponse([
+            {
+              code: 200,
+              body: {
+                catalog_listing: true,
+                id: "MLBNEW1",
+                pictures: [
+                  {
+                    id: "PIC-NEW-1",
+                    secure_url: "https://http2.mlstatic.com/family.jpg",
+                  },
+                ],
+                price: 249.9,
+                seller_sku: null,
+                status: "active",
+                title: "Legacy title ignored",
+                user_product_id: "MLBU3845002628",
+                variations: [],
+              },
+            },
+          ]),
+        );
+      }
+
+      if (url === "https://api.mercadolibre.com/user-products/MLBU3845002628") {
+        return Promise.resolve(
+          createJsonResponse({
+            attributes: [
+              { id: "COLOR", value_name: "Preto" },
+              { id: "SIZE", value_name: "37 BR" },
+            ],
+            family_id: "840907750180115",
+            family_name: "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
+            id: "MLBU3845002628",
+            pictures: [
+              {
+                id: "PIC-NEW-1",
+                secure_url: "https://http2.mlstatic.com/family.jpg",
+              },
+            ],
+            seller_sku: "828011Preta37",
+            siblings: [
+              {
+                attributes: [
+                  { id: "COLOR", value_name: "Preto" },
+                  { id: "SIZE", value_name: "37 BR" },
+                  { id: "SELLER_SKU", values: [{ name: "828011Preta37" }] },
+                ],
+                id: "MLBU3845002628",
+                seller_sku: "MLBU3845002628",
+              },
+              {
+                attributes: [
+                  { id: "COLOR", value_name: "Cafe" },
+                  { id: "SIZE", value_name: "38 BR" },
+                  { id: "SELLER_SKU", values: [{ name: "828011Cafe38" }] },
+                ],
+                id: "MLBU3845002629",
+                seller_sku: "MLBU3845002629",
+              },
+            ],
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.importCatalog({
+      connection: {
+        accessToken: "access-token",
+        externalAccountId: "seller-1",
+      } as never,
+      organizationId: "org-1",
+    });
+
+    expect(result).toEqual([
+      {
+        externalProductId: "840907750180115",
+        images: ["https://http2.mlstatic.com/family.jpg"],
+        isActive: true,
+        metadata: {
+          familyName: "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
+          itemId: "840907750180115",
+          legacyItemId: "MLBNEW1",
+          source: "mercadolivre-user-product-family",
+          variationId: null,
+        },
+        sellingPrice: "249.90",
+        sku: "ML-840907750180115",
+        title: "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
+      },
+      {
+        externalProductId: "MLBU3845002628",
+        images: ["https://http2.mlstatic.com/family.jpg"],
+        isActive: true,
+        metadata: {
+          color: "Preto",
+          itemId: "840907750180115",
+          legacyItemId: "MLBNEW1",
+          size: "37 BR",
+          source: "mercadolivre-user-product",
+          userProductId: "MLBU3845002628",
+          variationId: "MLBU3845002628",
+        },
+        sellingPrice: "249.90",
+        sku: "828011Preta37",
+        title: "Cor: Preto, Tamanho: 37 BR",
+      },
+      {
+        externalProductId: "MLBU3845002629",
+        images: ["https://http2.mlstatic.com/family.jpg"],
+        isActive: true,
+        metadata: {
+          color: "Cafe",
+          itemId: "840907750180115",
+          legacyItemId: "MLBNEW1",
+          size: "38 BR",
+          source: "mercadolivre-user-product",
+          userProductId: "MLBU3845002629",
+          variationId: "MLBU3845002629",
+        },
+        sellingPrice: "249.90",
+        sku: "828011Cafe38",
+        title: "Cor: Cafe, Tamanho: 38 BR",
+      },
+    ]);
+  });
+
+  it("imports complete family when external product id is an MLBU user product id", async () => {
+    const provider = new MercadoLivreProvider({
+      API_PUBLIC_BASE_URL: "http://localhost:4000",
+      AUTH_SESSION_SECRET: "secret",
+      BETTER_AUTH_SECRET: "secret",
+      BETTER_AUTH_URL: "http://localhost:4000",
+      MERCADOLIVRE_CLIENT_ID: "client-id",
+      MERCADOLIVRE_CLIENT_SECRET: "client-secret",
+      MERCADOLIVRE_REDIRECT_URI:
+        "http://localhost:4000/integrations/mercadolivre/callback",
+      MERCADOLIVRE_USE_PKCE: false,
+      NODE_ENV: "test",
+      WEB_APP_ORIGIN: "http://localhost:3000",
+    } as never);
+
+    const fetchMock = vi.fn((input: string | URL) => {
+      const url = String(input);
+
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=active") &&
+        !url.includes("scroll_id=")
+      ) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: ["MLBNEW1"],
+            scroll_id: "active-next",
+          }),
+        );
+      }
+
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=active") &&
+        url.includes("scroll_id=active-next")
+      ) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [],
+            scroll_id: "active-next",
+          }),
+        );
+      }
+
+      if (url.includes("/users/seller-1/items/search?") && url.includes("status=paused")) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [],
+            scroll_id: "paused-next",
+          }),
+        );
+      }
+
+      if (url === "https://api.mercadolibre.com/items?ids=MLBNEW1") {
+        return Promise.resolve(
+          createJsonResponse([
+            {
+              code: 200,
+              body: {
+                catalog_listing: true,
+                id: "MLBNEW1",
+                pictures: [
+                  {
+                    id: "PIC-NEW-1",
+                    secure_url: "https://http2.mlstatic.com/family.jpg",
+                  },
+                ],
+                price: 249.9,
+                status: "active",
+                title: "Legacy title ignored",
+                user_product_id: "MLBU3845002628",
+                variations: [],
+              },
+            },
+          ]),
+        );
+      }
+
+      if (url === "https://api.mercadolibre.com/user-products/MLBU3845002628") {
+        return Promise.resolve(
+          createJsonResponse({
+            family_id: "840907750180115",
+            family_name: "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
+            id: "MLBU3845002628",
+            seller_sku: "828011Preta37",
+            siblings: [
+              {
+                attributes: [
+                  { id: "COLOR", value_name: "Preto" },
+                  { id: "SIZE", value_name: "37 BR" },
+                  { id: "SELLER_SKU", values: [{ name: "828011Preta37" }] },
+                ],
+                id: "MLBU3845002628",
+                seller_sku: "MLBU3845002628",
+              },
+              {
+                attributes: [
+                  { id: "COLOR", value_name: "Cafe" },
+                  { id: "SIZE", value_name: "38 BR" },
+                  { id: "SELLER_SKU", values: [{ name: "828011Cafe38" }] },
+                ],
+                id: "MLBU3845002629",
+                seller_sku: "MLBU3845002629",
+              },
+            ],
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.importCatalogByExternalProductId({
+      connection: {
+        accessToken: "access-token",
+        externalAccountId: "seller-1",
+      } as never,
+      externalProductId: "MLBU3845002628",
+      organizationId: "org-1",
+    });
+
+    expect(result.map((entry) => entry.externalProductId)).toEqual([
+      "840907750180115",
+      "MLBU3845002628",
+      "MLBU3845002629",
+    ]);
+  });
+
+  it("imports complete family when external product id is a family_id parent", async () => {
+    const provider = new MercadoLivreProvider({
+      API_PUBLIC_BASE_URL: "http://localhost:4000",
+      AUTH_SESSION_SECRET: "secret",
+      BETTER_AUTH_SECRET: "secret",
+      BETTER_AUTH_URL: "http://localhost:4000",
+      MERCADOLIVRE_CLIENT_ID: "client-id",
+      MERCADOLIVRE_CLIENT_SECRET: "client-secret",
+      MERCADOLIVRE_REDIRECT_URI:
+        "http://localhost:4000/integrations/mercadolivre/callback",
+      MERCADOLIVRE_USE_PKCE: false,
+      NODE_ENV: "test",
+      WEB_APP_ORIGIN: "http://localhost:3000",
+    } as never);
+
+    const fetchMock = vi.fn((input: string | URL) => {
+      const url = String(input);
+
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=active") &&
+        !url.includes("scroll_id=")
+      ) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: ["MLBNEW1"],
+            scroll_id: "active-next",
+          }),
+        );
+      }
+
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=active") &&
+        url.includes("scroll_id=active-next")
+      ) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [],
+            scroll_id: "active-next",
+          }),
+        );
+      }
+
+      if (url.includes("/users/seller-1/items/search?") && url.includes("status=paused")) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [],
+            scroll_id: "paused-next",
+          }),
+        );
+      }
+
+      if (url === "https://api.mercadolibre.com/items?ids=MLBNEW1") {
+        return Promise.resolve(
+          createJsonResponse([
+            {
+              code: 200,
+              body: {
+                catalog_listing: true,
+                id: "MLBNEW1",
+                pictures: [
+                  {
+                    id: "PIC-NEW-1",
+                    secure_url: "https://http2.mlstatic.com/family.jpg",
+                  },
+                ],
+                price: 249.9,
+                status: "active",
+                title: "Legacy title ignored",
+                user_product_id: "MLBU3845002628",
+                variations: [],
+              },
+            },
+          ]),
+        );
+      }
+
+      if (url === "https://api.mercadolibre.com/user-products/MLBU3845002628") {
+        return Promise.resolve(
+          createJsonResponse({
+            family_id: "840907750180115",
+            family_name: "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
+            id: "MLBU3845002628",
+            seller_sku: "828011Preta37",
+            siblings: [
+              {
+                attributes: [
+                  { id: "COLOR", value_name: "Preto" },
+                  { id: "SIZE", value_name: "37 BR" },
+                ],
+                id: "MLBU3845002628",
+                seller_sku: "828011Preta37",
+              },
+              {
+                attributes: [
+                  { id: "COLOR", value_name: "Cafe" },
+                  { id: "SIZE", value_name: "38 BR" },
+                ],
+                id: "MLBU3845002629",
+                seller_sku: "828011Cafe38",
+              },
+            ],
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected URL ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.importCatalogByExternalProductId({
+      connection: {
+        accessToken: "access-token",
+        externalAccountId: "seller-1",
+      } as never,
+      externalProductId: "840907750180115",
+      organizationId: "org-1",
+    });
+
+    expect(result.map((entry) => entry.externalProductId)).toEqual([
+      "840907750180115",
+      "MLBU3845002628",
+      "MLBU3845002629",
     ]);
   });
 

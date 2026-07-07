@@ -580,25 +580,6 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
         <CompositionMetric
           icon={<Truck className="h-4 w-4" />}
           label="Frete / Taxa Fixa"
-          details={
-            composition.shippingBreakdown
-              ? [
-                  {
-                    label:
-                      "Pagamento do Mercado Envios (por conta do comprador)",
-                    value:
-                      composition.shippingBreakdown.buyerShippingPaymentAmount,
-                  },
-                  {
-                    label:
-                      "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
-                    negative: true,
-                    value:
-                      composition.shippingBreakdown.grossShippingTariffAmount,
-                  },
-                ]
-              : undefined
-          }
           value={formatMoney(shippingDisplayAmount)}
           negative={!composition.shippingBreakdown}
         />
