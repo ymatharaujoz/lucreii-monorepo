@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MercadoLivreProvider } from "./mercadolivre.provider";
+import {
+  MercadoLivreProvider,
+  readMercadoLivreBillingOrderShippingCost,
+} from "./mercadolivre.provider";
 
 function createProvider() {
   return new MercadoLivreProvider({
@@ -90,6 +93,51 @@ function withShippingResolver(
 describe("MercadoLivreProvider", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("reads billing shipping seller fee from charge_info CFFE details", () => {
+    const result = readMercadoLivreBillingOrderShippingCost({
+      orderId: "2000013564480079",
+      payload: {
+        details: [
+          {
+            charge_info: {
+              detail_amount: 10,
+              detail_sub_type: "CFFE",
+            },
+            marketplace_info: {},
+            shipping_info: {
+              receiver_shipping_cost: 30,
+              shipping_id: 999,
+            },
+          },
+          {
+            charge_info: {
+              detail_amount: 6.64,
+              detail_sub_type: "CFFE",
+            },
+            marketplace_info: {},
+            shipping_info: {
+              receiver_shipping_cost: 30,
+              shipping_id: 999,
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        amount: 13.36,
+        metadata: expect.objectContaining({
+          buyerShippingAmount: 30,
+          grossShippingTariffAmount: 16.64,
+          shipping_buyer_paid: "30.00",
+          shipping_net_amount: "13.36",
+          shipping_seller_fee: "16.64",
+        }),
+      }),
+    );
   });
 
   it("builds the documented authorization URL", async () => {
@@ -389,6 +437,41 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
+        createJsonResponse({
+          currency_id: "BRL",
+          date_closed: "2026-05-14T10:00:00.000-03:00",
+          id: 123,
+          order_items: [
+            {
+              item: {
+                id: "MLB123",
+                seller_sku: "SKU-1",
+                title: "Produto",
+              },
+              quantity: 3,
+              sale_fee: 10.54,
+              variation_id: 456,
+              unit_price: 29.9,
+            },
+          ],
+          payments: [
+            {
+              fee_amount: 3,
+              shipping_cost: 7,
+            },
+          ],
+          shipping: {
+            id: 999,
+          },
+          total_amount: 89.7,
+        }),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          details: [],
+        }),
+      )
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             senders: [{ cost: 9, user_id: 123456 }],
@@ -453,117 +536,107 @@ describe("MercadoLivreProvider", () => {
     ]);
   });
 
-  it("replaces shipment sender gross tariff with payment net shipping during sync", async () => {
+  it("uses MELI billing order details net shipping amount during sync", async () => {
     const provider = createProvider();
+    const orderPayload = {
+      currency_id: "BRL",
+      date_closed: "2026-05-14T10:00:00.000-03:00",
+      id: 123,
+      order_items: [
+        {
+          item: {
+            id: "MLB123",
+            seller_sku: "SKU-1",
+            title: "Produto",
+          },
+          quantity: 1,
+          sale_fee: 10,
+          unit_price: 89.7,
+        },
+      ],
+      payments: [
+        {
+          fee_amount: 3,
+          shipping_cost: 10.99,
+        },
+      ],
+      total_amount: 89.7,
+    };
     const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
       const url = String(input);
 
       if (url.includes("/orders/search")) {
+        if (url.includes("offset=50")) {
+          return Promise.resolve(
+            createJsonResponse({
+              paging: { limit: 50, offset: 50, total: 1 },
+              results: [],
+            }),
+          );
+        }
+
         return Promise.resolve(
           createJsonResponse({
             paging: { limit: 50, offset: 0, total: 1 },
-            results: [
-              {
-                currency_id: "BRL",
-                date_closed: "2026-05-14T10:00:00.000-03:00",
-                id: 123,
-                order_items: [
-                  {
-                    item: {
-                      id: "MLB123",
-                      seller_sku: "SKU-1",
-                      title: "Produto",
-                    },
-                    quantity: 1,
-                    sale_fee: 2.46,
-                    unit_price: 18.96,
-                  },
-                ],
-                payments: [
-                  {
-                    fee_amount: 1,
-                    shipping_cost: 10.99,
-                  },
-                ],
-                shipping: { id: 999 },
-                total_amount: 18.96,
-              },
-            ],
+            results: [orderPayload],
           }),
         );
       }
 
-      if (url.includes("/shipments/999/costs")) {
-        return Promise.resolve(
-          createJsonResponse({
-            receiver: { cost: 10.99 },
-            senders: [{ cost: 16.65, user_id: 123456 }],
-          }),
-        );
+      if (url.includes("/orders/123")) {
+        return Promise.resolve(createJsonResponse(orderPayload));
       }
 
-      if (url === "https://api.mercadolibre.com/orders/123") {
+      if (url.includes("/billing/integration/group/ML/order/details")) {
         return Promise.resolve(
           createJsonResponse({
-            currency_id: "BRL",
-            date_closed: "2026-05-14T10:00:00.000-03:00",
-            id: 123,
-            order_items: [
+            details: [
               {
-                item: {
-                  id: "MLB123",
-                  seller_sku: "SKU-1",
-                  title: "Produto",
+                charge_info: {
+                  detail_amount: 16.64,
+                  detail_sub_type: "CFFE",
+                  detail_type: "CHARGE",
+                  transaction_detail:
+                    "Tarifa de envio extra ou intermunicipal",
                 },
-                quantity: 1,
-                sale_fee: 2.46,
-                unit_price: 18.96,
+                marketplace_info: {
+                  marketplace: "SHIPPING",
+                },
+                shipping_info: {
+                  receiver_shipping_cost: 10.99,
+                  shipping_id: 999,
+                },
               },
-            ],
-            payments: [
               {
-                fee_amount: 1,
-                id: 7654321,
-                shipping_cost: 10.99,
+                charge_info: {
+                  detail_sub_type: "CVVPRC",
+                },
+                detail_amount: 0.01,
+                marketplace_info: {
+                  marketplace: "CORE",
+                },
+                shipping_info: {
+                  receiver_shipping_cost: 10.99,
+                  shipping_id: 999,
+                },
               },
             ],
-            shipping: { id: 999 },
-            total_amount: 18.96,
           }),
         );
       }
 
-      if (url === "https://api.mercadopago.com/v1/payments/7654321") {
+      if (url.includes("/billing/integration/periods")) {
         return Promise.resolve(
           createJsonResponse({
-            charges_details: [
-              {
-                amount: 10.99,
-                name: "Pagamento do Mercado Envios (por conta do comprador)",
-                type: "shipping",
-              },
-              {
-                amount: -16.64,
-                name: "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
-                type: "shipping",
-              },
-            ],
-            id: 7654321,
+            limit: 1000,
+            offset: 0,
+            results: [],
+            total: 0,
           }),
         );
       }
 
-      if (
-        url.includes(
-          "/billing/integration/periods/key/2026-05-01/group/MP/details",
-        )
-      ) {
-        return Promise.resolve(
-          createJsonResponse({ limit: 1000, offset: 0, results: [], total: 0 }),
-        );
-      }
-
-      throw new Error(`Unexpected fetch: ${url}`);
+      return Promise.resolve(createJsonResponse({}));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -575,17 +648,20 @@ describe("MercadoLivreProvider", () => {
 
     expect(result.orders[0]?.fees).toEqual([
       expect.objectContaining({
-        amount: "2.46",
+        amount: "10.00",
         feeType: "marketplace_commission",
       }),
-      expect.objectContaining({ amount: "1.00", feeType: "fixed_fee" }),
+      expect.objectContaining({ amount: "3.00", feeType: "fixed_fee" }),
       expect.objectContaining({
         amount: "5.65",
         feeType: "shipping_cost",
         metadata: expect.objectContaining({
           buyerShippingAmount: 10.99,
           grossShippingTariffAmount: 16.64,
-          source: "payment.charges_details.shipping",
+          shipping_buyer_paid: "10.99",
+          shipping_net_amount: "-5.65",
+          shipping_seller_fee: "16.64",
+          source: "billing/integration/group/ML/order/details",
         }),
       }),
     ]);
@@ -669,6 +745,39 @@ describe("MercadoLivreProvider", () => {
         );
       }
 
+      if (url.includes("/orders/123")) {
+        return Promise.resolve(
+          createJsonResponse({
+            currency_id: "BRL",
+            date_closed: "2026-05-14T10:00:00.000-03:00",
+            id: 123,
+            order_items: [
+              {
+                item: {
+                  id: "MLB123",
+                  seller_sku: null,
+                  title: "Produto",
+                },
+                quantity: 1,
+                sale_fee: 10.54,
+                variation_id: 456,
+                unit_price: 29.9,
+              },
+            ],
+            payments: [
+              {
+                fee_amount: 3,
+                shipping_cost: 7,
+              },
+            ],
+            shipping: {
+              id: 999,
+            },
+            total_amount: 29.9,
+          }),
+        );
+      }
+
       if (url.startsWith("https://api.mercadolibre.com/items?ids=MLB123")) {
         return Promise.resolve(
           new Response(
@@ -721,6 +830,14 @@ describe("MercadoLivreProvider", () => {
         );
       }
 
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        return Promise.resolve(
+          createJsonResponse({
+            details: [],
+          }),
+        );
+      }
+
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
@@ -749,228 +866,15 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.items).toEqual([
       expect.objectContaining({
         externalProductId: "MLB123:456",
-        sku: "LEGACY-456",
+        sku: "CALCAPRETA39",
       }),
     ]);
     expect(result.products).toEqual([
       expect.objectContaining({
         externalProductId: "MLB123:456",
-        sku: "LEGACY-456",
+        sku: "CALCAPRETA39",
       }),
     ]);
-  });
-
-  it("uses direct order seller_custom_field before catalog lookup when seller_sku is missing", async () => {
-    const provider = createProvider();
-    const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
-      const url = String(input);
-
-      if (url.includes("/orders/search")) {
-        return Promise.resolve(
-          createJsonResponse({
-            paging: { limit: 50, offset: 0, total: 1 },
-            results: [
-              {
-                currency_id: "BRL",
-                date_closed: "2026-05-14T10:00:00.000-03:00",
-                id: 123,
-                order_items: [
-                  {
-                    item: {
-                      id: "MLB123",
-                      seller_custom_field: "SKU-DIRETO-PEDIDO",
-                      seller_sku: null,
-                      title: "Produto",
-                    },
-                    quantity: 1,
-                    unit_price: 29.9,
-                  },
-                ],
-                payments: [],
-                total_amount: 29.9,
-              },
-            ],
-          }),
-        );
-      }
-
-      if (url === "https://api.mercadolibre.com/orders/123") {
-        return Promise.resolve(
-          createJsonResponse({
-            currency_id: "BRL",
-            id: 123,
-            order_items: [
-              {
-                item: {
-                  id: "MLB123",
-                  seller_custom_field: "SKU-DIRETO-PEDIDO",
-                  seller_sku: null,
-                  title: "Produto",
-                },
-                quantity: 1,
-                unit_price: 29.9,
-              },
-            ],
-            payments: [],
-            total_amount: 29.9,
-          }),
-        );
-      }
-
-      if (
-        url.includes(
-          "/billing/integration/periods/key/2026-05-01/group/MP/details",
-        )
-      ) {
-        return Promise.resolve(
-          createJsonResponse({ limit: 1000, offset: 0, results: [], total: 0 }),
-        );
-      }
-
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await provider.syncOrders({
-      connection: createSyncConnection(),
-      cursor: null,
-      organizationId: "org_1",
-    });
-
-    expect(result.orders[0]?.items).toEqual([
-      expect.objectContaining({
-        externalProductId: "MLB123",
-        sku: "SKU-DIRETO-PEDIDO",
-      }),
-    ]);
-    expect(fetchMock.mock.calls.map((call) => String(call[0]))).not.toEqual(
-      expect.arrayContaining([expect.stringContaining("/items?ids=MLB123")]),
-    );
-  });
-
-  it("uses User Product SELLER_SKU values name for order item without direct sku", async () => {
-    const provider = createProvider();
-    const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
-      const url = String(input);
-
-      if (url.includes("/orders/search")) {
-        return Promise.resolve(
-          createJsonResponse({
-            paging: { limit: 50, offset: 0, total: 1 },
-            results: [
-              {
-                currency_id: "BRL",
-                date_closed: "2026-05-14T10:00:00.000-03:00",
-                id: 123,
-                order_items: [
-                  {
-                    item: {
-                      id: "MLBUP1",
-                      seller_sku: null,
-                      title: "Produto UP",
-                    },
-                    quantity: 1,
-                    unit_price: 189.9,
-                  },
-                ],
-                payments: [],
-                total_amount: 189.9,
-              },
-            ],
-          }),
-        );
-      }
-
-      if (url === "https://api.mercadolibre.com/orders/123") {
-        return Promise.resolve(
-          createJsonResponse({
-            currency_id: "BRL",
-            id: 123,
-            order_items: [
-              {
-                item: {
-                  id: "MLBUP1",
-                  seller_sku: null,
-                  title: "Produto UP",
-                },
-                quantity: 1,
-                unit_price: 189.9,
-              },
-            ],
-            payments: [],
-            total_amount: 189.9,
-          }),
-        );
-      }
-
-      if (url.startsWith("https://api.mercadolibre.com/items?ids=MLBUP1")) {
-        return Promise.resolve(
-          createJsonResponse([
-            {
-              code: 200,
-              body: {
-                attributes: [],
-                id: "MLBUP1",
-                seller_custom_field: null,
-                seller_sku: "ML-MLBUP1-AUTO",
-                title: "Produto UP",
-                user_product_id: "MLBU999",
-                variations: [],
-              },
-            },
-          ]),
-        );
-      }
-
-      if (url === "https://api.mercadolibre.com/user-products/MLBU999") {
-        return Promise.resolve(
-          createJsonResponse({
-            attributes: [
-              {
-                id: "SELLER_SKU",
-                name: "SKU",
-                values: [{ name: "SKU-MANUAL-UP" }],
-              },
-            ],
-            family_id: 123,
-            family_name: "Familia UP",
-            id: "MLBU999",
-          }),
-        );
-      }
-
-      if (
-        url.includes(
-          "/billing/integration/periods/key/2026-05-01/group/MP/details",
-        )
-      ) {
-        return Promise.resolve(
-          createJsonResponse({ limit: 1000, offset: 0, results: [], total: 0 }),
-        );
-      }
-
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await provider.syncOrders({
-      connection: createSyncConnection(),
-      cursor: null,
-      organizationId: "org_1",
-    });
-
-    expect(result.orders[0]?.items).toEqual([
-      expect.objectContaining({
-        externalProductId: "MLBUP1",
-        sku: "SKU-MANUAL-UP",
-      }),
-    ]);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.mercadolibre.com/user-products/MLBU999",
-      expect.objectContaining({
-        headers: { Authorization: "Bearer token_123" },
-      }),
-    );
   });
 
   it("does not fall back to payment shipping_cost when shipment seller cost is unavailable", async () => {
@@ -1210,56 +1114,6 @@ describe("MercadoLivreProvider", () => {
     );
   });
 
-  it("prefers payment shipping breakdown over shipment sender gross tariff", async () => {
-    const provider = createProvider();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          receiver: { cost: 10.99 },
-          senders: [{ cost: 16.64, user_id: 123456 }],
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          charges_details: [
-            {
-              amount: -16.64,
-              description:
-                "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
-              type: "shipping",
-            },
-          ],
-          id: 7654321,
-        }),
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const shippingCost = await withShippingResolver(
-      provider,
-    ).resolveShippingCostWithSource(
-      {
-        payments: [{ id: 7654321 }],
-        shipping: { id: 999 },
-      },
-      {
-        accessToken: "token_123",
-        sellerAccountId: "123456",
-      },
-    );
-
-    expect(shippingCost).toEqual({
-      amount: 5.65,
-      metadata: {
-        buyerShippingAmount: 10.99,
-        grossShippingTariffAmount: 16.64,
-        paymentId: "7654321",
-      },
-      source: "payment.charges_details.shipping",
-    });
-  });
-
   it("does not treat buyer payment shipping_cost as seller shipping cost without payment details", async () => {
     const provider = createProvider();
 
@@ -1310,90 +1164,6 @@ describe("MercadoLivreProvider", () => {
     );
 
     expect(shippingCost).toBe(6.55);
-  });
-
-  it("prefers shipment shipping_option.list_cost over legacy shipment detail amounts", async () => {
-    const provider = createProvider();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          receiver: { cost: 0 },
-          senders: [],
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          id: 999,
-          order_cost: 18.99,
-          shipping_option: {
-            cost: 17.45,
-            list_cost: 6.55,
-          },
-        }),
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const shippingCost = await withShippingResolver(
-      provider,
-    ).resolveShippingCostWithSource(
-      {
-        payments: [],
-        shipping: { id: 999 },
-      },
-      {
-        accessToken: "token_123",
-        sellerAccountId: "123456",
-      },
-    );
-
-    expect(shippingCost).toEqual({
-      amount: 6.55,
-      metadata: {
-        listCostAmount: 6.55,
-      },
-      source: "shipment_detail.shipping_option.list_cost",
-    });
-  });
-
-  it("falls back to legacy shipment detail amounts when shipping_option.list_cost is missing", async () => {
-    const provider = createProvider();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          receiver: { cost: 0 },
-          senders: [],
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          id: 999,
-          shipping_option: {},
-          order_cost: 6.55,
-        }),
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    const shippingCost = await withShippingResolver(
-      provider,
-    ).resolveShippingCostWithSource(
-      {
-        payments: [],
-        shipping: { id: 999 },
-      },
-      {
-        accessToken: "token_123",
-        sellerAccountId: "123456",
-      },
-    );
-
-    expect(shippingCost).toEqual({
-      amount: 6.55,
-      source: "shipment_detail.order_cost",
-    });
   });
 
   it("does not fall back to order.shipping_cost when shipment and payment shipping data are unavailable", async () => {
@@ -1502,6 +1272,11 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
+        createJsonResponse({
+          details: [],
+        }),
+      )
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             currency_id: "BRL",
@@ -1590,12 +1365,12 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.metadata).toMatchObject({
       refundBonusAmount: "0.00",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
       "/billing/integration/periods/key/2026-05-01/group/MP/details",
     );
     expect(
-      (fetchMock.mock.calls[2]?.[1] as RequestInit | undefined)?.headers,
+      (fetchMock.mock.calls[3]?.[1] as RequestInit | undefined)?.headers,
     ).toEqual(
       expect.objectContaining({
         "x-version": "2",
@@ -2632,6 +2407,11 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
+      )
+      .mockResolvedValueOnce(
+        createJsonResponse({
+          details: [],
+        }),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -3950,6 +3730,312 @@ describe("MercadoLivreProvider", () => {
     ]);
   });
 
+  it("prefers detailed order items over partial search payload items during sync", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+
+      if (url.includes("/orders/search")) {
+        if (url.includes("offset=50")) {
+          return Promise.resolve(
+            createJsonResponse({
+              paging: { limit: 50, offset: 50, total: 1 },
+              results: [],
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          createJsonResponse({
+            paging: { limit: 50, offset: 0, total: 1 },
+            results: [
+              {
+                currency_id: "BRL",
+                date_closed: "2026-06-24T10:00:00.000-03:00",
+                id: 2000017063392034,
+                order_items: [
+                  {
+                    item: {
+                      id: "MLB123",
+                      seller_sku: "SKU-PRETO",
+                      title: "Suporte 02 Preto",
+                      variation_id: 111,
+                    },
+                    quantity: 2,
+                    unit_price: 18.96,
+                  },
+                ],
+                payments: [],
+                shipping: {
+                  id: 999,
+                },
+                total_amount: 75.84,
+              },
+            ],
+          }),
+        );
+      }
+
+      if (url.includes("/orders/2000017063392034")) {
+        return Promise.resolve(
+          createJsonResponse({
+            currency_id: "BRL",
+            date_closed: "2026-06-24T10:00:00.000-03:00",
+            id: 2000017063392034,
+            order_items: [
+              {
+                item: {
+                  id: "MLB123",
+                  seller_sku: "SKU-BRANCO",
+                  title: "Suporte 02 Branco",
+                  variation_id: 222,
+                },
+                quantity: 2,
+                unit_price: 18.96,
+              },
+              {
+                item: {
+                  id: "MLB123",
+                  seller_sku: "SKU-PRETO",
+                  title: "Suporte 02 Preto",
+                  variation_id: 111,
+                },
+                quantity: 2,
+                unit_price: 18.96,
+              },
+            ],
+            payments: [],
+            shipping: {
+              id: 999,
+            },
+            total_amount: 75.84,
+          }),
+        );
+      }
+
+      if (url.includes("/shipments/999/costs")) {
+        return Promise.resolve(
+          createJsonResponse({
+            senders: [{ cost: 0, user_id: 123456 }],
+          }),
+        );
+      }
+
+      if (url.includes("/shipments/999")) {
+        return Promise.resolve(
+          createJsonResponse({
+            id: 999,
+            order_cost: 0,
+            shipping_option: {
+              cost: 0,
+            },
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/periods")) {
+        return Promise.resolve(
+          createJsonResponse({
+            limit: 1000,
+            offset: 0,
+            results: [],
+            total: 0,
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        return Promise.resolve(
+          createJsonResponse({
+            details: [{ amount: 6.65 }],
+          }),
+        );
+      }
+
+      return Promise.resolve(createJsonResponse({}));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      organizationId: "org_1",
+    });
+
+    expect(result.orders[0]?.items).toHaveLength(2);
+    expect(result.orders[0]?.items).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB123:222",
+        sku: "SKU-BRANCO",
+        title: "Suporte 02 Branco",
+        variationId: "222",
+      }),
+      expect.objectContaining({
+        externalProductId: "MLB123:111",
+        sku: "SKU-PRETO",
+        title: "Suporte 02 Preto",
+        variationId: "111",
+      }),
+    ]);
+  });
+
+  it("keeps distinct Mercado Livre variations from same item id as separate order items during sync", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+
+      if (url.includes("/orders/search")) {
+        if (url.includes("offset=50")) {
+          return Promise.resolve(
+            createJsonResponse({
+              paging: { limit: 50, offset: 50, total: 1 },
+              results: [],
+            }),
+          );
+        }
+
+        return Promise.resolve(
+          createJsonResponse({
+            paging: { limit: 50, offset: 0, total: 1 },
+            results: [
+              {
+                currency_id: "BRL",
+                date_closed: "2026-06-24T10:00:00.000-03:00",
+                id: 555,
+                order_items: [
+                  {
+                    item: {
+                      id: "MLB999",
+                      seller_sku: "SKU-A",
+                      title: "Produto A",
+                      variation_id: 1,
+                    },
+                    quantity: 1,
+                    unit_price: 40,
+                  },
+                  {
+                    item: {
+                      id: "MLB999",
+                      seller_sku: "SKU-B",
+                      title: "Produto B",
+                      variation_id: 2,
+                    },
+                    quantity: 1,
+                    unit_price: 40,
+                  },
+                ],
+                payments: [],
+                shipping: {
+                  id: 1234,
+                },
+                total_amount: 80,
+              },
+            ],
+          }),
+        );
+      }
+
+      if (url.includes("/shipments/1234/costs")) {
+        return Promise.resolve(
+          createJsonResponse({
+            senders: [{ cost: 0, user_id: 123456 }],
+          }),
+        );
+      }
+
+      if (url.includes("/shipments/1234")) {
+        return Promise.resolve(
+          createJsonResponse({
+            id: 1234,
+            order_cost: 0,
+            shipping_option: {
+              cost: 0,
+            },
+          }),
+        );
+      }
+
+      if (url.includes("/orders/555")) {
+        return Promise.resolve(
+          createJsonResponse({
+            currency_id: "BRL",
+            date_closed: "2026-06-24T10:00:00.000-03:00",
+            id: 555,
+            order_items: [
+              {
+                item: {
+                  id: "MLB999",
+                  seller_sku: "SKU-A",
+                  title: "Produto A",
+                  variation_id: 1,
+                },
+                quantity: 1,
+                unit_price: 40,
+              },
+              {
+                item: {
+                  id: "MLB999",
+                  seller_sku: "SKU-B",
+                  title: "Produto B",
+                  variation_id: 2,
+                },
+                quantity: 1,
+                unit_price: 40,
+              },
+            ],
+            payments: [],
+            shipping: {
+              id: 1234,
+            },
+            total_amount: 80,
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/periods")) {
+        return Promise.resolve(
+          createJsonResponse({
+            limit: 1000,
+            offset: 0,
+            results: [],
+            total: 0,
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        return Promise.resolve(
+          createJsonResponse({
+            details: [{ amount: 6.65 }],
+          }),
+        );
+      }
+
+      return Promise.resolve(createJsonResponse({}));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      organizationId: "org_1",
+    });
+
+    expect(result.orders[0]?.items).toHaveLength(2);
+    expect(result.orders[0]?.items).toEqual([
+      expect.objectContaining({
+        externalProductId: "MLB999:1",
+        sku: "SKU-A",
+        variationId: "1",
+      }),
+      expect.objectContaining({
+        externalProductId: "MLB999:2",
+        sku: "SKU-B",
+        variationId: "2",
+      }),
+    ]);
+  });
+
   it("imports active and paused listings, expanding variations with stable SKUs and pictures", async () => {
     const provider = new MercadoLivreProvider({
       API_PUBLIC_BASE_URL: "http://localhost:4000",
@@ -4085,7 +4171,6 @@ describe("MercadoLivreProvider", () => {
                 price: 49.9,
                 status: "active",
                 seller_custom_field: "GARRAFA-LEGACY",
-                seller_sku: "ML-MLB3-AUTO",
                 attributes: [
                   {
                     id: "SELLER_SKU",
@@ -4104,34 +4189,6 @@ describe("MercadoLivreProvider", () => {
           ]),
           { status: 200, headers: { "content-type": "application/json" } },
         ),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          id: 101,
-          price: 64.9,
-          seller_custom_field: "CAM-RED-M",
-          attributes: [
-            {
-              id: "SELLER_SKU",
-              value_name: "SKU-001-RED-M",
-            },
-          ],
-          picture_ids: ["PIC-RED"],
-          attribute_combinations: [
-            { name: "Cor", value_name: "Vermelho" },
-            { name: "Tamanho", value_name: "M" },
-          ],
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          id: 102,
-          price: 69.9,
-          seller_custom_field: null,
-          attributes: [],
-          picture_ids: ["PIC-BLUE"],
-          attribute_combinations: [{ name: "Cor", value_name: "Azul" }],
-        }),
       );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -4193,207 +4250,10 @@ describe("MercadoLivreProvider", () => {
         title: "Garrafa",
       },
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("status=active");
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain("status=paused");
     expect(String(fetchMock.mock.calls[4]?.[0])).not.toContain("attributes=");
-    expect(fetchMock.mock.calls.map((call) => String(call[0]))).not.toEqual(
-      expect.arrayContaining([expect.stringContaining("/user-products/")]),
-    );
-  });
-
-  it("imports MLBU user products as family parent with deduped variations when item has no variations", async () => {
-    const provider = createProvider();
-    const fetchMock = vi.fn((input: string | URL) => {
-      const url = String(input);
-
-      if (
-        url.includes("/users/seller-1/items/search?") &&
-        url.includes("scroll_id=active-next")
-      ) {
-        return Promise.resolve(
-          createJsonResponse({ results: [], scroll_id: "active-next" }),
-        );
-      }
-
-      if (
-        url.includes("/users/seller-1/items/search?") &&
-        url.includes("status=active")
-      ) {
-        return Promise.resolve(
-          createJsonResponse({
-            results: ["MLBBOOT35", "MLBBOOT37"],
-            scroll_id: "active-next",
-          }),
-        );
-      }
-
-      if (
-        url.includes("/users/seller-1/items/search?") &&
-        url.includes("status=paused")
-      ) {
-        return Promise.resolve(
-          createJsonResponse({ results: [], scroll_id: "paused-next" }),
-        );
-      }
-
-      if (
-        url.startsWith(
-          "https://api.mercadolibre.com/items?ids=MLBBOOT35%2CMLBBOOT37",
-        ) ||
-        url.startsWith(
-          "https://api.mercadolibre.com/items?ids=MLBBOOT35,MLBBOOT37",
-        )
-      ) {
-        return Promise.resolve(
-          createJsonResponse([
-            {
-              code: 200,
-              body: {
-                id: "MLBBOOT35",
-                title: "Bota Feminina Preta 35",
-                price: 189.9,
-                status: "active",
-                user_product_id: "MLBU111",
-                pictures: [
-                  {
-                    id: "PIC-35",
-                    secure_url: "https://http2.mlstatic.com/boot-35.jpg",
-                  },
-                ],
-                variations: [],
-              },
-            },
-            {
-              code: 200,
-              body: {
-                id: "MLBBOOT37",
-                title: "Bota Feminina Marrom 37",
-                price: 189.9,
-                status: "active",
-                user_product_id: "MLBU222",
-                pictures: [
-                  {
-                    id: "PIC-37",
-                    secure_url: "https://http2.mlstatic.com/boot-37.jpg",
-                  },
-                ],
-                variations: [],
-              },
-            },
-          ]),
-        );
-      }
-
-      if (url === "https://api.mercadolibre.com/user-products/MLBU111") {
-        return Promise.resolve(
-          createJsonResponse({
-            id: "MLBU111",
-            family_id: 123456789,
-            family_name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
-            price: 189.9,
-            status: "active",
-            pictures: [
-              {
-                id: "PIC-35",
-                secure_url: "https://http2.mlstatic.com/boot-35.jpg",
-              },
-            ],
-            attributes: [
-              { id: "SELLER_SKU", name: "SKU", value_name: "828011PRETA35" },
-            ],
-          }),
-        );
-      }
-
-      if (url === "https://api.mercadolibre.com/user-products/MLBU222") {
-        return Promise.resolve(
-          createJsonResponse({
-            id: "MLBU222",
-            family_id: 123456789,
-            family_name: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
-            price: 189.9,
-            status: "active",
-            pictures: [
-              {
-                id: "PIC-37",
-                secure_url: "https://http2.mlstatic.com/boot-37.jpg",
-              },
-            ],
-            attributes: [
-              { id: "SELLER_SKU", name: "SKU", value_name: "828011CAFE37" },
-            ],
-          }),
-        );
-      }
-
-      throw new Error(`Unexpected URL ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await provider.importCatalog({
-      connection: {
-        accessToken: "access-token",
-        externalAccountId: "seller-1",
-      } as never,
-      organizationId: "org-1",
-    });
-
-    expect(result).toEqual([
-      {
-        externalProductId: "123456789",
-        images: ["https://http2.mlstatic.com/boot-35.jpg"],
-        isActive: true,
-        metadata: {
-          itemId: "123456789",
-          source: "mercadolivre-user-product-family",
-          variationId: null,
-        },
-        sellingPrice: "189.90",
-        sku: "ML-123456789",
-        title: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
-      },
-      {
-        externalProductId: "MLBU111",
-        images: ["https://http2.mlstatic.com/boot-35.jpg"],
-        isActive: true,
-        metadata: {
-          itemId: "123456789",
-          source: "mercadolivre-user-product",
-          userProductId: "MLBU111",
-          variationId: "MLBU111",
-        },
-        sellingPrice: "189.90",
-        sku: "828011PRETA35",
-        title: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
-      },
-      {
-        externalProductId: "MLBU222",
-        images: ["https://http2.mlstatic.com/boot-37.jpg"],
-        isActive: true,
-        metadata: {
-          itemId: "123456789",
-          source: "mercadolivre-user-product",
-          userProductId: "MLBU222",
-          variationId: "MLBU222",
-        },
-        sellingPrice: "189.90",
-        sku: "828011CAFE37",
-        title: "Bota Feminina Via Uno Bico Fino Ziper Lateral",
-      },
-    ]);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.mercadolibre.com/user-products/MLBU111",
-      expect.objectContaining({
-        headers: { Authorization: "Bearer access-token" },
-      }),
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.mercadolibre.com/user-products/MLBU222",
-      expect.objectContaining({
-        headers: { Authorization: "Bearer access-token" },
-      }),
-    );
   });
 
   it("uses variation detail SKU fallbacks after checking SELLER_SKU attributes", async () => {
@@ -4831,6 +4691,11 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
+        createJsonResponse({
+          details: [],
+        }),
+      )
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             message: "shipment costs unavailable",
@@ -4879,6 +4744,14 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
+        createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             paging: { limit: 50, offset: 50, total: 1 },
@@ -4921,10 +4794,10 @@ describe("MercadoLivreProvider", () => {
       expect.objectContaining({ amount: "3.00", feeType: "fixed_fee" }),
       expect.objectContaining({ amount: "14.50", feeType: "shipping_cost" }),
     ]);
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/shipments/999/costs",
     );
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/shipments/999");
+    expect(String(fetchMock.mock.calls[5]?.[0])).toContain("/shipments/999");
   });
 
   it("retries catalog requests after a transient provider failure", async () => {

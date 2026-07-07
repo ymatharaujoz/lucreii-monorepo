@@ -152,25 +152,71 @@ function readMercadoLivreExternalProductMetadata(
     metadata &&
     typeof metadata === "object" &&
     "itemId" in metadata &&
-    typeof metadata.itemId === "string" &&
-    metadata.itemId.trim().length > 0
-      ? metadata.itemId.trim()
+    (typeof metadata.itemId === "string" || typeof metadata.itemId === "number")
+      ? String(metadata.itemId).trim()
       : extractMercadoLivreItemId(externalProduct.externalProductId);
   const variationId =
     metadata &&
     typeof metadata === "object" &&
     "variationId" in metadata &&
-    typeof metadata.variationId === "string" &&
-    metadata.variationId.trim().length > 0
-      ? metadata.variationId.trim()
+    (typeof metadata.variationId === "string" ||
+      typeof metadata.variationId === "number")
+      ? String(metadata.variationId).trim()
       : null;
+  const normalizedItemId = itemId && itemId.length > 0 ? itemId : null;
+  const normalizedVariationId =
+    variationId && variationId.length > 0 ? variationId : null;
 
   return {
-    hasVariations: variationId !== null,
+    hasVariations: normalizedVariationId !== null,
     isVariation:
-      variationId !== null || externalProduct.externalProductId.includes(":"),
+      normalizedVariationId !== null ||
+      externalProduct.externalProductId.includes(":"),
+    itemId: normalizedItemId,
+    variationId: normalizedVariationId,
+  };
+}
+
+function readShopeeExternalProductMetadata(
+  externalProduct: Pick<
+    SyncedExternalProductRow,
+    "externalProductId" | "metadata" | "provider"
+  >,
+) {
+  if (externalProduct.provider !== "shopee") {
+    return {
+      hasModels: false,
+      isModel: false,
+      itemId: null,
+      modelId: null,
+    };
+  }
+
+  const metadata = externalProduct.metadata;
+  const rawItemId =
+    metadata &&
+    typeof metadata === "object" &&
+    "itemId" in metadata &&
+    (typeof metadata.itemId === "string" || typeof metadata.itemId === "number")
+      ? String(metadata.itemId).trim()
+      : extractMercadoLivreItemId(externalProduct.externalProductId);
+  const rawModelId =
+    metadata &&
+    typeof metadata === "object" &&
+    "modelId" in metadata &&
+    (typeof metadata.modelId === "string" ||
+      typeof metadata.modelId === "number")
+      ? String(metadata.modelId).trim()
+      : externalProduct.externalProductId.split(":")[1]?.trim();
+  const itemId = rawItemId && rawItemId.length > 0 ? rawItemId : null;
+  const modelId = rawModelId && rawModelId.length > 0 ? rawModelId : null;
+
+  return {
+    hasModels: modelId !== null,
+    isModel:
+      modelId !== null || externalProduct.externalProductId.includes(":"),
     itemId,
-    variationId,
+    modelId,
   };
 }
 
@@ -647,7 +693,10 @@ export class IntegrationsService {
     const productRows = await this.db.query.products.findMany({
       orderBy: (table) => [desc(table.createdAt)],
       where: (table) =>
-        and(eq(table.organizationId, organizationId), eq(table.companyId, companyId)),
+        and(
+          eq(table.organizationId, organizationId),
+          eq(table.companyId, companyId),
+        ),
     });
 
     return listSyncedProductsReadModel({
@@ -1191,7 +1240,8 @@ export class IntegrationsService {
 
           return product;
         });
-        const linkChanged = externalProduct?.linkedProductId !== storedProduct.id;
+        const linkChanged =
+          externalProduct?.linkedProductId !== storedProduct.id;
         const internalSkuChanged =
           normalizeSku(matchedProduct?.sku) !== normalizeSku(storedProduct.sku);
 
@@ -1226,7 +1276,10 @@ export class IntegrationsService {
           result.unchanged += 1;
         }
 
-        if (!shouldRematerialize && (!matchedProduct || linkChanged || internalSkuChanged)) {
+        if (
+          !shouldRematerialize &&
+          (!matchedProduct || linkChanged || internalSkuChanged)
+        ) {
           shouldRematerialize = true;
         }
       } catch (error) {
@@ -1682,7 +1735,13 @@ export class IntegrationsService {
     organizationId: string;
     providerSlug: IntegrationProviderSlug;
   }) {
-    const metadata = readMercadoLivreExternalProductMetadata(input.externalProduct);
+    const metadata = readMercadoLivreExternalProductMetadata(
+      input.externalProduct,
+    );
+    if (input.providerSlug === "shopee") {
+      return this.resolveShopeeSyncedProductImportContext(input);
+    }
+
     if (input.providerSlug !== "mercadolivre" || !metadata.itemId) {
       return {
         externalProducts: [input.externalProduct],
@@ -1715,8 +1774,56 @@ export class IntegrationsService {
     });
 
     return {
-      externalProducts: hasChildVariations ? familyProducts : [input.externalProduct],
+      externalProducts: hasChildVariations
+        ? familyProducts
+        : [input.externalProduct],
       isFamilyImport: hasChildVariations,
+    };
+  }
+
+  private async resolveShopeeSyncedProductImportContext(input: {
+    companyId: string;
+    externalProduct: SyncedExternalProductRow;
+    organizationId: string;
+    providerSlug: IntegrationProviderSlug;
+  }) {
+    const metadata = readShopeeExternalProductMetadata(input.externalProduct);
+    if (!metadata.itemId) {
+      return {
+        externalProducts: [input.externalProduct],
+        isFamilyImport: false,
+      };
+    }
+
+    await this.hydrateShopeeFamilyExternalProducts(input);
+    const companyProducts = await this.readCompanyExternalProducts(input);
+
+    const familyProducts = companyProducts
+      .filter((row) => {
+        const rowMetadata = readShopeeExternalProductMetadata(row);
+        return rowMetadata.itemId === metadata.itemId;
+      })
+      .sort((left, right) => {
+        const leftMetadata = readShopeeExternalProductMetadata(left);
+        const rightMetadata = readShopeeExternalProductMetadata(right);
+
+        if (leftMetadata.isModel !== rightMetadata.isModel) {
+          return leftMetadata.isModel ? 1 : -1;
+        }
+
+        return left.externalProductId.localeCompare(right.externalProductId);
+      });
+
+    const hasChildModels = familyProducts.some((row) => {
+      const rowMetadata = readShopeeExternalProductMetadata(row);
+      return rowMetadata.isModel;
+    });
+
+    return {
+      externalProducts: hasChildModels
+        ? familyProducts
+        : [input.externalProduct],
+      isFamilyImport: hasChildModels,
     };
   }
 
@@ -1749,11 +1856,81 @@ export class IntegrationsService {
       return;
     }
 
-    const remoteCatalogProducts = await provider.importCatalogByExternalProductId({
-      connection,
-      externalProductId: input.externalProduct.externalProductId,
-      organizationId: input.organizationId,
-    });
+    const remoteCatalogProducts =
+      await provider.importCatalogByExternalProductId({
+        connection,
+        externalProductId: input.externalProduct.externalProductId,
+        organizationId: input.organizationId,
+      });
+
+    for (const catalogProduct of remoteCatalogProducts) {
+      await this.db
+        .insert(externalProducts)
+        .values({
+          companyId: input.companyId,
+          externalProductId: catalogProduct.externalProductId,
+          linkedProductId: null,
+          marketplaceConnectionId: connection.id,
+          metadata: catalogProduct.metadata,
+          organizationId: input.organizationId,
+          provider: input.providerSlug,
+          reviewStatus: "unreviewed",
+          sku: catalogProduct.sku,
+          title: catalogProduct.title,
+        })
+        .onConflictDoUpdate({
+          set: {
+            marketplaceConnectionId: connection.id,
+            metadata: catalogProduct.metadata,
+            sku: catalogProduct.sku,
+            title: catalogProduct.title,
+            updatedAt: new Date(),
+          },
+          target: [
+            externalProducts.organizationId,
+            externalProducts.companyId,
+            externalProducts.provider,
+            externalProducts.externalProductId,
+          ],
+        });
+    }
+  }
+
+  private async hydrateShopeeFamilyExternalProducts(input: {
+    companyId: string;
+    externalProduct: SyncedExternalProductRow;
+    organizationId: string;
+    providerSlug: IntegrationProviderSlug;
+  }) {
+    if (input.providerSlug !== "shopee") {
+      return;
+    }
+
+    const provider = this.getProvider(input.providerSlug);
+    if (!provider.importCatalogByExternalProductId) {
+      return;
+    }
+
+    const connection =
+      (await this.db.query.marketplaceConnections.findFirst({
+        where: (table) =>
+          and(
+            eq(table.organizationId, input.organizationId),
+            eq(table.companyId, input.companyId),
+            eq(table.provider, input.providerSlug),
+          ),
+      })) ?? null;
+
+    if (!connection) {
+      return;
+    }
+
+    const remoteCatalogProducts =
+      await provider.importCatalogByExternalProductId({
+        connection,
+        externalProductId: input.externalProduct.externalProductId,
+        organizationId: input.organizationId,
+      });
 
     for (const catalogProduct of remoteCatalogProducts) {
       await this.db

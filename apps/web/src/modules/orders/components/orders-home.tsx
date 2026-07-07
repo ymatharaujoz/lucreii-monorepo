@@ -547,6 +547,10 @@ function CompositionMetric({
 }
 
 function CompositionTab({ composition }: { composition: OrderComposition }) {
+  const shippingDisplayAmount =
+    composition.shippingBreakdown?.netShippingAmount ??
+    composition.shippingOrFixedFeeAmount;
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -595,8 +599,8 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
                 ]
               : undefined
           }
-          value={formatMoney(composition.shippingOrFixedFeeAmount)}
-          negative
+          value={formatMoney(shippingDisplayAmount)}
+          negative={!composition.shippingBreakdown}
         />
         <CompositionMetric
           icon={<Package className="h-4 w-4" />}

@@ -216,20 +216,19 @@ function readMercadoLivreSyncMetadata(
 
   const itemId =
     "itemId" in metadata &&
-    typeof metadata.itemId === "string" &&
-    metadata.itemId.trim().length > 0
-      ? metadata.itemId.trim()
+    (typeof metadata.itemId === "string" || typeof metadata.itemId === "number")
+      ? String(metadata.itemId).trim()
       : null;
   const variationId =
     "variationId" in metadata &&
-    typeof metadata.variationId === "string" &&
-    metadata.variationId.trim().length > 0
-      ? metadata.variationId.trim()
+    (typeof metadata.variationId === "string" ||
+      typeof metadata.variationId === "number")
+      ? String(metadata.variationId).trim()
       : null;
 
   return {
-    itemId,
-    variationId,
+    itemId: itemId && itemId.length > 0 ? itemId : null,
+    variationId: variationId && variationId.length > 0 ? variationId : null,
   };
 }
 

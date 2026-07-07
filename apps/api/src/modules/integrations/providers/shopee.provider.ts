@@ -3,6 +3,7 @@ import type { MarketplaceConnection } from "@lucreii/database";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import {
   type IntegrationCatalogImportContext,
+  type IntegrationCatalogSingleItemImportContext,
   type IntegrationCatalogProduct,
   IntegrationProviderError,
   type IntegrationProvider,
@@ -86,9 +87,13 @@ type ShopeeEscrowResponse = {
   response?: {
     order_income?: {
       actual_shipping_fee?: number;
+      buyer_paid_shipping_fee?: number;
       commission_fee?: number;
       estimated_shipping_fee?: number;
+      escrow_amount?: number;
       final_shipping_fee?: number;
+      shipping_fee_discount_from_3pl?: number;
+      seller_coin_cash_back?: number;
       seller_shipping_discount?: number;
       seller_transaction_fee?: number;
       service_fee?: number;
@@ -181,6 +186,28 @@ function externalProductId(item: ShopeeOrderItem) {
     : String(item.item_id);
 }
 
+function externalProductMetadata(item: ShopeeOrderItem) {
+  const itemId = typeof item.item_id === "number" ? item.item_id : null;
+  const modelId =
+    typeof item.model_id === "number" && item.model_id > 0
+      ? item.model_id
+      : null;
+
+  return { itemId, modelId };
+}
+
+function externalProductVariationId(item: ShopeeOrderItem) {
+  return typeof item.model_id === "number" && item.model_id > 0
+    ? String(item.model_id)
+    : null;
+}
+
+function extractShopeeItemId(externalProductId: string) {
+  const [itemId] = externalProductId.split(":");
+  const parsed = Number(itemId);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 function extractShopeeOrderNumberFromNotification(
   notification: IntegrationSyncNotification | null | undefined,
 ) {
@@ -239,6 +266,23 @@ function isShopeeActive(itemStatus: string | undefined, stock: number | null) {
   }
 
   return stock === null ? true : stock > 0;
+}
+
+function sanitizeProviderPayload(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (/(token|secret|password|key)/i.test(key)) {
+      sanitized[key] = "[redacted]";
+      continue;
+    }
+    sanitized[key] = value;
+  }
+
+  return sanitized;
 }
 
 export class ShopeeProvider implements IntegrationProvider {
@@ -368,6 +412,30 @@ export class ShopeeProvider implements IntegrationProvider {
     return products;
   }
 
+  async importCatalogByExternalProductId(
+    input: IntegrationCatalogSingleItemImportContext,
+  ): Promise<IntegrationCatalogProduct[]> {
+    this.assertConfigured();
+    const shopId = input.connection.externalAccountId;
+    const accessToken = input.connection.accessToken;
+    const itemId = extractShopeeItemId(input.externalProductId);
+
+    if (!shopId || !accessToken || itemId === null) {
+      throw new IntegrationProviderError(
+        "Shopee connection is missing shop_id or access_token required for catalog import.",
+        "callback_invalid",
+      );
+    }
+
+    const [item] = await this.fetchCatalogBaseItems({
+      accessToken,
+      itemIds: [itemId],
+      shopId,
+    });
+
+    return item ? this.normalizeCatalogItem({ accessToken, item, shopId }) : [];
+  }
+
   verifyWebhookSignature(input: {
     authorization: string;
     callbackUrl: string;
@@ -476,7 +544,10 @@ export class ShopeeProvider implements IntegrationProvider {
           .filter((item) => item.externalProductId)
           .map((item) => ({
             externalProductId: item.externalProductId!,
-            metadata: { source: "shopee-order-item" },
+            metadata: {
+              source: "shopee-order-item",
+              ...externalProductMetadataFromId(item.externalProductId!),
+            },
             sku: item.sku ?? null,
             title: item.title ?? null,
           })),
@@ -532,7 +603,11 @@ export class ShopeeProvider implements IntegrationProvider {
         amount: toMoney(commission),
         currency,
         feeType: "marketplace_commission",
-        metadata: { source: "payment.get_escrow_detail" },
+        metadata: {
+          commissionFee: income?.commission_fee ?? null,
+          serviceFee: income?.service_fee ?? null,
+          source: "payment.get_escrow_detail",
+        },
       });
     }
     if (fixedFee > 0) {
@@ -540,7 +615,10 @@ export class ShopeeProvider implements IntegrationProvider {
         amount: toMoney(fixedFee),
         currency,
         feeType: "fixed_fee",
-        metadata: { source: "payment.get_escrow_detail" },
+        metadata: {
+          sellerTransactionFee: income?.seller_transaction_fee ?? null,
+          source: "payment.get_escrow_detail",
+        },
       });
     }
     if (sellerShippingCost > 0) {
@@ -548,7 +626,16 @@ export class ShopeeProvider implements IntegrationProvider {
         amount: toMoney(sellerShippingCost),
         currency,
         feeType: "shipping_cost",
-        metadata: { source: "payment.get_escrow_detail" },
+        metadata: {
+          actualShippingFee: income?.actual_shipping_fee ?? null,
+          buyerPaidShippingFee: income?.buyer_paid_shipping_fee ?? null,
+          estimatedShippingFee: income?.estimated_shipping_fee ?? null,
+          finalShippingFee: income?.final_shipping_fee ?? null,
+          sellerShippingDiscount: income?.seller_shipping_discount ?? null,
+          shippingFeeDiscountFrom3pl:
+            income?.shipping_fee_discount_from_3pl ?? null,
+          source: "payment.get_escrow_detail",
+        },
       });
     }
 
@@ -561,11 +648,23 @@ export class ShopeeProvider implements IntegrationProvider {
         item.model_discounted_price ?? item.model_original_price ?? 0;
       return {
         externalProductId: externalProductId(item),
+        metadata: externalProductMetadata(item),
         quantity,
-        sku: item.model_sku || item.item_sku || null,
-        title: item.model_name || item.item_name || null,
+        sku:
+          item.model_sku ||
+          item.item_sku ||
+          (item.item_id
+            ? item.model_id && item.model_id > 0
+              ? `SHP-${item.item_id}-${item.model_id}`
+              : `SHP-${item.item_id}`
+            : null),
+        title:
+          item.model_name && item.item_name
+            ? `${item.item_name} - ${item.model_name}`
+            : item.model_name || item.item_name || null,
         totalPrice: toMoney(unitPrice * quantity),
         unitPrice: toMoney(unitPrice),
+        variationId: externalProductVariationId(item),
       };
     });
     const paid = Boolean(input.order.pay_time && input.order.pay_time > 0);
@@ -577,8 +676,10 @@ export class ShopeeProvider implements IntegrationProvider {
       items,
       metadata: {
         escrowAvailable: Boolean(income),
+        escrowAmount: income?.escrow_amount ?? null,
         paid,
         payTime: input.order.pay_time ?? null,
+        rawEscrowIncome: sanitizeProviderPayload(income),
         updateTime: input.order.update_time ?? null,
       },
       orderedAt: input.order.create_time
@@ -928,4 +1029,19 @@ export class ShopeeProvider implements IntegrationProvider {
       );
     }
   }
+}
+
+function externalProductMetadataFromId(externalProductId: string) {
+  const [itemId, modelId] = externalProductId.split(":");
+  const parsedItemId = Number(itemId);
+  const parsedModelId = Number(modelId);
+
+  return {
+    itemId:
+      Number.isFinite(parsedItemId) && parsedItemId > 0 ? parsedItemId : null,
+    modelId:
+      Number.isFinite(parsedModelId) && parsedModelId > 0
+        ? parsedModelId
+        : null,
+  };
 }
