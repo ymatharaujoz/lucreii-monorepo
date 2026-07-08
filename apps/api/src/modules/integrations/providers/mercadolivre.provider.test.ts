@@ -2743,6 +2743,141 @@ describe("MercadoLivreProvider", () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 
+  it("does not derive refund bonus when Mercado Pago net total excludes shared shipping cost", async () => {
+    const provider = createProvider();
+    const searchPayload = {
+      paging: { limit: 50, offset: 0, total: 1 },
+      results: [
+        {
+          currency_id: "BRL",
+          date_closed: "2026-06-29T22:12:31.000-04:00",
+          id: 2000017170311872,
+          order_items: [
+            {
+              item: {
+                category_id: "MLB418472",
+                id: "MLB4454271609",
+                seller_sku: "Suporte 02 Branco",
+                title:
+                  "Suporte Teclado Pc Inclinação Ângulo Perfeito Envio Imediato",
+              },
+              listing_type_id: "gold_special",
+              quantity: 1,
+              sale_fee: 2.96,
+              unit_price: 22.74,
+            },
+          ],
+          pack_id: 2000013762862251,
+          payments: [
+            {
+              id: 166422896102,
+              marketplace_fee: 0,
+            },
+          ],
+          shipping: { id: 47409123176 },
+          total_amount: 22.74,
+        },
+      ],
+    };
+    const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+
+      if (url.includes("/orders/search")) {
+        return Promise.resolve(createJsonResponse(searchPayload));
+      }
+
+      if (url.includes("/orders/2000017170311872")) {
+        return Promise.resolve(
+          createJsonResponse({
+            ...searchPayload.results[0],
+            status: "paid",
+          }),
+        );
+      }
+
+      if (url.includes("/v1/payments/166422896102")) {
+        return Promise.resolve(
+          createJsonResponse({
+            id: 166422896102,
+            transaction_details: {
+              net_received_amount: 19.78,
+            },
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [
+              {
+                details: [
+                  {
+                    charge_info: {
+                      detail_amount: 36.09,
+                      detail_sub_type: "CFFE",
+                    },
+                    shipping_info: {
+                      receiver_shipping_cost: 22.99,
+                    },
+                  },
+                ],
+                order_id: 2000017170311872,
+                sale_fee: {
+                  gross: 2.96,
+                  net: 2.96,
+                  rebate: 0,
+                  discount: 0,
+                },
+              },
+            ],
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/periods")) {
+        return Promise.resolve(
+          createJsonResponse({
+            limit: 1000,
+            offset: 0,
+            results: [],
+            total: 0,
+          }),
+        );
+      }
+
+      if (url.includes("/listing_prices")) {
+        return Promise.resolve(
+          createJsonResponse([
+            {
+              sale_fee_amount: 2.96,
+            },
+          ]),
+        );
+      }
+
+      return Promise.reject(new Error(`Unexpected URL: ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      organizationId: "org_1",
+    });
+
+    expect(result.orders[0]?.metadata).toMatchObject({
+      refundBonusAmount: "0.00",
+    });
+    expect(result.orders[0]?.fees).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          feeType: "refund_bonus",
+        }),
+      ]),
+    );
+  });
+
   it("splits MELI gross sale_fee into commission net and fixed fee when billing details match the order fee", async () => {
     const provider = new MercadoLivreProvider({
       API_DB_POOL_MAX: 5,

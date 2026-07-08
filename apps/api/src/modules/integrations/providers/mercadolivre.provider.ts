@@ -875,6 +875,17 @@ function deriveNetTotalRefundBonus(input: {
     "marketplace_commission",
   );
   const shippingAmount = sumFeeAmountsByType(input.fees, "shipping_cost");
+  const expectedNetWithoutShippingAmount = roundMoneyNumber(
+    input.totalAmount - marketplaceCommissionAmount,
+  );
+
+  if (
+    shippingAmount > 0 &&
+    isAlmostEqualMoney(input.netReceivedAmount, expectedNetWithoutShippingAmount)
+  ) {
+    return null;
+  }
+
   const expectedNetAmount = roundMoneyNumber(
     input.totalAmount - marketplaceCommissionAmount - shippingAmount,
   );
