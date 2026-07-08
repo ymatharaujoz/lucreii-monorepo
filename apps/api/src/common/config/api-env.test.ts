@@ -50,6 +50,23 @@ describe("readApiEnv", () => {
     expect(env.BETTER_AUTH_URL).toBeUndefined();
   });
 
+  it("prefers platform PORT over API_PORT for deployment binds", () => {
+    const env = readApiEnv({
+      API_HOST: "0.0.0.0",
+      API_PORT: "4000",
+      API_DB_POOL_MAX: "12",
+      DATABASE_URL: runtimeUrl,
+      PORT: "31234",
+      STRIPE_SECRET_KEY: "stripe",
+      STRIPE_WEBHOOK_SECRET: "webhook",
+      ...stripePlanPrices,
+      NODE_ENV: "test",
+      WEB_APP_ORIGIN: "http://localhost:3000",
+    });
+
+    expect(env.API_PORT).toBe(31234);
+  });
+
   it("accepts optional legacy Better Auth config without requiring it", () => {
     const env = readApiEnv({
       API_HOST: "127.0.0.1",

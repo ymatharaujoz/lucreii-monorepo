@@ -65,7 +65,7 @@ export function readApiEnv(
 ): ApiRuntimeEnv {
   return apiEnvSchema.parse({
     API_HOST: source.API_HOST,
-    API_PORT: source.API_PORT ?? source.PORT,
+    API_PORT: source.PORT ?? source.API_PORT,
     API_DB_POOL_MAX: source.API_DB_POOL_MAX,
     API_PUBLIC_BASE_URL: source.API_PUBLIC_BASE_URL,
     DATABASE_URL: source.DATABASE_URL,
