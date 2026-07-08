@@ -264,6 +264,11 @@ type MercadoLivreBillingDetailResult = Record<string, unknown> & {
   sale_fee?: MercadoLivreBillingDetailFeeResponse;
 };
 
+type MercadoLivreBillingAdjustmentResult = Record<string, unknown> & {
+  operation_id?: number | string;
+  sale_fee?: MercadoLivreBillingDetailFeeResponse | null;
+};
+
 type MercadoLivreFinancialAdjustment = {
   amount: number;
   operationId: string | null;
@@ -271,6 +276,7 @@ type MercadoLivreFinancialAdjustment = {
   originalType: string | null;
   rawPayload: Record<string, unknown> | null;
   source:
+    | "billing/integration/group/ML/order/details"
     | "billing/integration/periods"
     | "payment.transaction_details.net_received_amount";
 };
@@ -302,13 +308,25 @@ type MercadoLivreBillingOrderShippingDetail = Record<string, unknown> & {
   };
 };
 
+type MercadoLivreBillingOrderResult = MercadoLivreBillingOrderShippingDetail & {
+  details?: MercadoLivreBillingOrderShippingDetail[];
+  operation_id?: number | string;
+  sale_fee?: MercadoLivreBillingDetailFeeResponse | null;
+  total?: number | string;
+  total_amount?: number | string;
+};
+
 export type MercadoLivreBillingOrderDetailsResponse = Record<string, unknown> & {
   details?: MercadoLivreBillingOrderShippingDetail[];
-  results?: Array<
-    MercadoLivreBillingOrderShippingDetail | {
-      details?: MercadoLivreBillingOrderShippingDetail[];
-    }
-  >;
+  results?: MercadoLivreBillingOrderResult[];
+};
+
+type MercadoLivreBillingOrderAdjustmentMetadata = {
+  mercadoLivreRefundBonusAmount?: string;
+  mercadoLivreRefundBonusOriginalDescription?: string | null;
+  mercadoLivreRefundBonusOriginalType?: string | null;
+  mercadoLivreRefundBonusOperationId?: string | null;
+  mercadoLivreRefundBonusSource?: MercadoLivreFinancialAdjustment["source"];
 };
 
 function toDecimalString(value: number | string | null | undefined) {
@@ -457,7 +475,7 @@ function normalizeBillingText(value: unknown) {
 }
 
 function readFirstBillingText(
-  result: MercadoLivreBillingDetailResult,
+  result: MercadoLivreBillingAdjustmentResult,
   keys: string[],
 ) {
   for (const key of keys) {
@@ -470,7 +488,7 @@ function readFirstBillingText(
   return null;
 }
 
-function hasBillingAdjustmentText(result: MercadoLivreBillingDetailResult) {
+function hasBillingAdjustmentText(result: MercadoLivreBillingAdjustmentResult) {
   const text = [
     result.type,
     result.description,
@@ -540,6 +558,143 @@ function flattenBillingOrderDetails(
   return details;
 }
 
+function readBillingOrderResultTotalAmount(
+  result: MercadoLivreBillingOrderResult,
+) {
+  const record = result as Record<string, unknown>;
+  const nestedAmounts =
+    record.amounts && typeof record.amounts === "object"
+      ? (record.amounts as Record<string, unknown>)
+      : null;
+  const nestedSummary =
+    record.summary && typeof record.summary === "object"
+      ? (record.summary as Record<string, unknown>)
+      : null;
+  const candidates = [
+    result.total_amount,
+    result.total,
+    record.billing_total_amount,
+    record.net_total,
+    record.net_amount,
+    nestedAmounts?.total,
+    nestedAmounts?.net_total,
+    nestedSummary?.total,
+    nestedSummary?.net_total,
+  ];
+
+  for (const candidate of candidates) {
+    const amount = readBillingMoneyNumber(candidate);
+    if (amount !== null && amount > 0) {
+      return amount;
+    }
+  }
+
+  return null;
+}
+
+function readMercadoLivreBillingTotalAmountFromFees(fees: IntegrationSyncFee[]) {
+  for (const fee of fees) {
+    const metadata =
+      fee.metadata && typeof fee.metadata === "object"
+        ? (fee.metadata as Record<string, unknown>)
+        : null;
+    const amount = readBillingMoneyNumber(
+      metadata?.mercadoLivreBillingTotalAmount,
+    );
+
+    if (amount !== null && amount > 0) {
+      return toDecimalString(amount);
+    }
+  }
+
+  return null;
+}
+
+function findBillingOrderResult(input: {
+  orderId: string;
+  payload: MercadoLivreBillingOrderDetailsResponse;
+}) {
+  return (input.payload.results ?? []).find(
+    (result) =>
+      result.order_id !== undefined &&
+      result.order_id !== null &&
+      String(result.order_id) === input.orderId,
+  );
+}
+
+function readBillingOrderTotalAmount(input: {
+  orderId: string;
+  payload: MercadoLivreBillingOrderDetailsResponse;
+}) {
+  const results = input.payload.results ?? [];
+  const matchingResult = findBillingOrderResult(input);
+  const orderedResults = matchingResult
+    ? [matchingResult, ...results.filter((result) => result !== matchingResult)]
+    : results;
+
+  for (const result of orderedResults) {
+    const amount = readBillingOrderResultTotalAmount(result);
+    if (amount !== null) {
+      return roundMoneyNumber(amount);
+    }
+  }
+
+  return null;
+}
+
+function readBillingOrderFinancialAdjustment(input: {
+  orderId: string;
+  payload: MercadoLivreBillingOrderDetailsResponse;
+}) {
+  const matchingResult = findBillingOrderResult(input);
+
+  return readBillingFinancialAdjustment(
+    matchingResult,
+    "billing/integration/group/ML/order/details",
+  );
+}
+
+function readMercadoLivreBillingRefundBonusAdjustmentFromFees(
+  fees: IntegrationSyncFee[],
+): MercadoLivreFinancialAdjustment | null {
+  for (const fee of fees) {
+    const metadata =
+      fee.metadata && typeof fee.metadata === "object"
+        ? (fee.metadata as MercadoLivreBillingOrderAdjustmentMetadata &
+            Record<string, unknown>)
+        : null;
+    const amount = readBillingMoneyNumber(metadata?.mercadoLivreRefundBonusAmount);
+
+    if (amount !== null && amount > 0) {
+      return {
+        amount: roundMoneyNumber(amount),
+        operationId:
+          typeof metadata?.mercadoLivreRefundBonusOperationId === "string"
+            ? metadata.mercadoLivreRefundBonusOperationId
+            : null,
+        originalDescription:
+          typeof metadata?.mercadoLivreRefundBonusOriginalDescription === "string"
+            ? metadata.mercadoLivreRefundBonusOriginalDescription
+            : null,
+        originalType:
+          typeof metadata?.mercadoLivreRefundBonusOriginalType === "string"
+            ? metadata.mercadoLivreRefundBonusOriginalType
+            : null,
+        rawPayload:
+          metadata?.raw_billing_payload &&
+          typeof metadata.raw_billing_payload === "object"
+            ? (metadata.raw_billing_payload as Record<string, unknown>)
+            : null,
+        source:
+          metadata?.mercadoLivreRefundBonusSource ??
+          "billing/integration/group/ML/order/details",
+      };
+    }
+  }
+
+  return null;
+}
+
 function readBillingReceiverShippingCost(
   details: MercadoLivreBillingOrderShippingDetail[],
 ) {
@@ -569,6 +724,8 @@ export function readMercadoLivreBillingOrderShippingCost(input: {
   payload: MercadoLivreBillingOrderDetailsResponse;
 }): MercadoLivreShippingCostResolution | null {
   const details = flattenBillingOrderDetails(input.payload);
+  const billingTotalAmount = readBillingOrderTotalAmount(input);
+  const financialAdjustment = readBillingOrderFinancialAdjustment(input);
 
   const buyerPaid = readBillingReceiverShippingCost(details) ?? 0;
   const sellerFee = readBillingCffeAmount(details);
@@ -577,10 +734,12 @@ export function readMercadoLivreBillingOrderShippingCost(input: {
   const roundedSellerFee = roundMoneyNumber(sellerFee);
 
   const netAmount = roundMoneyNumber(roundedBuyerPaid - roundedSellerFee);
+  const sellerShippingCost = Math.abs(netAmount);
 
   if (
     isAlmostEqualMoney(roundedBuyerPaid, 0) &&
-    isAlmostEqualMoney(roundedSellerFee, 0)
+    isAlmostEqualMoney(roundedSellerFee, 0) &&
+    billingTotalAmount === null
   ) {
     return null;
   }
@@ -588,11 +747,26 @@ export function readMercadoLivreBillingOrderShippingCost(input: {
   const sanitizedPayload = sanitizeProviderPayload(input.payload);
 
   return {
-    amount: netAmount,
+    amount: sellerShippingCost,
     metadata: {
       buyerShippingAmount: roundedBuyerPaid,
       grossShippingTariffAmount: roundedSellerFee,
       raw_billing_payload: sanitizedPayload,
+      ...(billingTotalAmount !== null
+        ? { mercadoLivreBillingTotalAmount: toDecimalString(billingTotalAmount) }
+        : {}),
+      ...(financialAdjustment
+        ? {
+            mercadoLivreRefundBonusAmount: toDecimalString(
+              financialAdjustment.amount,
+            ),
+            mercadoLivreRefundBonusOperationId: financialAdjustment.operationId,
+            mercadoLivreRefundBonusOriginalDescription:
+              financialAdjustment.originalDescription,
+            mercadoLivreRefundBonusOriginalType: financialAdjustment.originalType,
+            mercadoLivreRefundBonusSource: financialAdjustment.source,
+          }
+        : {}),
       shipping_buyer_paid: toDecimalString(roundedBuyerPaid),
       shipping_net_amount: toDecimalString(netAmount),
       shipping_seller_fee: toDecimalString(roundedSellerFee),
@@ -602,7 +776,8 @@ export function readMercadoLivreBillingOrderShippingCost(input: {
 }
 
 function readBillingFinancialAdjustment(
-  result: MercadoLivreBillingDetailResult | null | undefined,
+  result: MercadoLivreBillingAdjustmentResult | null | undefined,
+  source: MercadoLivreFinancialAdjustment["source"] = "billing/integration/periods",
 ): MercadoLivreFinancialAdjustment | null {
   if (!result) {
     return null;
@@ -650,7 +825,7 @@ function readBillingFinancialAdjustment(
           sanitizedPayload && typeof sanitizedPayload === "object"
             ? sanitizedPayload
             : null,
-        source: "billing/integration/periods",
+        source,
       };
     }
   }
@@ -2423,7 +2598,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
       },
     );
 
-    const { fees, operationId } = await this.resolveOrderFees(
+    const { fees, operationId, refundBonusAdjustment } = await this.resolveOrderFees(
       order,
       input,
       detailedOrder,
@@ -2433,7 +2608,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
       order: resolvedOrder,
     });
     const financialAdjustment =
-      netReceivedAmount && typeof resolvedOrder.total_amount === "number"
+      refundBonusAdjustment ??
+      (netReceivedAmount && typeof resolvedOrder.total_amount === "number"
         ? deriveNetTotalRefundBonus({
             fees,
             netReceivedAmount: netReceivedAmount.amount,
@@ -2441,7 +2617,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
             rawPayload: netReceivedAmount.rawPayload,
             totalAmount: resolvedOrder.total_amount,
           })
-        : null;
+        : null);
     const refundBonusAmount = financialAdjustment
       ? toDecimalString(financialAdjustment.amount)
       : "0.00";
@@ -2462,6 +2638,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
           },
         ]
       : fees;
+    const mercadoLivreBillingTotalAmount =
+      readMercadoLivreBillingTotalAmountFromFees(orderFees);
 
     return {
       currency: resolvedOrder.currency_id ?? "BRL",
@@ -2473,6 +2651,9 @@ export class MercadoLivreProvider implements IntegrationProvider {
           ? { packId: String(resolvedOrder.pack_id) }
           : {}),
         ...(operationId ? { operationId } : {}),
+        ...(mercadoLivreBillingTotalAmount
+          ? { mercadoLivreBillingTotalAmount }
+          : {}),
         refundBonusAmount,
         returnQuantityBySku,
         skuByExternalProductId,
@@ -2500,7 +2681,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
       return {
         fees: initialFees,
         operationId: null,
-        refundBonusAdjustment: null,
+        refundBonusAdjustment:
+          readMercadoLivreBillingRefundBonusAdjustmentFromFees(initialFees),
       };
     }
 
@@ -2514,7 +2696,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
         fees: initialFees,
         operationId: billingFeeBreakdown?.operationId ?? null,
         refundBonusAdjustment:
-          billingFeeBreakdown?.refundBonusAdjustment ?? null,
+          billingFeeBreakdown?.refundBonusAdjustment ??
+          readMercadoLivreBillingRefundBonusAdjustmentFromFees(initialFees),
       };
     }
 
@@ -2531,7 +2714,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
       return {
         fees: initialFees,
         operationId: null,
-        refundBonusAdjustment: null,
+        refundBonusAdjustment:
+          readMercadoLivreBillingRefundBonusAdjustmentFromFees(initialFees),
       };
     }
 
@@ -2625,13 +2809,16 @@ export class MercadoLivreProvider implements IntegrationProvider {
     });
 
     const completedFees = [...adjustedFees];
+    const orderDetailsRefundBonusAdjustment =
+      readMercadoLivreBillingRefundBonusAdjustmentFromFees(completedFees);
 
     if (!feeBreakdown || feeBreakdown.fixedFee === null) {
       return {
         fees: completedFees,
         operationId: billingFeeBreakdown?.operationId ?? null,
         refundBonusAdjustment:
-          billingFeeBreakdown?.refundBonusAdjustment ?? null,
+          billingFeeBreakdown?.refundBonusAdjustment ??
+          orderDetailsRefundBonusAdjustment,
       };
     }
 
@@ -2640,7 +2827,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
         fees: completedFees,
         operationId: billingFeeBreakdown?.operationId ?? null,
         refundBonusAdjustment:
-          billingFeeBreakdown?.refundBonusAdjustment ?? null,
+          billingFeeBreakdown?.refundBonusAdjustment ??
+          orderDetailsRefundBonusAdjustment,
       };
     }
 
@@ -2660,7 +2848,9 @@ export class MercadoLivreProvider implements IntegrationProvider {
         },
       ],
       operationId: billingFeeBreakdown?.operationId ?? null,
-      refundBonusAdjustment: billingFeeBreakdown?.refundBonusAdjustment ?? null,
+      refundBonusAdjustment:
+        billingFeeBreakdown?.refundBonusAdjustment ??
+        orderDetailsRefundBonusAdjustment,
     };
   }
 

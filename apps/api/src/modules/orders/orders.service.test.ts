@@ -2534,7 +2534,7 @@ describe("OrdersService", () => {
               companyId: "company_123",
               createdAt: new Date("2026-06-20T12:00:00.000Z"),
               currency: "BRL",
-              externalOrderId: "MLB-1001",
+              externalOrderId: "SHP-1001",
               metadata: {
                 compositionOverrides: {
                   marketplaceCommissionAmount: "15.00",
@@ -3355,7 +3355,7 @@ describe("OrdersService", () => {
     ).resolves.toEqual(
       expect.objectContaining({
         composition: expect.objectContaining({
-          netRevenueAmount: "134.00",
+          netRevenueAmount: "144.00",
           refundBonusAmount: "4.00",
         }),
         items: [
@@ -3895,7 +3895,7 @@ describe("OrdersService", () => {
     expect(result.page).toBe(2);
     expect(result.totalPages).toBe(2);
     expect(result.items).toHaveLength(1);
-    expect(result.items[0]?.orderId).toBe("MLB-1001");
+    expect(result.items[0]?.orderId).toBe("SHP-1001");
   });
 
   it("coerces string pagination filters before slicing results", async () => {
@@ -4044,10 +4044,13 @@ describe("OrdersService", () => {
   it("uses offset and a stable id tie-breaker in optimized database pagination", async () => {
     const countWhereMock = vi.fn().mockResolvedValue([{ count: 2 }]);
     const countFromMock = vi.fn().mockReturnValue({ where: countWhereMock });
-    const pageOffsetMock = vi.fn().mockResolvedValue([{ id: "order_row_1" }]);
+    const pageOffsetMock = vi
+      .fn()
+      .mockResolvedValue([{ logicalGroupKey: "order_row_1", provider: "shopee" }]);
     const pageLimitMock = vi.fn().mockReturnValue({ offset: pageOffsetMock });
     const pageOrderByMock = vi.fn().mockReturnValue({ limit: pageLimitMock });
-    const pageWhereMock = vi.fn().mockReturnValue({ orderBy: pageOrderByMock });
+    const pageGroupByMock = vi.fn().mockReturnValue({ orderBy: pageOrderByMock });
+    const pageWhereMock = vi.fn().mockReturnValue({ groupBy: pageGroupByMock });
     const pageFromMock = vi.fn().mockReturnValue({ where: pageWhereMock });
     const selectMock = vi
       .fn()
@@ -4069,11 +4072,11 @@ describe("OrdersService", () => {
               companyId: "company_123",
               createdAt: new Date("2026-06-21T12:00:00.000Z"),
               currency: "BRL",
-              externalOrderId: "MLB-1001",
+              externalOrderId: "SHP-1001",
               metadata: {},
               orderedAt: new Date("2026-06-21T10:15:00.000Z"),
               organizationId: "org_123",
-              provider: "mercadolivre",
+              provider: "shopee",
               status: "paid",
               syncRunId: null,
               updatedAt: new Date("2026-06-21T12:00:00.000Z"),
@@ -4100,12 +4103,184 @@ describe("OrdersService", () => {
         includeSummary: false,
         page: 2,
         pageSize: 1,
+        provider: "shopee",
       },
     );
 
     expect(pageOffsetMock).toHaveBeenCalledWith(1);
     expect(pageOrderByMock.mock.calls[0]).toHaveLength(3);
-    expect(result.items[0]?.orderId).toBe("MLB-1001");
+    expect(result.items[0]?.orderId).toBe("SHP-1001");
+  });
+
+  it("uses optimized database pagination for Mercado Livre logical orders", async () => {
+    const countWhereMock = vi.fn().mockResolvedValue([{ count: 2 }]);
+    const countFromMock = vi.fn().mockReturnValue({ where: countWhereMock });
+    const pageOffsetMock = vi.fn().mockResolvedValue([
+      {
+        logicalGroupKey: "2000013650735359",
+        provider: "mercadolivre",
+      },
+    ]);
+    const pageLimitMock = vi.fn().mockReturnValue({ offset: pageOffsetMock });
+    const pageOrderByMock = vi.fn().mockReturnValue({ limit: pageLimitMock });
+    const pageGroupByMock = vi.fn().mockReturnValue({ orderBy: pageOrderByMock });
+    const pageWhereMock = vi.fn().mockReturnValue({ groupBy: pageGroupByMock });
+    const pageFromMock = vi.fn().mockReturnValue({ where: pageWhereMock });
+    const selectMock = vi
+      .fn()
+      .mockReturnValueOnce({ from: countFromMock })
+      .mockReturnValueOnce({ from: pageFromMock });
+    const findManyMock = vi
+      .fn()
+      .mockResolvedValue([
+        {
+          id: "order_row_1",
+          companyId: "company_123",
+          createdAt: new Date("2026-06-22T18:10:00.000Z"),
+          currency: "BRL",
+          externalOrderId: "MLB-ORDER-1",
+          metadata: { operationId: "2000013650735359" },
+          orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+          organizationId: "org_123",
+          provider: "mercadolivre",
+          status: "paid",
+          syncRunId: null,
+          updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+          totalAmount: "37.92",
+          items: [],
+          fees: [],
+        },
+        {
+          id: "order_row_2",
+          companyId: "company_123",
+          createdAt: new Date("2026-06-22T18:10:00.000Z"),
+          currency: "BRL",
+          externalOrderId: "MLB-ORDER-2",
+          metadata: { operationId: "2000013650735359" },
+          orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+          organizationId: "org_123",
+          provider: "mercadolivre",
+          status: "paid",
+          syncRunId: null,
+          updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+          totalAmount: "37.92",
+          items: [],
+          fees: [],
+        },
+      ]);
+    const db = {
+      select: selectMock,
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        externalOrders: {
+          findMany: findManyMock,
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        includeSummary: false,
+        page: 1,
+        pageSize: 1,
+      },
+    );
+
+    expect(selectMock).toHaveBeenCalledTimes(2);
+    expect(pageOffsetMock).toHaveBeenCalledWith(0);
+    expect(String(findManyMock.mock.calls[0]?.[0]?.where ?? "")).toContain(
+      "operationId",
+    );
+    expect(result.totalItems).toBe(2);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.id).toBe("group__mercadolivre__2000013650735359");
+  });
+
+  it("keeps single Mercado Livre orders visible in optimized database pagination", async () => {
+    const countWhereMock = vi.fn().mockResolvedValue([{ count: 1 }]);
+    const countFromMock = vi.fn().mockReturnValue({ where: countWhereMock });
+    const pageOffsetMock = vi.fn().mockResolvedValue([
+      {
+        logicalGroupKey: "MLB-1001",
+        provider: "mercadolivre",
+      },
+    ]);
+    const pageLimitMock = vi.fn().mockReturnValue({ offset: pageOffsetMock });
+    const pageOrderByMock = vi.fn().mockReturnValue({ limit: pageLimitMock });
+    const pageGroupByMock = vi.fn().mockReturnValue({ orderBy: pageOrderByMock });
+    const pageWhereMock = vi.fn().mockReturnValue({ groupBy: pageGroupByMock });
+    const pageFromMock = vi.fn().mockReturnValue({ where: pageWhereMock });
+    const selectMock = vi
+      .fn()
+      .mockReturnValueOnce({ from: countFromMock })
+      .mockReturnValueOnce({ from: pageFromMock });
+    const db = {
+      select: selectMock,
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-20T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-1001",
+              metadata: {},
+              orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-20T12:00:00.000Z"),
+              totalAmount: "200.00",
+              items: [],
+              fees: [],
+            },
+          ]),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        includeSummary: false,
+        page: 1,
+        pageSize: 20,
+      },
+    );
+
+    expect(result.totalItems).toBe(1);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.id).toBe("group__mercadolivre__MLB-1001");
   });
 
   it("aggregates unique order skus on list rows", async () => {
@@ -4298,73 +4473,14 @@ describe("OrdersService", () => {
     );
 
     expect(result.items).toHaveLength(1);
-    expect(result.items[0]?.id).toBe("order_row_1");
+    expect(result.items[0]?.id).toBe("group__mercadolivre__MLB-SALE-9001");
     expect(result.items[0]?.skus).toEqual(["SKU-1", "SKU-2"]);
   });
 
-  it("uses displayOrderId in database search filters for paginated list queries", async () => {
-    const whereCalls: string[] = [];
-    const serializeSql = (value: unknown): string => {
-      if (value === null || value === undefined) {
-        return "";
-      }
-
-      if (typeof value === "string" || typeof value === "number") {
-        return String(value);
-      }
-
-      if (Array.isArray(value)) {
-        return value.map((chunk) => serializeSql(chunk)).join("");
-      }
-
-      if (typeof value !== "object") {
-        return "";
-      }
-
-      if ("queryChunks" in value) {
-        return serializeSql((value as { queryChunks: unknown[] }).queryChunks);
-      }
-
-      if ("value" in value) {
-        return serializeSql((value as { value: unknown }).value);
-      }
-
-      if ("name" in value) {
-        return String((value as { name: unknown }).name);
-      }
-
-      return "";
-    };
-    const createSelectBuilder = (
-      result: unknown,
-      options: { resolveOnWhere?: boolean } = {},
-    ) => ({
-      from() {
-        return this;
-      },
-      where(whereClause: unknown) {
-        whereCalls.push(serializeSql(whereClause));
-        return options.resolveOnWhere ? Promise.resolve(result) : this;
-      },
-      orderBy() {
-        return this;
-      },
-      limit() {
-        return this;
-      },
-      offset() {
-        return Promise.resolve(result);
-      },
-    });
-
+  it("filters by displayOrderId in memory when search is active", async () => {
+    const selectMock = vi.fn();
     const db = {
-      select: vi.fn().mockImplementation((selection: Record<string, unknown>) => {
-        if ("count" in selection) {
-          return createSelectBuilder([{ count: 1 }], { resolveOnWhere: true });
-        }
-
-        return createSelectBuilder([{ id: "order_row_1" }]);
-      }),
+      select: selectMock,
       query: {
         companies: {
           findFirst: vi.fn().mockResolvedValue({
@@ -4455,13 +4571,187 @@ describe("OrdersService", () => {
     );
 
     expect(result.items).toHaveLength(1);
-    expect(result.items[0]?.id).toBe("order_row_1");
+    expect(result.items[0]?.id).toBe("group__mercadolivre__MLB-SALE-9001");
     expect(result.items[0]?.displayOrderId).toBe("MLB-SALE-9001");
     expect(result.items[0]?.orderId).toBe("MLB-ORDER-1001");
-    expect(whereCalls).toHaveLength(2);
-    expect(whereCalls.join("\n")).toContain("coalesce");
-    expect(whereCalls.join("\n")).toContain("packId");
-    expect(whereCalls.join("\n")).toContain("operationId");
+    expect(selectMock).not.toHaveBeenCalled();
+  });
+
+  it("filters orders by saleId using dedicated filter", async () => {
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.120000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-20T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-ORDER-1001",
+              metadata: { operationId: "MLB-SALE-9001" },
+              orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-20T12:00:00.000Z"),
+              totalAmount: "200.00",
+              items: [],
+              fees: [],
+            },
+            {
+              id: "order_row_2",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-21T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "SHP-ORDER-1002",
+              metadata: {},
+              orderedAt: new Date("2026-06-21T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "shopee",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-21T12:00:00.000Z"),
+              totalAmount: "80.00",
+              items: [],
+              fees: [],
+            },
+          ]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        saleId: "SALE-9001",
+      },
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.displayOrderId).toBe("MLB-SALE-9001");
+  });
+
+  it("filters orders by dedicated sku filter", async () => {
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.120000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-20T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-ORDER-1001",
+              metadata: { operationId: "MLB-SALE-9001" },
+              orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-20T12:00:00.000Z"),
+              totalAmount: "200.00",
+              items: [
+                {
+                  id: "item_1",
+                  quantity: 1,
+                  totalPrice: "120.00",
+                  unitPrice: "120.00",
+                  externalProduct: {
+                    id: "ext_prod_1",
+                    linkedProductId: null,
+                    sku: "SKU-1",
+                    title: "Produto 1",
+                  },
+                },
+                {
+                  id: "item_2",
+                  quantity: 1,
+                  totalPrice: "80.00",
+                  unitPrice: "80.00",
+                  externalProduct: {
+                    id: "ext_prod_2",
+                    linkedProductId: null,
+                    sku: "SKU-2",
+                    title: "Produto 2",
+                  },
+                },
+              ],
+              fees: [],
+            },
+            {
+              id: "order_row_2",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-21T12:00:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "SHP-1002",
+              metadata: {},
+              orderedAt: new Date("2026-06-21T10:15:00.000Z"),
+              organizationId: "org_123",
+              provider: "shopee",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-21T12:00:00.000Z"),
+              totalAmount: "80.00",
+              items: [
+                {
+                  id: "item_3",
+                  quantity: 1,
+                  totalPrice: "80.00",
+                  unitPrice: "80.00",
+                  externalProduct: {
+                    id: "ext_prod_3",
+                    linkedProductId: null,
+                    sku: "SKU-9",
+                    title: "Produto 9",
+                  },
+                },
+              ],
+              fees: [],
+            },
+          ]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        sku: "SKU-2",
+      },
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.id).toBe("group__mercadolivre__MLB-SALE-9001");
+    expect(result.items[0]?.skus).toEqual(["SKU-1", "SKU-2"]);
   });
 
   it("exports filtered orders as xlsx rows and restricts export to selected ids", async () => {
@@ -4551,7 +4841,7 @@ describe("OrdersService", () => {
         userId: "user_123",
       },
       {
-        ids: ["order_row_1"],
+        ids: ["group__mercadolivre__MLB-SALE-9001"],
         provider: "mercadolivre",
         search: "SALE-9001",
       },
@@ -4678,5 +4968,945 @@ describe("OrdersService", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.["ID da Venda"]).toBe("MLB-SALE-9001");
     expect(rows[0]?.["SKUs"]).toBe("SKU-1\nSKU-2");
+  });
+
+  it("groups Mercado Livre rows with same displayOrderId into one logical list order", async () => {
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-22T18:10:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-ORDER-1",
+              metadata: { operationId: "2000013650735359" },
+              orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+              totalAmount: "37.92",
+              items: [
+                {
+                  id: "item_1",
+                  quantity: 2,
+                  totalPrice: "37.92",
+                  unitPrice: "18.96",
+                  externalProduct: {
+                    id: "ext_prod_1",
+                    linkedProductId: null,
+                    sku: "SUPORTE-02-PRETO",
+                    title: "SUPORTE 02 PRETO",
+                  },
+                },
+              ],
+              fees: [
+                {
+                  amount: "4.00",
+                  feeType: "shipping_cost",
+                  id: "fee_ship_1",
+                  metadata: {},
+                },
+                {
+                  amount: "3.79",
+                  feeType: "marketplace_commission",
+                  id: "fee_comm_1",
+                  metadata: {},
+                },
+              ],
+            },
+            {
+              id: "order_row_2",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-22T18:10:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-ORDER-2",
+              metadata: { operationId: "2000013650735359" },
+              orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+              totalAmount: "37.92",
+              items: [
+                {
+                  id: "item_2",
+                  quantity: 2,
+                  totalPrice: "37.92",
+                  unitPrice: "18.96",
+                  externalProduct: {
+                    id: "ext_prod_2",
+                    linkedProductId: null,
+                    sku: "SUPORTE-02-BRANCO",
+                    title: "SUPORTE 02 BRANCO",
+                  },
+                },
+              ],
+              fees: [
+                {
+                  amount: "4.00",
+                  feeType: "shipping_cost",
+                  id: "fee_ship_2",
+                  metadata: {},
+                },
+                {
+                  amount: "3.79",
+                  feeType: "marketplace_commission",
+                  id: "fee_comm_2",
+                  metadata: {},
+                },
+              ],
+            },
+          ]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        page: 1,
+        pageSize: 20,
+      },
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        displayOrderId: "2000013650735359",
+        id: "group__mercadolivre__2000013650735359",
+        itemsSold: 4,
+        orderId: "MLB-ORDER-1",
+        shippingAmount: "8.00",
+        skus: ["SUPORTE-02-PRETO", "SUPORTE-02-BRANCO"],
+        tariffAmount: "7.58",
+        totalWithFees: "75.84",
+      }),
+    );
+    expect(result.summary.ordersCount).toBe(1);
+    expect(result.summary.unitsSold).toBe(4);
+  });
+
+  it("returns grouped Mercado Livre detail rows for synthetic list ids", async () => {
+    const orders = [
+      {
+        id: "order_row_1",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-1",
+        metadata: { operationId: "2000013650735359" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [
+          {
+            id: "item_1",
+            quantity: 2,
+            totalPrice: "37.92",
+            unitPrice: "18.96",
+            externalProduct: {
+              id: "ext_prod_1",
+              linkedProductId: null,
+              sku: "SUPORTE-02-PRETO",
+              title: "SUPORTE 02 PRETO",
+            },
+          },
+        ],
+        fees: [
+          {
+            amount: "4.00",
+            feeType: "shipping_cost",
+            id: "fee_ship_1",
+            metadata: {},
+          },
+          {
+            amount: "3.79",
+            feeType: "marketplace_commission",
+            id: "fee_comm_1",
+            metadata: {},
+          },
+        ],
+      },
+      {
+        id: "order_row_2",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-2",
+        metadata: { operationId: "2000013650735359" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [
+          {
+            id: "item_2",
+            quantity: 2,
+            totalPrice: "37.92",
+            unitPrice: "18.96",
+            externalProduct: {
+              id: "ext_prod_2",
+              linkedProductId: null,
+              sku: "SUPORTE-02-BRANCO",
+              title: "SUPORTE 02 BRANCO",
+            },
+          },
+        ],
+        fees: [
+          {
+            amount: "4.00",
+            feeType: "shipping_cost",
+            id: "fee_ship_2",
+            metadata: {},
+          },
+          {
+            amount: "3.79",
+            feeType: "marketplace_commission",
+            id: "fee_comm_2",
+            metadata: {},
+          },
+        ],
+      },
+    ];
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findFirst: vi.fn().mockResolvedValue(orders[0]),
+          findMany: vi.fn().mockResolvedValue(orders),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.getOrderDetails(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      "group__mercadolivre__2000013650735359",
+    );
+
+    expect(result.order.id).toBe("group__mercadolivre__2000013650735359");
+    expect(result.order.totalWithFees).toBe("75.84");
+    expect(result.composition.revenueAmount).toBe("75.84");
+    expect(result.items).toHaveLength(2);
+    expect(result.items.map((item) => item.sku)).toEqual([
+      "SUPORTE-02-PRETO",
+      "SUPORTE-02-BRANCO",
+    ]);
+  });
+
+  it("deduplicates shared Mercado Livre shipping totals in grouped sale composition", async () => {
+    const shippingMetadata = {
+      shipmentId: "shipment_123",
+      shipping_buyer_paid: "0.00",
+      shipping_net_amount: "-22.60",
+      shipping_seller_fee: "22.60",
+      source: "billing/integration/group/ML/order/details",
+    };
+    const orders = [
+      {
+        id: "order_row_1",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-1",
+        metadata: { operationId: "2000013650735359" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [
+          {
+            amount: "22.60",
+            feeType: "shipping_cost",
+            id: "fee_ship_1",
+            metadata: shippingMetadata,
+          },
+          {
+            amount: "3.79",
+            feeType: "marketplace_commission",
+            id: "fee_comm_1",
+            metadata: {},
+          },
+        ],
+      },
+      {
+        id: "order_row_2",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-2",
+        metadata: { operationId: "2000013650735359" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [
+          {
+            amount: "22.60",
+            feeType: "shipping_cost",
+            id: "fee_ship_2",
+            metadata: shippingMetadata,
+          },
+          {
+            amount: "3.79",
+            feeType: "marketplace_commission",
+            id: "fee_comm_2",
+            metadata: {},
+          },
+        ],
+      },
+    ];
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findFirst: vi.fn().mockResolvedValue(orders[0]),
+          findMany: vi.fn().mockResolvedValue(orders),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.getOrderDetails(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      "group__mercadolivre__2000013650735359",
+    );
+
+    expect(result.composition).toEqual(
+      expect.objectContaining({
+        shippingBreakdown: expect.objectContaining({
+          netShippingAmount: "-22.60",
+        }),
+        shippingOrFixedFeeAmount: "22.60",
+      }),
+    );
+  });
+
+  it("derives grouped Mercado Livre refund bonus from billing total once per logical order", async () => {
+    const shippingMetadata = {
+      mercadoLivreBillingTotalAmount: "49.44",
+      shipmentId: "shipment_123",
+      shipping_buyer_paid: "0.00",
+      shipping_net_amount: "-22.60",
+      shipping_seller_fee: "22.60",
+      source: "billing/integration/group/ML/order/details",
+    };
+    const orders = [
+      {
+        id: "order_row_1",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-1",
+        metadata: {
+          mercadoLivreBillingTotalAmount: "49.44",
+          operationId: "2000013650735359",
+        },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [
+          {
+            amount: "22.60",
+            feeType: "shipping_cost",
+            id: "fee_ship_1",
+            metadata: shippingMetadata,
+          },
+          {
+            amount: "4.92",
+            feeType: "marketplace_commission",
+            id: "fee_comm_1",
+            metadata: {},
+          },
+        ],
+      },
+      {
+        id: "order_row_2",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-2",
+        metadata: {
+          mercadoLivreBillingTotalAmount: "49.44",
+          operationId: "2000013650735359",
+        },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [
+          {
+            amount: "22.60",
+            feeType: "shipping_cost",
+            id: "fee_ship_2",
+            metadata: shippingMetadata,
+          },
+          {
+            amount: "4.92",
+            feeType: "marketplace_commission",
+            id: "fee_comm_2",
+            metadata: {},
+          },
+        ],
+      },
+    ];
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findFirst: vi.fn().mockResolvedValue(orders[0]),
+          findMany: vi.fn().mockResolvedValue(orders),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.getOrderDetails(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      "group__mercadolivre__2000013650735359",
+    );
+
+    expect(result.composition).toEqual(
+      expect.objectContaining({
+        marketplaceCommissionAmount: "9.84",
+        netRevenueAmount: "49.44",
+        refundBonusAmount: "6.04",
+        revenueAmount: "75.84",
+        shippingOrFixedFeeAmount: "22.60",
+      }),
+    );
+  });
+
+  it("uses explicit Mercado Livre billing rebate instead of inflated net-total refund fallback", async () => {
+    const orders = [
+      {
+        id: "order_row_1",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "2000017063392030",
+        metadata: { packId: "2000013650735359", refundBonusAmount: "3.02" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        refundBonusAmount: "3.02",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [
+          {
+            amount: "4.92",
+            feeType: "marketplace_commission",
+            id: "fee_comm_1",
+            metadata: { source: "listing_prices.sale_fee_amount" },
+          },
+          {
+            amount: "3.02",
+            feeType: "refund_bonus",
+            id: "fee_refund_1",
+            metadata: {
+              originalType: "net_total_difference",
+              source: "payment.transaction_details.net_received_amount",
+            },
+          },
+          {
+            amount: "22.60",
+            feeType: "shipping_cost",
+            id: "fee_ship_1",
+            metadata: {
+              shipmentId: "47358700157",
+              shipping_seller_fee: "22.60",
+              source: "shipment_detail.shipping_option.list_cost",
+            },
+          },
+        ],
+      },
+      {
+        id: "order_row_2",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "2000017063392034",
+        metadata: { packId: "2000013650735359", refundBonusAmount: "25.62" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        refundBonusAmount: "25.62",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [
+          {
+            amount: "4.92",
+            feeType: "marketplace_commission",
+            id: "fee_comm_2",
+            metadata: { source: "listing_prices.sale_fee_amount" },
+          },
+          {
+            amount: "25.62",
+            feeType: "refund_bonus",
+            id: "fee_refund_2",
+            metadata: {
+              originalType: "net_total_difference",
+              source: "payment.transaction_details.net_received_amount",
+            },
+          },
+          {
+            amount: "22.60",
+            feeType: "shipping_cost",
+            id: "fee_ship_2",
+            metadata: {
+              mercadoLivreRefundBonusAmount: "3.02",
+              shipmentId: "47358700157",
+              shipping_seller_fee: "22.60",
+              source: "billing/integration/group/ML/order/details",
+            },
+          },
+        ],
+      },
+    ];
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findFirst: vi.fn().mockResolvedValue(orders[0]),
+          findMany: vi.fn().mockResolvedValue(orders),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.getOrderDetails(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      "group__mercadolivre__2000013650735359",
+    );
+
+    expect(result.composition).toEqual(
+      expect.objectContaining({
+        netRevenueAmount: "49.44",
+        refundBonusAmount: "6.04",
+        shippingOrFixedFeeAmount: "22.60",
+      }),
+    );
+  });
+
+  it("does not backfill unrelated Mercado Livre orders when loading grouped sale details", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const groupedDisplayOrderId = "2000013650735359";
+    const findGroupedOrdersMock = vi.fn();
+    const orders = [
+      {
+        id: "order_row_1",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-1",
+        marketplaceConnectionId: "conn_1",
+        metadata: { packId: groupedDisplayOrderId },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [],
+      },
+      {
+        id: "order_row_2",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-2",
+        marketplaceConnectionId: "conn_1",
+        metadata: { packId: groupedDisplayOrderId },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [],
+      },
+      {
+        id: "order_row_3",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-18T09:00:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-UNRELATED-3",
+        marketplaceConnectionId: "conn_1",
+        metadata: {},
+        orderedAt: new Date("2026-06-18T09:00:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-18T09:00:00.000Z"),
+        totalAmount: "12.00",
+        items: [],
+        fees: [],
+      },
+    ];
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        marketplaceConnections: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              accessToken: "token_123",
+              companyId: "company_123",
+              externalAccountId: "seller_1",
+              id: "conn_1",
+              metadata: {},
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              refreshToken: null,
+              status: "connected",
+              tokenExpiresAt: new Date("2030-01-01T00:00:00.000Z"),
+            },
+          ]),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findMany: findGroupedOrdersMock.mockResolvedValue(orders.slice(0, 2)),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never, {
+      API_DB_POOL_MAX: 5,
+      API_HOST: "127.0.0.1",
+      API_PORT: 4000,
+      BETTER_AUTH_SECRET: "secret",
+      BETTER_AUTH_URL: "http://localhost:4000",
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/lucreii",
+      MERCADOLIVRE_CLIENT_ID: "ml-client-id",
+      MERCADOLIVRE_CLIENT_SECRET: "ml-client-secret",
+      MERCADOLIVRE_REDIRECT_URI:
+        "http://localhost:4000/integrations/mercadolivre/callback",
+      NODE_ENV: "test",
+      STRIPE_PRICE_START_MONTHLY: "price_start_monthly",
+      STRIPE_PRICE_START_ANNUAL: "price_start_annual",
+      STRIPE_PRICE_PRO_MONTHLY: "price_pro_monthly",
+      STRIPE_PRICE_PRO_ANNUAL: "price_pro_annual",
+      STRIPE_PRICE_BUSINESS_MONTHLY: "price_business_monthly",
+      STRIPE_PRICE_BUSINESS_ANNUAL: "price_business_annual",
+      STRIPE_SECRET_KEY: "sk_test_123",
+      STRIPE_WEBHOOK_SECRET: "whsec_test_123",
+      SYNC_RELAX_GUARDS: false,
+      WEB_APP_ORIGIN: "http://localhost:3000",
+    });
+
+    await service.getOrderDetails(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      `group__mercadolivre__${groupedDisplayOrderId}`,
+    );
+
+    expect(
+      String(findGroupedOrdersMock.mock.calls[0]?.[0]?.where ?? ""),
+    ).toContain("buildExactMercadoLivreGroupedOrderWhere");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("paginates Mercado Livre grouped sale as one logical row", async () => {
+    const sharedOrderPayload = [
+      {
+        id: "order_row_1",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-1",
+        metadata: { operationId: "2000013650735359" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [],
+      },
+      {
+        id: "order_row_2",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-2",
+        metadata: { operationId: "2000013650735359" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [],
+      },
+      {
+        id: "order_row_3",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-21T12:00:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "SHP-ORDER-3",
+        metadata: {},
+        orderedAt: new Date("2026-06-21T12:00:00.000Z"),
+        organizationId: "org_123",
+        provider: "shopee",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-21T12:00:00.000Z"),
+        totalAmount: "20.00",
+        items: [],
+        fees: [],
+      },
+    ];
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue(sharedOrderPayload),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        page: 1,
+        pageSize: 1,
+      },
+    );
+
+    expect(result.totalItems).toBe(2);
+    expect(result.totalPages).toBe(2);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.id).toBe("group__mercadolivre__2000013650735359");
+  });
+
+  it("exports grouped Mercado Livre sales as one spreadsheet row", async () => {
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-22T18:10:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-ORDER-1",
+              metadata: { operationId: "2000013650735359" },
+              orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+              totalAmount: "37.92",
+              items: [
+                {
+                  id: "item_1",
+                  quantity: 2,
+                  totalPrice: "37.92",
+                  unitPrice: "18.96",
+                  externalProduct: {
+                    id: "ext_prod_1",
+                    linkedProductId: null,
+                    sku: "SUPORTE-02-PRETO",
+                    title: "SUPORTE 02 PRETO",
+                  },
+                },
+              ],
+              fees: [],
+            },
+            {
+              id: "order_row_2",
+              companyId: "company_123",
+              createdAt: new Date("2026-06-22T18:10:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "MLB-ORDER-2",
+              metadata: { operationId: "2000013650735359" },
+              orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+              totalAmount: "37.92",
+              items: [
+                {
+                  id: "item_2",
+                  quantity: 2,
+                  totalPrice: "37.92",
+                  unitPrice: "18.96",
+                  externalProduct: {
+                    id: "ext_prod_2",
+                    linkedProductId: null,
+                    sku: "SUPORTE-02-BRANCO",
+                    title: "SUPORTE 02 BRANCO",
+                  },
+                },
+              ],
+              fees: [],
+            },
+          ]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const fileBuffer = await service.exportOrdersSpreadsheet(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        ids: ["group__mercadolivre__2000013650735359"],
+      },
+    );
+
+    const workbook = read(fileBuffer, { type: "buffer" });
+    const rows = utils.sheet_to_json<Record<string, unknown>>(
+      workbook.Sheets[workbook.SheetNames[0]!],
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.["ID da Venda"]).toBe("2000013650735359");
+    expect(rows[0]?.["SKUs"]).toBe("SUPORTE-02-PRETO\nSUPORTE-02-BRANCO");
   });
 });

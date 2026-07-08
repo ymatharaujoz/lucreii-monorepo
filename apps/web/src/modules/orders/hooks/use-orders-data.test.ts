@@ -109,6 +109,36 @@ describe("orders protected fetchers", () => {
     );
   });
 
+  it("sends saleId and sku filters to orders list endpoint", async () => {
+    apiClientMock.getValidatedData.mockResolvedValue({
+      summary: {
+        averageMargin: "0.00",
+        grossProfit: "0.00",
+        grossRevenue: "0.00",
+        ordersCount: 0,
+        unitsSold: 0,
+      },
+      availableStatuses: [],
+      items: [],
+      page: 1,
+      pageSize: 20,
+      totalItems: 0,
+      totalPages: 1,
+    });
+
+    await fetchOrders({
+      page: 1,
+      pageSize: 20,
+      saleId: "SALE-9001",
+      sku: "SKU-2",
+    });
+
+    expect(apiClientMock.getValidatedData).toHaveBeenCalledWith(
+      "/orders?page=1&pageSize=20&saleId=SALE-9001&sku=SKU-2",
+      expect.any(Object),
+    );
+  });
+
   it("downloads orders export using filters", async () => {
     apiClientMock.download.mockResolvedValue(new Blob(["xlsx"]));
 
@@ -122,6 +152,19 @@ describe("orders protected fetchers", () => {
 
     expect(apiClientMock.download).toHaveBeenCalledWith(
       "/orders/export?search=MLB-1001&provider=mercadolivre&status=paid&orderedFrom=2026-06-01&orderedTo=2026-06-30",
+    );
+  });
+
+  it("downloads orders export using saleId and sku filters", async () => {
+    apiClientMock.download.mockResolvedValue(new Blob(["xlsx"]));
+
+    await downloadOrdersExport({
+      saleId: "SALE-9001",
+      sku: "SKU-2",
+    });
+
+    expect(apiClientMock.download).toHaveBeenCalledWith(
+      "/orders/export?saleId=SALE-9001&sku=SKU-2",
     );
   });
 
@@ -346,6 +389,8 @@ describe("orders protected fetchers", () => {
           false,
           "",
           "",
+          "",
+          "",
         ],
       }),
     );
@@ -387,6 +432,51 @@ describe("orders protected fetchers", () => {
           true,
           "2026-06-01",
           "2026-06-30",
+          "",
+          "",
+        ],
+      }),
+    );
+
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+    });
+  });
+
+  it("keys order list queries by selected company, saleId and sku", () => {
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: {
+        cookie: "lucreii_selected_company_id=company_123",
+      },
+    });
+
+    useOrdersList({
+      page: 1,
+      pageSize: 20,
+      saleId: "SALE-9001",
+      sku: "SKU-2",
+    });
+
+    expect(useQueryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: [
+          "orders",
+          "company_123",
+          1,
+          20,
+          "",
+          "",
+          "",
+          "",
+          "",
+          true,
+          "",
+          "",
+          "SALE-9001",
+          "SKU-2",
         ],
       }),
     );

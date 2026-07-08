@@ -45,6 +45,8 @@ export const orderListFiltersSchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
   search: z.string().trim().min(1).optional(),
+  saleId: z.string().trim().min(1).optional(),
+  sku: z.string().trim().min(1).optional(),
   provider: integrationProviderSchema.optional(),
   status: orderCanonicalStatusSchema.optional(),
   orderedFrom: isoDateField("Ordered from").optional(),

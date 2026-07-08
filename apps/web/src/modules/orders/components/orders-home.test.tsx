@@ -315,14 +315,7 @@ describe("OrdersHome", () => {
     const content = text();
     expect(content).toContain("Frete / Taxa Fixa");
     expect(content).toContain("-R$ 5,65");
-    expect(content).toContain(
-      "Pagamento do Mercado Envios (por conta do comprador)",
-    );
     expect(content).toContain("R$ 10,99");
-    expect(content).toContain(
-      "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
-    );
-    expect(content).toContain("-R$ 16,64");
 
     view.unmount();
   });
@@ -424,6 +417,143 @@ describe("OrdersHome", () => {
     expect(modalContent).not.toContain("Margem de Contribuição");
     expect(modalContent).not.toContain("Lucro Total");
     expect(text()).not.toContain("status origem");
+
+    view.unmount();
+  });
+
+  it("renders grouped Mercado Livre order details with both sold items in modal", () => {
+    useOrdersListMock.mockReturnValue({
+      data: {
+        summary: {
+          averageMargin: "0.29",
+          grossProfit: "57.00",
+          grossRevenue: "75.84",
+          ordersCount: 1,
+          unitsSold: 4,
+        },
+        availableStatuses: [{ label: "Pagamento aprovado", value: "paid" }],
+        items: [
+          {
+            contributionMarginPercent: "20.00",
+            createdAt: "2026-06-22T18:10:00.000Z",
+            currency: "BRL",
+            displayOrderId: "2000013650735359",
+            fixedCostAmount: "0.00",
+            id: "group__mercadolivre__2000013650735359",
+            itemsSold: 4,
+            orderDate: "2026-06-22",
+            orderId: "MLB-ORDER-1",
+            orderedAt: "2026-06-22T18:10:00.000Z",
+            provider: "mercadolivre",
+            skus: ["SUPORTE-02-PRETO", "SUPORTE-02-BRANCO"],
+            shippingAmount: "8.00",
+            sourceStatus: "paid",
+            status: "paid",
+            statusLabel: "Pagamento aprovado",
+            tariffAmount: "7.58",
+            totalFees: "15.58",
+            totalProfitAmount: "15.17",
+            totalWithFees: "75.84",
+            totalWithoutFees: "60.26",
+          },
+        ],
+        page: 1,
+        pageSize: 20,
+        totalItems: 1,
+        totalPages: 1,
+      },
+      error: null,
+      isLoading: false,
+    });
+    useOrderDetailsMock.mockReturnValue({
+      data: {
+        composition: {
+          hasIncompleteCostData: true,
+          marketplaceCommissionAmount: "7.58",
+          missingCostItemsCount: 2,
+          missingLinkedItemsCount: 2,
+          netRevenueAmount: "60.26",
+          packagingCostAmount: "0.00",
+          productCostAmount: "0.00",
+          refundBonusAmount: "0.00",
+          revenueAmount: "75.84",
+          shippingOrFixedFeeAmount: "8.00",
+          taxAmount: "0.00",
+          taxRateDefault: null,
+        },
+        items: [
+          {
+            channel: "mercadolivre",
+            contributionMarginPercent: null,
+            displayName: "SUPORTE 02 PRETO",
+            id: "item_1",
+            imageUrl: null,
+            linkedProductId: null,
+            netRevenueAmount: "30.13",
+            orderedAt: "2026-06-22T18:10:00.000Z",
+            productName: "SUPORTE 02 PRETO",
+            quantity: 2,
+            sku: "SUPORTE-02-PRETO",
+            totalProfitAmount: null,
+            totalPrice: "37.92",
+            unitPrice: "18.96",
+          },
+          {
+            channel: "mercadolivre",
+            contributionMarginPercent: null,
+            displayName: "SUPORTE 02 BRANCO",
+            id: "item_2",
+            imageUrl: null,
+            linkedProductId: null,
+            netRevenueAmount: "30.13",
+            orderedAt: "2026-06-22T18:10:00.000Z",
+            productName: "SUPORTE 02 BRANCO",
+            quantity: 2,
+            sku: "SUPORTE-02-BRANCO",
+            totalProfitAmount: null,
+            totalPrice: "37.92",
+            unitPrice: "18.96",
+          },
+        ],
+        order: {
+          contributionMarginPercent: "20.00",
+          createdAt: "2026-06-22T18:10:00.000Z",
+          currency: "BRL",
+          displayOrderId: "2000013650735359",
+          fixedCostAmount: "0.00",
+          id: "group__mercadolivre__2000013650735359",
+          itemsSold: 4,
+          orderDate: "2026-06-22",
+          orderId: "MLB-ORDER-1",
+          orderedAt: "2026-06-22T18:10:00.000Z",
+          provider: "mercadolivre",
+          skus: ["SUPORTE-02-PRETO", "SUPORTE-02-BRANCO"],
+          shippingAmount: "8.00",
+          sourceStatus: "paid",
+          status: "paid",
+          statusLabel: "Pagamento aprovado",
+          tariffAmount: "7.58",
+          totalFees: "15.58",
+          totalProfitAmount: "15.17",
+          totalWithFees: "75.84",
+          totalWithoutFees: "60.26",
+        },
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const view = mount(<OrdersHome />);
+
+    click(document.querySelector('tr[role="button"]')!);
+
+    expect(text()).toContain("Venda #2000013650735359");
+    expect(text()).toContain("SUPORTE 02 PRETO");
+    expect(text()).toContain("SUPORTE 02 BRANCO");
+    expect(useOrderDetailsMock).toHaveBeenLastCalledWith(
+      "group__mercadolivre__2000013650735359",
+      true,
+    );
 
     view.unmount();
   });
@@ -642,6 +772,62 @@ describe("OrdersHome", () => {
       expect.objectContaining({
         page: 1,
         pageSize: 20,
+      }),
+    );
+
+    view.unmount();
+  });
+
+  it("passes saleId and sku filters to list query and export", async () => {
+    const view = mount(<OrdersHome />);
+
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Filtros"),
+      )!,
+    );
+
+    const saleIdInput = document.querySelector(
+      'input[placeholder="Filtrar por ID"]',
+    ) as HTMLInputElement;
+    const skuInput = document.querySelector(
+      'input[placeholder="Filtrar por SKU"]',
+    ) as HTMLInputElement;
+
+    changeInputValue(saleIdInput, "SALE-9001");
+    changeInputValue(skuInput, "SKU-2");
+
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Aplicar"),
+      )!,
+    );
+
+    expect(useOrdersListMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        page: 1,
+        pageSize: 20,
+        saleId: "SALE-9001",
+        sku: "SKU-2",
+      }),
+    );
+
+    await act(async () => {
+      click(
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Exportar"),
+        )!,
+      );
+      await Promise.resolve();
+    });
+
+    expect(downloadOrdersExportMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        includeSummary: false,
+        page: 1,
+        pageSize: 20,
+        saleId: "SALE-9001",
+        sku: "SKU-2",
       }),
     );
 

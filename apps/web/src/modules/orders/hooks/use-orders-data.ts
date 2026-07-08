@@ -45,6 +45,14 @@ export async function fetchOrders(
     params.set("search", filters.search);
   }
 
+  if (filters.saleId) {
+    params.set("saleId", filters.saleId);
+  }
+
+  if (filters.sku) {
+    params.set("sku", filters.sku);
+  }
+
   if (filters.provider) {
     params.set("provider", filters.provider);
   }
@@ -93,6 +101,14 @@ export async function downloadOrdersExport(
 
   if (filters.search) {
     params.set("search", filters.search);
+  }
+
+  if (filters.saleId) {
+    params.set("saleId", filters.saleId);
+  }
+
+  if (filters.sku) {
+    params.set("sku", filters.sku);
   }
 
   if (filters.provider) {
@@ -147,6 +163,8 @@ export function useOrdersList(filters: OrderListFilters = {}) {
       filters.includeSummary ?? true,
       filters.orderedFrom ?? "",
       filters.orderedTo ?? "",
+      filters.saleId ?? "",
+      filters.sku ?? "",
     ],
   });
 }

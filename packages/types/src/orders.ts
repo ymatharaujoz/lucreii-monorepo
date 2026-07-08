@@ -30,6 +30,8 @@ export type OrderListFilters = {
   page?: number;
   pageSize?: number;
   search?: string;
+  saleId?: string;
+  sku?: string;
   provider?: IntegrationProviderSlug;
   status?: OrderCanonicalStatus;
   orderedFrom?: string;

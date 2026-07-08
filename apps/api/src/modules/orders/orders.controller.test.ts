@@ -83,7 +83,7 @@ describe("orders controller", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/orders?page=1&pageSize=10&provider=mercadolivre",
+      url: "/orders?page=1&pageSize=10&provider=mercadolivre&saleId=SALE-9001&sku=SKU-2",
     });
 
     expect(response.statusCode).toBe(200);
@@ -116,6 +116,8 @@ describe("orders controller", () => {
         page: 1,
         pageSize: 10,
         provider: "mercadolivre",
+        saleId: "SALE-9001",
+        sku: "SKU-2",
       }),
     );
   });
@@ -311,7 +313,7 @@ describe("orders controller", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/orders/export?search=MLB&provider=mercadolivre&ids=order_1,order_2",
+      url: "/orders/export?provider=mercadolivre&ids=order_1,order_2&saleId=SALE-9001&sku=SKU-2",
     });
 
     expect(response.statusCode).toBe(200);
@@ -330,7 +332,8 @@ describe("orders controller", () => {
       expect.objectContaining({
         ids: ["order_1", "order_2"],
         provider: "mercadolivre",
-        search: "MLB",
+        saleId: "SALE-9001",
+        sku: "SKU-2",
       }),
     );
   });

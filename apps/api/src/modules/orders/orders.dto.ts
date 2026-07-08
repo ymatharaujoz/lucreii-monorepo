@@ -15,6 +15,8 @@ export class OrderListFiltersDto {
   page?: number;
   pageSize?: number;
   search?: string;
+  saleId?: string;
+  sku?: string;
   provider?: "mercadolivre" | "shopee" | "shein";
   status?: OrderCanonicalStatus;
   orderedFrom?: string;
@@ -50,6 +52,8 @@ export class OrderExportQueryDto implements OrderExportFilters {
 
   ids?: string[];
   search?: string;
+  saleId?: string;
+  sku?: string;
   provider?: "mercadolivre" | "shopee" | "shein";
   status?: OrderCanonicalStatus;
   orderedFrom?: string;

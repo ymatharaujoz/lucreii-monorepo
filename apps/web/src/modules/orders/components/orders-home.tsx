@@ -551,6 +551,12 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
     composition.shippingBreakdown?.netShippingAmount ??
     composition.shippingOrFixedFeeAmount;
 
+  const isShippingCost =
+    !composition.shippingBreakdown ||
+    Number(shippingDisplayAmount) <= 0;
+
+  const absShippingAmount = Math.abs(Number(shippingDisplayAmount ?? 0));
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -580,8 +586,8 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
         <CompositionMetric
           icon={<Truck className="h-4 w-4" />}
           label="Frete / Taxa Fixa"
-          value={formatMoney(shippingDisplayAmount)}
-          negative={!composition.shippingBreakdown}
+          value={formatMoney(absShippingAmount.toString())}
+          negative={isShippingCost}
         />
         <CompositionMetric
           icon={<Package className="h-4 w-4" />}
@@ -630,8 +636,10 @@ function buildStatusDropdownItems(
 
 export function OrdersHome() {
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [searchDraft, setSearchDraft] = useState("");
+  const [saleId, setSaleId] = useState("");
+  const [saleIdDraft, setSaleIdDraft] = useState("");
+  const [sku, setSku] = useState("");
+  const [skuDraft, setSkuDraft] = useState("");
   const [orderedFrom, setOrderedFrom] = useState("");
   const [orderedTo, setOrderedTo] = useState("");
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>(
@@ -714,7 +722,8 @@ export function OrdersHome() {
     includeSummary: false,
     page,
     pageSize: PAGE_SIZE,
-    ...(search ? { search } : {}),
+    ...(saleId ? { saleId } : {}),
+    ...(sku ? { sku } : {}),
     ...(provider ? { provider: provider as IntegrationProviderSlug } : {}),
     ...(selectedStatus ? { status: selectedStatus } : {}),
     ...(sortConfig?.direction
@@ -751,22 +760,26 @@ export function OrdersHome() {
     selectedVisibleCount === visibleOrderIds.length;
 
   const hasActiveFilters =
-    search.trim().length > 0 ||
+    saleId.trim().length > 0 ||
+    sku.trim().length > 0 ||
     selectedMarketplaces.length > 0 ||
     selectedStatus !== null ||
     orderedFrom.length > 0 ||
     orderedTo.length > 0;
 
   const activeFilterCount =
-    (search.trim() ? 1 : 0) +
+    (saleId.trim() ? 1 : 0) +
+    (sku.trim() ? 1 : 0) +
     selectedMarketplaces.length +
     (selectedStatus ? 1 : 0) +
     (orderedFrom ? 1 : 0) +
     (orderedTo ? 1 : 0);
 
   const clearAllFilters = () => {
-    setSearch("");
-    setSearchDraft("");
+    setSaleId("");
+    setSaleIdDraft("");
+    setSku("");
+    setSkuDraft("");
     setOrderedFrom("");
     setOrderedTo("");
     setSelectedMarketplaces([]);
@@ -807,7 +820,8 @@ export function OrdersHome() {
               provider: provider
                 ? (provider as IntegrationProviderSlug)
                 : undefined,
-              search: search || undefined,
+              saleId: saleId || undefined,
+              sku: sku || undefined,
               status: selectedStatus ?? undefined,
             },
       );
@@ -828,7 +842,8 @@ export function OrdersHome() {
 
   const applyFilters = () => {
     setPage(1);
-    setSearch(searchDraft.trim());
+    setSaleId(saleIdDraft.trim());
+    setSku(skuDraft.trim());
   };
 
   const handleSort = (key: SortKey) => {
@@ -942,38 +957,42 @@ export function OrdersHome() {
                 transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
                 className="mb-3 shrink-0 overflow-hidden"
               >
-                <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-strong/50 p-1.5 shadow-[var(--shadow-xs)]">
+                <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-lg)] border border-border bg-surface-strong/50 p-1.5 shadow-[var(--shadow-xs)] w-full">
                   <form
-                    className="relative flex min-w-[260px] flex-[1.5] items-center"
+                    className="flex flex-wrap items-center gap-2 w-full sm:w-auto"
                     onSubmit={(event) => {
                       event.preventDefault();
                       applyFilters();
                     }}
                   >
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
-                    <input
-                      type="text"
-                      value={searchDraft}
-                      onChange={(event) => setSearchDraft(event.target.value)}
-                      placeholder="Buscar por ID ou SKU..."
-                      className="h-8 w-full min-w-0 rounded-[var(--radius-md)] border border-border bg-background pl-9 pr-9 text-xs font-medium text-foreground transition-all duration-[var(--transition-fast)] hover:border-border-strong focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/15"
-                    />
-                    {searchDraft ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSearchDraft("");
-                          setSearch("");
-                          setPage(1);
-                        }}
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    ) : null}
-                  </form>
+                    <div className="relative w-full sm:w-48">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
+                      <input
+                        type="text"
+                        value={saleIdDraft}
+                        onChange={(event) => setSaleIdDraft(event.target.value)}
+                        onBlur={applyFilters}
+                        placeholder="Filtrar por ID"
+                        className="h-8 w-full min-w-0 rounded-[var(--radius-md)] border border-border bg-background pl-9 pr-3 text-xs font-medium text-foreground transition-all duration-[var(--transition-fast)] hover:border-border-strong focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/15"
+                      />
+                    </div>
 
-                  <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
+                    <div className="relative w-full sm:w-48">
+                      <Package className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
+                      <input
+                        type="text"
+                        value={skuDraft}
+                        onChange={(event) => setSkuDraft(event.target.value)}
+                        onBlur={applyFilters}
+                        placeholder="Filtrar por SKU"
+                        className="h-8 w-full min-w-0 rounded-[var(--radius-md)] border border-border bg-background pl-9 pr-3 text-xs font-medium text-foreground transition-all duration-[var(--transition-fast)] hover:border-border-strong focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/15"
+                      />
+                    </div>
+
+                    <button type="submit" className="hidden">
+                      Aplicar
+                    </button>
+                  </form>
 
                   <MultiSelectDropdown
                     align="left"
@@ -992,8 +1011,6 @@ export function OrdersHome() {
                     triggerIcon={<Store className="h-3.5 w-3.5" />}
                   />
 
-                  <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
-
                   <DateRangePicker
                     from={orderedFrom}
                     to={orderedTo}
@@ -1003,8 +1020,6 @@ export function OrdersHome() {
                       setPage(1);
                     }}
                   />
-
-                  <div className="hidden h-5 w-px shrink-0 bg-border/60 sm:block" />
 
                   <Dropdown
                     align="left"
@@ -1052,15 +1067,13 @@ export function OrdersHome() {
                     }
                   />
 
-                  <div className="flex-1" />
-
                   {hasActiveFilters ? (
                     <button
                       type="button"
                       onClick={clearAllFilters}
-                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground"
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-all duration-[var(--transition-fast)] hover:bg-foreground/5 hover:text-foreground cursor-pointer ml-auto"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-3.5 w-3.5" />
                       Limpar
                     </button>
                   ) : null}
@@ -1082,15 +1095,33 @@ export function OrdersHome() {
                   Filtros ativos:
                 </span>
                 
-                {search && (
+                {saleId && (
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
-                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">Busca:</span>
-                    <span>"{search}"</span>
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">ID Venda:</span>
+                    <span>{saleId}</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setSearch("");
-                        setSearchDraft("");
+                        setSaleId("");
+                        setSaleIdDraft("");
+                        setPage(1);
+                      }}
+                      className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+
+                {sku && (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">SKU:</span>
+                    <span>{sku}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSku("");
+                        setSkuDraft("");
                         setPage(1);
                       }}
                       className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
