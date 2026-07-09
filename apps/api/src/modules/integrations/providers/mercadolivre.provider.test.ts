@@ -140,6 +140,60 @@ describe("MercadoLivreProvider", () => {
     );
   });
 
+  it("prefers the buyer shipping amount attached to the CFFE detail", () => {
+    const result = readMercadoLivreBillingOrderShippingCost({
+      orderId: "2000016957696382",
+      payload: {
+        results: [
+          {
+            order_id: "2000016957696382",
+            details: [
+              {
+                charge_info: {
+                  detail_amount: 0.01,
+                  detail_sub_type: "CVVPRC",
+                },
+                marketplace_info: {
+                  marketplace: "CORE",
+                },
+                shipping_info: {
+                  receiver_shipping_cost: 9.99,
+                  shipping_id: 47308751453,
+                },
+              },
+              {
+                charge_info: {
+                  detail_amount: 10.64,
+                  detail_sub_type: "CFFE",
+                },
+                marketplace_info: {
+                  marketplace: "SHIPPING",
+                },
+                shipping_info: {
+                  receiver_shipping_cost: 4.99,
+                  shipping_id: 47308751453,
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        amount: 5.65,
+        metadata: expect.objectContaining({
+          buyerShippingAmount: 4.99,
+          grossShippingTariffAmount: 10.64,
+          shipping_buyer_paid: "4.99",
+          shipping_net_amount: "-5.65",
+          shipping_seller_fee: "10.64",
+        }),
+      }),
+    );
+  });
+
   it("reads billing financial total from order details result", () => {
     const result = readMercadoLivreBillingOrderShippingCost({
       orderId: "2000013650735359",

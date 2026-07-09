@@ -693,9 +693,14 @@ function readMercadoLivreBillingRefundBonusAdjustmentFromFees(
 function readBillingReceiverShippingCost(
   details: MercadoLivreBillingOrderShippingDetail[],
 ) {
-  const detail = details.find(
-    detail => detail.shipping_info?.receiver_shipping_cost != null,
+  const cffeDetail = details.find(
+    (detail) =>
+      detail.charge_info?.detail_sub_type === "CFFE" &&
+      detail.shipping_info?.receiver_shipping_cost != null,
   );
+  const detail =
+    cffeDetail ??
+    details.find((candidate) => candidate.shipping_info?.receiver_shipping_cost != null);
 
   return readBillingMoneyNumber(
     detail?.shipping_info?.receiver_shipping_cost,
