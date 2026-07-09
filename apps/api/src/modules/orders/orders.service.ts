@@ -938,8 +938,13 @@ function shouldRefreshMercadoLivreShippingRatio(
     shippingFee.metadata && typeof shippingFee.metadata === "object"
       ? (shippingFee.metadata as Record<string, unknown>)
       : null;
+
+  if (!metadata) {
+    return true;
+  }
+
   const source =
-    typeof metadata?.source === "string" && metadata.source.trim().length > 0
+    typeof metadata.source === "string" && metadata.source.trim().length > 0
       ? metadata.source.trim()
       : null;
 
