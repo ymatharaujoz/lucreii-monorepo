@@ -1,4 +1,5 @@
 export * from "./auth";
+export * from "./app-version";
 export * from "./env";
 export * from "./finance-inputs";
 export * from "./orders";

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { buildApp } from "@/app";
+import packageJson from "../../../../../package.json";
 
 describe("health endpoint", () => {
   let app: NestFastifyApplication;
@@ -44,6 +45,21 @@ describe("health endpoint", () => {
         service: "lucreii-api",
         status: "ok",
       }),
+      error: null,
+    });
+  });
+
+  it("returns the application version payload", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/health/version",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      data: {
+        version: packageJson.version,
+      },
       error: null,
     });
   });

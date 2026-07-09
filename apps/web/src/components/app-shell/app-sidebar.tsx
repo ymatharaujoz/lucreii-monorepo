@@ -109,6 +109,7 @@ export function AppSidebar({
   onToggle,
   user,
   companies,
+  appVersion,
   organization,
   planLimit,
   isMobile = false,
@@ -116,6 +117,7 @@ export function AppSidebar({
   collapsed: boolean;
   onToggle: () => void;
   companies: Company[];
+  appVersion: string;
   user: {
     email: string;
     image: string | null;
@@ -395,6 +397,14 @@ export function AppSidebar({
           })}
         </ul>
       </nav>
+
+      {!collapsed && (
+        <div className="px-3 pb-2 text-center">
+          <p className="text-[11px] font-medium tabular-nums leading-none text-muted-foreground">
+            {appVersion}
+          </p>
+        </div>
+      )}
 
       {/* Collapse toggle handle */}
       {!isMobile && (

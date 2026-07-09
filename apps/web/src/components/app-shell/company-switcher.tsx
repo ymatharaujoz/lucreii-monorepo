@@ -126,7 +126,7 @@ export function CompanySwitcher({
         </div>
 
         {!collapsed ? (
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 text-center">
             <p className="truncate text-[13px] font-medium text-foreground">{formatShortName(user.name)}</p>
             <p className="truncate text-[11px] text-muted-foreground">
               {selectedCompany?.razaoSocial ?? organizationName}

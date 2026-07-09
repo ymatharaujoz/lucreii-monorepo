@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AppLayoutClient } from "@/components/app-shell";
+import { readServerAppVersion } from "@/lib/server-app-version";
 import { readServerAuthState } from "@/lib/server-auth";
 import { readServerBillingState } from "@/lib/server-billing";
 import { hasActiveCompany, readServerCompanies } from "@/lib/server-companies";
@@ -31,6 +32,7 @@ export default async function ProtectedAppLayout({
   const hasSubscription = hasSubscriptionForProtectedApp(billingState);
   const companies = authState.organization ? await readServerCompanies() : [];
   const hasOnboarded = !!authState.organization && hasActiveCompany(companies);
+  const appVersion = await readServerAppVersion();
   const planCode =
     billingState?.subscription?.planCode && isBillingPlanCode(billingState.subscription.planCode)
       ? billingState.subscription.planCode
@@ -48,6 +50,7 @@ export default async function ProtectedAppLayout({
       organization={{
         name: authState.organization?.name ?? "Novo workspace",
       }}
+      appVersion={appVersion}
       planLimit={planLimit}
       hasSubscription={hasSubscription}
       hasOnboarded={hasOnboarded}

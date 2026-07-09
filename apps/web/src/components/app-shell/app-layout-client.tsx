@@ -8,6 +8,7 @@ import { MinimalHeader } from "./minimal-header";
 
 type AppLayoutClientProps = {
   children: ReactNode;
+  appVersion: string;
   organization: {
     name: string;
   };
@@ -24,6 +25,7 @@ type AppLayoutClientProps = {
 
 export function AppLayoutClient({
   children,
+  appVersion,
   companies,
   organization,
   planLimit,
@@ -60,6 +62,7 @@ export function AppLayoutClient({
         <AppSidebar
           collapsed={collapsed}
           companies={companies}
+          appVersion={appVersion}
           onToggle={() => setCollapsed(!collapsed)}
           planLimit={planLimit}
           user={user}
@@ -76,6 +79,7 @@ export function AppLayoutClient({
         <AppSidebar
           collapsed={false}
           companies={companies}
+          appVersion={appVersion}
           onToggle={() => setMobileOpen(false)}
           planLimit={planLimit}
           user={user}

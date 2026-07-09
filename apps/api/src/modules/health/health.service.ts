@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { API_RUNTIME_ENV } from "@/common/tokens";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
+import packageJson from "../../../../../package.json";
 
 @Injectable()
 export class HealthService {
@@ -16,6 +17,15 @@ export class HealthService {
         service: "lucreii-api",
         status: "ok" as const,
         timestamp: new Date().toISOString(),
+      },
+      error: null,
+    };
+  }
+
+  getVersion() {
+    return {
+      data: {
+        version: packageJson.version,
       },
       error: null,
     };
