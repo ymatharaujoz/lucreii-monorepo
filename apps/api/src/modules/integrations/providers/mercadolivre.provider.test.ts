@@ -1741,25 +1741,14 @@ describe("MercadoLivreProvider", () => {
     expect(shippingCost).toBe(0);
   });
 
-  it("ignores buyer shipment cost and falls back to seller shipment detail cost", async () => {
+  it("returns 0 when shipment costs payload has no seller cost for current seller", async () => {
     const provider = createProvider();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          receiver: { cost: 18.99 },
-          senders: [{ cost: 0, user_id: 123456 }],
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          id: 999,
-          order_cost: 6.55,
-          shipping_option: {
-            cost: 18.99,
-          },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        receiver: { cost: 18.99 },
+        senders: [{ cost: 0, user_id: 123456 }],
+      }),
+    );
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -1776,37 +1765,14 @@ describe("MercadoLivreProvider", () => {
       },
     );
 
-    expect(shippingCost).toBe(6.55);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      "/shipments/999/costs",
-    );
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/shipments/999");
+    expect(shippingCost).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/shipments/999/costs");
   });
 
-  it("uses payment charge details to derive seller shipping cost instead of buyer shipping payment", async () => {
+  it("returns null when order has no shipment id even if payment details exist", async () => {
     const provider = createProvider();
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      createJsonResponse({
-        charges_details: [
-          {
-            amounts: {
-              original: 23.54,
-            },
-            name: "Tarifa por envios no Mercado Livre",
-            type: "shipping",
-          },
-          {
-            amounts: {
-              original: 16.99,
-            },
-            name: "Pagamento do Mercado Envios",
-            type: "shipping",
-          },
-        ],
-        fee_details: [],
-        id: 7654321,
-      }),
-    );
+    const fetchMock = vi.fn();
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -1822,35 +1788,13 @@ describe("MercadoLivreProvider", () => {
       },
     );
 
-    expect(shippingCost).toEqual({
-      amount: 6.55,
-      metadata: {
-        buyerShippingAmount: 16.99,
-        grossShippingTariffAmount: 23.54,
-        paymentId: "7654321",
-      },
-      source: "payment.charges_details.shipping",
-    });
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
-      "https://api.mercadopago.com/v1/payments/7654321",
-    );
+    expect(shippingCost).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("subtracts order buyer shipping payment when payment details only expose the gross shipping tariff", async () => {
+  it("returns null when order has no shipment id and only payment gross tariff data", async () => {
     const provider = createProvider();
-    const fetchMock = vi.fn().mockResolvedValueOnce(
-      createJsonResponse({
-        charges_details: [
-          {
-            amount: -23.54,
-            description:
-              "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
-            type: "shipping",
-          },
-        ],
-        id: 7654321,
-      }),
-    );
+    const fetchMock = vi.fn();
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -1866,40 +1810,18 @@ describe("MercadoLivreProvider", () => {
       },
     );
 
-    expect(shippingCost).toEqual({
-      amount: 6.55,
-      metadata: {
-        buyerShippingAmount: 16.99,
-        grossShippingTariffAmount: 23.54,
-        paymentId: "7654321",
-      },
-      source: "payment.charges_details.shipping",
-    });
+    expect(shippingCost).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("subtracts shipment receiver cost from gross payment shipping tariff", async () => {
+  it("does not fall back to payment tariff when shipment costs has no seller match", async () => {
     const provider = createProvider();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          receiver: { cost: 10.99 },
-          senders: [{ cost: 0, user_id: 123456 }],
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          charges_details: [
-            {
-              amount: -16.64,
-              description:
-                "Tarifa por envios no Mercado Livre (por sua conta e por conta do comprador)",
-              type: "shipping",
-            },
-          ],
-          id: 7654321,
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        receiver: { cost: 10.99 },
+        senders: [{ cost: 0, user_id: 123456 }],
+      }),
+    );
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -1916,21 +1838,9 @@ describe("MercadoLivreProvider", () => {
       },
     );
 
-    expect(shippingCost).toEqual({
-      amount: 5.65,
-      metadata: {
-        buyerShippingAmount: 10.99,
-        grossShippingTariffAmount: 16.64,
-        paymentId: "7654321",
-      },
-      source: "payment.charges_details.shipping",
-    });
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      "/shipments/999/costs",
-    );
-    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
-      "https://api.mercadopago.com/v1/payments/7654321",
-    );
+    expect(shippingCost).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/shipments/999/costs");
   });
 
   it("does not treat buyer payment shipping_cost as seller shipping cost without payment details", async () => {
@@ -1951,21 +1861,13 @@ describe("MercadoLivreProvider", () => {
     expect(shippingCost).toBeNull();
   });
 
-  it("does not use the first shipment sender when another sender user id is present", async () => {
+  it("does not use another seller sender when current seller is absent", async () => {
     const provider = createProvider();
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          senders: [{ cost: 18.99, user_id: 999999 }],
-        }),
-      )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          id: 999,
-          order_cost: 6.55,
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        senders: [{ cost: 18.99, user_id: 999999 }],
+      }),
+    );
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -1982,7 +1884,8 @@ describe("MercadoLivreProvider", () => {
       },
     );
 
-    expect(shippingCost).toBe(6.55);
+    expect(shippingCost).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not fall back to order.shipping_cost when shipment and payment shipping data are unavailable", async () => {
@@ -6279,7 +6182,7 @@ describe("MercadoLivreProvider", () => {
     );
   });
 
-  it("falls back to shipment detail order_cost when shipment costs payload omits senders", async () => {
+  it("does not create shipping fee when shipment costs request keeps failing", async () => {
     const provider = new MercadoLivreProvider({
       API_DB_POOL_MAX: 5,
       API_HOST: "127.0.0.1",
@@ -6385,21 +6288,6 @@ describe("MercadoLivreProvider", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            id: 999,
-            order_cost: 14.5,
-            shipping_option: {
-              cost: 19.53,
-            },
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
         createJsonResponse({
           limit: 1000,
           offset: 0,
@@ -6448,12 +6336,10 @@ describe("MercadoLivreProvider", () => {
         feeType: "marketplace_commission",
       }),
       expect.objectContaining({ amount: "3.00", feeType: "fixed_fee" }),
-      expect.objectContaining({ amount: "14.50", feeType: "shipping_cost" }),
     ]);
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/shipments/999/costs",
     );
-    expect(String(fetchMock.mock.calls[5]?.[0])).toContain("/shipments/999");
   });
 
   it("retries catalog requests after a transient provider failure", async () => {

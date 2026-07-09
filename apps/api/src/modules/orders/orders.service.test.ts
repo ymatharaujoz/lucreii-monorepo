@@ -618,7 +618,7 @@ describe("OrdersService", () => {
     );
   });
 
-  it("backfills Mercado Livre shipment list cost on order details using order shipping id", async () => {
+  it("backfills Mercado Livre shipment seller cost on order details using order shipping id", async () => {
     const updateWhereMock = vi.fn().mockResolvedValue([]);
     const updateSetMock = vi.fn().mockReturnValue({
       where: updateWhereMock,
@@ -652,14 +652,14 @@ describe("OrdersService", () => {
         );
       }
 
-      if (url.includes("/shipments/47320221685")) {
+      if (url.includes("/shipments/47320221685/costs")) {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              id: 47320221685,
-              shipping_option: {
-                list_cost: 6.55,
+              receiver: {
+                cost: 0,
               },
+              senders: [{ cost: 6.55, user_id: "seller_1" }],
             }),
             {
               headers: { "content-type": "application/json" },
@@ -805,15 +805,17 @@ describe("OrdersService", () => {
       expect.objectContaining({
         amount: "6.55",
         metadata: expect.objectContaining({
-          listCostAmount: 6.55,
           shipmentId: "47320221685",
-          source: "shipment_detail.shipping_option.list_cost",
+          shipping_buyer_paid: "0.00",
+          shipping_net_amount: "-6.55",
+          shipping_seller_fee: "6.55",
+          source: "shipment_costs.senders",
         }),
       }),
     );
   });
 
-  it("uses Mercado Livre shipment list cost in composition when fixed fee is absent", async () => {
+  it("uses Mercado Livre shipment seller cost in composition when fixed fee is absent", async () => {
     const updateWhereMock = vi.fn().mockResolvedValue([]);
     const updateSetMock = vi.fn().mockReturnValue({
       where: updateWhereMock,
@@ -847,14 +849,14 @@ describe("OrdersService", () => {
         );
       }
 
-      if (url.includes("/shipments/47320221685")) {
+      if (url.includes("/shipments/47320221685/costs")) {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              id: 47320221685,
-              shipping_option: {
-                list_cost: 6.55,
+              receiver: {
+                cost: 0,
               },
+              senders: [{ cost: 6.55, user_id: "seller_1" }],
             }),
             {
               headers: { "content-type": "application/json" },
@@ -1336,7 +1338,7 @@ describe("OrdersService", () => {
     );
   });
 
-  it("recomputes incomplete Mercado Livre billing shipping from shipment detail in order details", async () => {
+  it("recomputes incomplete Mercado Livre billing shipping from shipment costs in order details", async () => {
     const fetchMock = vi.fn().mockImplementation((input: string | URL) => {
       const url = String(input);
 
@@ -1372,15 +1374,14 @@ describe("OrdersService", () => {
         );
       }
 
-      if (url.includes("/shipments/47459283017")) {
+      if (url.includes("/shipments/47459283017/costs")) {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              id: 47459283017,
-              shipping_option: {
+              receiver: {
                 cost: 1.99,
-                list_cost: 8.54,
               },
+              senders: [{ cost: 6.55, user_id: "204174912" }],
             }),
             {
               headers: {
@@ -1518,9 +1519,9 @@ describe("OrdersService", () => {
       expect.objectContaining({
         shippingBreakdown: {
           buyerShippingPaymentAmount: "1.99",
-          grossShippingTariffAmount: "8.54",
+          grossShippingTariffAmount: "6.55",
           netShippingAmount: "-6.55",
-          source: "shipment_detail.shipping_option.list_cost",
+          source: "shipment_costs.senders",
         },
         shippingOrFixedFeeAmount: "6.55",
       }),
@@ -1529,12 +1530,11 @@ describe("OrdersService", () => {
       expect.objectContaining({
         amount: "6.55",
         metadata: expect.objectContaining({
-          listCostAmount: 8.54,
           shipmentId: "47459283017",
           shipping_buyer_paid: "1.99",
           shipping_net_amount: "-6.55",
-          shipping_seller_fee: "8.54",
-          source: "shipment_detail.shipping_option.list_cost",
+          shipping_seller_fee: "6.55",
+          source: "shipment_costs.senders",
         }),
       }),
     );

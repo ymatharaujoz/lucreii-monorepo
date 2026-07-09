@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import type { DatabaseClient } from "@lucreii/database";
@@ -97,12 +98,22 @@ type MercadoLivreOrderDetailResponse = {
   };
 };
 
-type MercadoLivreShipmentDetailResponse = {
-  order_cost?: number | string;
-  shipping_option?: {
+type MercadoLivreShipmentCostsResponse = {
+  receiver?: {
     cost?: number | string;
-    list_cost?: number | string;
   };
+  senders?: Array<{
+    cost?: number | string;
+    user_id?: number | string;
+  }>;
+};
+
+type MercadoLivreShipmentSellerCost = {
+  buyerPaidAmount: number;
+  sellerCostAmount: number;
+  sellerMatched: boolean;
+  shipmentId: string;
+  source: "shipment_costs.senders";
 };
 
 type OrderSortKey = NonNullable<OrderListFilters["sortBy"]>;
@@ -812,24 +823,6 @@ function readMercadoLivreShipmentId(
   return shipmentId && shipmentId.length > 0 ? shipmentId : null;
 }
 
-function readMercadoLivreShippingListCostAmount(
-  metadata: Record<string, unknown> | null | undefined,
-) {
-  const value = metadata?.listCostAmount;
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-
-  return null;
-}
-
 function readPositiveMoneyFromMetadata(
   metadata: Record<string, unknown> | null | undefined,
   key: string,
@@ -945,15 +938,24 @@ function shouldRefreshMercadoLivreShippingRatio(
     shippingFee.metadata && typeof shippingFee.metadata === "object"
       ? (shippingFee.metadata as Record<string, unknown>)
       : null;
+  const source =
+    typeof metadata?.source === "string" && metadata.source.trim().length > 0
+      ? metadata.source.trim()
+      : null;
 
-  if (metadata?.source === "billing/integration/group/ML/order/details") {
+  if (source === null) {
+    return true;
+  }
+
+  if (source === "billing/integration/group/ML/order/details") {
     return readMetadataMoney(metadata, "shipping_seller_fee") <= 0;
   }
 
-  return (
-    metadata?.source !== "shipment_detail.shipping_option.list_cost" ||
-    readMercadoLivreShippingListCostAmount(metadata) === null
-  );
+  if (source === "shipment_costs.senders") {
+    return readMetadataMoney(metadata, "shipping_seller_fee") <= 0;
+  }
+
+  return source === "shipment_detail.shipping_option.list_cost";
 }
 
 function toBillingPeriodKey(value: Date | string | null | undefined) {
@@ -1771,6 +1773,7 @@ function readPositiveInteger(value: unknown, fallback: number) {
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
   private readonly mercadoLivrePackIdCache = new Map<
     string,
     Promise<Map<string, string>>
@@ -2815,28 +2818,25 @@ export class OrdersService {
 
       const shipmentBreakdown = await this.fetchMercadoLivreShipmentBreakdown({
         accessToken: connection.accessToken!,
+        sellerAccountId: connection.externalAccountId,
         shipmentId,
       });
       if (shipmentBreakdown === null) {
         continue;
       }
 
-      const fallbackBuyerPaid = readMetadataMoney(
-        feeMetadata,
-        "shipping_buyer_paid",
-      );
-      const buyerPaidAmount = Math.max(
-        fallbackBuyerPaid,
-        shipmentBreakdown.buyerPaidAmount,
-      );
-      const netAmount = Math.max(
-        0,
-        roundMoneyNumber(shipmentBreakdown.grossTariffAmount - buyerPaidAmount),
-      );
+      const buyerPaidAmount = roundMoneyNumber(shipmentBreakdown.buyerPaidAmount);
+      const netAmount = roundMoneyNumber(shipmentBreakdown.sellerCostAmount);
+
+      if (!shipmentBreakdown.sellerMatched) {
+        this.logger.warn(
+          `Shipment seller cost missing in /shipments/${shipmentId}/costs for seller ${connection.externalAccountId}. Using 0.`,
+        );
+      }
 
       ratioByRowId.set(row.id, {
         buyerPaidAmount,
-        grossTariffAmount: shipmentBreakdown.grossTariffAmount,
+        grossTariffAmount: shipmentBreakdown.sellerCostAmount,
         netAmount,
         shipmentId,
       });
@@ -2863,16 +2863,14 @@ export class OrdersService {
               fee.metadata && typeof fee.metadata === "object"
                 ? { ...(fee.metadata as Record<string, unknown>) }
                 : {};
-            metadata.listCostAmount = shippingRatio.grossTariffAmount;
+            delete metadata.listCostAmount;
             metadata.shipmentId = shippingRatio.shipmentId;
             metadata.shipping_buyer_paid = toMoney(shippingRatio.buyerPaidAmount);
-            metadata.shipping_net_amount = toMoney(
-              shippingRatio.buyerPaidAmount - shippingRatio.grossTariffAmount,
-            );
+            metadata.shipping_net_amount = toMoney(-shippingRatio.netAmount);
             metadata.shipping_seller_fee = toMoney(
               shippingRatio.grossTariffAmount,
             );
-            metadata.source = "shipment_detail.shipping_option.list_cost";
+            metadata.source = "shipment_costs.senders";
 
             await this.db
               .update(externalFees)
@@ -3372,14 +3370,16 @@ export class OrdersService {
 
   private async fetchMercadoLivreShipmentBreakdown(input: {
     accessToken: string;
+    sellerAccountId: string | null;
     shipmentId: string;
-  }) {
+  }): Promise<MercadoLivreShipmentSellerCost | null> {
     const response = await fetch(
-      `https://api.mercadolibre.com/shipments/${encodeURIComponent(input.shipmentId)}`,
+      `https://api.mercadolibre.com/shipments/${encodeURIComponent(input.shipmentId)}/costs`,
       {
         headers: {
           Authorization: `Bearer ${input.accessToken}`,
           accept: "application/json",
+          "x-format-new": "true",
         },
         method: "GET",
       },
@@ -3394,29 +3394,40 @@ export class OrdersService {
       return null;
     }
 
-    const payload = (await response.json()) as MercadoLivreShipmentDetailResponse;
-    const rawBuyerPaid = payload.shipping_option?.cost;
+    const payload = (await response.json()) as MercadoLivreShipmentCostsResponse;
+    const rawBuyerPaid = payload.receiver?.cost;
     const buyerPaid =
       typeof rawBuyerPaid === "number"
         ? rawBuyerPaid
         : typeof rawBuyerPaid === "string"
           ? Number(rawBuyerPaid)
           : 0;
-    const rawListCost = payload.shipping_option?.list_cost;
-    const listCost =
-      typeof rawListCost === "number"
-        ? rawListCost
-        : typeof rawListCost === "string"
-          ? Number(rawListCost)
-          : null;
+    const matchedSender =
+      input.sellerAccountId === null
+        ? null
+        : (payload.senders ?? []).find(
+            (sender) =>
+              String(sender.user_id ?? "").trim() === input.sellerAccountId,
+          ) ?? null;
+    const rawSellerCost = matchedSender?.cost;
+    const sellerCost =
+      typeof rawSellerCost === "number"
+        ? rawSellerCost
+        : typeof rawSellerCost === "string"
+          ? Number(rawSellerCost)
+          : 0;
 
-    return listCost !== null && Number.isFinite(listCost) && listCost > 0
-      ? {
-          buyerPaidAmount:
-            Number.isFinite(buyerPaid) && buyerPaid > 0 ? buyerPaid : 0,
-          grossTariffAmount: listCost,
-        }
-      : null;
+    return {
+      buyerPaidAmount: Number.isFinite(buyerPaid) && buyerPaid > 0 ? buyerPaid : 0,
+      sellerCostAmount:
+        Number.isFinite(sellerCost) && sellerCost > 0 ? sellerCost : 0,
+      sellerMatched:
+        input.sellerAccountId !== null &&
+        Number.isFinite(sellerCost) &&
+        sellerCost > 0,
+      shipmentId: input.shipmentId,
+      source: "shipment_costs.senders",
+    };
   }
 
   private async fetchMercadoLivreBillingOrderShippingCost(input: {
