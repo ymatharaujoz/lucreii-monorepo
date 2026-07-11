@@ -5340,7 +5340,7 @@ describe("OrdersService", () => {
     );
   });
 
-  it("derives grouped Mercado Livre refund bonus from billing total once per logical order", async () => {
+  it("does not infer grouped Mercado Livre refund bonus from billing total", async () => {
     const shippingMetadata = {
       mercadoLivreBillingTotalAmount: "49.44",
       shipmentId: "shipment_123",
@@ -5448,8 +5448,8 @@ describe("OrdersService", () => {
     expect(result.composition).toEqual(
       expect.objectContaining({
         marketplaceCommissionAmount: "9.84",
-        netRevenueAmount: "49.44",
-        refundBonusAmount: "6.04",
+        netRevenueAmount: "43.40",
+        refundBonusAmount: "0.00",
         revenueAmount: "75.84",
         shippingOrFixedFeeAmount: "22.60",
       }),

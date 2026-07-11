@@ -849,64 +849,6 @@ function readPaymentNetReceivedAmount(payload: MercadoLivrePaymentResponse) {
   return null;
 }
 
-function sumFeeAmountsByType(
-  fees: IntegrationSyncFee[],
-  feeType: IntegrationSyncFee["feeType"],
-) {
-  return fees.reduce((sum, fee) => {
-    if (fee.feeType !== feeType) {
-      return sum;
-    }
-
-    const amount = Number(fee.amount);
-    return Number.isFinite(amount) ? sum + amount : sum;
-  }, 0);
-}
-
-function deriveNetTotalRefundBonus(input: {
-  fees: IntegrationSyncFee[];
-  netReceivedAmount: number;
-  operationId: string | null;
-  rawPayload: Record<string, unknown> | null;
-  totalAmount: number;
-}): MercadoLivreFinancialAdjustment | null {
-  const marketplaceCommissionAmount = sumFeeAmountsByType(
-    input.fees,
-    "marketplace_commission",
-  );
-  const shippingAmount = sumFeeAmountsByType(input.fees, "shipping_cost");
-  const expectedNetWithoutShippingAmount = roundMoneyNumber(
-    input.totalAmount - marketplaceCommissionAmount,
-  );
-
-  if (
-    shippingAmount > 0 &&
-    isAlmostEqualMoney(input.netReceivedAmount, expectedNetWithoutShippingAmount)
-  ) {
-    return null;
-  }
-
-  const expectedNetAmount = roundMoneyNumber(
-    input.totalAmount - marketplaceCommissionAmount - shippingAmount,
-  );
-  const refundBonusAmount = roundMoneyNumber(
-    input.netReceivedAmount - expectedNetAmount,
-  );
-
-  if (refundBonusAmount < 0.01) {
-    return null;
-  }
-
-  return {
-    amount: refundBonusAmount,
-    operationId: input.operationId,
-    originalDescription: "Derived from Mercado Livre net total",
-    originalType: "net_total_difference",
-    rawPayload: input.rawPayload,
-    source: "payment.transaction_details.net_received_amount",
-  };
-}
-
 function roundMoneyNumber(value: number) {
   return Math.round(value * 100) / 100;
 }
@@ -2485,21 +2427,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
       input,
       detailedOrder,
     );
-    const netReceivedAmount = await this.fetchOrderNetReceivedAmount({
-      accessToken: input.accessToken,
-      order: resolvedOrder,
-    });
-    const financialAdjustment =
-      refundBonusAdjustment ??
-      (netReceivedAmount && typeof resolvedOrder.total_amount === "number"
-        ? deriveNetTotalRefundBonus({
-            fees,
-            netReceivedAmount: netReceivedAmount.amount,
-            operationId,
-            rawPayload: netReceivedAmount.rawPayload,
-            totalAmount: resolvedOrder.total_amount,
-          })
-        : null);
+    const financialAdjustment = refundBonusAdjustment;
     const refundBonusAmount = financialAdjustment
       ? toDecimalString(financialAdjustment.amount)
       : "0.00";
@@ -2578,8 +2506,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
         fees: initialFees,
         operationId: billingFeeBreakdown?.operationId ?? null,
         refundBonusAdjustment:
-          billingFeeBreakdown?.refundBonusAdjustment ??
-          readMercadoLivreBillingRefundBonusAdjustmentFromFees(initialFees),
+          readMercadoLivreBillingRefundBonusAdjustmentFromFees(initialFees) ??
+          billingFeeBreakdown?.refundBonusAdjustment,
       };
     }
 
@@ -2699,8 +2627,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
         fees: completedFees,
         operationId: billingFeeBreakdown?.operationId ?? null,
         refundBonusAdjustment:
-          billingFeeBreakdown?.refundBonusAdjustment ??
-          orderDetailsRefundBonusAdjustment,
+          orderDetailsRefundBonusAdjustment ??
+          billingFeeBreakdown?.refundBonusAdjustment,
       };
     }
 
@@ -2709,8 +2637,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
         fees: completedFees,
         operationId: billingFeeBreakdown?.operationId ?? null,
         refundBonusAdjustment:
-          billingFeeBreakdown?.refundBonusAdjustment ??
-          orderDetailsRefundBonusAdjustment,
+          orderDetailsRefundBonusAdjustment ??
+          billingFeeBreakdown?.refundBonusAdjustment,
       };
     }
 
@@ -2731,8 +2659,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
       ],
       operationId: billingFeeBreakdown?.operationId ?? null,
       refundBonusAdjustment:
-        billingFeeBreakdown?.refundBonusAdjustment ??
-        orderDetailsRefundBonusAdjustment,
+        orderDetailsRefundBonusAdjustment ??
+        billingFeeBreakdown?.refundBonusAdjustment,
     };
   }
 
@@ -3123,11 +3051,14 @@ export class MercadoLivreProvider implements IntegrationProvider {
         ? String(matchedResult.operation_id)
         : null;
 
+    const refundBonusAdjustment = readBillingFinancialAdjustment(matchedResult);
+
     if (
       fixedFee === null &&
       marketplaceCommission === null &&
       grossAmount === null &&
-      operationId === null
+      operationId === null &&
+      refundBonusAdjustment === null
     ) {
       return null;
     }
@@ -3137,8 +3068,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
       grossAmount,
       marketplaceCommission,
       operationId,
-      refundBonus: readBillingRefundBonus(matchedResult),
-      refundBonusAdjustment: readBillingFinancialAdjustment(matchedResult),
+      refundBonus: refundBonusAdjustment?.amount ?? null,
+      refundBonusAdjustment,
     };
   }
 

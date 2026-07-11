@@ -770,12 +770,12 @@ describe("MercadoLivreProvider", () => {
     });
   });
 
-  it("keeps MELI pack CFFE shipping out of refund bonus during sync", async () => {
+  it("persists the R$ 0.82 billing rebate for sale 2000013732950429", async () => {
     const provider = createProvider();
     const orderPayload = {
       currency_id: "BRL",
       date_closed: "2026-06-22T17:10:46.000-04:00",
-      id: 2000017063392034,
+      id: 2000013732950429,
       order_items: [
         {
           item: {
@@ -824,8 +824,12 @@ describe("MercadoLivreProvider", () => {
         );
       }
 
-      if (url.includes("/orders/2000017063392034")) {
+      if (url.includes("/orders/2000013732950429")) {
         return Promise.resolve(createJsonResponse(orderPayload));
+      }
+
+      if (url.includes("/shipments/47358700157/costs")) {
+        return Promise.resolve(createJsonResponse({}, 404));
       }
 
       if (url.includes("/billing/integration/group/ML/order/details")) {
@@ -836,11 +840,9 @@ describe("MercadoLivreProvider", () => {
             total: 2,
             results: [
               {
-                order_id: 2000017063392034,
+                order_id: 2000013732950429,
                 sale_fee: {
-                  gross: 4.92,
-                  net: 1.9,
-                  rebate: 3.02,
+                  rebate: 0.82,
                   discount: 0,
                 },
                 details: [
@@ -861,7 +863,7 @@ describe("MercadoLivreProvider", () => {
                 ],
               },
               {
-                order_id: 2000017063392030,
+                order_id: 2000013732950428,
                 sale_fee: null,
                 details: [
                   {
@@ -894,11 +896,9 @@ describe("MercadoLivreProvider", () => {
             results: [
               {
                 operation_id: 164531747905,
-                order_id: 2000017063392034,
+                order_id: 2000013732950429,
                 sale_fee: {
-                  gross: 4.92,
-                  net: 1.9,
-                  rebate: 3.02,
+                  rebate: 0.82,
                   discount: 0,
                 },
               },
@@ -931,7 +931,7 @@ describe("MercadoLivreProvider", () => {
 
     expect(result.orders[0]?.metadata).toMatchObject({
       packId: "2000013650735359",
-      refundBonusAmount: "3.02",
+      refundBonusAmount: "0.82",
     });
     expect(result.orders[0]?.fees).toEqual(
       expect.arrayContaining([
@@ -944,8 +944,11 @@ describe("MercadoLivreProvider", () => {
           feeType: "shipping_cost",
         }),
         expect.objectContaining({
-          amount: "3.02",
+          amount: "0.82",
           feeType: "refund_bonus",
+          metadata: expect.objectContaining({
+            source: "billing/integration/group/ML/order/details",
+          }),
         }),
       ]),
     );
@@ -2471,7 +2474,7 @@ describe("MercadoLivreProvider", () => {
     ).toBe(true);
   });
 
-  it("derives refund bonus from Mercado Livre net total difference", async () => {
+  it("does not infer refund bonus from Mercado Livre net total difference", async () => {
     const provider = createProvider();
     const searchPayload = {
       paging: { limit: 50, offset: 0, total: 1 },
@@ -2515,6 +2518,14 @@ describe("MercadoLivreProvider", () => {
             ...searchPayload.results[0],
             shipping: { id: 1 },
             status: "paid",
+          }),
+        );
+      }
+
+      if (url.includes("/shipments/1/costs")) {
+        return Promise.resolve(
+          createJsonResponse({
+            senders: [{ cost: 13.1, receiver: { user_id: 123456 } }],
           }),
         );
       }
@@ -2568,27 +2579,13 @@ describe("MercadoLivreProvider", () => {
 
     expect(result.orders[0]?.items).toHaveLength(1);
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "2.50",
+      refundBonusAmount: "0.00",
     });
-    expect(result.orders[0]?.fees).toEqual(
+    expect(result.orders[0]?.fees).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          amount: "2.50",
-          feeType: "refund_bonus",
-          metadata: expect.objectContaining({
-            originalDescription: "Derived from Mercado Livre net total",
-            originalType: "net_total_difference",
-            source: "payment.transaction_details.net_received_amount",
-          }),
-        }),
+        expect.objectContaining({ feeType: "refund_bonus" }),
       ]),
     );
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
-    expect(
-      fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes("/v1/payments/7654321"),
-      ),
-    ).toBe(true);
     expect(
       fetchMock.mock.calls.some((call) =>
         String(call[0]).includes("/billing/integration/periods/key/2026-06-01/group/MP/details"),

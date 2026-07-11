@@ -1005,7 +1005,7 @@ describe("SyncService", () => {
     ]);
   });
 
-  it("persists refund bonus amount on external orders during upsert", async () => {
+  it("persists the R$ 0.82 refund bonus during external order upsert", async () => {
     const { db, service } = createService();
     let insertedOrder: Record<string, unknown> | null = null;
     let externalOrderConflictSet: Record<string, unknown> | null = null;
@@ -1016,7 +1016,8 @@ describe("SyncService", () => {
           value &&
           typeof value === "object" &&
           "externalOrderId" in value &&
-          (value as { externalOrderId?: unknown }).externalOrderId === "order_1"
+          (value as { externalOrderId?: unknown }).externalOrderId ===
+            "2000013732950429"
         ) {
           insertedOrder = value as Record<string, unknown>;
           return {
@@ -1093,7 +1094,7 @@ describe("SyncService", () => {
         orders: [
           {
             currency: "BRL",
-            externalOrderId: "order_1",
+            externalOrderId: "2000013732950429",
             fees: [],
             items: [
               {
@@ -1103,7 +1104,7 @@ describe("SyncService", () => {
                 unitPrice: "100.00",
               },
             ],
-            metadata: { refundBonusAmount: "4.75" },
+            metadata: { refundBonusAmount: "0.82" },
             orderedAt: "2026-05-01T10:00:00.000Z",
             status: "paid",
             totalAmount: "100.00",
@@ -1123,13 +1124,13 @@ describe("SyncService", () => {
 
     expect(insertedOrder).toEqual(
       expect.objectContaining({
-        externalOrderId: "order_1",
-        refundBonusAmount: "4.75",
+        externalOrderId: "2000013732950429",
+        refundBonusAmount: "0.82",
       }),
     );
     expect(externalOrderConflictSet).toEqual(
       expect.objectContaining({
-        refundBonusAmount: "4.75",
+        refundBonusAmount: "0.82",
       }),
     );
   });

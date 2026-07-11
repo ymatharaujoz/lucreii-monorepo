@@ -320,7 +320,7 @@ describe("OrdersHome", () => {
     view.unmount();
   });
 
-  it("shows refund bonus card in composition tab when present", () => {
+  it("shows the R$ 0.82 refund bonus for sale 2000013732950429", () => {
     useOrderDetailsMock.mockReturnValue({
       data: {
         composition: {
@@ -331,7 +331,7 @@ describe("OrdersHome", () => {
           netRevenueAmount: "170.54",
           packagingCostAmount: "8.00",
           productCostAmount: "43.00",
-          refundBonusAmount: "3.54",
+          refundBonusAmount: "0.82",
           revenueAmount: "200.00",
           shippingOrFixedFeeAmount: "23.00",
           taxAmount: "24.00",
@@ -363,7 +363,7 @@ describe("OrdersHome", () => {
           id: "order_row_1",
           itemsSold: 2,
           orderDate: "2026-06-20",
-          orderId: "MLB-1001",
+          orderId: "2000013732950429",
           orderedAt: "2026-06-20T10:15:00.000Z",
           provider: "mercadolivre",
           shippingAmount: "20.00",
@@ -391,7 +391,7 @@ describe("OrdersHome", () => {
     );
 
     const content = text();
-    expect(content).toContain("R$ 3,54");
+    expect(content).toContain("R$ 0,82");
 
     view.unmount();
   });

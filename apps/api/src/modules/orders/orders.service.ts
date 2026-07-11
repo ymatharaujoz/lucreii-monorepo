@@ -664,18 +664,9 @@ function buildOrderFinancialMetrics(
     compositionOverrides.marketplaceCommissionAmount,
     baseMetrics.tariffAmount,
   );
-  const billingTotalRefundBonusAmount =
-    compositionOverrides.refundBonusAmount === undefined
-      ? deriveMercadoLivreRefundBonusFromBillingTotal({
-          billingTotalAmount: readMercadoLivreBillingTotalAmount(order),
-          marketplaceCommissionAmount,
-          revenueAmount,
-          shippingOrFixedFeeAmount,
-        })
-      : null;
   const refundBonusAmount = readOverrideMoney(
     compositionOverrides.refundBonusAmount,
-    billingTotalRefundBonusAmount ?? baseMetrics.refundBonusAmount,
+    baseMetrics.refundBonusAmount,
   );
   const netRevenueAmount =
     revenueAmount -
@@ -821,78 +812,6 @@ function readMercadoLivreShipmentId(
       : null;
 
   return shipmentId && shipmentId.length > 0 ? shipmentId : null;
-}
-
-function readPositiveMoneyFromMetadata(
-  metadata: Record<string, unknown> | null | undefined,
-  key: string,
-) {
-  if (!metadata) {
-    return null;
-  }
-
-  const value = metadata[key];
-  if (typeof value !== "string" && typeof value !== "number") {
-    return null;
-  }
-
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function readMercadoLivreBillingTotalAmount(
-  order: Pick<OrderRow, "fees" | "metadata" | "provider">,
-) {
-  if (order.provider !== "mercadolivre") {
-    return null;
-  }
-
-  const orderMetadata =
-    order.metadata && typeof order.metadata === "object"
-      ? (order.metadata as Record<string, unknown>)
-      : null;
-  const orderBillingTotal = readPositiveMoneyFromMetadata(
-    orderMetadata,
-    "mercadoLivreBillingTotalAmount",
-  );
-  if (orderBillingTotal !== null) {
-    return orderBillingTotal;
-  }
-
-  for (const fee of order.fees) {
-    const feeMetadata =
-      fee.metadata && typeof fee.metadata === "object"
-        ? (fee.metadata as Record<string, unknown>)
-        : null;
-    const feeBillingTotal = readPositiveMoneyFromMetadata(
-      feeMetadata,
-      "mercadoLivreBillingTotalAmount",
-    );
-
-    if (feeBillingTotal !== null) {
-      return feeBillingTotal;
-    }
-  }
-
-  return null;
-}
-
-function deriveMercadoLivreRefundBonusFromBillingTotal(input: {
-  billingTotalAmount: number | null;
-  marketplaceCommissionAmount: number;
-  revenueAmount: number;
-  shippingOrFixedFeeAmount: number;
-}) {
-  if (input.billingTotalAmount === null) {
-    return null;
-  }
-
-  return roundMoneyNumber(
-    input.billingTotalAmount -
-      (input.revenueAmount -
-        input.shippingOrFixedFeeAmount -
-        input.marketplaceCommissionAmount),
-  );
 }
 
 function shouldRefreshMercadoLivrePackId(
@@ -1404,21 +1323,6 @@ function aggregateGroupedShipping(
   };
 }
 
-function readMercadoLivreGroupedBillingTotalAmount(rows: OrderRow[]) {
-  if (rows[0]?.provider !== "mercadolivre") {
-    return null;
-  }
-
-  for (const row of rows) {
-    const billingTotalAmount = readMercadoLivreBillingTotalAmount(row);
-    if (billingTotalAmount !== null) {
-      return billingTotalAmount;
-    }
-  }
-
-  return null;
-}
-
 function aggregateOrderComposition(
   compositions: OrderComposition[],
   shippingAmount: number,
@@ -1497,21 +1401,6 @@ function buildLogicalOrder(
           shippingBreakdown: compositions[0]?.shippingBreakdown ?? undefined,
         }
       : aggregateGroupedShipping(rows, baseMetricsByRow);
-  const groupedBillingRefundBonusAmount =
-    rows.length === 1
-      ? null
-      : deriveMercadoLivreRefundBonusFromBillingTotal({
-          billingTotalAmount: readMercadoLivreGroupedBillingTotalAmount(rows),
-          marketplaceCommissionAmount: baseMetricsByRow.reduce(
-            (total, metrics) => total + metrics.tariffAmount,
-            0,
-          ),
-          revenueAmount: baseMetricsByRow.reduce(
-            (total, metrics) => total + metrics.totalWithFees,
-            0,
-          ),
-          shippingOrFixedFeeAmount: groupedShipping.shippingAmount,
-        });
   const composition =
     rows.length === 1
       ? compositions[0]!
@@ -1519,7 +1408,6 @@ function buildLogicalOrder(
           compositions,
           groupedShipping.shippingAmount,
           groupedShipping.shippingBreakdown,
-          { refundBonusAmount: groupedBillingRefundBonusAmount },
         );
   const financialMetrics = deriveOrderProfitMetricsFromComposition(composition);
   const uniqueSkus = new Set<string>();
@@ -1547,12 +1435,10 @@ function buildLogicalOrder(
     (total, metrics) => total + metrics.tariffAmount,
     0,
   );
-  const totalRefundBonusAmount =
-    groupedBillingRefundBonusAmount ??
-    baseMetricsByRow.reduce(
-      (total, metrics) => total + metrics.refundBonusAmount,
-      0,
-    );
+  const totalRefundBonusAmount = baseMetricsByRow.reduce(
+    (total, metrics) => total + metrics.refundBonusAmount,
+    0,
+  );
   const totalWithFeesAmount = baseMetricsByRow.reduce(
     (total, metrics) => total + metrics.totalWithFees,
     0,
