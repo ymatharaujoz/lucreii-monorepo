@@ -12,6 +12,7 @@ import {
   externalOrderItems,
   externalOrders,
   externalProducts,
+  mercadoLivreBillingMovements,
   marketplaceConnections,
   syncRuns,
   type DatabaseClient,
@@ -191,6 +192,67 @@ function readOrderRefundBonusAmount(
   return "0.00";
 }
 
+type RefundBonusStatus = "PENDING" | "RESOLVED" | "RESOLVED_ZERO" | "ERROR";
+
+function readOrderRefundBonusStatus(
+  metadata: Record<string, unknown> | null | undefined,
+  provider: string,
+  amount: string,
+): RefundBonusStatus {
+  const rawStatus = metadata?.refundBonusStatus;
+  if (
+    rawStatus === "PENDING" ||
+    rawStatus === "RESOLVED" ||
+    rawStatus === "RESOLVED_ZERO" ||
+    rawStatus === "ERROR"
+  ) {
+    return rawStatus;
+  }
+
+  if (Number(amount) > 0) {
+    return "RESOLVED";
+  }
+
+  return provider === "mercadolivre" ? "PENDING" : "RESOLVED_ZERO";
+}
+
+function buildRefundBonusMetadata(
+  metadata: Record<string, unknown>,
+  amount: string,
+  status: RefundBonusStatus,
+) {
+  return {
+    amountCents: Math.round(Number(amount) * 100),
+    componentAmounts:
+      metadata.refundBonusComponentAmounts &&
+      typeof metadata.refundBonusComponentAmounts === "object"
+        ? metadata.refundBonusComponentAmounts
+        : {},
+    movementKeys: Array.isArray(metadata.refundBonusMovementKeys)
+      ? metadata.refundBonusMovementKeys
+      : [],
+    movements: Array.isArray(metadata.refundBonusMovements)
+      ? metadata.refundBonusMovements
+      : [],
+    periodsSearched: [],
+    source: metadata.refundBonusSource ?? null,
+    status,
+  } satisfies Record<string, unknown>;
+}
+
+function toBillingPeriodKey(value: string | null | undefined) {
+  if (!value) {
+    return new Date().toISOString().slice(0, 7) + "-01";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return new Date().toISOString().slice(0, 7) + "-01";
+  }
+
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
 function normalizeRunOrigin(
   value: Record<string, unknown> | null | undefined,
 ): SyncRunOrigin {
@@ -219,8 +281,7 @@ type ManualSyncRequest = {
 
 const MANUAL_SYNC_OUTSIDE_WINDOW_ERROR =
   "Periodo manual deve ficar dentro dos ultimos 60 dias.";
-const MANUAL_SYNC_MAX_RANGE_ERROR =
-  "Periodo manual nao pode exceder 60 dias.";
+const MANUAL_SYNC_MAX_RANGE_ERROR = "Periodo manual nao pode exceder 60 dias.";
 
 function parseDateOnlyAsUtc(value: string) {
   const [year, month, day] = value.split("-").map(Number);
@@ -859,7 +920,9 @@ export class SyncService {
           metadata: {
             importCounts: counts,
             origin: input.triggerOrigin,
-            ...(syncResult.metadata ? { providerMetadata: syncResult.metadata } : {}),
+            ...(syncResult.metadata
+              ? { providerMetadata: syncResult.metadata }
+              : {}),
             requestedCursor,
             trigger: input.triggerMetadata,
             ...(input.manualRange ? {} : { resultCursor: syncResult.cursor }),
@@ -1439,8 +1502,76 @@ export class SyncService {
       let itemCount = 0;
 
       for (const order of input.syncResult.orders) {
-        const orderMetadata = buildOrderMetadata(order);
+        let orderMetadata = buildOrderMetadata(order);
         const refundBonusAmount = readOrderRefundBonusAmount(orderMetadata);
+        const refundBonusStatus = readOrderRefundBonusStatus(
+          orderMetadata,
+          input.providerSlug,
+          refundBonusAmount,
+        );
+        const refundBonusCheckedAt = new Date();
+        const existingOrder = tx.query?.externalOrders
+          ? await tx.query.externalOrders.findFirst({
+              columns: {
+                refundBonusAmount: true,
+                refundBonusAttempts: true,
+                refundBonusMetadata: true,
+                refundBonusResolvedAt: true,
+                refundBonusSource: true,
+                metadata: true,
+              },
+              where: and(
+                eq(externalOrders.organizationId, input.organizationId),
+                eq(externalOrders.companyId, input.companyId),
+                eq(externalOrders.provider, input.providerSlug),
+                eq(externalOrders.externalOrderId, order.externalOrderId),
+              ),
+            })
+          : undefined;
+        const existingCompositionOverrides =
+          existingOrder?.metadata &&
+          typeof existingOrder.metadata === "object" &&
+          existingOrder.metadata.compositionOverrides &&
+          typeof existingOrder.metadata.compositionOverrides === "object"
+            ? existingOrder.metadata.compositionOverrides
+            : null;
+        if (existingCompositionOverrides) {
+          orderMetadata = {
+            ...orderMetadata,
+            compositionOverrides: existingCompositionOverrides,
+          };
+        }
+        const preserveConfirmedValue =
+          existingOrder !== undefined &&
+          (refundBonusStatus === "PENDING" || refundBonusStatus === "ERROR");
+        const materializedRefundBonusAmount = preserveConfirmedValue
+          ? String(existingOrder.refundBonusAmount ?? "0.00")
+          : refundBonusAmount;
+        const materializedRefundBonusCents = Math.round(
+          Number(materializedRefundBonusAmount) * 100,
+        );
+        const refundBonusMetadata = {
+          ...(existingOrder?.refundBonusMetadata ?? {}),
+          ...buildRefundBonusMetadata(
+            orderMetadata,
+            materializedRefundBonusAmount,
+            refundBonusStatus,
+          ),
+          lastCheckedAt: refundBonusCheckedAt.toISOString(),
+        };
+        const refundBonusResolvedAt = preserveConfirmedValue
+          ? (existingOrder?.refundBonusResolvedAt ?? null)
+          : refundBonusStatus === "RESOLVED" ||
+              refundBonusStatus === "RESOLVED_ZERO"
+            ? refundBonusCheckedAt
+            : null;
+        const refundBonusSource = preserveConfirmedValue
+          ? (existingOrder?.refundBonusSource ?? null)
+          : typeof orderMetadata.refundBonusSource === "string"
+            ? orderMetadata.refundBonusSource
+            : null;
+        const refundBonusAttempts =
+          (existingOrder?.refundBonusAttempts ?? 0) + 1;
         const [storedOrder] = await tx
           .insert(externalOrders)
           .values({
@@ -1451,7 +1582,14 @@ export class SyncService {
             orderedAt: order.orderedAt ? new Date(order.orderedAt) : null,
             organizationId: input.organizationId,
             provider: input.providerSlug,
-            refundBonusAmount,
+            refundBonusAmount: materializedRefundBonusAmount,
+            refundBonusAttempts,
+            refundBonusCents: materializedRefundBonusCents,
+            refundBonusLastCheckedAt: refundBonusCheckedAt,
+            refundBonusMetadata,
+            refundBonusResolvedAt,
+            refundBonusSource,
+            refundBonusStatus,
             status: order.status,
             syncRunId: input.syncRunId,
             totalAmount: order.totalAmount,
@@ -1464,7 +1602,14 @@ export class SyncService {
               metadata: orderMetadata,
               orderedAt: order.orderedAt ? new Date(order.orderedAt) : null,
               status: order.status,
-              refundBonusAmount,
+              refundBonusAmount: materializedRefundBonusAmount,
+              refundBonusAttempts,
+              refundBonusCents: materializedRefundBonusCents,
+              refundBonusLastCheckedAt: refundBonusCheckedAt,
+              refundBonusMetadata,
+              refundBonusResolvedAt,
+              refundBonusSource,
+              refundBonusStatus,
               syncRunId: input.syncRunId,
               totalAmount: order.totalAmount,
               updatedAt: new Date(),
@@ -1479,6 +1624,100 @@ export class SyncService {
           .returning({
             id: externalOrders.id,
           });
+
+        const refundBonusMovements = Array.isArray(
+          orderMetadata.refundBonusMovements,
+        )
+          ? orderMetadata.refundBonusMovements
+          : [];
+        for (const movement of refundBonusMovements) {
+          if (!movement || typeof movement !== "object") {
+            continue;
+          }
+
+          const movementRecord = movement as Record<string, unknown>;
+          const movementKey =
+            typeof movementRecord.key === "string"
+              ? movementRecord.key.trim()
+              : "";
+          const amount =
+            typeof movementRecord.amount === "number"
+              ? movementRecord.amount
+              : Number(movementRecord.amount);
+          const documentType =
+            movementRecord.documentType === "CREDIT_NOTE"
+              ? "CREDIT_NOTE"
+              : movementRecord.documentType === "BILL"
+                ? "BILL"
+                : null;
+
+          if (
+            !movementKey ||
+            !documentType ||
+            !Number.isFinite(amount) ||
+            amount <= 0
+          ) {
+            continue;
+          }
+
+          const deduplicationKey = `${documentType}:${movementKey}`;
+          await tx
+            .insert(mercadoLivreBillingMovements)
+            .values({
+              amountCents: Math.round(amount * 100),
+              billingGroup: "ML",
+              companyId: input.companyId,
+              currency: order.currency,
+              deduplicationKey,
+              documentType,
+              externalMovementId: movementKey,
+              externalOrderId: order.externalOrderId,
+              externalPackId:
+                typeof orderMetadata.packId === "string"
+                  ? orderMetadata.packId
+                  : null,
+              externalPaymentId:
+                typeof orderMetadata.operationId === "string"
+                  ? orderMetadata.operationId
+                  : null,
+              isSellerCredit: true,
+              marketplaceConnectionId: input.connection.id,
+              organizationId: input.organizationId,
+              payload:
+                movementRecord.payload &&
+                typeof movementRecord.payload === "object"
+                  ? (movementRecord.payload as Record<string, unknown>)
+                  : {},
+              periodKey: toBillingPeriodKey(order.orderedAt),
+            })
+            .onConflictDoUpdate({
+              set: {
+                amountCents: Math.round(amount * 100),
+                currency: order.currency,
+                documentType,
+                externalOrderId: order.externalOrderId,
+                externalPackId:
+                  typeof orderMetadata.packId === "string"
+                    ? orderMetadata.packId
+                    : null,
+                externalPaymentId:
+                  typeof orderMetadata.operationId === "string"
+                    ? orderMetadata.operationId
+                    : null,
+                isSellerCredit: true,
+                payload:
+                  movementRecord.payload &&
+                  typeof movementRecord.payload === "object"
+                    ? (movementRecord.payload as Record<string, unknown>)
+                    : {},
+                updatedAt: new Date(),
+              },
+              target: [
+                mercadoLivreBillingMovements.marketplaceConnectionId,
+                mercadoLivreBillingMovements.deduplicationKey,
+              ],
+            });
+        }
 
         await tx
           .delete(externalOrderItems)

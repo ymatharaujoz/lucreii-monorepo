@@ -40,6 +40,10 @@ export type ExternalProduct = typeof schema.externalProducts.$inferSelect;
 export type NewExternalProduct = typeof schema.externalProducts.$inferInsert;
 export type ExternalOrder = typeof schema.externalOrders.$inferSelect;
 export type NewExternalOrder = typeof schema.externalOrders.$inferInsert;
+export type MercadoLivreBillingMovement =
+  typeof schema.mercadoLivreBillingMovements.$inferSelect;
+export type NewMercadoLivreBillingMovement =
+  typeof schema.mercadoLivreBillingMovements.$inferInsert;
 export type ExternalOrderItem = typeof schema.externalOrderItems.$inferSelect;
 export type NewExternalOrderItem =
   typeof schema.externalOrderItems.$inferInsert;

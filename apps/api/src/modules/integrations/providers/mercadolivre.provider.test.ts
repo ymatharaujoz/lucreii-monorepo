@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MercadoLivreProvider,
+  readMercadoLivreBillingRefundBonus,
+  readMercadoLivreBillingOrderRefundBonus,
   readMercadoLivreBillingOrderShippingCost,
 } from "./mercadolivre.provider";
 
@@ -228,6 +230,103 @@ describe("MercadoLivreProvider", () => {
           shipping_net_amount: "-22.60",
           shipping_seller_fee: "22.60",
         }),
+      }),
+    );
+  });
+
+  it("uses sale_fee rebate as the campaign refund bonus without deriving gross minus net", () => {
+    const result = readMercadoLivreBillingOrderRefundBonus({
+      orderId: "123",
+      payload: {
+        results: [
+          {
+            order_id: "123",
+            operation_id: "payment-123",
+            sale_fee: {
+              discount: 0,
+              gross: 6.27,
+              net: 4.37,
+              rebate: 1.9,
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        amount: 1.9,
+        componentAmounts: expect.objectContaining({
+          saleFeeRebate: 1.9,
+          saleFeeDiscount: 0,
+        }),
+      }),
+    );
+  });
+
+  it("reads nested discount_info and bonus details even without shipping data", () => {
+    const result = readMercadoLivreBillingOrderRefundBonus({
+      orderId: "456",
+      payload: {
+        results: [
+          {
+            details: [
+              {
+                charge_info: {
+                  detail_amount: 2.25,
+                  detail_type: "CREDIT",
+                  status: "BONUS_ON_CREDIT_NOTE",
+                  transaction_detail: "Estorno de envio",
+                },
+                discount_info: {
+                  discount_amount: 0.75,
+                  rebate: 0,
+                },
+                sales_info: [{ order_id: "456", operation_id: "payment-456" }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        amount: 3,
+        componentAmounts: expect.objectContaining({
+          creditNote: 2.25,
+          detailDiscount: 0.75,
+        }),
+      }),
+    );
+  });
+
+  it("reads a CREDIT_NOTE seller credit even without a bonus status", () => {
+    const result = readMercadoLivreBillingRefundBonus({
+      documentType: "CREDIT_NOTE",
+      orderId: "789",
+      payload: {
+        results: [
+          {
+            sales_info: [{ order_id: "789", operation_id: "payment-789" }],
+            details: [
+              {
+                charge_info: {
+                  detail_amount: "1.90",
+                  detail_type: "CREDIT_NOTE",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        amount: 1.9,
+        componentAmounts: expect.objectContaining({ creditNote: 1.9 }),
+        operationId: "payment-789",
       }),
     );
   });
@@ -560,19 +659,16 @@ describe("MercadoLivreProvider", () => {
       )
       .mockResolvedValueOnce(
         createJsonResponse({
-          details: [],
+          senders: [{ cost: 9, user_id: 123456 }],
         }),
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            senders: [{ cost: 9, user_id: 123456 }],
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
+        createJsonResponse({
+          limit: 1000,
+          offset: 0,
+          results: [],
+          total: 0,
+        }),
       )
       .mockResolvedValueOnce(
         createJsonResponse({
@@ -1275,7 +1371,7 @@ describe("MercadoLivreProvider", () => {
 
       if (
         url.includes(
-          "/billing/integration/periods/key/2026-05-01/group/MP/details",
+          "/billing/integration/periods/key/2026-05-01/group/ML/details",
         )
       ) {
         return Promise.resolve(
@@ -1736,9 +1832,9 @@ describe("MercadoLivreProvider", () => {
       organizationId: "org_1",
     });
 
-    expect(
-      fetchMock.mock.calls.map((call) => String(call[0])),
-    ).toContain("https://api.mercadolibre.com/user-products/MLBU123");
+    expect(fetchMock.mock.calls.map((call) => String(call[0]))).toContain(
+      "https://api.mercadolibre.com/user-products/MLBU123",
+    );
     expect(result.orders[0]?.items).toEqual([
       expect.objectContaining({
         externalProductId: "MLB123",
@@ -1824,7 +1920,9 @@ describe("MercadoLivreProvider", () => {
 
     expect(shippingCost).toBe(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/shipments/999/costs");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/shipments/999/costs",
+    );
   });
 
   it("returns null when order has no shipment id even if payment details exist", async () => {
@@ -1897,7 +1995,9 @@ describe("MercadoLivreProvider", () => {
 
     expect(shippingCost).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/shipments/999/costs");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/shipments/999/costs",
+    );
   });
 
   it("does not treat buyer payment shipping_cost as seller shipping cost without payment details", async () => {
@@ -2142,11 +2242,11 @@ describe("MercadoLivreProvider", () => {
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "0.00",
+      refundBonusAmount: "19.95",
     });
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
-      "/billing/integration/periods/key/2026-05-01/group/MP/details",
+      "/billing/integration/periods/key/2026-05-01/group/ML/details",
     );
     expect(
       (fetchMock.mock.calls[3]?.[1] as RequestInit | undefined)?.headers,
@@ -2226,6 +2326,14 @@ describe("MercadoLivreProvider", () => {
             ...searchPayload.results[0],
             shipping: { id: 1 },
             status: "paid",
+          }),
+        );
+      }
+
+      if (url.includes("/shipments/1/costs")) {
+        return Promise.resolve(
+          createJsonResponse({
+            senders: [{ cost: 14.5, user_id: 123456 }],
           }),
         );
       }
@@ -2328,12 +2436,9 @@ describe("MercadoLivreProvider", () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
     expect(
       fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes("/v1/payments/7654321"),
-      ),
-    ).toBe(true);
-    expect(
-      fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes("/billing/integration/periods/key/2026-05-01/group/MP/details"),
+        String(call[0]).includes(
+          "/billing/integration/periods/key/2026-05-01/group/ML/details",
+        ),
       ),
     ).toBe(true);
   });
@@ -2469,7 +2574,9 @@ describe("MercadoLivreProvider", () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
     expect(
       fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes("/billing/integration/periods/key/2026-05-01/group/MP/details"),
+        String(call[0]).includes(
+          "/billing/integration/periods/key/2026-05-01/group/ML/details",
+        ),
       ),
     ).toBe(true);
   });
@@ -2588,7 +2695,9 @@ describe("MercadoLivreProvider", () => {
     );
     expect(
       fetchMock.mock.calls.some((call) =>
-        String(call[0]).includes("/billing/integration/periods/key/2026-06-01/group/MP/details"),
+        String(call[0]).includes(
+          "/billing/integration/periods/key/2026-06-01/group/ML/details",
+        ),
       ),
     ).toBe(true);
   });
@@ -2920,6 +3029,7 @@ describe("MercadoLivreProvider", () => {
           },
         ),
       )
+      .mockResolvedValueOnce(createJsonResponse({ results: [] }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -2987,7 +3097,7 @@ describe("MercadoLivreProvider", () => {
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "0.00",
+      refundBonusAmount: "6.65",
     });
   });
 
@@ -3085,6 +3195,7 @@ describe("MercadoLivreProvider", () => {
           },
         ),
       )
+      .mockResolvedValueOnce(createJsonResponse({ results: [] }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -3152,7 +3263,7 @@ describe("MercadoLivreProvider", () => {
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "0.00",
+      refundBonusAmount: "6.65",
     });
   });
 
@@ -3258,14 +3369,8 @@ describe("MercadoLivreProvider", () => {
           },
         ),
       )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          details: [
-            { amounts: { mercadolibre: 3.5 } },
-            { amounts: { mercadolibre: 1.25 } },
-          ],
-        }),
-      )
+      .mockResolvedValueOnce(createJsonResponse({ results: [] }))
+      .mockResolvedValueOnce(createJsonResponse({ results: [] }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -3335,11 +3440,11 @@ describe("MercadoLivreProvider", () => {
         }),
       }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
-      "/billing/integration/periods/key/2026-06-01/group/MP/details",
-    );
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
+      "/billing/integration/periods/key/2026-06-01/group/ML/details",
+    );
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
       "/sites/MLB/listing_prices",
     );
   });
@@ -3958,7 +4063,9 @@ describe("MercadoLivreProvider", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/orders/123");
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/orders/123");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      "/billing/integration/group/ML/order/details",
+    );
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/periods/",
     );
@@ -4061,6 +4168,7 @@ describe("MercadoLivreProvider", () => {
           },
         ),
       )
+      .mockResolvedValueOnce(createJsonResponse({ results: [] }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -4112,9 +4220,12 @@ describe("MercadoLivreProvider", () => {
         variationId: "456",
       }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/orders/123");
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      "/billing/integration/group/ML/order/details",
+    );
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
       "/billing/integration/periods/",
     );
   });
@@ -4178,6 +4289,7 @@ describe("MercadoLivreProvider", () => {
           },
         }),
       )
+      .mockResolvedValueOnce(createJsonResponse({ results: [] }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -4242,13 +4354,10 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.externalOrderId).toBe("2000017085667456");
     expect(result.orders[0]?.metadata).toMatchObject({
       operationId: "2000013674359901",
-      refundBonusAmount: "4.75",
+      refundBonusAmount: "0.00",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
-      "https://api.mercadopago.com/v1/payments/7654321",
-    );
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
       "/billing/integration/periods/",
     );
   });
@@ -4417,6 +4526,7 @@ describe("MercadoLivreProvider", () => {
           id: 7654321,
         }),
       )
+      .mockResolvedValueOnce(createJsonResponse({ results: [] }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -4483,9 +4593,10 @@ describe("MercadoLivreProvider", () => {
       operationId: "2000013674359901",
       packId: "2000013607301987",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("from_id=cursor-1");
-    expect(String(fetchMock.mock.calls[4]?.[0])).toContain("from_id=cursor-2");
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("from_id=0");
+    expect(String(fetchMock.mock.calls[4]?.[0])).toContain("from_id=cursor-1");
+    expect(String(fetchMock.mock.calls[5]?.[0])).toContain("from_id=cursor-2");
   });
 
   it("prefers billing row with operation_id when the same order_id appears multiple times", async () => {
@@ -4544,6 +4655,7 @@ describe("MercadoLivreProvider", () => {
           id: 7654321,
         }),
       )
+      .mockResolvedValueOnce(createJsonResponse({ results: [] }))
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -5099,7 +5211,10 @@ describe("MercadoLivreProvider", () => {
         );
       }
 
-      if (url.includes("/users/seller-1/items/search?") && url.includes("status=paused")) {
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=paused")
+      ) {
         return Promise.resolve(
           createJsonResponse({
             results: [],
@@ -5659,7 +5774,10 @@ describe("MercadoLivreProvider", () => {
         );
       }
 
-      if (url.includes("/users/seller-1/items/search?") && url.includes("status=paused")) {
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=paused")
+      ) {
         return Promise.resolve(
           createJsonResponse({
             results: [],
@@ -5702,7 +5820,8 @@ describe("MercadoLivreProvider", () => {
               { id: "SIZE", value_name: "37 BR" },
             ],
             family_id: "840907750180115",
-            family_name: "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
+            family_name:
+              "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
             id: "MLBU3845002628",
             pictures: [
               {
@@ -5753,7 +5872,8 @@ describe("MercadoLivreProvider", () => {
         images: ["https://http2.mlstatic.com/family.jpg"],
         isActive: true,
         metadata: {
-          familyName: "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
+          familyName:
+            "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
           itemId: "840907750180115",
           legacyItemId: "MLBNEW1",
           source: "mercadolivre-user-product-family",
@@ -5844,7 +5964,10 @@ describe("MercadoLivreProvider", () => {
         );
       }
 
-      if (url.includes("/users/seller-1/items/search?") && url.includes("status=paused")) {
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=paused")
+      ) {
         return Promise.resolve(
           createJsonResponse({
             results: [],
@@ -5882,7 +6005,8 @@ describe("MercadoLivreProvider", () => {
         return Promise.resolve(
           createJsonResponse({
             family_id: "840907750180115",
-            family_name: "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
+            family_name:
+              "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
             id: "MLBU3845002628",
             seller_sku: "828011Preta37",
             siblings: [
@@ -5973,7 +6097,10 @@ describe("MercadoLivreProvider", () => {
         );
       }
 
-      if (url.includes("/users/seller-1/items/search?") && url.includes("status=paused")) {
+      if (
+        url.includes("/users/seller-1/items/search?") &&
+        url.includes("status=paused")
+      ) {
         return Promise.resolve(
           createJsonResponse({
             results: [],
@@ -6011,7 +6138,8 @@ describe("MercadoLivreProvider", () => {
         return Promise.resolve(
           createJsonResponse({
             family_id: "840907750180115",
-            family_name: "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
+            family_name:
+              "Bota Feminina Via Uno Bico Fino Ziper Lateral Lancamento",
             id: "MLBU3845002628",
             seller_sku: "828011Preta37",
             siblings: [

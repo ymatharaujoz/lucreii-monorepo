@@ -217,16 +217,14 @@ function allocateCentsByWeights(totalCents: bigint, weights: bigint[]) {
   return allocations;
 }
 
-function toPercentString(
-  numeratorCents: bigint,
-  denominatorCents: bigint,
-) {
+function toPercentString(numeratorCents: bigint, denominatorCents: bigint) {
   if (denominatorCents <= 0n) {
     return null;
   }
 
   const sign = numeratorCents < 0n ? "-" : "";
-  const absoluteNumerator = numeratorCents < 0n ? numeratorCents * -1n : numeratorCents;
+  const absoluteNumerator =
+    numeratorCents < 0n ? numeratorCents * -1n : numeratorCents;
   const scale = 10000n;
   const scaled = absoluteNumerator * scale;
   const quotient = scaled / denominatorCents;
@@ -238,7 +236,10 @@ function toPercentString(
   return `${sign}${whole.toString()}.${fraction.toString().padStart(2, "0")}`;
 }
 
-function includesIgnoreCase(haystack: string | null | undefined, needle: string) {
+function includesIgnoreCase(
+  haystack: string | null | undefined,
+  needle: string,
+) {
   if (!haystack) {
     return false;
   }
@@ -343,7 +344,8 @@ function isOrderWithinRange(
 
 function getOrderStatusLabel(status: OrderCanonicalStatus): OrderStatusLabel {
   return (
-    ORDER_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status
+    ORDER_STATUS_OPTIONS.find((option) => option.value === status)?.label ??
+    status
   );
 }
 
@@ -353,7 +355,9 @@ function normalizeOrderStatus(
   metadata: Record<string, unknown>,
 ): OrderCanonicalStatus {
   const normalized = status.trim().toLowerCase();
-  const detail = String(metadata.status_detail ?? "").trim().toLowerCase();
+  const detail = String(metadata.status_detail ?? "")
+    .trim()
+    .toLowerCase();
   const returned =
     metadata.returned === true ||
     metadata.refunded === true ||
@@ -428,7 +432,9 @@ function sumFeesByPredicate(
   }, 0);
 }
 
-function readMercadoLivreExplicitRefundBonusFromShippingFees(fees: ExternalFee[]) {
+function readMercadoLivreExplicitRefundBonusFromShippingFees(
+  fees: ExternalFee[],
+) {
   let total = 0;
   let found = false;
 
@@ -469,16 +475,12 @@ function getPrimaryImageUrl(
     | undefined,
 ) {
   return (
-    images
-      ?.slice()
-      .sort((left, right) => left.position - right.position)[0]?.url ?? null
+    images?.slice().sort((left, right) => left.position - right.position)[0]
+      ?.url ?? null
   );
 }
 
-function readMetadataMoney(
-  metadata: Record<string, unknown>,
-  key: string,
-) {
+function readMetadataMoney(metadata: Record<string, unknown>, key: string) {
   const value = metadata[key];
 
   if (typeof value === "string" || typeof value === "number") {
@@ -581,7 +583,9 @@ function readMercadoLivreSyncMetadata(
   };
 }
 
-function resolveLatestCostAmount(product: LinkedProductRecord | null | undefined) {
+function resolveLatestCostAmount(
+  product: LinkedProductRecord | null | undefined,
+) {
   if (!product) {
     return null;
   }
@@ -591,13 +595,12 @@ function resolveLatestCostAmount(product: LinkedProductRecord | null | undefined
   }
 
   const latestCost =
-    product.productCosts
-      ?.slice()
-      .sort((left, right) => {
-        const leftDate = toIsoString(left.effectiveFrom ?? left.createdAt) ?? "";
-        const rightDate = toIsoString(right.effectiveFrom ?? right.createdAt) ?? "";
-        return rightDate.localeCompare(leftDate);
-      })[0] ?? null;
+    product.productCosts?.slice().sort((left, right) => {
+      const leftDate = toIsoString(left.effectiveFrom ?? left.createdAt) ?? "";
+      const rightDate =
+        toIsoString(right.effectiveFrom ?? right.createdAt) ?? "";
+      return rightDate.localeCompare(leftDate);
+    })[0] ?? null;
 
   return latestCost ? toNumber(latestCost.amount) : null;
 }
@@ -619,17 +622,39 @@ function buildOrderBaseMetrics(order: OrderRow) {
     order.provider === "mercadolivre"
       ? readMercadoLivreExplicitRefundBonusFromShippingFees(order.fees)
       : null;
-  const refundBonusAmount =
-    explicitMercadoLivreRefundBonusAmount !== null
+  const persistedRefundBonusAmount =
+    order.refundBonusAmount !== null && order.refundBonusAmount !== undefined
+      ? toNumber(order.refundBonusAmount)
+      : 0;
+  const persistedRefundBonusStatus =
+    typeof order.refundBonusStatus === "string"
+      ? order.refundBonusStatus
+      : null;
+  const hasPersistedResolution =
+    persistedRefundBonusStatus === "RESOLVED" ||
+    persistedRefundBonusStatus === "RESOLVED_ZERO";
+  const refundBonusAmount = hasPersistedResolution
+    ? persistedRefundBonusAmount
+    : explicitMercadoLivreRefundBonusAmount !== null
       ? explicitMercadoLivreRefundBonusAmount
-      : order.refundBonusAmount !== null && order.refundBonusAmount !== undefined
-        ? toNumber(order.refundBonusAmount)
-        : sumFeesByPredicate(order.fees, (fee) => fee.feeType === "refund_bonus");
+      : persistedRefundBonusAmount > 0
+        ? persistedRefundBonusAmount
+        : sumFeesByPredicate(
+            order.fees,
+            (fee) => fee.feeType === "refund_bonus",
+          );
   const totalFees =
     shippingAmount + tariffAmount + fixedCostAmount - refundBonusAmount;
   const totalWithoutFees = Math.max(0, totalWithFees - totalFees);
-  const itemsSold = order.items.reduce((total, item) => total + item.quantity, 0);
-  const canonicalStatus = normalizeOrderStatus(order.provider, order.status, metadata);
+  const itemsSold = order.items.reduce(
+    (total, item) => total + item.quantity,
+    0,
+  );
+  const canonicalStatus = normalizeOrderStatus(
+    order.provider,
+    order.status,
+    metadata,
+  );
 
   return {
     canonicalStatus,
@@ -978,7 +1003,8 @@ function buildOrderDisplayNameMaps(order: OrderRow) {
       (externalProduct.metadata ?? {}) as Record<string, unknown>,
     );
     const itemId =
-      metadata.itemId ?? extractMercadoLivreItemId(externalProduct.externalProductId);
+      metadata.itemId ??
+      extractMercadoLivreItemId(externalProduct.externalProductId);
     if (!itemId) {
       continue;
     }
@@ -1007,7 +1033,8 @@ function buildOrderDisplayNameMaps(order: OrderRow) {
       (externalProduct.metadata ?? {}) as Record<string, unknown>,
     );
     const itemId =
-      metadata.itemId ?? extractMercadoLivreItemId(externalProduct.externalProductId);
+      metadata.itemId ??
+      extractMercadoLivreItemId(externalProduct.externalProductId);
     if (!itemId) {
       displayNameByItemId.set(item.id, fallbackName);
       continue;
@@ -1024,7 +1051,8 @@ function buildOrderDisplayNameMaps(order: OrderRow) {
     }
 
     const parentName = parentNameByGroupKey.get(groupKey);
-    const linkedProductName = externalProduct.linkedProduct?.name?.trim() || null;
+    const linkedProductName =
+      externalProduct.linkedProduct?.name?.trim() || null;
     displayNameByItemId.set(
       item.id,
       parentName || linkedProductName
@@ -1095,7 +1123,9 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
   const orderRow = toOrderListItem(order);
   const baseMetrics = buildOrderBaseMetrics(order);
   const displayNameByItemId = buildOrderDisplayNameMaps(order);
-  const itemTotalsCents = order.items.map((item) => parseMoneyToCents(item.totalPrice));
+  const itemTotalsCents = order.items.map((item) =>
+    parseMoneyToCents(item.totalPrice),
+  );
   const commissionTotalCents = parseMoneyToCents(orderRow.tariffAmount);
   const shippingOrFixedFeeTotalCents =
     parseMoneyToCents(orderRow.shippingAmount) +
@@ -1123,7 +1153,10 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
     const shippingOrFixedFeeCents = shippingOrFixedFeeAllocations[index] ?? 0n;
     const refundBonusCents = refundBonusAllocations[index] ?? 0n;
     const netRevenueCents =
-      revenueCents - commissionCents - shippingOrFixedFeeCents + refundBonusCents;
+      revenueCents -
+      commissionCents -
+      shippingOrFixedFeeCents +
+      refundBonusCents;
     const packagingCostCents = linkedProduct
       ? parseMoneyToCents(linkedProduct.financeDefaults?.packagingCost) *
         BigInt(item.quantity)
@@ -1205,7 +1238,9 @@ function sumMoneyStrings(values: Array<string | null | undefined>) {
   return values.reduce((total, value) => total + toNumber(value), 0).toFixed(2);
 }
 
-function deriveOrderProfitMetricsFromComposition(composition: OrderComposition) {
+function deriveOrderProfitMetricsFromComposition(
+  composition: OrderComposition,
+) {
   const revenueAmount = toNumber(composition.revenueAmount);
   const totalProfitAmount = composition.hasIncompleteCostData
     ? null
@@ -1228,8 +1263,9 @@ function deriveOrderProfitMetricsFromComposition(composition: OrderComposition) 
 function aggregateShippingBreakdown(compositions: OrderComposition[]) {
   const breakdowns = compositions
     .map((composition) => composition.shippingBreakdown)
-    .filter((value): value is NonNullable<OrderComposition["shippingBreakdown"]> =>
-      Boolean(value),
+    .filter(
+      (value): value is NonNullable<OrderComposition["shippingBreakdown"]> =>
+        Boolean(value),
     );
 
   return aggregateShippingBreakdowns(breakdowns);
@@ -1287,7 +1323,8 @@ function aggregateGroupedShipping(
   baseMetricsByRow: ReturnType<typeof buildOrderBaseMetrics>[],
 ) {
   let shippingAmount = 0;
-  const breakdowns: Array<NonNullable<OrderComposition["shippingBreakdown"]>> = [];
+  const breakdowns: Array<NonNullable<OrderComposition["shippingBreakdown"]>> =
+    [];
   const seenShippingKeys = new Set<string>();
 
   rows.forEach((row, index) => {
@@ -1300,7 +1337,8 @@ function aggregateGroupedShipping(
       row,
       baseMetrics.shippingAmount,
     );
-    const shouldDeduplicate = shippingKey !== null && seenShippingKeys.has(shippingKey);
+    const shouldDeduplicate =
+      shippingKey !== null && seenShippingKeys.has(shippingKey);
 
     if (!shouldDeduplicate) {
       shippingAmount += baseMetrics.shippingAmount;
@@ -1335,7 +1373,8 @@ function aggregateOrderComposition(
     compositions.map((composition) => composition.marketplaceCommissionAmount),
   );
   const refundBonusAmount =
-    options.refundBonusAmount !== undefined && options.refundBonusAmount !== null
+    options.refundBonusAmount !== undefined &&
+    options.refundBonusAmount !== null
       ? options.refundBonusAmount.toFixed(2)
       : sumMoneyStrings(
           compositions.map((composition) => composition.refundBonusAmount),
@@ -1375,11 +1414,75 @@ function aggregateOrderComposition(
     revenueAmount,
     ...(shippingBreakdown ? { shippingBreakdown } : {}),
     shippingOrFixedFeeAmount,
-    taxAmount: sumMoneyStrings(compositions.map((composition) => composition.taxAmount)),
+    taxAmount: sumMoneyStrings(
+      compositions.map((composition) => composition.taxAmount),
+    ),
     taxRateDefault:
       compositions.find((composition) => composition.taxRateDefault !== null)
         ?.taxRateDefault ?? null,
   } satisfies OrderComposition;
+}
+
+function sumUniqueRefundBonusMovements(
+  rows: OrderRow[],
+  baseMetricsByRow: ReturnType<typeof buildOrderBaseMetrics>[],
+) {
+  const seenMovementKeys = new Set<string>();
+  let total = 0;
+
+  rows.forEach((row, index) => {
+    const metadata =
+      row.metadata && typeof row.metadata === "object"
+        ? (row.metadata as Record<string, unknown>)
+        : {};
+    const manualOverride = readOrderCompositionOverrides(metadata)
+      .refundBonusAmount;
+    if (manualOverride !== undefined) {
+      const overrideAmount = toNumber(manualOverride);
+      if (Number.isFinite(overrideAmount)) {
+        total += overrideAmount;
+      }
+      return;
+    }
+    const movements = Array.isArray(metadata.refundBonusMovements)
+      ? metadata.refundBonusMovements
+      : [];
+    let hasValidMovement = false;
+
+    for (const movement of movements) {
+      if (!movement || typeof movement !== "object") {
+        continue;
+      }
+
+      const record = movement as Record<string, unknown>;
+      const key = typeof record.key === "string" ? record.key.trim() : "";
+      const documentType =
+        record.documentType === "CREDIT_NOTE" ? "CREDIT_NOTE" : "BILL";
+      const deduplicationKey = `${documentType}:${key}`;
+      const amount = Number(record.amount);
+      if (
+        !key ||
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        continue;
+      }
+
+      hasValidMovement = true;
+      if (seenMovementKeys.has(deduplicationKey)) {
+        continue;
+      }
+
+      seenMovementKeys.add(deduplicationKey);
+      total += amount;
+    }
+
+    if (!hasValidMovement) {
+      total += baseMetricsByRow[index]?.refundBonusAmount ?? 0;
+    }
+  });
+
+  return total;
 }
 
 function buildLogicalOrder(
@@ -1393,7 +1496,13 @@ function buildLogicalOrder(
 
   const displayOrderId = getDisplayOrderId(firstRow);
   const baseMetricsByRow = rows.map((row) => buildOrderBaseMetrics(row));
-  const compositions = rows.map((row) => buildOrderComposition(row, taxRateDefault));
+  const compositions = rows.map((row) =>
+    buildOrderComposition(row, taxRateDefault),
+  );
+  const totalRefundBonusAmount = sumUniqueRefundBonusMovements(
+    rows,
+    baseMetricsByRow,
+  );
   const groupedShipping =
     rows.length === 1
       ? {
@@ -1408,6 +1517,7 @@ function buildLogicalOrder(
           compositions,
           groupedShipping.shippingAmount,
           groupedShipping.shippingBreakdown,
+          { refundBonusAmount: totalRefundBonusAmount },
         );
   const financialMetrics = deriveOrderProfitMetricsFromComposition(composition);
   const uniqueSkus = new Set<string>();
@@ -1435,10 +1545,6 @@ function buildLogicalOrder(
     (total, metrics) => total + metrics.tariffAmount,
     0,
   );
-  const totalRefundBonusAmount = baseMetricsByRow.reduce(
-    (total, metrics) => total + metrics.refundBonusAmount,
-    0,
-  );
   const totalWithFeesAmount = baseMetricsByRow.reduce(
     (total, metrics) => total + metrics.totalWithFees,
     0,
@@ -1448,7 +1554,10 @@ function buildLogicalOrder(
     totalTariffAmount +
     totalFixedCostAmount -
     totalRefundBonusAmount;
-  const totalWithoutFeesAmount = Math.max(0, totalWithFeesAmount - totalFeesAmount);
+  const totalWithoutFeesAmount = Math.max(
+    0,
+    totalWithFeesAmount - totalFeesAmount,
+  );
 
   return {
     composition,
@@ -1574,7 +1683,9 @@ function getOrderListSortValue(row: OrderListItem, key: OrderSortKey) {
     case "fixedCostAmount":
       return Number(row.fixedCostAmount);
     case "totalProfitAmount":
-      return row.totalProfitAmount === null ? null : Number(row.totalProfitAmount);
+      return row.totalProfitAmount === null
+        ? null
+        : Number(row.totalProfitAmount);
     case "totalWithFees":
       return Number(row.totalWithFees);
   }
@@ -1589,7 +1700,11 @@ function compareOrderListItems(
   const leftValue = getOrderListSortValue(left, key);
   const rightValue = getOrderListSortValue(right, key);
 
-  const primaryResult = compareOrderSortValues(leftValue, rightValue, direction);
+  const primaryResult = compareOrderSortValues(
+    leftValue,
+    rightValue,
+    direction,
+  );
   if (primaryResult !== 0) {
     return primaryResult;
   }
@@ -1703,7 +1818,9 @@ export class OrdersService {
       eq(externalOrders.companyId, companyId),
       ...(saleIdNeedle ? [buildSaleIdWhere(saleIdNeedle)] : []),
       ...(skuNeedle ? [buildSkuWhere(skuNeedle)] : []),
-      ...(filters.provider ? [eq(externalOrders.provider, filters.provider)] : []),
+      ...(filters.provider
+        ? [eq(externalOrders.provider, filters.provider)]
+        : []),
       ...(filters.orderedFrom
         ? [sql`${externalOrders.orderedAt}::date >= ${filters.orderedFrom}`]
         : []),
@@ -1812,11 +1929,12 @@ export class OrdersService {
                 },
               },
             });
-      const operationBackfilledRows = await this.backfillMercadoLivreOperationIds(
-        authContext,
-        companyId,
-        shallowGroupRows as OrderRowShallow[],
-      );
+      const operationBackfilledRows =
+        await this.backfillMercadoLivreOperationIds(
+          authContext,
+          companyId,
+          shallowGroupRows as OrderRowShallow[],
+        );
       const shippingBillingBackfilledRows =
         await this.backfillMercadoLivreBillingShippingCosts(
           authContext,
@@ -1841,7 +1959,9 @@ export class OrdersService {
               : group.logicalGroupKey;
           return hydratedLogicalOrdersById.get(logicalOrderId) ?? null;
         })
-        .filter((logicalOrder): logicalOrder is LogicalOrder => logicalOrder !== null);
+        .filter(
+          (logicalOrder): logicalOrder is LogicalOrder => logicalOrder !== null,
+        );
 
       return {
         availableStatuses: ORDER_STATUS_OPTIONS,
@@ -1889,34 +2009,39 @@ export class OrdersService {
       companyId,
       shippingBillingBackfilledRows,
     );
-    const mapped = buildLogicalOrders(hydratedRows, company?.taxRateDefault).filter(
-      ({ order: item }) => {
-        if (filters.search && !matchesOrderSearch(item, filters.search)) {
-          return false;
-        }
+    const mapped = buildLogicalOrders(
+      hydratedRows,
+      company?.taxRateDefault,
+    ).filter(({ order: item }) => {
+      if (filters.search && !matchesOrderSearch(item, filters.search)) {
+        return false;
+      }
 
-        if (filters.saleId && !matchesSaleIdFilter(item, filters.saleId)) {
-          return false;
-        }
+      if (filters.saleId && !matchesSaleIdFilter(item, filters.saleId)) {
+        return false;
+      }
 
-        if (filters.sku && !matchesSkuFilter(item, filters.sku)) {
-          return false;
-        }
+      if (filters.sku && !matchesSkuFilter(item, filters.sku)) {
+        return false;
+      }
 
-        if (filters.status && item.status !== filters.status) {
-          return false;
-        }
+      if (filters.status && item.status !== filters.status) {
+        return false;
+      }
 
-        if (
-          (filters.orderedFrom || filters.orderedTo) &&
-          !isOrderWithinRange(item.orderDate, filters.orderedFrom, filters.orderedTo)
-        ) {
-          return false;
-        }
+      if (
+        (filters.orderedFrom || filters.orderedTo) &&
+        !isOrderWithinRange(
+          item.orderDate,
+          filters.orderedFrom,
+          filters.orderedTo,
+        )
+      ) {
+        return false;
+      }
 
-        return true;
-      },
-    );
+      return true;
+    });
     mapped.sort((left, right) =>
       compareOrderListItems(left.order, right.order, sortBy, sortDirection),
     );
@@ -1931,7 +2056,9 @@ export class OrdersService {
       items: paged.map(({ order }) => order),
       page: safePage,
       pageSize,
-      summary: includeSummary ? buildOrdersSummary(mapped) : buildEmptyOrdersSummary(),
+      summary: includeSummary
+        ? buildOrdersSummary(mapped)
+        : buildEmptyOrdersSummary(),
       totalItems,
       totalPages,
     };
@@ -1943,7 +2070,9 @@ export class OrdersService {
   ): Promise<Buffer> {
     const companyId = this.requireSelectedCompanyId(authContext);
     const normalizedFilters = orderExportQuerySchema.parse(filters);
-    const sortBy = "orderedAt" satisfies NonNullable<OrderListFilters["sortBy"]>;
+    const sortBy = "orderedAt" satisfies NonNullable<
+      OrderListFilters["sortBy"]
+    >;
     const sortDirection = "desc" as const;
     const saleIdNeedle = normalizedFilters.saleId?.trim();
     const skuNeedle = normalizedFilters.sku?.trim();
@@ -1956,10 +2085,14 @@ export class OrdersService {
         ? [eq(externalOrders.provider, normalizedFilters.provider)]
         : []),
       ...(normalizedFilters.orderedFrom
-        ? [sql`${externalOrders.orderedAt}::date >= ${normalizedFilters.orderedFrom}`]
+        ? [
+            sql`${externalOrders.orderedAt}::date >= ${normalizedFilters.orderedFrom}`,
+          ]
         : []),
       ...(normalizedFilters.orderedTo
-        ? [sql`${externalOrders.orderedAt}::date <= ${normalizedFilters.orderedTo}`]
+        ? [
+            sql`${externalOrders.orderedAt}::date <= ${normalizedFilters.orderedTo}`,
+          ]
         : []),
     ];
     const baseWhere = and(...baseWhereConditions);
@@ -2001,48 +2134,55 @@ export class OrdersService {
       shippingBillingBackfilledRows,
     );
     const selectedIds = new Set(normalizedFilters.ids ?? []);
-    const mapped = buildLogicalOrders(hydratedRows, company?.taxRateDefault).filter(
-      ({ order: item }) => {
-        if (selectedIds.size > 0 && !selectedIds.has(item.id)) {
-          return false;
-        }
+    const mapped = buildLogicalOrders(
+      hydratedRows,
+      company?.taxRateDefault,
+    ).filter(({ order: item }) => {
+      if (selectedIds.size > 0 && !selectedIds.has(item.id)) {
+        return false;
+      }
 
-        if (
-          normalizedFilters.search &&
-          !matchesOrderSearch(item, normalizedFilters.search)
-        ) {
-          return false;
-        }
+      if (
+        normalizedFilters.search &&
+        !matchesOrderSearch(item, normalizedFilters.search)
+      ) {
+        return false;
+      }
 
-        if (
-          normalizedFilters.saleId &&
-          !matchesSaleIdFilter(item, normalizedFilters.saleId)
-        ) {
-          return false;
-        }
+      if (
+        normalizedFilters.saleId &&
+        !matchesSaleIdFilter(item, normalizedFilters.saleId)
+      ) {
+        return false;
+      }
 
-        if (normalizedFilters.sku && !matchesSkuFilter(item, normalizedFilters.sku)) {
-          return false;
-        }
+      if (
+        normalizedFilters.sku &&
+        !matchesSkuFilter(item, normalizedFilters.sku)
+      ) {
+        return false;
+      }
 
-        if (normalizedFilters.status && item.status !== normalizedFilters.status) {
-          return false;
-        }
+      if (
+        normalizedFilters.status &&
+        item.status !== normalizedFilters.status
+      ) {
+        return false;
+      }
 
-        if (
-          (normalizedFilters.orderedFrom || normalizedFilters.orderedTo) &&
-          !isOrderWithinRange(
-            item.orderDate,
-            normalizedFilters.orderedFrom,
-            normalizedFilters.orderedTo,
-          )
-        ) {
-          return false;
-        }
+      if (
+        (normalizedFilters.orderedFrom || normalizedFilters.orderedTo) &&
+        !isOrderWithinRange(
+          item.orderDate,
+          normalizedFilters.orderedFrom,
+          normalizedFilters.orderedTo,
+        )
+      ) {
+        return false;
+      }
 
-        return true;
-      },
-    );
+      return true;
+    });
     mapped.sort((left, right) =>
       compareOrderListItems(left.order, right.order, sortBy, sortDirection),
     );
@@ -2077,7 +2217,8 @@ export class OrdersService {
           eq(table.organizationId, authContext.organizationId),
         ),
     });
-    const groupedDisplayOrderId = readMercadoLivreGroupedDisplayOrderId(orderRecordId);
+    const groupedDisplayOrderId =
+      readMercadoLivreGroupedDisplayOrderId(orderRecordId);
     const rows = groupedDisplayOrderId
       ? await this.db.query.externalOrders.findMany({
           orderBy: (table) => [desc(table.orderedAt), desc(table.createdAt)],
@@ -2133,22 +2274,26 @@ export class OrdersService {
         companyId,
         operationBackfilledRows,
       );
-    const shippingBackfilledRows = await this.backfillMercadoLivreShippingRatios(
-      authContext,
-      companyId,
-      shippingBillingBackfilledRows,
-    );
+    const shippingBackfilledRows =
+      await this.backfillMercadoLivreShippingRatios(
+        authContext,
+        companyId,
+        shippingBillingBackfilledRows,
+      );
     const hydratedRows = await this.hydrateLinkedProducts(
       authContext,
       companyId,
       shippingBackfilledRows,
     );
-    const logicalOrders = buildLogicalOrders(hydratedRows, company?.taxRateDefault);
+    const logicalOrders = buildLogicalOrders(
+      hydratedRows,
+      company?.taxRateDefault,
+    );
     const logicalOrder = groupedDisplayOrderId
-      ? logicalOrders.find(
+      ? (logicalOrders.find(
           (candidate) => candidate.order.id === orderRecordId,
-        ) ?? null
-      : logicalOrders[0] ?? null;
+        ) ?? null)
+      : (logicalOrders[0] ?? null);
 
     if (!logicalOrder) {
       throw new NotFoundException("Order not found.");
@@ -2232,7 +2377,9 @@ export class OrdersService {
         and(
           eq(table.organizationId, authContext.organizationId),
           eq(table.companyId, companyId),
-          ...(filters.saleId?.trim() ? [buildSaleIdWhere(filters.saleId.trim())] : []),
+          ...(filters.saleId?.trim()
+            ? [buildSaleIdWhere(filters.saleId.trim())]
+            : []),
           ...(filters.sku?.trim() ? [buildSkuWhere(filters.sku.trim())] : []),
           ...(filters.provider ? [eq(table.provider, filters.provider)] : []),
         ),
@@ -2272,7 +2419,11 @@ export class OrdersService {
 
       if (
         (filters.orderedFrom || filters.orderedTo) &&
-        !isOrderWithinRange(listItem.orderDate, filters.orderedFrom, filters.orderedTo)
+        !isOrderWithinRange(
+          listItem.orderDate,
+          filters.orderedFrom,
+          filters.orderedTo,
+        )
       ) {
         return false;
       }
@@ -2300,7 +2451,9 @@ export class OrdersService {
       ...new Set(
         rows
           .flatMap((row) =>
-            row.items.map((item) => item.externalProduct?.linkedProductId ?? null),
+            row.items.map(
+              (item) => item.externalProduct?.linkedProductId ?? null,
+            ),
           )
           .filter((value): value is string => value !== null),
       ),
@@ -2322,7 +2475,9 @@ export class OrdersService {
             },
           });
     const linkedProductById = new Map(
-      linkedProducts.map((product) => [product.id, product as LinkedProductRecord] as const),
+      linkedProducts.map(
+        (product) => [product.id, product as LinkedProductRecord] as const,
+      ),
     );
 
     return rows.map((row) => ({
@@ -2333,7 +2488,9 @@ export class OrdersService {
           ? {
               ...item.externalProduct,
               linkedProduct: item.externalProduct.linkedProductId
-                ? linkedProductById.get(item.externalProduct.linkedProductId) ?? null
+                ? (linkedProductById.get(
+                    item.externalProduct.linkedProductId,
+                  ) ?? null)
                 : null,
             }
           : null,
@@ -2663,9 +2820,8 @@ export class OrdersService {
         return cached;
       }
 
-      const refreshed = await this.refreshMercadoLivreConnectionIfNeeded(
-        rawConnection,
-      );
+      const refreshed =
+        await this.refreshMercadoLivreConnectionIfNeeded(rawConnection);
       refreshedConnectionById.set(rawConnection.id, refreshed);
       return refreshed;
     };
@@ -2686,7 +2842,9 @@ export class OrdersService {
         continue;
       }
 
-      const shippingFee = row.fees.find((fee) => fee.feeType === "shipping_cost");
+      const shippingFee = row.fees.find(
+        (fee) => fee.feeType === "shipping_cost",
+      );
       if (!shippingFee) {
         continue;
       }
@@ -2716,7 +2874,9 @@ export class OrdersService {
         continue;
       }
 
-      const buyerPaidAmount = roundMoneyNumber(shipmentBreakdown.buyerPaidAmount);
+      const buyerPaidAmount = roundMoneyNumber(
+        shipmentBreakdown.buyerPaidAmount,
+      );
       const netAmount = roundMoneyNumber(shipmentBreakdown.sellerCostAmount);
 
       if (!shipmentBreakdown.sellerMatched) {
@@ -2756,7 +2916,9 @@ export class OrdersService {
                 : {};
             delete metadata.listCostAmount;
             metadata.shipmentId = shippingRatio.shipmentId;
-            metadata.shipping_buyer_paid = toMoney(shippingRatio.buyerPaidAmount);
+            metadata.shipping_buyer_paid = toMoney(
+              shippingRatio.buyerPaidAmount,
+            );
             metadata.shipping_net_amount = toMoney(-shippingRatio.netAmount);
             metadata.shipping_seller_fee = toMoney(
               shippingRatio.grossTariffAmount,
@@ -2810,7 +2972,9 @@ export class OrdersService {
         return false;
       }
 
-      const shippingFee = row.fees.find((fee) => fee.feeType === "shipping_cost");
+      const shippingFee = row.fees.find(
+        (fee) => fee.feeType === "shipping_cost",
+      );
       if (!shippingFee) {
         return false;
       }
@@ -2873,9 +3037,8 @@ export class OrdersService {
         return cached;
       }
 
-      const refreshed = await this.refreshMercadoLivreConnectionIfNeeded(
-        rawConnection,
-      );
+      const refreshed =
+        await this.refreshMercadoLivreConnectionIfNeeded(rawConnection);
       refreshedConnectionById.set(rawConnection.id, refreshed);
       return refreshed;
     };
@@ -2895,7 +3058,9 @@ export class OrdersService {
         continue;
       }
 
-      const shippingFee = row.fees.find((fee) => fee.feeType === "shipping_cost");
+      const shippingFee = row.fees.find(
+        (fee) => fee.feeType === "shipping_cost",
+      );
       if (!shippingFee) {
         continue;
       }
@@ -3285,7 +3450,8 @@ export class OrdersService {
       return null;
     }
 
-    const payload = (await response.json()) as MercadoLivreShipmentCostsResponse;
+    const payload =
+      (await response.json()) as MercadoLivreShipmentCostsResponse;
     const rawBuyerPaid = payload.receiver?.cost;
     const buyerPaid =
       typeof rawBuyerPaid === "number"
@@ -3296,10 +3462,10 @@ export class OrdersService {
     const matchedSender =
       input.sellerAccountId === null
         ? null
-        : (payload.senders ?? []).find(
+        : ((payload.senders ?? []).find(
             (sender) =>
               String(sender.user_id ?? "").trim() === input.sellerAccountId,
-          ) ?? null;
+          ) ?? null);
     const rawSellerCost = matchedSender?.cost;
     const sellerCost =
       typeof rawSellerCost === "number"
@@ -3309,7 +3475,8 @@ export class OrdersService {
           : 0;
 
     return {
-      buyerPaidAmount: Number.isFinite(buyerPaid) && buyerPaid > 0 ? buyerPaid : 0,
+      buyerPaidAmount:
+        Number.isFinite(buyerPaid) && buyerPaid > 0 ? buyerPaid : 0,
       sellerCostAmount:
         Number.isFinite(sellerCost) && sellerCost > 0 ? sellerCost : 0,
       sellerMatched:

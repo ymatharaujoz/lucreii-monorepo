@@ -1,5 +1,6 @@
 import { relations, sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   date,
@@ -354,13 +355,15 @@ export const productMonthlyPerformance = pgTable(
     ),
     uniqueIndex(
       "product_monthly_performance_org_company_month_channel_sku_legacy_key",
-    ).on(
-      table.organizationId,
-      table.companyId,
-      table.referenceMonth,
-      table.channel,
-      table.sku,
-    ).where(sql`${table.productId} is null`),
+    )
+      .on(
+        table.organizationId,
+        table.companyId,
+        table.referenceMonth,
+        table.channel,
+        table.sku,
+      )
+      .where(sql`${table.productId} is null`),
   ],
 );
 
@@ -721,6 +724,24 @@ export const externalOrders = pgTable(
     })
       .default("0")
       .notNull(),
+    refundBonusCents: bigint("refund_bonus_cents", { mode: "number" })
+      .default(0)
+      .notNull(),
+    refundBonusStatus: varchar("refund_bonus_status", { length: 30 })
+      .default("PENDING")
+      .notNull(),
+    refundBonusSource: varchar("refund_bonus_source", { length: 50 }),
+    refundBonusResolvedAt: timestamp("refund_bonus_resolved_at", {
+      withTimezone: true,
+    }),
+    refundBonusLastCheckedAt: timestamp("refund_bonus_last_checked_at", {
+      withTimezone: true,
+    }),
+    refundBonusAttempts: integer("refund_bonus_attempts").default(0).notNull(),
+    refundBonusMetadata: jsonb("refund_bonus_metadata")
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     metadata: jsonb("metadata")
       .$type<Record<string, unknown>>()
       .default(sql`'{}'::jsonb`)
@@ -742,6 +763,50 @@ export const externalOrders = pgTable(
       columns: [table.marketplaceConnectionId],
       foreignColumns: [marketplaceConnections.id],
     }).onDelete("set null"),
+  ],
+);
+
+export const mercadoLivreBillingMovements = pgTable(
+  "mercado_livre_billing_movements",
+  {
+    id: id(),
+    organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    companyId: companyId().references(() => companies.id, {
+      onDelete: "cascade",
+    }),
+    marketplaceConnectionId: uuid("marketplace_connection_id")
+      .notNull()
+      .references(() => marketplaceConnections.id, { onDelete: "cascade" }),
+    externalOrderId: varchar("external_order_id", { length: 255 }),
+    externalPackId: varchar("external_pack_id", { length: 255 }),
+    externalPaymentId: varchar("external_payment_id", { length: 255 }),
+    externalShipmentId: varchar("external_shipment_id", { length: 255 }),
+    externalMovementId: varchar("external_movement_id", {
+      length: 255,
+    }).notNull(),
+    deduplicationKey: varchar("deduplication_key", { length: 512 }).notNull(),
+    periodKey: varchar("period_key", { length: 10 }).notNull(),
+    billingGroup: varchar("billing_group", { length: 4 }).notNull(),
+    documentType: varchar("document_type", { length: 64 }).notNull(),
+    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
+    currency: varchar("currency", { length: 8 }).default("BRL").notNull(),
+    isSellerCredit: boolean("is_seller_credit").default(false).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index("meli_billing_movements_organization_id_idx").on(
+      table.organizationId,
+    ),
+    index("meli_billing_movements_company_id_idx").on(table.companyId),
+    index("meli_billing_movements_order_id_idx").on(table.externalOrderId),
+    uniqueIndex("meli_billing_movements_connection_dedupe_key").on(
+      table.marketplaceConnectionId,
+      table.deduplicationKey,
+    ),
   ],
 );
 
@@ -1105,6 +1170,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   syncRuns: many(syncRuns),
   externalProducts: many(externalProducts),
   externalOrders: many(externalOrders),
+  mercadoLivreBillingMovements: many(mercadoLivreBillingMovements),
   externalOrderItems: many(externalOrderItems),
   externalFees: many(externalFees),
   fixedCosts: many(fixedCosts),
@@ -1133,6 +1199,7 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
   syncRuns: many(syncRuns),
   externalProducts: many(externalProducts),
   externalOrders: many(externalOrders),
+  mercadoLivreBillingMovements: many(mercadoLivreBillingMovements),
 }));
 
 export const organizationMembersRelations = relations(
@@ -1224,6 +1291,7 @@ export const marketplaceConnectionsRelations = relations(
     syncRuns: many(syncRuns),
     externalProducts: many(externalProducts),
     externalOrders: many(externalOrders),
+    mercadoLivreBillingMovements: many(mercadoLivreBillingMovements),
   }),
 );
 
@@ -1242,6 +1310,24 @@ export const syncRunsRelations = relations(syncRuns, ({ one, many }) => ({
   }),
   externalOrders: many(externalOrders),
 }));
+
+export const mercadoLivreBillingMovementsRelations = relations(
+  mercadoLivreBillingMovements,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [mercadoLivreBillingMovements.organizationId],
+      references: [organizations.id],
+    }),
+    company: one(companies, {
+      fields: [mercadoLivreBillingMovements.companyId],
+      references: [companies.id],
+    }),
+    marketplaceConnection: one(marketplaceConnections, {
+      fields: [mercadoLivreBillingMovements.marketplaceConnectionId],
+      references: [marketplaceConnections.id],
+    }),
+  }),
+);
 
 export const externalProductsRelations = relations(
   externalProducts,
