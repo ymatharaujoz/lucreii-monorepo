@@ -1135,6 +1135,204 @@ describe("SyncService", () => {
     );
   });
 
+  it("replaces stale Flex fees and refund values during re-sync", async () => {
+    const { db, service } = createService();
+    const insertedFees: Array<Record<string, unknown>> = [];
+    let insertedOrder: Record<string, unknown> | null = null;
+    let externalOrderConflictSet: Record<string, unknown> | null = null;
+
+    Object.assign(db.query, {
+      externalOrders: {
+        findFirst: vi.fn().mockResolvedValue({
+          metadata: {},
+          refundBonusAmount: "8.90",
+          refundBonusAttempts: 1,
+          refundBonusMetadata: {},
+          refundBonusResolvedAt: new Date("2026-06-14T20:00:00.000Z"),
+          refundBonusSource: "shipment_costs.senders",
+        }),
+      },
+    });
+
+    db.insert = vi.fn().mockImplementation(() => ({
+      values: vi.fn().mockImplementation((value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalOrderId" in value &&
+          !("feeType" in value) &&
+          "totalAmount" in value
+        ) {
+          insertedOrder = value as Record<string, unknown>;
+          return {
+            onConflictDoUpdate: vi.fn().mockImplementation((payload) => {
+              externalOrderConflictSet = (
+                payload as { set: Record<string, unknown> }
+              ).set;
+              return {
+                returning: vi.fn().mockResolvedValue([{ id: "ext_order_1" }]),
+              };
+            }),
+          };
+        }
+
+        if (value && typeof value === "object" && "feeType" in value) {
+          insertedFees.push(value as Record<string, unknown>);
+        }
+
+        return {
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+          returning: vi.fn().mockResolvedValue([]),
+        };
+      }),
+    }));
+
+    await (
+      service as unknown as {
+        persistSyncResult: (input: {
+          companyId: string;
+          connection: { id: string };
+          organizationId: string;
+          providerSlug: "mercadolivre";
+          syncResult: {
+            orders: Array<{
+              currency: string;
+              externalOrderId: string;
+              fees: Array<{
+                amount: string;
+                currency: string;
+                feeType: string;
+                metadata: Record<string, unknown>;
+              }>;
+              items: [];
+              metadata: Record<string, unknown>;
+              orderedAt: string;
+              status: string;
+              totalAmount: string;
+            }>;
+            products: [];
+          };
+          syncRunId: string;
+        }) => Promise<unknown>;
+      }
+    ).persistSyncResult({
+      companyId: "company_1",
+      connection: { id: "conn_1" },
+      organizationId: "org_1",
+      providerSlug: "mercadolivre",
+      syncResult: {
+        orders: [
+          {
+            currency: "BRL",
+            externalOrderId: "2000016937064078",
+            fees: [
+              {
+                amount: "4.37",
+                currency: "BRL",
+                feeType: "marketplace_commission",
+                metadata: { source: "listing_prices.sale_fee_amount" },
+              },
+              {
+                amount: "6.65",
+                currency: "BRL",
+                feeType: "fixed_fee",
+                metadata: {
+                  source: "billing/integration/group/ML/order/details.sale_fee",
+                },
+              },
+              {
+                amount: "10.80",
+                currency: "BRL",
+                feeType: "refund_bonus",
+                metadata: {
+                  componentAmounts: {
+                    saleFeeRebate: "1.90",
+                    shippingDiscount: "8.90",
+                  },
+                  movementKeys: [
+                    "sale_fee:2000016937064078",
+                    "shipping:47299177413",
+                  ],
+                  source: "billing/integration/group/ML/order/details",
+                },
+              },
+            ],
+            items: [],
+            metadata: {
+              refundBonusAmount: "10.80",
+              refundBonusComponentAmounts: {
+                saleFeeRebate: "1.90",
+                shippingDiscount: "8.90",
+              },
+              refundBonusMovementKeys: [
+                "sale_fee:2000016937064078",
+                "shipping:47299177413",
+              ],
+              refundBonusMovements: [
+                {
+                  amount: 1.9,
+                  documentType: "BILL",
+                  key: "sale_fee:2000016937064078",
+                  payload: null,
+                  source: "billing/integration/group/ML/order/details",
+                },
+                {
+                  amount: 8.9,
+                  documentType: "BILL",
+                  key: "shipping:47299177413",
+                  payload: null,
+                  source: "shipment_costs.senders",
+                },
+              ],
+              refundBonusSource: "billing/integration/group/ML/order/details",
+              refundBonusStatus: "RESOLVED",
+            },
+            orderedAt: "2026-06-14T20:15:17.000Z",
+            status: "paid",
+            totalAmount: "38.00",
+          },
+        ],
+        products: [],
+      },
+      syncRunId: "sync_2",
+    });
+
+    expect(insertedOrder).toEqual(
+      expect.objectContaining({
+        externalOrderId: "2000016937064078",
+        refundBonusAmount: "10.80",
+        refundBonusCents: 1080,
+        refundBonusStatus: "RESOLVED",
+      }),
+    );
+    expect(externalOrderConflictSet).toEqual(
+      expect.objectContaining({
+        refundBonusAmount: "10.80",
+        refundBonusCents: 1080,
+        refundBonusStatus: "RESOLVED",
+      }),
+    );
+    expect(insertedFees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amount: "4.37",
+          feeType: "marketplace_commission",
+        }),
+        expect.objectContaining({ amount: "6.65", feeType: "fixed_fee" }),
+        expect.objectContaining({ amount: "10.80", feeType: "refund_bonus" }),
+      ]),
+    );
+    expect(insertedFees).toHaveLength(3);
+    expect(insertedFees).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ feeType: "shipping_cost" }),
+      ]),
+    );
+    expect(db.delete).toHaveBeenCalledTimes(2);
+  });
+
   it("persists refund bonus financial adjustment fee metadata during upsert", async () => {
     const { db, service } = createService();
     const insertedFees: Array<Record<string, unknown>> = [];

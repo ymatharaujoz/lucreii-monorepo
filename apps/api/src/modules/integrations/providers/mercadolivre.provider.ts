@@ -983,6 +983,26 @@ function buildMercadoLivreShippingBonusAdjustment(input: {
   } satisfies MercadoLivreFinancialAdjustment;
 }
 
+function hasMercadoLivreShippingBonus(
+  adjustment: MercadoLivreFinancialAdjustment | null | undefined,
+) {
+  if (
+    !adjustment ||
+    (adjustment.componentAmounts?.shippingDiscount ?? 0) <= 0
+  ) {
+    return false;
+  }
+
+  return (
+    adjustment.source === "shipment_costs.senders" ||
+    adjustment.movements?.some(
+      (movement) =>
+        movement.source === "shipment_costs.senders" ||
+        movement.key.startsWith("shipping:"),
+    ) === true
+  );
+}
+
 function flattenBillingOrderDetails(
   payload: MercadoLivreBillingOrderDetailsResponse,
 ) {
@@ -3214,7 +3234,14 @@ export class MercadoLivreProvider implements IntegrationProvider {
       };
     }
 
-    if (this.hasCompleteFeeCoverage(initialFees)) {
+    const shouldResolveDetailedFees = hasMercadoLivreShippingBonus(
+      initialFeeCollection.refundBonusAdjustment,
+    );
+
+    if (
+      this.hasCompleteFeeCoverage(initialFees) &&
+      !shouldResolveDetailedFees
+    ) {
       const billingResolution = await this.resolveMercadoLivreRefundBonus({
         accessToken: input.accessToken,
         fallbackDate: order.date_closed ?? order.date_created,
@@ -3439,13 +3466,19 @@ export class MercadoLivreProvider implements IntegrationProvider {
       };
     }
 
-    const feesWithoutStaleFixedFee = completedFees.filter(
-      (fee) => fee.feeType !== "fixed_fee",
-    );
+    const hasFlexShippingBonus =
+      hasMercadoLivreShippingBonus(financialAdjustment);
+    const feesWithoutStaleFees = completedFees.filter((fee) => {
+      if (fee.feeType === "fixed_fee") {
+        return false;
+      }
+
+      return !(hasFlexShippingBonus && fee.feeType === "shipping_cost");
+    });
 
     return {
       fees: [
-        ...feesWithoutStaleFixedFee,
+        ...feesWithoutStaleFees,
         {
           amount: toDecimalString(resolvedFixedFee),
           currency: order.currency_id ?? detailedOrder.currency_id ?? "BRL",
