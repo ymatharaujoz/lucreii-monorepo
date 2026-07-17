@@ -3439,18 +3439,13 @@ export class MercadoLivreProvider implements IntegrationProvider {
       };
     }
 
-    if (this.hasFeeType(completedFees, "fixed_fee")) {
-      return {
-        fees: completedFees,
-        operationId: billingFeeBreakdown?.operationId ?? null,
-        refundBonusAdjustment: financialAdjustment,
-        refundBonusStatus,
-      };
-    }
+    const feesWithoutStaleFixedFee = completedFees.filter(
+      (fee) => fee.feeType !== "fixed_fee",
+    );
 
     return {
       fees: [
-        ...completedFees,
+        ...feesWithoutStaleFixedFee,
         {
           amount: toDecimalString(resolvedFixedFee),
           currency: order.currency_id ?? detailedOrder.currency_id ?? "BRL",

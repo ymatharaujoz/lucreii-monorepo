@@ -216,7 +216,8 @@ describe("MercadoLivreProvider", () => {
           unit_price: 38,
         },
       ],
-      payments: [],
+      // Legacy fee candidate: the resolved order-details value must win.
+      payments: [{ fee_amount: 4.75 }],
       shipping: { id: "47299177413" },
       total_amount: 38,
     };
@@ -332,6 +333,14 @@ describe("MercadoLivreProvider", () => {
         }),
       ]),
     );
+    expect(
+      result.fees.filter((fee) => fee.feeType === "fixed_fee"),
+    ).toEqual([
+      expect.objectContaining({
+        amount: "6.65",
+        feeType: "fixed_fee",
+      }),
+    ]);
     expect(result.fees).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ feeType: "shipping_cost" }),
