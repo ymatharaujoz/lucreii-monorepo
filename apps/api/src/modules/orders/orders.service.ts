@@ -101,6 +101,9 @@ type MercadoLivreOrderDetailResponse = {
 type MercadoLivreShipmentCostsResponse = {
   receiver?: {
     cost?: number | string;
+    discounts?: Array<{
+      promoted_amount?: number | string;
+    }>;
   };
   senders?: Array<{
     cost?: number | string;
@@ -112,6 +115,7 @@ type MercadoLivreShipmentSellerCost = {
   buyerPaidAmount: number;
   sellerCostAmount: number;
   sellerMatched: boolean;
+  shippingBonusAmount: number;
   shipmentId: string;
   source: "shipment_costs.senders";
 };
@@ -447,13 +451,15 @@ function readMercadoLivreExplicitRefundBonusFromShippingFees(
       fee.metadata && typeof fee.metadata === "object"
         ? (fee.metadata as Record<string, unknown>)
         : null;
-    const rawValue = metadata?.mercadoLivreRefundBonusAmount;
-
-    if (typeof rawValue !== "string" && typeof rawValue !== "number") {
-      continue;
-    }
-
-    const amount = toNumber(rawValue);
+    const refundBonusAmount = readMetadataMoney(
+      metadata ?? {},
+      "mercadoLivreRefundBonusAmount",
+    );
+    const shippingBonusAmount = readMetadataMoney(
+      metadata ?? {},
+      "mercadoLivreShippingBonusAmount",
+    );
+    const amount = refundBonusAmount + shippingBonusAmount;
     if (amount <= 0) {
       continue;
     }
@@ -2832,6 +2838,7 @@ export class OrdersService {
         buyerPaidAmount: number;
         grossTariffAmount: number;
         netAmount: number;
+        shippingBonusAmount: number;
         shipmentId: string;
       }
     >();
@@ -2889,6 +2896,7 @@ export class OrdersService {
         buyerPaidAmount,
         grossTariffAmount: shipmentBreakdown.sellerCostAmount,
         netAmount,
+        shippingBonusAmount: shipmentBreakdown.shippingBonusAmount,
         shipmentId,
       });
     }
@@ -2916,6 +2924,13 @@ export class OrdersService {
                 : {};
             delete metadata.listCostAmount;
             metadata.shipmentId = shippingRatio.shipmentId;
+            if (shippingRatio.shippingBonusAmount > 0) {
+              metadata.mercadoLivreShippingBonusAmount = toMoney(
+                shippingRatio.shippingBonusAmount,
+              );
+            } else {
+              delete metadata.mercadoLivreShippingBonusAmount;
+            }
             metadata.shipping_buyer_paid = toMoney(
               shippingRatio.buyerPaidAmount,
             );
@@ -3464,7 +3479,8 @@ export class OrdersService {
         ? null
         : ((payload.senders ?? []).find(
             (sender) =>
-              String(sender.user_id ?? "").trim() === input.sellerAccountId,
+              String(sender.user_id ?? "").trim() ===
+              String(input.sellerAccountId ?? "").trim(),
           ) ?? null);
     const rawSellerCost = matchedSender?.cost;
     const sellerCost =
@@ -3473,16 +3489,31 @@ export class OrdersService {
         : typeof rawSellerCost === "string"
           ? Number(rawSellerCost)
           : 0;
+    const normalizedSellerCost =
+      Number.isFinite(sellerCost) && sellerCost > 0 ? sellerCost : 0;
+    const shippingBonusAmount =
+      matchedSender !== null && normalizedSellerCost === 0
+        ? (payload.receiver?.discounts ?? []).reduce((sum, discount) => {
+            const rawAmount = discount.promoted_amount;
+            const amount =
+              typeof rawAmount === "number"
+                ? rawAmount
+                : typeof rawAmount === "string"
+                  ? Number(rawAmount)
+                  : 0;
+            return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+          }, 0)
+        : 0;
 
     return {
       buyerPaidAmount:
         Number.isFinite(buyerPaid) && buyerPaid > 0 ? buyerPaid : 0,
-      sellerCostAmount:
-        Number.isFinite(sellerCost) && sellerCost > 0 ? sellerCost : 0,
-      sellerMatched:
-        input.sellerAccountId !== null &&
-        Number.isFinite(sellerCost) &&
-        sellerCost > 0,
+      sellerCostAmount: normalizedSellerCost,
+      sellerMatched: input.sellerAccountId !== null && matchedSender !== null,
+      shippingBonusAmount:
+        Number.isFinite(shippingBonusAmount) && shippingBonusAmount > 0
+          ? roundMoneyNumber(shippingBonusAmount)
+          : 0,
       shipmentId: input.shipmentId,
       source: "shipment_costs.senders",
     };

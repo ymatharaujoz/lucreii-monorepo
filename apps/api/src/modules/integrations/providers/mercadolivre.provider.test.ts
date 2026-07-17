@@ -84,6 +84,23 @@ type MercadoLivreProviderWithShippingResolver = {
     metadata?: Record<string, unknown>;
     source: string;
   } | null>;
+  resolveOrderFees(
+    order: unknown,
+    input: {
+      accessToken: string;
+      sellerAccountId: string;
+    },
+    detailedOrder?: unknown,
+  ): Promise<{
+    fees: Array<{
+      amount: string;
+      feeType: string;
+    }>;
+    refundBonusAdjustment: {
+      amount: number;
+      componentAmounts?: Record<string, number>;
+    } | null;
+  }>;
 };
 
 function withShippingResolver(
@@ -140,6 +157,193 @@ describe("MercadoLivreProvider", () => {
         }),
       }),
     );
+  });
+
+  it("resolves a matched zero shipment cost and preserves the shipping bonus", async () => {
+    const provider = createProvider();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        createJsonResponse({
+          receiver: {
+            cost: 0,
+            discounts: [{ promoted_amount: 8.9 }],
+          },
+          senders: [{ cost: 0, user_id: 204174912 }],
+        }),
+      ),
+    );
+
+    const result = await withShippingResolver(provider).fetchShipmentCosts({
+      accessToken: "token",
+      sellerAccountId: "204174912",
+      shipmentId: "47299177413",
+    });
+
+    expect(result).toMatchObject({
+      lookupStatus: "resolved",
+      sellerCost: {
+        amount: 0,
+        metadata: {
+          mercadoLivreShippingBonusAmount: "8.90",
+        },
+        refundBonusAdjustment: {
+          amount: 8.9,
+          componentAmounts: {
+            shippingDiscount: 8.9,
+          },
+          movementKeys: ["shipping:47299177413"],
+        },
+      },
+    });
+  });
+
+  it("composes the atypical local delivery order from shipment and billing data", async () => {
+    const provider = createProvider();
+    const order = {
+      currency_id: "BRL",
+      date_closed: "2026-06-14T17:15:00.000-03:00",
+      id: "2000016937064078",
+      order_items: [
+        {
+          item: {
+            category_id: "MLB272132",
+            id: "MLB4626083209",
+          },
+          listing_type_id: "gold_special",
+          quantity: 1,
+          sale_fee: 9.12,
+          unit_price: 38,
+        },
+      ],
+      payments: [],
+      shipping: { id: "47299177413" },
+      total_amount: 38,
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((request: unknown) => {
+        const url = String(request);
+
+        if (url.includes("/shipments/47299177413/costs")) {
+          return Promise.resolve(
+            createJsonResponse({
+              receiver: {
+                cost: 0,
+                discounts: [{ promoted_amount: 8.9 }],
+              },
+              senders: [{ cost: 0, user_id: 204174912 }],
+            }),
+          );
+        }
+
+        if (url.includes("/billing/integration/group/ML/order/details")) {
+          return Promise.resolve(
+            createJsonResponse({
+              results: [
+                {
+                  details: [
+                    {
+                      charge_info: {
+                        detail_amount: 0.04,
+                        detail_sub_type: "CVVPRC",
+                      },
+                      shipping_info: {
+                        receiver_shipping_cost: 0,
+                        shipment_id: 47299177413,
+                      },
+                    },
+                    {
+                      charge_info: {
+                        detail_amount: 9.08,
+                        detail_sub_type: "CVVML",
+                      },
+                      shipping_info: {
+                        receiver_shipping_cost: 0,
+                        shipment_id: 47299177413,
+                      },
+                    },
+                  ],
+                  order_id: "2000016937064078",
+                  operation_id: "163310589727",
+                  sale_fee: {
+                    discount: 0,
+                    gross: 11.02,
+                    net: 9.12,
+                    rebate: 1.9,
+                  },
+                },
+              ],
+            }),
+          );
+        }
+
+        if (url.includes("/billing/integration/periods")) {
+          return Promise.resolve(
+            createJsonResponse({
+              results: [
+                {
+                  order_id: "2000016937064078",
+                  sale_fee: {
+                    discount: 0,
+                    gross: 11.02,
+                    net: 9.12,
+                    rebate: 0,
+                  },
+                },
+              ],
+              total: 1,
+            }),
+          );
+        }
+
+        if (url.includes("/listing_prices")) {
+          return Promise.resolve(
+            createJsonResponse({
+              sale_fee_amount: 4.37,
+              sale_fee_details: { fixed_fee: 0 },
+            }),
+          );
+        }
+
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      }),
+    );
+
+    const result = await withShippingResolver(provider).resolveOrderFees(
+      order,
+      {
+        accessToken: "token",
+        sellerAccountId: "204174912",
+      },
+      order,
+    );
+
+    expect(result.fees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amount: "4.37",
+          feeType: "marketplace_commission",
+        }),
+        expect.objectContaining({
+          amount: "6.65",
+          feeType: "fixed_fee",
+        }),
+      ]),
+    );
+    expect(result.fees).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ feeType: "shipping_cost" }),
+      ]),
+    );
+    expect(result.refundBonusAdjustment).toMatchObject({
+      amount: 10.8,
+      componentAmounts: {
+        saleFeeRebate: 1.9,
+        shippingDiscount: 8.9,
+      },
+    });
   });
 
   it("prefers the buyer shipping amount attached to the CFFE detail", () => {
@@ -1974,7 +2178,7 @@ describe("MercadoLivreProvider", () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       createJsonResponse({
         receiver: { cost: 10.99 },
-        senders: [{ cost: 0, user_id: 123456 }],
+        senders: [{ cost: 0, user_id: 999999 }],
       }),
     );
 

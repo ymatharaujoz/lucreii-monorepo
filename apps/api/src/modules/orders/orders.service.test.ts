@@ -7,6 +7,54 @@ describe("OrdersService", () => {
     vi.unstubAllGlobals();
   });
 
+  it("treats a matched zero shipment sender cost as resolved", async () => {
+    const service = new OrdersService({} as never);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            receiver: {
+              cost: 0,
+              discounts: [{ promoted_amount: 8.9 }],
+            },
+            senders: [{ cost: 0, user_id: "204174912" }],
+          }),
+          {
+            headers: { "content-type": "application/json" },
+            status: 200,
+          },
+        ),
+      ),
+    );
+
+    const result = await (
+      service as unknown as {
+        fetchMercadoLivreShipmentBreakdown(input: {
+          accessToken: string;
+          sellerAccountId: string | null;
+          shipmentId: string;
+        }): Promise<{
+          sellerCostAmount: number;
+          sellerMatched: boolean;
+          shippingBonusAmount: number;
+        }>;
+      }
+    ).fetchMercadoLivreShipmentBreakdown({
+      accessToken: "token",
+      sellerAccountId: "204174912",
+      shipmentId: "47299177413",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        sellerCostAmount: 0,
+        sellerMatched: true,
+        shippingBonusAmount: 8.9,
+      }),
+    );
+  });
+
   it("backfills Mercado Livre sale id on order details when metadata is still missing", async () => {
     const updateWhereMock = vi.fn().mockResolvedValue([]);
     const updateSetMock = vi.fn().mockReturnValue({
