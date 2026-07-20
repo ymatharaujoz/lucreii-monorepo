@@ -157,6 +157,7 @@ describe("orders controller", () => {
         taxRateDefault: null,
       },
       items: [],
+      pendingFinancialFields: [],
       order: {
         contributionMarginPercent: null,
         createdAt: "2026-06-20T12:00:00.000Z",
@@ -180,6 +181,7 @@ describe("orders controller", () => {
         totalWithFees: "0.00",
         totalWithoutFees: "0.00",
       },
+      tags: [],
     });
 
     const response = await app.inject({
@@ -233,6 +235,7 @@ describe("orders controller", () => {
         taxRateDefault: "0.120000",
       },
       items: [],
+      pendingFinancialFields: [],
       order: {
         contributionMarginPercent: "21.50",
         createdAt: "2026-06-20T12:00:00.000Z",
@@ -256,6 +259,7 @@ describe("orders controller", () => {
         totalWithFees: "200.00",
         totalWithoutFees: "167.00",
       },
+      tags: [],
     });
 
     const response = await app.inject({
