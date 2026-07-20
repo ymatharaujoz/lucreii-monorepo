@@ -78,7 +78,7 @@ export function SyncControlCard({
     <motion.div variants={fadeInVariants}>
       <Card 
         variant="outlined" 
-        className="p-6 bg-surface-elevated/40 border border-border/80 rounded-2xl shadow-[var(--shadow-xs)] hover:border-border-strong transition-all duration-300 backdrop-blur-xs"
+        className="rounded-[var(--radius-2xl)] border border-border/80 bg-surface-elevated/65 p-6 shadow-[var(--shadow-card)] backdrop-blur-xs transition-all duration-300 hover:border-border-strong"
       >
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
@@ -119,7 +119,7 @@ export function SyncControlCard({
               disabled={!canSubmitManualSync}
               loading={isSyncing}
               onClick={onSyncClick}
-              className="shrink-0 gap-2 rounded-xl bg-gradient-to-r from-accent to-accent-strong hover:from-accent-strong hover:to-accent px-6 py-2.5 text-xs font-bold text-white shadow-[0_4px_12px_rgba(14,122,111,0.2)] hover:shadow-[0_6px_20px_rgba(14,122,111,0.3)] transition-all duration-300 hover:-translate-y-0.5 active:scale-97"
+              className="shrink-0 gap-2 rounded-xl bg-accent px-6 py-2.5 text-xs font-bold text-white shadow-[0_4px_12px_rgba(14,122,111,0.2)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-accent-strong hover:shadow-[0_6px_20px_rgba(14,122,111,0.3)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2"
             >
               {!isSyncing && <RefreshCw className="h-3.5 w-3.5" />}
               {isSyncing ? "Sincronizando..." : "Sincronizar agora"}

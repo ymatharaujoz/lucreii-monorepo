@@ -31,6 +31,8 @@ import type {
   OrderCompositionUpdateInput,
   OrderDetails,
   OrderExportFilters,
+  OrderImportPendingFinancialField,
+  OrderImportTag,
   OrderLineItem,
   OrderListFilters,
   OrderListItem,
@@ -115,7 +117,6 @@ type MercadoLivreShipmentSellerCost = {
   buyerPaidAmount: number;
   sellerCostAmount: number;
   sellerMatched: boolean;
-  shippingBonusAmount: number;
   shipmentId: string;
   source: "shipment_costs.senders";
 };
@@ -455,11 +456,7 @@ function readMercadoLivreExplicitRefundBonusFromShippingFees(
       metadata ?? {},
       "mercadoLivreRefundBonusAmount",
     );
-    const shippingBonusAmount = readMetadataMoney(
-      metadata ?? {},
-      "mercadoLivreShippingBonusAmount",
-    );
-    const amount = refundBonusAmount + shippingBonusAmount;
+    const amount = refundBonusAmount;
     if (amount <= 0) {
       continue;
     }
@@ -508,6 +505,77 @@ function readMetadataMoneyString(
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed.toFixed(2) : null;
+}
+
+function isSpreadsheetImportedOrder(order: Pick<OrderRowShallow, "metadata">) {
+  const metadata =
+    order.metadata && typeof order.metadata === "object"
+      ? (order.metadata as Record<string, unknown>)
+      : {};
+  return (
+    metadata.importSource === "spreadsheet" ||
+    metadata.spreadsheetImport === true
+  );
+}
+
+function readSpreadsheetProductRevenueAmount(
+  order: Pick<OrderRowShallow, "metadata" | "provider">,
+) {
+  if (order.provider !== "mercadolivre" || !isSpreadsheetImportedOrder(order)) {
+    return null;
+  }
+
+  const metadata =
+    order.metadata && typeof order.metadata === "object"
+      ? (order.metadata as Record<string, unknown>)
+      : {};
+  const amount = readMetadataMoneyString(
+    metadata,
+    "spreadsheetProductRevenueAmount",
+  );
+
+  return amount === null ? null : toNumber(amount);
+}
+
+function readOrderImportTags(
+  order: Pick<OrderRow, "metadata">,
+): OrderImportTag[] {
+  const metadata =
+    order.metadata && typeof order.metadata === "object"
+      ? (order.metadata as Record<string, unknown>)
+      : {};
+  const rawTags = Array.isArray(metadata.tags) ? metadata.tags : [];
+  const tags = rawTags.filter(
+    (tag): tag is OrderImportTag => tag === "ENVIO FLEX",
+  );
+  return tags;
+}
+
+function readOrderPendingFinancialFields(
+  order: Pick<OrderRow, "metadata">,
+): OrderImportPendingFinancialField[] {
+  const metadata =
+    order.metadata && typeof order.metadata === "object"
+      ? (order.metadata as Record<string, unknown>)
+      : {};
+  const rawFields = Array.isArray(metadata.pendingFinancialFields)
+    ? metadata.pendingFinancialFields
+    : [];
+  return rawFields.filter(
+    (field): field is OrderImportPendingFinancialField =>
+      field === "shippingOrFixedFeeAmount" || field === "taxAmount",
+  );
+}
+
+function readOrderSourceStatus(order: Pick<OrderRow, "status" | "metadata">) {
+  const metadata =
+    order.metadata && typeof order.metadata === "object"
+      ? (order.metadata as Record<string, unknown>)
+      : {};
+  return typeof metadata.sourceStatus === "string" &&
+    metadata.sourceStatus.trim()
+    ? metadata.sourceStatus.trim()
+    : order.status;
 }
 
 function buildOrderShippingBreakdown(
@@ -681,12 +749,17 @@ function buildOrderFinancialMetrics(
   taxRateDefault: string | number | null | undefined,
 ) {
   const baseMetrics = buildOrderBaseMetrics(order);
-  const revenueAmount = baseMetrics.totalWithFees;
+  const revenueAmount =
+    readSpreadsheetProductRevenueAmount(order) ?? baseMetrics.totalWithFees;
   const compositionOverrides = readOrderCompositionOverrides(
     (order.metadata ?? {}) as Record<string, unknown>,
   );
+  const hasAuthoritativeMercadoLivreComposition =
+    order.provider === "mercadolivre";
   const shippingOrFixedFeeAmount = readOverrideMoney(
-    compositionOverrides.shippingOrFixedFeeAmount,
+    hasAuthoritativeMercadoLivreComposition
+      ? undefined
+      : compositionOverrides.shippingOrFixedFeeAmount,
     baseMetrics.shippingAmount > 0
       ? baseMetrics.shippingAmount
       : baseMetrics.fixedCostAmount,
@@ -696,7 +769,9 @@ function buildOrderFinancialMetrics(
     baseMetrics.tariffAmount,
   );
   const refundBonusAmount = readOverrideMoney(
-    compositionOverrides.refundBonusAmount,
+    hasAuthoritativeMercadoLivreComposition
+      ? undefined
+      : compositionOverrides.refundBonusAmount,
     baseMetrics.refundBonusAmount,
   );
   const netRevenueAmount =
@@ -706,7 +781,17 @@ function buildOrderFinancialMetrics(
     refundBonusAmount;
   const parsedTaxRate = toNumber(taxRateDefault);
   const taxRateValue = Number.isFinite(parsedTaxRate) ? parsedTaxRate : 0;
-  const taxAmount = revenueAmount * taxRateValue;
+  const pendingFinancialFields = readOrderPendingFinancialFields(order);
+  const importedTaxAmount =
+    order.provider === "mercadolivre" && isSpreadsheetImportedOrder(order)
+      ? null
+      : readMetadataMoneyString(baseMetrics.metadata, "importedTaxAmount");
+  const taxAmount =
+    importedTaxAmount !== null
+      ? toNumber(importedTaxAmount)
+      : pendingFinancialFields.includes("taxAmount")
+        ? 0
+        : revenueAmount * taxRateValue;
 
   let productCostAmount = 0;
   let packagingCostAmount = 0;
@@ -742,7 +827,9 @@ function buildOrderFinancialMetrics(
   );
 
   const hasIncompleteCostData =
-    missingLinkedItemsCount > 0 || missingCostItemsCount > 0;
+    missingLinkedItemsCount > 0 ||
+    missingCostItemsCount > 0 ||
+    pendingFinancialFields.length > 0;
   const totalProfitAmount = hasIncompleteCostData
     ? null
     : netRevenueAmount - productCostAmount - packagingCostAmount - taxAmount;
@@ -770,6 +857,7 @@ function buildOrderFinancialMetrics(
         taxRateDefault === null || taxRateDefault === undefined
           ? null
           : String(taxRateDefault),
+      ...(pendingFinancialFields.length > 0 ? { pendingFinancialFields } : {}),
     } satisfies OrderComposition,
     contributionMarginPercent:
       contributionMarginPercent === null
@@ -848,6 +936,10 @@ function readMercadoLivreShipmentId(
 function shouldRefreshMercadoLivrePackId(
   order: Pick<OrderRowShallow, "metadata">,
 ) {
+  if (isSpreadsheetImportedOrder(order)) {
+    return false;
+  }
+
   const metadata =
     order.metadata && typeof order.metadata === "object"
       ? (order.metadata as Record<string, unknown>)
@@ -859,6 +951,10 @@ function shouldRefreshMercadoLivrePackId(
 function shouldRefreshMercadoLivreOperationId(
   order: Pick<OrderRowShallow, "externalOrderId" | "metadata">,
 ) {
+  if (isSpreadsheetImportedOrder(order)) {
+    return false;
+  }
+
   const metadata =
     order.metadata && typeof order.metadata === "object"
       ? (order.metadata as Record<string, unknown>)
@@ -873,9 +969,13 @@ function shouldRefreshMercadoLivreOperationId(
 }
 
 function shouldRefreshMercadoLivreShippingRatio(
-  order: Pick<OrderRowShallow, "fees" | "provider">,
+  order: Pick<OrderRowShallow, "fees" | "provider" | "metadata">,
 ) {
   if (order.provider !== "mercadolivre") {
+    return false;
+  }
+
+  if (isSpreadsheetImportedOrder(order)) {
     return false;
   }
 
@@ -1078,6 +1178,10 @@ function toOrderListItem(
   },
 ): OrderListItem {
   const baseMetrics = buildOrderBaseMetrics(order);
+  const imported = isSpreadsheetImportedOrder(order);
+  const spreadsheetProductRevenueAmount =
+    readSpreadsheetProductRevenueAmount(order);
+  const sourceStatus = readOrderSourceStatus(order);
 
   return {
     createdAt: toIsoString(order.createdAt)!,
@@ -1092,12 +1196,17 @@ function toOrderListItem(
     provider: order.provider as "mercadolivre" | "shopee" | "shein",
     skus: collectOrderSkus(order),
     shippingAmount: baseMetrics.shippingAmount.toFixed(2),
-    sourceStatus: order.status,
+    sourceStatus,
     status: baseMetrics.canonicalStatus,
-    statusLabel: getOrderStatusLabel(baseMetrics.canonicalStatus),
+    statusLabel: imported
+      ? sourceStatus
+      : getOrderStatusLabel(baseMetrics.canonicalStatus),
+    tags: readOrderImportTags(order),
     tariffAmount: baseMetrics.tariffAmount.toFixed(2),
     totalFees: baseMetrics.totalFees.toFixed(2),
-    totalWithFees: baseMetrics.totalWithFees.toFixed(2),
+    totalWithFees: (
+      spreadsheetProductRevenueAmount ?? baseMetrics.totalWithFees
+    ).toFixed(2),
     totalWithoutFees: baseMetrics.totalWithoutFees.toFixed(2),
     contributionMarginPercent:
       financialMetrics?.contributionMarginPercent ?? null,
@@ -1395,6 +1504,13 @@ function aggregateOrderComposition(
     shippingAmount +
     toNumber(refundBonusAmount)
   ).toFixed(2);
+  const pendingFinancialFields = Array.from(
+    new Set(
+      compositions.flatMap(
+        (composition) => composition.pendingFinancialFields ?? [],
+      ),
+    ),
+  ) as OrderImportPendingFinancialField[];
 
   return {
     hasIncompleteCostData: compositions.some(
@@ -1426,6 +1542,7 @@ function aggregateOrderComposition(
     taxRateDefault:
       compositions.find((composition) => composition.taxRateDefault !== null)
         ?.taxRateDefault ?? null,
+    ...(pendingFinancialFields.length > 0 ? { pendingFinancialFields } : {}),
   } satisfies OrderComposition;
 }
 
@@ -1433,6 +1550,13 @@ function sumUniqueRefundBonusMovements(
   rows: OrderRow[],
   baseMetricsByRow: ReturnType<typeof buildOrderBaseMetrics>[],
 ) {
+  if (rows.every((row) => row.provider === "mercadolivre")) {
+    return baseMetricsByRow.reduce(
+      (total, metrics) => total + metrics.refundBonusAmount,
+      0,
+    );
+  }
+
   const seenMovementKeys = new Set<string>();
   let total = 0;
 
@@ -1441,8 +1565,8 @@ function sumUniqueRefundBonusMovements(
       row.metadata && typeof row.metadata === "object"
         ? (row.metadata as Record<string, unknown>)
         : {};
-    const manualOverride = readOrderCompositionOverrides(metadata)
-      .refundBonusAmount;
+    const manualOverride =
+      readOrderCompositionOverrides(metadata).refundBonusAmount;
     if (manualOverride !== undefined) {
       const overrideAmount = toNumber(manualOverride);
       if (Number.isFinite(overrideAmount)) {
@@ -1466,11 +1590,7 @@ function sumUniqueRefundBonusMovements(
         record.documentType === "CREDIT_NOTE" ? "CREDIT_NOTE" : "BILL";
       const deduplicationKey = `${documentType}:${key}`;
       const amount = Number(record.amount);
-      if (
-        !key ||
-        !Number.isFinite(amount) ||
-        amount <= 0
-      ) {
+      if (!key || !Number.isFinite(amount) || amount <= 0) {
         continue;
       }
 
@@ -1551,8 +1671,12 @@ function buildLogicalOrder(
     (total, metrics) => total + metrics.tariffAmount,
     0,
   );
-  const totalWithFeesAmount = baseMetricsByRow.reduce(
-    (total, metrics) => total + metrics.totalWithFees,
+  const totalWithFeesAmount = rows.reduce(
+    (total, row, index) =>
+      total +
+      (readSpreadsheetProductRevenueAmount(row) ??
+        baseMetricsByRow[index]?.totalWithFees ??
+        0),
     0,
   );
   const totalFeesAmount =
@@ -1564,6 +1688,9 @@ function buildLogicalOrder(
     0,
     totalWithFeesAmount - totalFeesAmount,
   );
+  const tags = Array.from(
+    new Set(rows.flatMap((row) => readOrderImportTags(row))),
+  ) as OrderImportTag[];
 
   return {
     composition,
@@ -1584,9 +1711,12 @@ function buildLogicalOrder(
       provider: firstRow.provider as "mercadolivre" | "shopee" | "shein",
       shippingAmount: totalShippingAmount.toFixed(2),
       skus,
-      sourceStatus: firstRow.status,
+      sourceStatus: readOrderSourceStatus(firstRow),
       status: firstMetrics.canonicalStatus,
-      statusLabel: getOrderStatusLabel(firstMetrics.canonicalStatus),
+      statusLabel: isSpreadsheetImportedOrder(firstRow)
+        ? readOrderSourceStatus(firstRow)
+        : getOrderStatusLabel(firstMetrics.canonicalStatus),
+      tags,
       tariffAmount: totalTariffAmount.toFixed(2),
       totalFees: totalFeesAmount.toFixed(2),
       totalWithFees: totalWithFeesAmount.toFixed(2),
@@ -2309,6 +2439,9 @@ export class OrdersService {
       composition: logicalOrder.composition,
       items: logicalOrder.items,
       order: logicalOrder.order,
+      pendingFinancialFields:
+        logicalOrder.composition.pendingFinancialFields ?? [],
+      tags: logicalOrder.order.tags ?? [],
     };
   }
 
@@ -2343,13 +2476,17 @@ export class OrdersService {
       row.metadata && typeof row.metadata === "object"
         ? { ...(row.metadata as Record<string, unknown>) }
         : {};
-    metadata.compositionOverrides = {
+    const compositionOverrides: OrderCompositionOverrides = {
       marketplaceCommissionAmount: input.marketplaceCommissionAmount,
       packagingCostAmount: input.packagingCostAmount,
       productCostAmount: input.productCostAmount,
-      refundBonusAmount: input.refundBonusAmount,
-      shippingOrFixedFeeAmount: input.shippingOrFixedFeeAmount,
-    } satisfies OrderCompositionOverrides;
+    };
+    if (row.provider !== "mercadolivre") {
+      compositionOverrides.refundBonusAmount = input.refundBonusAmount;
+      compositionOverrides.shippingOrFixedFeeAmount =
+        input.shippingOrFixedFeeAmount;
+    }
+    metadata.compositionOverrides = compositionOverrides;
 
     await this.db
       .update(externalOrders)
@@ -2514,7 +2651,10 @@ export class OrdersService {
     }
 
     const mercadoLivreRows = rows.filter(
-      (row) => row.provider === "mercadolivre" && Boolean(row.orderedAt),
+      (row) =>
+        row.provider === "mercadolivre" &&
+        Boolean(row.orderedAt) &&
+        !isSpreadsheetImportedOrder(row),
     );
 
     if (mercadoLivreRows.length === 0) {
@@ -2838,7 +2978,6 @@ export class OrdersService {
         buyerPaidAmount: number;
         grossTariffAmount: number;
         netAmount: number;
-        shippingBonusAmount: number;
         shipmentId: string;
       }
     >();
@@ -2896,7 +3035,6 @@ export class OrdersService {
         buyerPaidAmount,
         grossTariffAmount: shipmentBreakdown.sellerCostAmount,
         netAmount,
-        shippingBonusAmount: shipmentBreakdown.shippingBonusAmount,
         shipmentId,
       });
     }
@@ -2924,13 +3062,7 @@ export class OrdersService {
                 : {};
             delete metadata.listCostAmount;
             metadata.shipmentId = shippingRatio.shipmentId;
-            if (shippingRatio.shippingBonusAmount > 0) {
-              metadata.mercadoLivreShippingBonusAmount = toMoney(
-                shippingRatio.shippingBonusAmount,
-              );
-            } else {
-              delete metadata.mercadoLivreShippingBonusAmount;
-            }
+            delete metadata.mercadoLivreShippingBonusAmount;
             metadata.shipping_buyer_paid = toMoney(
               shippingRatio.buyerPaidAmount,
             );
@@ -2984,6 +3116,10 @@ export class OrdersService {
 
     const targets = rows.filter((row) => {
       if (row.provider !== "mercadolivre") {
+        return false;
+      }
+
+      if (isSpreadsheetImportedOrder(row)) {
         return false;
       }
 
@@ -3491,29 +3627,11 @@ export class OrdersService {
           : 0;
     const normalizedSellerCost =
       Number.isFinite(sellerCost) && sellerCost > 0 ? sellerCost : 0;
-    const shippingBonusAmount =
-      matchedSender !== null && normalizedSellerCost === 0
-        ? (payload.receiver?.discounts ?? []).reduce((sum, discount) => {
-            const rawAmount = discount.promoted_amount;
-            const amount =
-              typeof rawAmount === "number"
-                ? rawAmount
-                : typeof rawAmount === "string"
-                  ? Number(rawAmount)
-                  : 0;
-            return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
-          }, 0)
-        : 0;
-
     return {
       buyerPaidAmount:
         Number.isFinite(buyerPaid) && buyerPaid > 0 ? buyerPaid : 0,
       sellerCostAmount: normalizedSellerCost,
       sellerMatched: input.sellerAccountId !== null && matchedSender !== null,
-      shippingBonusAmount:
-        Number.isFinite(shippingBonusAmount) && shippingBonusAmount > 0
-          ? roundMoneyNumber(shippingBonusAmount)
-          : 0,
       shipmentId: input.shipmentId,
       source: "shipment_costs.senders",
     };

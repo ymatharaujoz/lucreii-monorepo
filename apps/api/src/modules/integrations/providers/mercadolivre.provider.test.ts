@@ -57,8 +57,43 @@ function createJsonResponse(payload: unknown, status = 200) {
   });
 }
 
+function createSpreadsheetOrderPayload(input: {
+  fixedFee?: number;
+  orderId: string;
+  saleFee?: number;
+  shippingId?: string;
+  unitPrice?: number;
+}) {
+  const unitPrice = input.unitPrice ?? 38;
+  return {
+    currency_id: "BRL",
+    id: input.orderId,
+    order_items: [
+      {
+        item: {
+          category_id: "MLB272132",
+          id: "MLB4626083209",
+        },
+        listing_type_id: "gold_special",
+        quantity: 1,
+        sale_fee: input.saleFee ?? 4.37,
+        unit_price: unitPrice,
+      },
+    ],
+    shipping: { id: input.shippingId ?? `shipment-${input.orderId}` },
+  };
+}
+
 type MercadoLivreProviderWithShippingResolver = {
-  fetchShipmentCosts(input: unknown): Promise<unknown>;
+  fetchShipmentCosts(input: unknown): Promise<{
+    buyerShippingAmount?: number;
+    lookupStatus?: string;
+    sellerCost: {
+      amount: number;
+      metadata?: Record<string, unknown>;
+      refundBonusAdjustment?: unknown;
+    } | null;
+  } | null>;
   fetchShipmentSellerCost(input: unknown): Promise<unknown>;
   resolveShippingCost(
     order: unknown,
@@ -159,7 +194,7 @@ describe("MercadoLivreProvider", () => {
     );
   });
 
-  it("resolves a matched zero shipment cost and preserves the shipping bonus", async () => {
+  it("resolves a matched zero shipment cost without treating shipping promotion as refund", async () => {
     const provider = createProvider();
     vi.stubGlobal(
       "fetch",
@@ -184,18 +219,12 @@ describe("MercadoLivreProvider", () => {
       lookupStatus: "resolved",
       sellerCost: {
         amount: 0,
-        metadata: {
-          mercadoLivreShippingBonusAmount: "8.90",
-        },
-        refundBonusAdjustment: {
-          amount: 8.9,
-          componentAmounts: {
-            shippingDiscount: 8.9,
-          },
-          movementKeys: ["shipping:47299177413"],
-        },
+        refundBonusAdjustment: null,
       },
     });
+    expect(result?.sellerCost?.metadata).not.toHaveProperty(
+      "mercadoLivreShippingBonusAmount",
+    );
   });
 
   it("composes the atypical local delivery order from shipment and billing data", async () => {
@@ -222,95 +251,101 @@ describe("MercadoLivreProvider", () => {
       total_amount: 38,
     };
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockImplementation((request: unknown) => {
-        const url = String(request);
+    const fetchMock = vi.fn().mockImplementation((request: unknown) => {
+      const url = String(request);
 
-        if (url.includes("/shipments/47299177413/costs")) {
-          return Promise.resolve(
-            createJsonResponse({
-              receiver: {
-                cost: 0,
-                discounts: [{ promoted_amount: 8.9 }],
+      if (url.includes("/shipments/47299177413/costs")) {
+        return Promise.resolve(
+          createJsonResponse({
+            receiver: {
+              cost: 0,
+              discounts: [{ promoted_amount: 8.9 }],
+            },
+            senders: [{ cost: 0, user_id: 204174912 }],
+          }),
+        );
+      }
+
+      if (url.includes("/shipments/47299177413")) {
+        return Promise.resolve(
+          createJsonResponse({
+            logistic: { mode: "me2", type: "self_service" },
+          }),
+        );
+      }
+
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [
+              {
+                details: [
+                  {
+                    charge_info: {
+                      detail_amount: 0.04,
+                      detail_sub_type: "CVVPRC",
+                    },
+                    shipping_info: {
+                      receiver_shipping_cost: 0,
+                      shipment_id: 47299177413,
+                    },
+                  },
+                  {
+                    charge_info: {
+                      detail_amount: 9.08,
+                      detail_sub_type: "CVVML",
+                    },
+                    shipping_info: {
+                      receiver_shipping_cost: 0,
+                      shipment_id: 47299177413,
+                    },
+                  },
+                ],
+                order_id: "2000016937064078",
+                operation_id: "163310589727",
+                sale_fee: {
+                  discount: 0,
+                  gross: 11.02,
+                  net: 9.12,
+                  rebate: 1.9,
+                },
               },
-              senders: [{ cost: 0, user_id: 204174912 }],
-            }),
-          );
-        }
+            ],
+          }),
+        );
+      }
 
-        if (url.includes("/billing/integration/group/ML/order/details")) {
-          return Promise.resolve(
-            createJsonResponse({
-              results: [
-                {
-                  details: [
-                    {
-                      charge_info: {
-                        detail_amount: 0.04,
-                        detail_sub_type: "CVVPRC",
-                      },
-                      shipping_info: {
-                        receiver_shipping_cost: 0,
-                        shipment_id: 47299177413,
-                      },
-                    },
-                    {
-                      charge_info: {
-                        detail_amount: 9.08,
-                        detail_sub_type: "CVVML",
-                      },
-                      shipping_info: {
-                        receiver_shipping_cost: 0,
-                        shipment_id: 47299177413,
-                      },
-                    },
-                  ],
-                  order_id: "2000016937064078",
-                  operation_id: "163310589727",
-                  sale_fee: {
-                    discount: 0,
-                    gross: 11.02,
-                    net: 9.12,
-                    rebate: 1.9,
-                  },
+      if (url.includes("/billing/integration/periods")) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [
+              {
+                order_id: "2000016937064078",
+                sale_fee: {
+                  discount: 0,
+                  gross: 11.02,
+                  net: 9.12,
+                  rebate: 0,
                 },
-              ],
-            }),
-          );
-        }
+              },
+            ],
+            total: 1,
+          }),
+        );
+      }
 
-        if (url.includes("/billing/integration/periods")) {
-          return Promise.resolve(
-            createJsonResponse({
-              results: [
-                {
-                  order_id: "2000016937064078",
-                  sale_fee: {
-                    discount: 0,
-                    gross: 11.02,
-                    net: 9.12,
-                    rebate: 0,
-                  },
-                },
-              ],
-              total: 1,
-            }),
-          );
-        }
+      if (url.includes("/listing_prices")) {
+        return Promise.resolve(
+          createJsonResponse({
+            sale_fee_amount: 11.02,
+            sale_fee_details: { fixed_fee: 6.65, gross_amount: 11.02 },
+          }),
+        );
+      }
 
-        if (url.includes("/listing_prices")) {
-          return Promise.resolve(
-            createJsonResponse({
-              sale_fee_amount: 4.37,
-              sale_fee_details: { fixed_fee: 0 },
-            }),
-          );
-        }
-
-        return Promise.reject(new Error(`Unexpected URL: ${url}`));
-      }),
-    );
+      return Promise.reject(new Error(`Unexpected URL: ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await withShippingResolver(provider).resolveOrderFees(
       order,
@@ -333,9 +368,7 @@ describe("MercadoLivreProvider", () => {
         }),
       ]),
     );
-    expect(
-      result.fees.filter((fee) => fee.feeType === "fixed_fee"),
-    ).toEqual([
+    expect(result.fees.filter((fee) => fee.feeType === "fixed_fee")).toEqual([
       expect.objectContaining({
         amount: "6.65",
         feeType: "fixed_fee",
@@ -347,12 +380,21 @@ describe("MercadoLivreProvider", () => {
       ]),
     );
     expect(result.refundBonusAdjustment).toMatchObject({
-      amount: 10.8,
+      amount: 1.9,
       componentAmounts: {
         saleFeeRebate: 1.9,
-        shippingDiscount: 8.9,
       },
     });
+    expect(
+      fetchMock.mock.calls.some((call) => {
+        const url = String(call[0]);
+        return (
+          url.includes("/listing_prices") &&
+          url.includes("logistic_type=self_service") &&
+          url.includes("shipping_mode=me2")
+        );
+      }),
+    ).toBe(true);
   });
 
   it("prefers the buyer shipping amount attached to the CFFE detail", () => {
@@ -477,7 +519,43 @@ describe("MercadoLivreProvider", () => {
     );
   });
 
-  it("reads nested discount_info and bonus details even without shipping data", () => {
+  it.each([
+    ["2000017015226206", 1.25],
+    ["2000017083377696", 3.54],
+    ["2000017076368344", 3.54],
+    ["2000017068678770", 3.54],
+    ["2000017045701094", 3.54],
+    ["2000017024850698", 3.54],
+    ["2000017017628964", 3.54],
+    ["2000016988040810", 3.54],
+    ["2000017042196394", 1.15],
+    ["2000017030515428", 1.15],
+    ["2000017020994468", 1.15],
+    ["2000016956155818", 1.13],
+    ["2000016706017164", 1.54],
+  ])("reads the panel rebate for real order %s", (orderId, rebate) => {
+    const result = readMercadoLivreBillingOrderRefundBonus({
+      orderId,
+      payload: {
+        results: [
+          {
+            order_id: orderId,
+            sale_fee: {
+              discount: rebate + 99,
+              gross: rebate + 10,
+              net: 0.01,
+              rebate,
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result?.amount).toBe(rebate);
+    expect(result?.movementKeys).toEqual([`sale_fee:${orderId}`]);
+  });
+
+  it("ignores nested discount_info and credit details when sale_fee.rebate is absent", () => {
     const result = readMercadoLivreBillingOrderRefundBonus({
       orderId: "456",
       payload: {
@@ -503,18 +581,10 @@ describe("MercadoLivreProvider", () => {
       },
     });
 
-    expect(result).toEqual(
-      expect.objectContaining({
-        amount: 3,
-        componentAmounts: expect.objectContaining({
-          creditNote: 2.25,
-          detailDiscount: 0.75,
-        }),
-      }),
-    );
+    expect(result).toBeNull();
   });
 
-  it("reads a CREDIT_NOTE seller credit even without a bonus status", () => {
+  it("ignores a CREDIT_NOTE seller credit when sale_fee.rebate is absent", () => {
     const result = readMercadoLivreBillingRefundBonus({
       documentType: "CREDIT_NOTE",
       orderId: "789",
@@ -535,13 +605,7 @@ describe("MercadoLivreProvider", () => {
       },
     });
 
-    expect(result).toEqual(
-      expect.objectContaining({
-        amount: 1.9,
-        componentAmounts: expect.objectContaining({ creditNote: 1.9 }),
-        operationId: "payment-789",
-      }),
-    );
+    expect(result).toBeNull();
   });
 
   it("builds the documented authorization URL", async () => {
@@ -2448,14 +2512,14 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.fees).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          amount: "12.00",
+          amount: "11.67",
           feeType: "marketplace_commission",
         }),
         expect.objectContaining({ amount: "19.95", feeType: "fixed_fee" }),
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "19.95",
+      refundBonusAmount: "0.00",
     });
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
@@ -2470,7 +2534,7 @@ describe("MercadoLivreProvider", () => {
     );
   });
 
-  it("adds refund bonus when initial MELI fees already have commission, fixed fee, and shipping", async () => {
+  it("does not use billing period rebate when initial MELI fees are complete", async () => {
     const provider = new MercadoLivreProvider({
       API_DB_POOL_MAX: 5,
       API_HOST: "127.0.0.1",
@@ -2634,19 +2698,11 @@ describe("MercadoLivreProvider", () => {
           amount: "14.50",
           feeType: "shipping_cost",
         }),
-        expect.objectContaining({
-          amount: "5.54",
-          feeType: "refund_bonus",
-          metadata: expect.objectContaining({
-            source: "billing/integration/periods",
-          }),
-        }),
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "5.54",
+      refundBonusAmount: "0.00",
     });
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
     expect(
       fetchMock.mock.calls.some((call) =>
         String(call[0]).includes(
@@ -2656,7 +2712,7 @@ describe("MercadoLivreProvider", () => {
     ).toBe(true);
   });
 
-  it("imports billing estorno as order financial adjustment without creating an item", async () => {
+  it("ignores billing period estorno without order sale_fee.rebate", async () => {
     const provider = createProvider();
     const searchPayload = {
       paging: { limit: 50, offset: 0, total: 1 },
@@ -2769,22 +2825,13 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.items).toHaveLength(1);
     expect(result.orders[0]?.metadata).toMatchObject({
       operationId: "987654",
-      refundBonusAmount: "7.25",
+      refundBonusAmount: "0.00",
     });
-    expect(result.orders[0]?.fees).toEqual(
+    expect(result.orders[0]?.fees).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          amount: "7.25",
-          feeType: "refund_bonus",
-          metadata: expect.objectContaining({
-            operationId: "987654",
-            originalDescription: "Estorno Mercado Livre",
-            source: "billing/integration/periods",
-          }),
-        }),
+        expect.objectContaining({ feeType: "refund_bonus" }),
       ]),
     );
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3);
     expect(
       fetchMock.mock.calls.some((call) =>
         String(call[0]).includes(
@@ -3310,7 +3357,7 @@ describe("MercadoLivreProvider", () => {
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "6.65",
+      refundBonusAmount: "0.00",
     });
   });
 
@@ -3476,7 +3523,7 @@ describe("MercadoLivreProvider", () => {
       ]),
     );
     expect(result.orders[0]?.metadata).toMatchObject({
-      refundBonusAmount: "6.65",
+      refundBonusAmount: "0.00",
     });
   });
 
@@ -3589,10 +3636,10 @@ describe("MercadoLivreProvider", () => {
           JSON.stringify({
             currency_id: "BRL",
             listing_type_id: "gold_special",
-            sale_fee_amount: 3.89,
+            sale_fee_amount: 10.54,
             sale_fee_details: {
-              fixed_fee: 0,
-              gross_amount: 3.89,
+              fixed_fee: 6.65,
+              gross_amount: 10.54,
               percentage_fee: 13,
             },
           }),
@@ -3642,21 +3689,18 @@ describe("MercadoLivreProvider", () => {
         amount: "3.89",
         feeType: "marketplace_commission",
         metadata: expect.objectContaining({
-          source: "listing_prices.sale_fee_amount",
+          source: "listing_prices.sale_fee_details",
         }),
       }),
       expect.objectContaining({
         amount: "6.65",
         feeType: "fixed_fee",
         metadata: expect.objectContaining({
-          source: "listing_prices.fixed_fee_fallback",
+          source: "listing_prices.sale_fee_details.fixed_fee",
         }),
       }),
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(5);
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
-      "/billing/integration/periods/key/2026-06-01/group/ML/details",
-    );
     expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
       "/sites/MLB/listing_prices",
     );
@@ -3940,6 +3984,18 @@ describe("MercadoLivreProvider", () => {
         });
       }
 
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        const orderId = new URL(url).searchParams.get("order_ids");
+        return createJsonResponse({
+          results: [
+            {
+              order_id: orderId,
+              sale_fee: { gross: 10, net: 10, rebate: 0 },
+            },
+          ],
+        });
+      }
+
       if (url.includes("/billing/integration/periods/")) {
         return createJsonResponse({
           limit: 1000,
@@ -3970,7 +4026,6 @@ describe("MercadoLivreProvider", () => {
       "order.date_created.to=2026-05-20T23%3A59%3A59.999Z",
     );
     expect(firstRequestUrl).not.toContain("order.date_created.from=");
-    expect(fetchMock).toHaveBeenCalledTimes(8);
     expect(
       fetchMock.mock.calls.filter((call) =>
         String(call[0]).includes("/orders/search"),
@@ -3978,9 +4033,14 @@ describe("MercadoLivreProvider", () => {
     ).toHaveLength(6);
     expect(
       fetchMock.mock.calls.filter((call) =>
+        String(call[0]).includes("/billing/integration/group/ML/order/details"),
+      ),
+    ).toHaveLength(6);
+    expect(
+      fetchMock.mock.calls.filter((call) =>
         String(call[0]).includes("/billing/integration/periods/"),
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     expect(result.orders).toHaveLength(totalOrders);
     expect(result.orders[0]?.externalOrderId).toBe("1");
     expect(result.orders.at(-1)?.externalOrderId).toBe("251");
@@ -4279,9 +4339,6 @@ describe("MercadoLivreProvider", () => {
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
       "/billing/integration/group/ML/order/details",
     );
-    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
-      "/billing/integration/periods/",
-    );
     expect(result.orders).toHaveLength(1);
     expect(result.orders[0]?.externalOrderId).toBe("123");
     expect(result.cursor).toEqual({
@@ -4438,9 +4495,6 @@ describe("MercadoLivreProvider", () => {
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/group/ML/order/details",
     );
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
-      "/billing/integration/periods/",
-    );
   });
 
   it("persists Mercado Livre pack_id and operation_id even when search fees are already complete", async () => {
@@ -4570,9 +4624,6 @@ describe("MercadoLivreProvider", () => {
       refundBonusAmount: "0.00",
     });
     expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
-      "/billing/integration/periods/",
-    );
   });
 
   it("keeps zero refund bonus when net total is unavailable", async () => {
@@ -6778,5 +6829,330 @@ describe("MercadoLivreProvider", () => {
       }),
     ).resolves.toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("resolves spreadsheet sale IDs through pack orders and listing prices", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((request: unknown) => {
+      const url = new URL(String(request));
+
+      if (url.pathname === "/packs/2000013516715241") {
+        return Promise.resolve(
+          createJsonResponse({ orders: [{ id: "2000016937064078" }] }),
+        );
+      }
+
+      if (url.pathname === "/orders/2000016937064078") {
+        return Promise.resolve(
+          createJsonResponse(
+            createSpreadsheetOrderPayload({
+              orderId: "2000016937064078",
+              saleFee: 9.12,
+              shippingId: "47299177413",
+            }),
+          ),
+        );
+      }
+
+      if (url.pathname === "/shipments/47299177413") {
+        return Promise.resolve(
+          createJsonResponse({
+            logistic: { mode: "me2", type: "self_service" },
+          }),
+        );
+      }
+
+      if (url.pathname === "/sites/MLB/listing_prices") {
+        expect(url.searchParams.get("logistic_type")).toBe("self_service");
+        expect(url.searchParams.get("shipping_mode")).toBe("me2");
+        return Promise.resolve(
+          createJsonResponse({
+            sale_fee_amount: 11.02,
+            sale_fee_details: { fixed_fee: 6.65, gross_amount: 11.02 },
+          }),
+        );
+      }
+
+      return Promise.reject(new Error(`Unexpected URL: ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      provider.resolveSpreadsheetFixedCostForSale({
+        accessToken: "token",
+        saleId: "2000013516715241",
+      }),
+    ).resolves.toEqual({
+      fixedCost: 6.65,
+      orderIds: ["2000016937064078"],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: "/packs/2000013516715241" }),
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: "/shipments/47299177413" }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-format-new": "true" }),
+      }),
+    );
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes("/billing/integration/group/ML/order/details"),
+      ),
+    ).toBe(false);
+  });
+
+  it("resolves the second real spreadsheet pack fixture with listing prices", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((request: unknown) => {
+      const url = new URL(String(request));
+
+      if (url.pathname === "/packs/2000013480723293") {
+        return Promise.resolve(
+          createJsonResponse({ orders: [{ id: "2000016903205044" }] }),
+        );
+      }
+
+      if (url.pathname === "/orders/2000016903205044") {
+        return Promise.resolve(
+          createJsonResponse(
+            createSpreadsheetOrderPayload({
+              orderId: "2000016903205044",
+              saleFee: 11.24,
+              shippingId: "47283773296",
+              unitPrice: 39.9,
+            }),
+          ),
+        );
+      }
+
+      if (url.pathname === "/shipments/47283773296") {
+        return Promise.resolve(
+          createJsonResponse({
+            logistic: { mode: "me2", type: "self_service" },
+          }),
+        );
+      }
+
+      if (url.pathname === "/sites/MLB/listing_prices") {
+        expect(url.searchParams.get("price")).toBe("39.9");
+        expect(url.searchParams.get("logistic_type")).toBe("self_service");
+        expect(url.searchParams.get("shipping_mode")).toBe("me2");
+        return Promise.resolve(
+          createJsonResponse({
+            sale_fee_amount: 11.24,
+            sale_fee_details: { fixed_fee: 6.65, gross_amount: 11.24 },
+          }),
+        );
+      }
+
+      return Promise.reject(new Error(`Unexpected URL: ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      provider.resolveSpreadsheetFixedCostForSale({
+        accessToken: "token",
+        saleId: "2000013480723293",
+      }),
+    ).resolves.toEqual({
+      fixedCost: 6.65,
+      orderIds: ["2000016903205044"],
+    });
+  });
+
+  it("sums fixed costs for every order returned by a spreadsheet pack", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((request: unknown) => {
+      const url = new URL(String(request));
+
+      if (url.pathname === "/packs/sale-2") {
+        return Promise.resolve(
+          createJsonResponse({
+            orders: [{ id: "order-1" }, { id: "order-2" }],
+          }),
+        );
+      }
+
+      if (url.pathname.startsWith("/orders/")) {
+        const orderId = url.pathname.split("/").at(-1) ?? "";
+        return Promise.resolve(
+          createJsonResponse(
+            createSpreadsheetOrderPayload({
+              orderId,
+              unitPrice: orderId === "order-1" ? 38 : 39.9,
+            }),
+          ),
+        );
+      }
+
+      if (url.pathname.startsWith("/shipments/")) {
+        return Promise.resolve(
+          createJsonResponse({
+            logistic: { mode: "me2", type: "self_service" },
+          }),
+        );
+      }
+
+      if (url.pathname === "/sites/MLB/listing_prices") {
+        const orderId =
+          url.searchParams.get("price") === "38" ? "order-1" : "order-2";
+        const fixedFee = orderId === "order-1" ? 4.25 : 3.5;
+        return Promise.resolve(
+          createJsonResponse({
+            sale_fee_amount: fixedFee + 4.37,
+            sale_fee_details: {
+              fixed_fee: fixedFee,
+              gross_amount: fixedFee + 4.37,
+            },
+          }),
+        );
+      }
+
+      return Promise.reject(new Error(`Unexpected URL: ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      provider.resolveSpreadsheetFixedCostForSale({
+        accessToken: "token",
+        saleId: "sale-2",
+      }),
+    ).resolves.toEqual({
+      fixedCost: 7.75,
+      orderIds: ["order-1", "order-2"],
+    });
+  });
+
+  it("falls back to billing gross when listing prices omits fixed fee", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((request: unknown) => {
+      const url = new URL(String(request));
+
+      if (url.pathname === "/packs/sale-billing") {
+        return Promise.resolve(
+          createJsonResponse({ orders: [{ id: "order-billing" }] }),
+        );
+      }
+
+      if (url.pathname === "/orders/order-billing") {
+        return Promise.resolve(
+          createJsonResponse(
+            createSpreadsheetOrderPayload({
+              orderId: "order-billing",
+              saleFee: 9.12,
+            }),
+          ),
+        );
+      }
+
+      if (url.pathname === "/shipments/shipment-order-billing") {
+        return Promise.resolve(
+          createJsonResponse({
+            logistic: { mode: "me2", type: "self_service" },
+          }),
+        );
+      }
+
+      if (url.pathname === "/sites/MLB/listing_prices") {
+        return Promise.resolve(
+          createJsonResponse({
+            sale_fee_amount: 4.37,
+            sale_fee_details: { fixed_fee: 0, gross_amount: 11.02 },
+          }),
+        );
+      }
+
+      if (
+        url.pathname === "/billing/integration/group/ML/order/details" &&
+        url.searchParams.get("order_ids") === "order-billing"
+      ) {
+        return Promise.resolve(
+          createJsonResponse({
+            results: [
+              { order_id: "order-billing", sale_fee: { gross: 11.02 } },
+            ],
+          }),
+        );
+      }
+
+      return Promise.reject(new Error(`Unexpected URL: ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      provider.resolveSpreadsheetFixedCostForSale({
+        accessToken: "token",
+        saleId: "sale-billing",
+      }),
+    ).resolves.toEqual({ fixedCost: 6.65, orderIds: ["order-billing"] });
+  });
+
+  it("falls back to direct order lookup when sale ID is not a pack", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockImplementation((request: unknown) => {
+      const url = new URL(String(request));
+
+      if (url.pathname === "/packs/sale-3") {
+        return Promise.resolve(new Response("not found", { status: 404 }));
+      }
+
+      if (
+        url.pathname === "/orders/sale-3" ||
+        url.pathname === "/orders/order-3"
+      ) {
+        return Promise.resolve(
+          createJsonResponse(
+            createSpreadsheetOrderPayload({ orderId: "order-3" }),
+          ),
+        );
+      }
+
+      if (url.pathname === "/shipments/shipment-order-3") {
+        return Promise.resolve(
+          createJsonResponse({
+            logistic: { mode: "me2", type: "self_service" },
+          }),
+        );
+      }
+
+      if (url.pathname === "/sites/MLB/listing_prices") {
+        return Promise.resolve(
+          createJsonResponse({
+            sale_fee_amount: 8.57,
+            sale_fee_details: { fixed_fee: 4.2, gross_amount: 8.57 },
+          }),
+        );
+      }
+
+      return Promise.reject(new Error(`Unexpected URL: ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      provider.resolveSpreadsheetFixedCostForSale({
+        accessToken: "token",
+        saleId: "sale-3",
+      }),
+    ).resolves.toEqual({ fixedCost: 4.2, orderIds: ["order-3"] });
+  });
+
+  it("returns no order IDs when neither pack nor direct order exists", async () => {
+    const provider = createProvider();
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(new Response("not found", { status: 404 })),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      provider.resolveSpreadsheetFixedCostForSale({
+        accessToken: "token",
+        saleId: "missing-sale",
+      }),
+    ).resolves.toEqual({ fixedCost: null, orderIds: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

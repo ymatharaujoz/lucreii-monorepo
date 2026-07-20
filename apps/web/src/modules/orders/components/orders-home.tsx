@@ -170,6 +170,39 @@ function getOrderStatusType(status: OrderCanonicalStatus): StatusType {
   }
 }
 
+function getOrderStatusTypeForRow(
+  row: Pick<OrderListItem, "provider" | "sourceStatus" | "status">,
+): StatusType {
+  if (row.provider !== "mercadolivre") {
+    return getOrderStatusType(row.status);
+  }
+
+  const source = row.sourceStatus
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (source.includes("cancel")) return "error";
+  if (source.includes("pacote de 2 produtos")) return "inactive";
+  if (source.includes("nao entregue")) return "warning";
+  if (
+    source.includes("entregue") ||
+    (source.includes("mediacao finalizada") &&
+      source.includes("te demos o dinheiro"))
+  ) {
+    return "success";
+  }
+  if (
+    source.includes("devol") ||
+    source.includes("reembols") ||
+    source.includes("mediacao") ||
+    source.includes("atras")
+  ) {
+    return "warning";
+  }
+
+  return getOrderStatusType(row.status);
+}
+
 function getProviderBadge(provider: string) {
   const normalized = provider.trim().toLowerCase();
 
@@ -556,9 +589,18 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
     Number(shippingDisplayAmount) <= 0;
 
   const absShippingAmount = Math.abs(Number(shippingDisplayAmount ?? 0));
+  const shippingPending = composition.pendingFinancialFields?.includes(
+    "shippingOrFixedFeeAmount",
+  );
+  const taxPending = composition.pendingFinancialFields?.includes("taxAmount");
 
   return (
     <div className="space-y-4">
+      {composition.pendingFinancialFields?.length ? (
+        <div className="rounded-xl border border-warning/25 bg-warning/8 px-4 py-3 text-xs text-foreground">
+          Custo Fixo e Imposto serão preenchidos quando a conexão do Mercado Livre estiver disponível.
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <CompositionMetric
           icon={<DollarSign className="h-4 w-4" />}
@@ -585,9 +627,24 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
         />
         <CompositionMetric
           icon={<Truck className="h-4 w-4" />}
-          label="Frete / Taxa Fixa"
-          value={formatMoney(absShippingAmount.toString())}
-          negative={isShippingCost}
+          label={`Frete / Taxa Fixa${shippingPending ? " · pendente" : ""}`}
+          value={shippingPending ? "Pendente" : formatMoney(absShippingAmount.toString())}
+          negative={!shippingPending && isShippingCost}
+          details={
+            composition.shippingBreakdown
+              ? [
+                  {
+                    label: "Frete pago pelo comprador",
+                    value: composition.shippingBreakdown.buyerShippingPaymentAmount,
+                  },
+                  {
+                    label: "Tarifa bruta de envio",
+                    negative: true,
+                    value: composition.shippingBreakdown.grossShippingTariffAmount,
+                  },
+                ]
+              : undefined
+          }
         />
         <CompositionMetric
           icon={<Package className="h-4 w-4" />}
@@ -597,20 +654,20 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
         />
         <CompositionMetric
           icon={<Percent className="h-4 w-4" />}
-          label="Imposto"
-          negative
+          label={`Imposto${taxPending ? " · pendente" : ""}`}
+          negative={!taxPending}
           value={
-            <>
-              <span>{formatMoney(composition.taxAmount)}</span>
+            <span>
+              {taxPending ? "Pendente" : formatMoney(composition.taxAmount)}
               {(() => {
                 const rateLabel = formatTaxRate(composition.taxRateDefault);
-                return rateLabel ? (
+                return !taxPending && rateLabel ? (
                   <span className="text-sm font-medium text-muted-foreground">
                     ({rateLabel})
                   </span>
                 ) : null;
               })()}
-            </>
+            </span>
           }
         />
       </div>
@@ -1462,7 +1519,7 @@ export function OrdersHome() {
                       </td>
                       <td className="px-3 py-3 text-left">
                         <StatusBadge
-                          status={getOrderStatusType(row.status)}
+                          status={getOrderStatusTypeForRow(row)}
                           label={row.statusLabel}
                         />
                       </td>
@@ -1529,7 +1586,7 @@ export function OrdersHome() {
                   Venda #{detailQuery.data.order.displayOrderId}
                 </h2>
                 <StatusBadge
-                  status={getOrderStatusType(detailQuery.data.order.status)}
+                  status={getOrderStatusTypeForRow(detailQuery.data.order)}
                   label={detailQuery.data.order.statusLabel}
                 />
               </div>
@@ -1552,9 +1609,35 @@ export function OrdersHome() {
           </div>
         ) : (
           <div className="space-y-4">
+            {(() => {
+              const tags = detailQuery.data.tags ?? [];
+              const pendingFinancialFields =
+                detailQuery.data.pendingFinancialFields ??
+                detailQuery.data.composition.pendingFinancialFields ??
+                [];
+              return (
+                <>
             <div className="flex justify-center">
               <DetailTabs activeTab={detailTab} onChange={setDetailTab} />
             </div>
+
+            {(tags.length > 0 || pendingFinancialFields.length > 0) && (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-surface-strong/35 px-4 py-3">
+                {tags.map((tag) => (
+                  <Badge
+                    key={tag}
+                    className="border-warning/25 bg-warning/10 text-warning"
+                  >
+                    {tag}
+                  </Badge>
+                ))}
+                {pendingFinancialFields.length > 0 && (
+                  <span className="text-xs text-warning">
+                    Composição financeira parcialmente pendente
+                  </span>
+                )}
+              </div>
+            )}
 
             {detailTab === "composition" ? (
               <div className="space-y-4">
@@ -1658,6 +1741,9 @@ export function OrdersHome() {
                 </div>
               </div>
             )}
+                </>
+              );
+            })()}
           </div>
         )}
       </Modal>

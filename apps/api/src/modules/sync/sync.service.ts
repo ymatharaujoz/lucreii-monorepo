@@ -1536,9 +1536,19 @@ export class SyncService {
             ? existingOrder.metadata.compositionOverrides
             : null;
         if (existingCompositionOverrides) {
+          const compositionOverrides = {
+            ...existingCompositionOverrides,
+          } as Record<string, unknown>;
+          if (input.providerSlug === "mercadolivre") {
+            delete compositionOverrides.refundBonusAmount;
+            delete compositionOverrides.shippingOrFixedFeeAmount;
+          }
+          delete orderMetadata.compositionOverrides;
           orderMetadata = {
             ...orderMetadata,
-            compositionOverrides: existingCompositionOverrides,
+            ...(Object.keys(compositionOverrides).length > 0
+              ? { compositionOverrides }
+              : {}),
           };
         }
         const preserveConfirmedValue =
@@ -1630,6 +1640,22 @@ export class SyncService {
         )
           ? orderMetadata.refundBonusMovements
           : [];
+        if (input.providerSlug === "mercadolivre") {
+          await tx
+            .delete(mercadoLivreBillingMovements)
+            .where(
+              and(
+                eq(
+                  mercadoLivreBillingMovements.marketplaceConnectionId,
+                  input.connection.id,
+                ),
+                eq(
+                  mercadoLivreBillingMovements.externalOrderId,
+                  order.externalOrderId,
+                ),
+              ),
+            );
+        }
         for (const movement of refundBonusMovements) {
           if (!movement || typeof movement !== "object") {
             continue;

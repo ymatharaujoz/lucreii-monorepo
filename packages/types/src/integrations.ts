@@ -36,6 +36,29 @@ export type MarketplaceCatalogImportResult = {
   updated: number;
 };
 
+export type OrderImportTag = "ENVIO FLEX";
+
+export type OrderImportPendingFinancialField =
+  | "shippingOrFixedFeeAmount"
+  | "taxAmount";
+
+export type OrderImportRowError = {
+  row: number;
+  message: string;
+  saleId?: string | null;
+};
+
+export type OrderSpreadsheetImportResult = {
+  provider: IntegrationProviderSlug;
+  imported: number;
+  created: number;
+  updated: number;
+  pendingFlex: number;
+  totalRows: number;
+  validRows: number;
+  errors: OrderImportRowError[];
+};
+
 export type IntegrationConnectResponse = {
   authorizationUrl: string;
   provider: IntegrationProviderSlug;

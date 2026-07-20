@@ -8,10 +8,10 @@ interface LoadingIntegrationsProps {
 
 function MarketplaceCardSkeleton() {
   return (
-    <div className="flex flex-col rounded-[var(--radius-xl)] border border-border bg-surface p-6">
+    <div className="flex min-h-[236px] flex-col rounded-[var(--radius-2xl)] border border-border bg-surface p-5 shadow-[var(--shadow-xs)]">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Skeleton className="h-[72px] w-[72px] rounded-2xl" />
+          <Skeleton className="h-16 w-16 rounded-2xl" />
           <div className="space-y-2">
             <Skeleton className="h-5 w-32" />
             <Skeleton className="h-5 w-20 rounded-full" />
@@ -29,7 +29,7 @@ function MarketplaceCardSkeleton() {
 
 export function LoadingIntegrations({ cardCount = 2 }: LoadingIntegrationsProps) {
   return (
-    <div className="space-y-10">
+    <div className="space-y-12 pb-8 lg:space-y-16">
       {/* Header Skeleton */}
       <div className="space-y-4">
         <Skeleton className="h-10 w-64" />
@@ -40,7 +40,6 @@ export function LoadingIntegrations({ cardCount = 2 }: LoadingIntegrationsProps)
         </div>
       </div>
 
-      <div className="border-t border-border/60" />
 
       {/* Marketplaces Section Skeleton — Premium Layout */}
       <div className="space-y-6">
@@ -51,19 +50,18 @@ export function LoadingIntegrations({ cardCount = 2 }: LoadingIntegrationsProps)
             <Skeleton className="h-3.5 w-56" />
           </div>
         </div>
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: cardCount }).map((_, i) => (
             <MarketplaceCardSkeleton key={i} />
           ))}
         </div>
       </div>
 
-      <div className="border-t border-border/60" />
 
       {/* Sync Section Skeleton */}
       <div className="space-y-6">
         <div className="flex items-center gap-3">
-          <Skeleton className="h-10 w-10 rounded-xl" />
+          <Skeleton className="h-11 w-11 rounded-2xl" />
           <div className="space-y-1.5">
             <Skeleton className="h-5 w-40" />
             <Skeleton className="h-3.5 w-56" />

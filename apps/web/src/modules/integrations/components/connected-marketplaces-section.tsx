@@ -145,7 +145,7 @@ function MarketplaceIconRing({
 }) {
   return (
     <motion.div
-      className="relative flex h-[72px] w-[72px] items-center justify-center rounded-2xl"
+      className="relative flex h-16 w-16 items-center justify-center rounded-2xl"
       style={{
         backgroundColor: brandColor,
         boxShadow: isGlowing ? `0 0 32px ${glowColor}, 0 4px 16px ${glowColor}` : "none",
@@ -180,7 +180,7 @@ function ConnectionMetrics({
       variants={fadeInVariants}
       initial="hidden"
       animate="visible"
-      className="mt-5 space-y-3 border-t border-border/60 pt-4"
+      className="mt-6 space-y-3 border-t border-border/60 pt-4"
     >
       {accountLabel && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -253,11 +253,11 @@ function EmptyMarketplaceCard({ meta }: { meta: (typeof marketplaceMeta)[keyof t
       variants={itemVariants}
       whileHover={{ y: -3, boxShadow: "var(--shadow-lg)" }}
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative flex flex-col rounded-[var(--radius-xl)] border border-dashed border-border bg-surface-strong/40 p-6 transition-colors hover:border-border-strong hover:bg-surface-strong/60"
+      className="group relative flex min-h-[236px] flex-col rounded-[var(--radius-2xl)] border border-dashed border-border bg-surface-strong/40 p-5 transition-colors hover:border-border-strong hover:bg-surface-strong/60"
     >
       <div className="mb-5 flex items-center gap-4">
         <div
-          className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl opacity-70 transition-all group-hover:opacity-90"
+          className="flex h-16 w-16 items-center justify-center rounded-2xl opacity-70 transition-all group-hover:opacity-90"
           style={{ backgroundColor: meta.brandColor }}
         >
           {meta.icon}
@@ -328,20 +328,20 @@ export function ConnectedMarketplacesSection({
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-5">
       {/* Section Header */}
       <motion.div
         variants={fadeInVariants}
         initial="hidden"
         animate="visible"
-        className="flex items-start justify-between gap-4"
+        className="flex items-end justify-between gap-4"
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 shadow-[var(--shadow-xs)]">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-accent/10 shadow-[var(--shadow-xs)]">
             <Link2 className="h-5 w-5 text-accent" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <h2 className="text-lg font-semibold tracking-[-0.02em] text-foreground">
               Marketplaces Conectados
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -370,7 +370,7 @@ export function ConnectedMarketplacesSection({
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="grid gap-5 sm:grid-cols-2"
+          className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
         >
           {enrichedConnections.map((connection) => {
             const isConnecting = busyAction === "connect" && busyProvider === connection.provider;
@@ -396,12 +396,12 @@ export function ConnectedMarketplacesSection({
                   boxShadow: "var(--shadow-card)",
                   transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
                 }}
-                className={`group relative flex flex-col rounded-[var(--radius-xl)] border p-6 transition-colors ${statusConfig.cardBorder} ${statusConfig.cardBg} bg-surface hover:border-border-strong`}
+                className={`group relative flex min-h-[236px] flex-col rounded-[var(--radius-2xl)] border p-5 shadow-[var(--shadow-xs)] transition-all ${statusConfig.cardBorder} ${statusConfig.cardBg} bg-surface hover:border-border-strong hover:shadow-[var(--shadow-card)]`}
               >
                 {/* Subtle gradient overlay for connected state */}
                 {isConnected && (
                   <div
-                    className="pointer-events-none absolute inset-0 rounded-[var(--radius-xl)] opacity-30"
+                    className="pointer-events-none absolute inset-0 rounded-[var(--radius-2xl)] opacity-20"
                     style={{
                       background: `radial-gradient(ellipse 80% 60% at 50% 0%, ${connection.meta.brandColorSoft}, transparent)`,
                     }}

@@ -154,6 +154,58 @@ describe("createApiClient", () => {
     );
   });
 
+  it("notifies upload completion before the response resolves", async () => {
+    class FakeXMLHttpRequest {
+      readonly upload = {
+        onload: null as (() => void) | null,
+        onprogress: null as ((event: ProgressEvent) => void) | null,
+      };
+      onerror: (() => void) | null = null;
+      onload: (() => void) | null = null;
+      responseText = JSON.stringify({ data: { ok: true }, error: null });
+      status = 200;
+
+      open() {}
+      setRequestHeader() {}
+      getResponseHeader() {
+        return "application/json";
+      }
+      send() {
+        this.upload.onprogress?.({
+          lengthComputable: true,
+          loaded: 100,
+          total: 100,
+        } as ProgressEvent);
+        this.upload.onload?.();
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+
+    const originalXmlHttpRequest = globalThis.XMLHttpRequest;
+    globalThis.XMLHttpRequest =
+      FakeXMLHttpRequest as unknown as typeof XMLHttpRequest;
+    const progress: number[] = [];
+    const lifecycle: string[] = [];
+    const file = Object.assign(new Blob(["xlsx"]), { name: "vendas.xlsx" }) as File;
+
+    try {
+      const client = createApiClient({ baseUrl: "http://localhost:4000" });
+      await expect(
+        client.postMultipartWithProgress(
+          "/integrations/mercadolivre/orders/import",
+          file,
+          (value) => progress.push(value),
+          () => lifecycle.push("upload-complete"),
+        ),
+      ).resolves.toEqual({ data: { ok: true }, error: null });
+    } finally {
+      globalThis.XMLHttpRequest = originalXmlHttpRequest;
+    }
+
+    expect(progress).toEqual([50]);
+    expect(lifecycle).toEqual(["upload-complete"]);
+  });
+
   it("throws an ApiContractError when protected payload shape is invalid", async () => {
     const client = createApiClient({
       baseUrl: "http://localhost:4000",

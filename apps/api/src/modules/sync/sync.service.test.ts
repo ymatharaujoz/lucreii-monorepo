@@ -1144,7 +1144,13 @@ describe("SyncService", () => {
     Object.assign(db.query, {
       externalOrders: {
         findFirst: vi.fn().mockResolvedValue({
-          metadata: {},
+          metadata: {
+            compositionOverrides: {
+              packagingCostAmount: "5.00",
+              refundBonusAmount: "99.00",
+              shippingOrFixedFeeAmount: "88.00",
+            },
+          },
           refundBonusAmount: "8.90",
           refundBonusAttempts: 1,
           refundBonusMetadata: {},
@@ -1243,33 +1249,25 @@ describe("SyncService", () => {
                 },
               },
               {
-                amount: "10.80",
+                amount: "1.90",
                 currency: "BRL",
                 feeType: "refund_bonus",
                 metadata: {
                   componentAmounts: {
                     saleFeeRebate: "1.90",
-                    shippingDiscount: "8.90",
                   },
-                  movementKeys: [
-                    "sale_fee:2000016937064078",
-                    "shipping:47299177413",
-                  ],
+                  movementKeys: ["sale_fee:2000016937064078"],
                   source: "billing/integration/group/ML/order/details",
                 },
               },
             ],
             items: [],
             metadata: {
-              refundBonusAmount: "10.80",
+              refundBonusAmount: "1.90",
               refundBonusComponentAmounts: {
                 saleFeeRebate: "1.90",
-                shippingDiscount: "8.90",
               },
-              refundBonusMovementKeys: [
-                "sale_fee:2000016937064078",
-                "shipping:47299177413",
-              ],
+              refundBonusMovementKeys: ["sale_fee:2000016937064078"],
               refundBonusMovements: [
                 {
                   amount: 1.9,
@@ -1277,13 +1275,6 @@ describe("SyncService", () => {
                   key: "sale_fee:2000016937064078",
                   payload: null,
                   source: "billing/integration/group/ML/order/details",
-                },
-                {
-                  amount: 8.9,
-                  documentType: "BILL",
-                  key: "shipping:47299177413",
-                  payload: null,
-                  source: "shipment_costs.senders",
                 },
               ],
               refundBonusSource: "billing/integration/group/ML/order/details",
@@ -1302,15 +1293,20 @@ describe("SyncService", () => {
     expect(insertedOrder).toEqual(
       expect.objectContaining({
         externalOrderId: "2000016937064078",
-        refundBonusAmount: "10.80",
-        refundBonusCents: 1080,
+        refundBonusAmount: "1.90",
+        refundBonusCents: 190,
         refundBonusStatus: "RESOLVED",
       }),
     );
     expect(externalOrderConflictSet).toEqual(
       expect.objectContaining({
-        refundBonusAmount: "10.80",
-        refundBonusCents: 1080,
+        metadata: expect.objectContaining({
+          compositionOverrides: {
+            packagingCostAmount: "5.00",
+          },
+        }),
+        refundBonusAmount: "1.90",
+        refundBonusCents: 190,
         refundBonusStatus: "RESOLVED",
       }),
     );
@@ -1321,7 +1317,7 @@ describe("SyncService", () => {
           feeType: "marketplace_commission",
         }),
         expect.objectContaining({ amount: "6.65", feeType: "fixed_fee" }),
-        expect.objectContaining({ amount: "10.80", feeType: "refund_bonus" }),
+        expect.objectContaining({ amount: "1.90", feeType: "refund_bonus" }),
       ]),
     );
     expect(insertedFees).toHaveLength(3);
@@ -1330,7 +1326,7 @@ describe("SyncService", () => {
         expect.objectContaining({ feeType: "shipping_cost" }),
       ]),
     );
-    expect(db.delete).toHaveBeenCalledTimes(2);
+    expect(db.delete).toHaveBeenCalledTimes(3);
   });
 
   it("persists refund bonus financial adjustment fee metadata during upsert", async () => {

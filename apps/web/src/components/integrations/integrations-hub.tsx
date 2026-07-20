@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
-import { AlertCircle, Activity } from "lucide-react";
+import { useCallback, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Activity, AlertCircle, Sparkles } from "lucide-react";
 import { ApiClientError } from "@/lib/api/client";
 import { translateApiMessage } from "@/lib/pt-br/api-ui";
 import { containerVariants, fadeInVariants } from "@/lib/animations";
 import {
-  IntegrationsHeader,
   ConnectedMarketplacesSection,
-  SyncStatusGrid,
-  SyncControlCard,
-  LoadingIntegrations,
   ErrorState,
+  IntegrationsHeader,
+  LoadingIntegrations,
+  SpreadsheetImportCard,
+  SyncControlCard,
+  SyncStatusGrid,
   useIntegrationsData,
 } from "@/modules/integrations";
 import {
@@ -33,9 +34,8 @@ export function IntegrationsHub({
   initialStatus,
   organizationName,
 }: IntegrationsHubProps) {
-  const [syncProvider, setSyncProvider] =
-    useState<IntegrationProviderSlug>("mercadolivre");
-  // Estado de mensagens (vindas da URL ou ações do usuário)
+  const [syncProvider, setSyncProvider] = useState<IntegrationProviderSlug>("mercadolivre");
+  const [actionMode, setActionMode] = useState<"period" | "spreadsheet">("period");
   const [message, setMessage] = useState<string | null>(() => {
     if (!initialMessage) return null;
     const translated = translateApiMessage(initialMessage) || initialMessage;
@@ -45,37 +45,31 @@ export function IntegrationsHub({
   const [messageTone, setMessageTone] = useState<"critical" | "neutral">(
     initialStatus === "error" ? "critical" : "neutral",
   );
-
-  // Estados de ações em andamento
-  const [busyProvider, setBusyProvider] =
-    useState<IntegrationProviderSlug | null>(null);
-  const [busyAction, setBusyAction] = useState<"connect" | "disconnect" | null>(
-    null,
-  );
+  const [busyProvider, setBusyProvider] = useState<IntegrationProviderSlug | null>(null);
+  const [busyAction, setBusyAction] = useState<"connect" | "disconnect" | null>(null);
   const [manualSyncDates, setManualSyncDates] = useState({
     endDate: "",
     startDate: "",
   });
 
-  // Fetch de dados
   const {
     integrationsQuery,
     syncStatusQuery,
     connectMutation,
     disconnectMutation,
     syncMutation,
+    spreadsheetImport,
     refetchAll,
   } = useIntegrationsData(syncProvider, {
     onSyncSuccess: (data: RunSyncResponse) => {
-      const n = data.run.counts.orders;
+      const count = data.run.counts.orders;
       setMessage(
-        `Sincronização finalizada com ${n} pedido${n === 1 ? "" : "s"} importado${n === 1 ? "" : "s"}.`,
+        `Sincronização finalizada com ${count} pedido${count === 1 ? "" : "s"} importado${count === 1 ? "" : "s"}.`,
       );
       setMessageTone("neutral");
     },
   });
 
-  // Handlers de conexão/desconexão
   const handleConnect = useCallback(
     (provider: IntegrationProviderSlug) => {
       setBusyAction("connect");
@@ -111,7 +105,6 @@ export function IntegrationsHub({
     [disconnectMutation],
   );
 
-  // Handler de sincronização
   const handleSyncClick = useCallback(() => {
     setMessage(null);
 
@@ -147,9 +140,7 @@ export function IntegrationsHub({
         "provider_sync_unsupported",
       ]);
       setMessageTone(
-        criticalReasons.has(status.availability.reason)
-          ? "critical"
-          : "neutral",
+        criticalReasons.has(status.availability.reason) ? "critical" : "neutral",
       );
       return;
     }
@@ -164,7 +155,6 @@ export function IntegrationsHub({
     syncMutation.mutate(buildManualSyncPayload(syncProvider, manualSyncDates));
   }, [manualSyncDates, syncMutation, syncProvider, syncStatusQuery]);
 
-  // Estados de loading e erro
   if (integrationsQuery.isLoading) {
     return <LoadingIntegrations cardCount={1} />;
   }
@@ -176,11 +166,12 @@ export function IntegrationsHub({
   const displayMessage = message
     ? translateApiMessage(message) || message
     : null;
-  const activeConnection = integrationsQuery.data?.find(
-    (c) => c.provider === syncProvider,
-  );
+  const connections = integrationsQuery.data ?? [];
+  const activeConnection = connections.find((connection) => connection.provider === syncProvider);
   const isConnected = activeConnection?.status === "connected";
+  const connectedCount = connections.filter((connection) => connection.status === "connected").length;
   const lastCompletedRun = syncStatusQuery.data?.lastCompletedRun;
+  const lastActivityAt = activeConnection?.lastSyncedAt ?? lastCompletedRun?.finishedAt ?? null;
   const manualSyncValidation = validateManualSyncRange(manualSyncDates);
   const manualSyncBounds = getManualSyncDateBounds();
 
@@ -189,48 +180,46 @@ export function IntegrationsHub({
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="space-y-10"
+      className="space-y-12 pb-8 lg:space-y-16"
     >
-      {/* Banner de Mensagem */}
       {displayMessage && (
         <motion.div
           role="status"
           variants={fadeInVariants}
           initial="hidden"
           animate="visible"
-          className={
+          className={`flex items-start gap-3 rounded-2xl border px-4 py-3.5 shadow-[var(--shadow-xs)] ${
             messageTone === "critical"
-              ? "flex gap-3 rounded-[var(--radius-lg)] border border-error/20 bg-error-soft/80 px-4 py-3"
-              : "flex gap-3 rounded-[var(--radius-lg)] border border-success/20 bg-success-soft/80 px-4 py-3"
-          }
+              ? "border-error/20 bg-error-soft/80"
+              : "border-success/20 bg-success-soft/80"
+          }`}
         >
           <span
-            className={
-              messageTone === "critical"
-                ? "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-error/10"
-                : "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-success/10"
-            }
+            className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+              messageTone === "critical" ? "bg-error/10" : "bg-success/10"
+            }`}
           >
             <AlertCircle
-              className={`h-3 w-3 ${messageTone === "critical" ? "text-error" : "text-success"}`}
+              className={`h-3.5 w-3.5 ${
+                messageTone === "critical" ? "text-error" : "text-success"
+              }`}
+              aria-hidden
             />
           </span>
-          <p className="text-sm text-foreground">{displayMessage}</p>
+          <p className="text-sm leading-6 text-foreground">{displayMessage}</p>
         </motion.div>
       )}
 
-      {/* Cabeçalho da Página */}
       <IntegrationsHeader
         organizationName={organizationName}
         isConnected={isConnected}
+        connectedCount={connectedCount}
+        totalCount={connections.length}
+        lastActivityAt={lastActivityAt}
       />
 
-      {/* Divider */}
-      <div className="border-t border-border/60" />
-
-      {/* Seção 1: Marketplaces Conectados — Design Premium */}
       <ConnectedMarketplacesSection
-        connections={integrationsQuery.data ?? []}
+        connections={connections}
         isLoading={integrationsQuery.isLoading}
         isFetching={integrationsQuery.isFetching}
         busyProvider={busyProvider}
@@ -239,80 +228,192 @@ export function IntegrationsHub({
         onDisconnect={handleDisconnect}
       />
 
-      {/* Divider */}
-      <div className="border-t border-border/60" />
-
-      {/* Seção 2: Status da Sincronização */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Status da Sincronização
-          </h2>
-        </div>
-        <div className="flex w-fit rounded-lg border border-border bg-surface-strong p-1">
-          {(
-            [
-              ["mercadolivre", "Mercado Livre"],
-              ["shopee", "Shopee"],
-              ["shein", "Shein"],
-            ] as const
-          ).map(([provider, label]) => (
-            <button
-              key={provider}
-              type="button"
-              onClick={() => setSyncProvider(provider)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                syncProvider === provider
-                  ? "bg-accent text-white"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+      <section className="space-y-6" aria-labelledby="sync-workspace-heading">
+        <div className="space-y-5">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-accent">
+              <Sparkles className="h-4 w-4" aria-hidden />
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em]">
+                Deck operacional
+              </span>
+            </div>
+            <h2
+              id="sync-workspace-heading"
+              className="text-2xl font-semibold tracking-[-0.045em] text-foreground sm:text-3xl"
             >
-              {label}
-            </button>
-          ))}
-        </div>
-        <SyncStatusGrid
-          syncStatus={syncStatusQuery.data}
-          lastRun={lastCompletedRun ?? undefined}
-          isLoading={syncStatusQuery.isLoading}
-        />
-      </section>
-
-      {/* Divider */}
-      {isConnected && <div className="border-t border-border/60" />}
-
-      {/* Seção 3: Controle de Sincronização (apenas quando conectado) */}
-      {isConnected && (
-        <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Ações de Sincronização
+              Acompanhe. Decida. Sincronize.
             </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Consulte a saúde do canal selecionado e escolha uma ação sem sair do fluxo.
+            </p>
           </div>
-          <SyncControlCard
-            syncStatus={syncStatusQuery.data}
-            endDate={manualSyncDates.endDate}
-            isLoading={syncStatusQuery.isLoading}
-            isSyncing={syncMutation.isPending}
-            maxDate={manualSyncBounds.maxDate}
-            minDate={manualSyncBounds.minDate}
-            onEndDateChange={(value) =>
-              setManualSyncDates((current) => ({ ...current, endDate: value }))
-            }
-            onStartDateChange={(value) =>
-              setManualSyncDates((current) => ({
-                ...current,
-                startDate: value,
-              }))
-            }
-            onSyncClick={handleSyncClick}
-            rangeError={manualSyncValidation.error}
-            startDate={manualSyncDates.startDate}
-          />
-        </section>
-      )}
+
+          <div className="flex w-full max-w-xl overflow-x-auto rounded-2xl border border-border/80 bg-surface-strong/70 p-1 shadow-[var(--shadow-xs)] sm:w-fit">
+            {(
+              [
+                ["mercadolivre", "Mercado Livre"],
+                ["shopee", "Shopee"],
+                ["shein", "Shein"],
+              ] as const
+            ).map(([provider, label]) => {
+              const isActive = syncProvider === provider;
+              return (
+                <button
+                  key={provider}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => setSyncProvider(provider)}
+                  className="relative min-w-max rounded-xl px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:px-4"
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="provider-tab-indicator"
+                      className="absolute inset-0 rounded-xl bg-background shadow-[var(--shadow-sm)]"
+                      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                    />
+                  )}
+                  <span className={`relative z-10 ${isActive ? "text-foreground" : ""}`}>
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-10">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Activity className="h-4 w-4 text-accent" aria-hidden />
+                Status da sincronização
+              </div>
+              {syncStatusQuery.isLoading && (
+                <span className="text-xs text-muted-foreground">Atualizando status…</span>
+              )}
+            </div>
+            <SyncStatusGrid
+              syncStatus={syncStatusQuery.data}
+              lastRun={lastCompletedRun ?? undefined}
+              isLoading={syncStatusQuery.isLoading}
+              layout="compact"
+            />
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Activity className="h-4 w-4 text-accent" aria-hidden />
+                Ações de sincronização
+              </div>
+              <span className="text-xs text-muted-foreground">Escolha um método</span>
+            </div>
+
+            <div className="flex w-full max-w-md rounded-2xl border border-border/80 bg-surface-strong/70 p-1 shadow-[var(--shadow-xs)]">
+              {(
+                [
+                  ["period", "Por período"],
+                  ["spreadsheet", "Por planilha"],
+                ] as const
+              ).map(([mode, label]) => {
+                const isActive = actionMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setActionMode(mode)}
+                    className="relative flex-1 rounded-xl px-3 py-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
+                    {isActive && (
+                      <motion.span
+                        layoutId="action-mode-indicator"
+                        className="absolute inset-0 rounded-xl bg-background shadow-[var(--shadow-sm)]"
+                        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                      />
+                    )}
+                    <span className={`relative z-10 ${isActive ? "text-foreground" : ""}`}>
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <AnimatePresence mode="wait" initial={false}>
+              {actionMode === "period" ? (
+                <motion.div
+                  key="period"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  {isConnected ? (
+                    <SyncControlCard
+                      syncStatus={syncStatusQuery.data}
+                      endDate={manualSyncDates.endDate}
+                      isLoading={syncStatusQuery.isLoading}
+                      isSyncing={syncMutation.isPending}
+                      maxDate={manualSyncBounds.maxDate}
+                      minDate={manualSyncBounds.minDate}
+                      onEndDateChange={(value) =>
+                        setManualSyncDates((current) => ({ ...current, endDate: value }))
+                      }
+                      onStartDateChange={(value) =>
+                        setManualSyncDates((current) => ({
+                          ...current,
+                          startDate: value,
+                        }))
+                      }
+                      onSyncClick={handleSyncClick}
+                      rangeError={manualSyncValidation.error}
+                      startDate={manualSyncDates.startDate}
+                    />
+                  ) : (
+                    <div className="flex min-h-[220px] flex-col justify-between rounded-[var(--radius-xl)] border border-dashed border-border bg-surface-strong/35 p-5">
+                      <div>
+                        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted/15 text-muted-foreground">
+                          <Activity className="h-5 w-5" aria-hidden />
+                        </span>
+                        <h3 className="mt-5 text-base font-semibold tracking-tight text-foreground">
+                          Sincronização por período
+                        </h3>
+                        <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+                          Conecte o marketplace selecionado para escolher um intervalo e importar seus pedidos.
+                        </p>
+                      </div>
+                      <span className="mt-6 inline-flex w-fit items-center gap-2 text-xs font-semibold text-muted-foreground">
+                        Conexão necessária <span aria-hidden>→</span>
+                      </span>
+                    </div>
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="spreadsheet"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <SpreadsheetImportCard
+                    provider={syncProvider}
+                    file={spreadsheetImport.file}
+                    stage={spreadsheetImport.stage}
+                    progress={spreadsheetImport.progress}
+                    result={spreadsheetImport.result}
+                    error={spreadsheetImport.error}
+                    isPending={spreadsheetImport.isPending}
+                    onSelectFile={spreadsheetImport.selectFile}
+                    onImport={spreadsheetImport.import}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </section>
     </motion.div>
   );
 }

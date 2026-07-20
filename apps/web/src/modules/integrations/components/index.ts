@@ -6,3 +6,4 @@ export { SyncControlCard } from "./sync-control-card";
 export { ManualSyncRangeErrorBanner } from "./manual-sync-range-error-banner";
 export { LoadingIntegrations } from "./loading-integrations";
 export { ErrorState } from "./error-state";
+export { SpreadsheetImportCard } from "./spreadsheet-import-card";

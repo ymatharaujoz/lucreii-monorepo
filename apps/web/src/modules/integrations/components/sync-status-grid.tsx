@@ -12,14 +12,34 @@ interface SyncStatusGridProps {
   syncStatus?: SyncStatusResponse;
   lastRun?: SyncRunRecord;
   isLoading: boolean;
+  layout?: "cards" | "compact";
 }
 
-export function SyncStatusGrid({ syncStatus, lastRun, isLoading }: SyncStatusGridProps) {
+export function SyncStatusGrid({
+  syncStatus,
+  lastRun,
+  isLoading,
+  layout = "cards",
+}: SyncStatusGridProps) {
+  const isCompact = layout === "compact";
+
   if (isLoading || !syncStatus) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-3",
+          isCompact ? "sm:grid-cols-2" : "sm:grid-cols-3",
+        )}
+      >
         {[1, 2, 3].map((i) => (
-          <Card key={i} variant="outlined" className="p-5">
+          <Card
+            key={i}
+            variant="outlined"
+            className={cn(
+              "rounded-[var(--radius-xl)] p-5 shadow-[var(--shadow-xs)]",
+              isCompact && i === 1 && "sm:col-span-2",
+            )}
+          >
             <Skeleton className="h-4 w-4 rounded" />
             <Skeleton className="mt-3 h-6 w-24" />
             <Skeleton className="mt-2 h-3 w-full" />
@@ -81,7 +101,10 @@ export function SyncStatusGrid({ syncStatus, lastRun, isLoading }: SyncStatusGri
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+      className={cn(
+        "grid grid-cols-1 gap-3",
+        isCompact ? "sm:grid-cols-2" : "sm:grid-cols-3",
+      )}
     >
       {cards.map((card) => {
         const Icon = card.icon;
@@ -93,14 +116,17 @@ export function SyncStatusGrid({ syncStatus, lastRun, isLoading }: SyncStatusGri
               y: -3,
               transition: hoverTransition,
             }}
-            className="group"
+            className={cn(
+              "group",
+              isCompact && card.key === "status" && "sm:col-span-2",
+            )}
           >
             <Card
               variant="outlined"
               padding="none"
               className={cn(
-                "relative h-full overflow-hidden p-5 transition-all duration-[var(--transition-normal)] rounded-xl border border-border shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-md)]",
-                "bg-surface-elevated/40 backdrop-blur-xs",
+                "relative h-full overflow-hidden rounded-[var(--radius-xl)] border border-border bg-surface-elevated/65 shadow-[var(--shadow-xs)] backdrop-blur-xs transition-all duration-[var(--transition-normal)] hover:shadow-[var(--shadow-md)]",
+                isCompact ? "p-4" : "p-5",
                 card.key === "status" && !canRun && "border-error/15 bg-error-soft/3 hover:border-error/25",
                 card.key === "status" && canRun && "border-success/15 bg-success-soft/3 hover:border-success/25",
                 card.key === "last" && !lastSync && "border-warning/15 bg-warning-soft/3 hover:border-warning/25",

@@ -1,4 +1,8 @@
 import type { IntegrationProviderSlug } from "./integrations";
+import type {
+  OrderImportPendingFinancialField,
+  OrderImportTag,
+} from "./integrations";
 
 export type OrderCanonicalStatus =
   | "confirmed"
@@ -81,6 +85,7 @@ export type OrderListItem = {
   contributionMarginPercent: string | null;
   totalProfitAmount: string | null;
   itemsSold: number;
+  tags?: OrderImportTag[];
 };
 
 export type OrdersListResponse = {
@@ -139,12 +144,15 @@ export type OrderComposition = {
   hasIncompleteCostData: boolean;
   missingLinkedItemsCount: number;
   missingCostItemsCount: number;
+  pendingFinancialFields?: OrderImportPendingFinancialField[];
 };
 
 export type OrderDetails = {
   composition: OrderComposition;
   order: OrderListItem;
   items: OrderLineItem[];
+  pendingFinancialFields: OrderImportPendingFinancialField[];
+  tags: OrderImportTag[];
 };
 
 export type OrderCompositionUpdateInput = {

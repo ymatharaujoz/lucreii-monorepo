@@ -28,6 +28,9 @@ export type ApiClientConfig = {
   defaultHeaders?: HeadersInit;
 };
 
+export type UploadProgressHandler = (progress: number) => void;
+export type UploadCompletedHandler = () => void;
+
 function readSelectedCompanyIdFromBrowserCookie() {
   if (typeof document === "undefined") {
     return null;
@@ -145,6 +148,74 @@ export function createApiClient({
   }
 
   return {
+    postMultipartWithProgress<T>(
+      path: string,
+      file: File,
+      onProgress?: UploadProgressHandler,
+      onUploadComplete?: UploadCompletedHandler,
+    ): Promise<T> {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        let uploadCompleted = false;
+        const formData = new FormData();
+        formData.append("file", file, file.name);
+        xhr.open("POST", `${baseUrl}${normalizePath(path)}`);
+        xhr.withCredentials = credentials === "include";
+
+        const headers = new Headers(defaultHeaders);
+        const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
+        if (selectedCompanyId) {
+          headers.set("x-lucreii-company-id", selectedCompanyId);
+        }
+        headers.forEach((value, key) => xhr.setRequestHeader(key, value));
+
+        const notifyUploadComplete = () => {
+          if (uploadCompleted) {
+            return;
+          }
+          uploadCompleted = true;
+          onUploadComplete?.();
+        };
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.min(50, Math.round((event.loaded / event.total) * 50));
+            onProgress?.(progress);
+            if (event.loaded >= event.total) {
+              notifyUploadComplete();
+            }
+          }
+        };
+        xhr.upload.onload = notifyUploadComplete;
+        xhr.onerror = () => reject(new ApiClientError("Falha de conexão com a API.", { status: 0, payload: null }));
+        xhr.onload = async () => {
+          const contentType = xhr.getResponseHeader("content-type") ?? "";
+          let payload: unknown = null;
+          if (contentType.includes("application/json")) {
+            try {
+              payload = JSON.parse(xhr.responseText || "null");
+            } catch {
+              payload = null;
+            }
+          }
+          if (xhr.status < 200 || xhr.status >= 300) {
+            reject(
+              new ApiClientError(
+                extractApiErrorMessage(payload, `API request failed with status ${xhr.status}`),
+                { status: xhr.status, payload },
+              ),
+            );
+            return;
+          }
+          if (!uploadCompleted) {
+            onProgress?.(50);
+            notifyUploadComplete();
+          }
+          resolve(payload as T);
+        };
+        xhr.send(formData);
+      });
+    },
     async download(path: string, options?: Omit<ApiRequestOptions, "body">) {
       const response = await executeRequest("GET", path, options);
 
@@ -200,6 +271,19 @@ function getDefaultApiClient() {
 }
 
 export const apiClient = {
+  postMultipartWithProgress<T>(
+    path: string,
+    file: File,
+    onProgress?: UploadProgressHandler,
+    onUploadComplete?: UploadCompletedHandler,
+  ) {
+    return getDefaultApiClient().postMultipartWithProgress<T>(
+      path,
+      file,
+      onProgress,
+      onUploadComplete,
+    );
+  },
   download(path: string, options?: Omit<ApiRequestOptions, "body">) {
     return getDefaultApiClient().download(path, options);
   },

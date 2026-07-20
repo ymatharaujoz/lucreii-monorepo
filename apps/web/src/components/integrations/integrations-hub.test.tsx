@@ -104,11 +104,13 @@ describe("IntegrationsHub", () => {
       />,
     );
 
-    expect(markup).toContain("Integrações");
+    expect(markup).toContain("Tudo conectado.");
     expect(markup).toContain("Mercado Livre");
     expect(markup).toContain("Conectar");
     expect(markup).not.toContain("Mercado Livre conectado com sucesso.");
-    expect(markup).toContain("Status da Sincronização");
+    expect(markup).toContain("Status da sincronização");
+    expect(markup).toContain("Por planilha");
+    expect(markup).toContain("Conexão necessária");
     expect(markup).not.toContain("Histórico de Sincronizações");
   });
 

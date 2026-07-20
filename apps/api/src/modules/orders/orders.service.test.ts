@@ -50,9 +50,9 @@ describe("OrdersService", () => {
       expect.objectContaining({
         sellerCostAmount: 0,
         sellerMatched: true,
-        shippingBonusAmount: 8.9,
       }),
     );
+    expect(result).not.toHaveProperty("shippingBonusAmount");
   });
 
   it("backfills Mercado Livre sale id on order details when metadata is still missing", async () => {
@@ -2488,7 +2488,7 @@ describe("OrdersService", () => {
     );
   });
 
-  it("persists composition overrides and recalculates derived metrics", async () => {
+  it("ignores authoritative Mercado Livre overrides and recalculates derived metrics", async () => {
     const updateSetMock = vi.fn().mockReturnValue({
       where: vi.fn().mockReturnValue({
         returning: vi.fn().mockResolvedValue([
@@ -2665,8 +2665,6 @@ describe("OrdersService", () => {
             marketplaceCommissionAmount: "15.00",
             packagingCostAmount: "12.00",
             productCostAmount: "80.00",
-            refundBonusAmount: "5.00",
-            shippingOrFixedFeeAmount: "30.00",
           },
         }),
       }),
@@ -2676,15 +2674,15 @@ describe("OrdersService", () => {
         marketplaceCommissionAmount: "15.00",
         packagingCostAmount: "12.00",
         productCostAmount: "80.00",
-        refundBonusAmount: "5.00",
-        shippingOrFixedFeeAmount: "30.00",
+        refundBonusAmount: "0.00",
+        shippingOrFixedFeeAmount: "20.00",
         taxAmount: "24.00",
       }),
     );
     expect(result.order).toEqual(
       expect.objectContaining({
-        contributionMarginPercent: "22.00",
-        totalProfitAmount: "44.00",
+        contributionMarginPercent: "24.50",
+        totalProfitAmount: "49.00",
       }),
     );
   });
@@ -2815,28 +2813,116 @@ describe("OrdersService", () => {
         { label: "Pagamento aprovado", value: "paid" },
         { label: "Cancelado", value: "cancelled" },
       ]),
-        items: [
-          expect.objectContaining({
-            contributionMarginPercent: null,
-            fixedCostAmount: "3.00",
-            itemsSold: 3,
-            orderId: "MLB-1001",
-            shippingAmount: "20.00",
-            sourceStatus: "paid",
-            tariffAmount: "10.00",
-            status: "paid",
-            statusLabel: "Pagamento aprovado",
-            totalFees: "33.00",
-            totalProfitAmount: null,
-            totalWithFees: "200.00",
-            totalWithoutFees: "167.00",
-          }),
-        ],
+      items: [
+        expect.objectContaining({
+          contributionMarginPercent: null,
+          fixedCostAmount: "3.00",
+          itemsSold: 3,
+          orderId: "MLB-1001",
+          shippingAmount: "20.00",
+          sourceStatus: "paid",
+          tariffAmount: "10.00",
+          status: "paid",
+          statusLabel: "Pagamento aprovado",
+          totalFees: "33.00",
+          totalProfitAmount: null,
+          totalWithFees: "200.00",
+          totalWithoutFees: "167.00",
+        }),
+      ],
       page: 1,
       pageSize: 10,
       totalItems: 1,
       totalPages: 1,
     });
+  });
+
+  it("uses standard tax treatment with spreadsheet revenue and net commission", async () => {
+    const order = {
+      id: "order_row_spreadsheet",
+      companyId: "company_123",
+      createdAt: new Date("2026-06-14T20:15:00.000Z"),
+      currency: "BRL",
+      externalOrderId: "2000013480723293",
+      metadata: {
+        compositionOverrides: {
+          marketplaceCommissionAmount: "4.59",
+        },
+        importSource: "spreadsheet",
+        importedTaxAmount: "4.59",
+        spreadsheetImport: true,
+        spreadsheetProductRevenueAmount: "39.90",
+      },
+      orderedAt: new Date("2026-06-14T20:15:00.000Z"),
+      organizationId: "org_123",
+      provider: "mercadolivre",
+      status: "paid",
+      syncRunId: null,
+      updatedAt: new Date("2026-06-14T20:15:00.000Z"),
+      totalAmount: "37.56",
+      items: [],
+      fees: [
+        {
+          amount: "11.24",
+          feeType: "marketplace_commission",
+          id: "fee_commission_spreadsheet",
+          metadata: {},
+        },
+        {
+          amount: "6.65",
+          feeType: "fixed_fee",
+          id: "fee_fixed_spreadsheet",
+          metadata: {},
+        },
+      ],
+    };
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([order]),
+          findFirst: vi.fn().mockResolvedValue(order),
+        },
+      },
+    };
+    const service = new OrdersService(db as never);
+    const authContext = {
+      organizationId: "org_123",
+      selectedCompanyId: "company_123",
+      userId: "user_123",
+    };
+
+    const list = await service.listOrders(authContext, {
+      includeSummary: false,
+      page: 1,
+      pageSize: 10,
+    });
+    expect(list.items[0]).toEqual(
+      expect.objectContaining({
+        totalWithFees: "39.90",
+      }),
+    );
+
+    const details = await service.getOrderDetails(
+      authContext,
+      "order_row_spreadsheet",
+    );
+    expect(details.order.totalWithFees).toBe("39.90");
+    expect(details.composition).toEqual(
+      expect.objectContaining({
+        marketplaceCommissionAmount: "4.59",
+        revenueAmount: "39.90",
+        taxAmount: "3.99",
+      }),
+    );
   });
 
   it("returns order detail with products table rows", async () => {
@@ -2908,11 +2994,11 @@ describe("OrdersService", () => {
                   metadata: {
                     itemId: "MLB123",
                     variationId: "VAR1",
+                  },
+                  provider: "mercadolivre",
+                  sku: "SKU-1",
+                  title: "Cor: Azul",
                 },
-                provider: "mercadolivre",
-                sku: "SKU-1",
-                title: "Cor: Azul",
-              },
               },
               {
                 id: "item_2",
@@ -4094,10 +4180,14 @@ describe("OrdersService", () => {
     const countFromMock = vi.fn().mockReturnValue({ where: countWhereMock });
     const pageOffsetMock = vi
       .fn()
-      .mockResolvedValue([{ logicalGroupKey: "order_row_1", provider: "shopee" }]);
+      .mockResolvedValue([
+        { logicalGroupKey: "order_row_1", provider: "shopee" },
+      ]);
     const pageLimitMock = vi.fn().mockReturnValue({ offset: pageOffsetMock });
     const pageOrderByMock = vi.fn().mockReturnValue({ limit: pageLimitMock });
-    const pageGroupByMock = vi.fn().mockReturnValue({ orderBy: pageOrderByMock });
+    const pageGroupByMock = vi
+      .fn()
+      .mockReturnValue({ orderBy: pageOrderByMock });
     const pageWhereMock = vi.fn().mockReturnValue({ groupBy: pageGroupByMock });
     const pageFromMock = vi.fn().mockReturnValue({ where: pageWhereMock });
     const selectMock = vi
@@ -4171,51 +4261,51 @@ describe("OrdersService", () => {
     ]);
     const pageLimitMock = vi.fn().mockReturnValue({ offset: pageOffsetMock });
     const pageOrderByMock = vi.fn().mockReturnValue({ limit: pageLimitMock });
-    const pageGroupByMock = vi.fn().mockReturnValue({ orderBy: pageOrderByMock });
+    const pageGroupByMock = vi
+      .fn()
+      .mockReturnValue({ orderBy: pageOrderByMock });
     const pageWhereMock = vi.fn().mockReturnValue({ groupBy: pageGroupByMock });
     const pageFromMock = vi.fn().mockReturnValue({ where: pageWhereMock });
     const selectMock = vi
       .fn()
       .mockReturnValueOnce({ from: countFromMock })
       .mockReturnValueOnce({ from: pageFromMock });
-    const findManyMock = vi
-      .fn()
-      .mockResolvedValue([
-        {
-          id: "order_row_1",
-          companyId: "company_123",
-          createdAt: new Date("2026-06-22T18:10:00.000Z"),
-          currency: "BRL",
-          externalOrderId: "MLB-ORDER-1",
-          metadata: { operationId: "2000013650735359" },
-          orderedAt: new Date("2026-06-22T18:10:00.000Z"),
-          organizationId: "org_123",
-          provider: "mercadolivre",
-          status: "paid",
-          syncRunId: null,
-          updatedAt: new Date("2026-06-22T18:10:00.000Z"),
-          totalAmount: "37.92",
-          items: [],
-          fees: [],
-        },
-        {
-          id: "order_row_2",
-          companyId: "company_123",
-          createdAt: new Date("2026-06-22T18:10:00.000Z"),
-          currency: "BRL",
-          externalOrderId: "MLB-ORDER-2",
-          metadata: { operationId: "2000013650735359" },
-          orderedAt: new Date("2026-06-22T18:10:00.000Z"),
-          organizationId: "org_123",
-          provider: "mercadolivre",
-          status: "paid",
-          syncRunId: null,
-          updatedAt: new Date("2026-06-22T18:10:00.000Z"),
-          totalAmount: "37.92",
-          items: [],
-          fees: [],
-        },
-      ]);
+    const findManyMock = vi.fn().mockResolvedValue([
+      {
+        id: "order_row_1",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-1",
+        metadata: { operationId: "2000013650735359" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [],
+      },
+      {
+        id: "order_row_2",
+        companyId: "company_123",
+        createdAt: new Date("2026-06-22T18:10:00.000Z"),
+        currency: "BRL",
+        externalOrderId: "MLB-ORDER-2",
+        metadata: { operationId: "2000013650735359" },
+        orderedAt: new Date("2026-06-22T18:10:00.000Z"),
+        organizationId: "org_123",
+        provider: "mercadolivre",
+        status: "paid",
+        syncRunId: null,
+        updatedAt: new Date("2026-06-22T18:10:00.000Z"),
+        totalAmount: "37.92",
+        items: [],
+        fees: [],
+      },
+    ]);
     const db = {
       select: selectMock,
       query: {
@@ -4269,7 +4359,9 @@ describe("OrdersService", () => {
     ]);
     const pageLimitMock = vi.fn().mockReturnValue({ offset: pageOffsetMock });
     const pageOrderByMock = vi.fn().mockReturnValue({ limit: pageLimitMock });
-    const pageGroupByMock = vi.fn().mockReturnValue({ orderBy: pageOrderByMock });
+    const pageGroupByMock = vi
+      .fn()
+      .mockReturnValue({ orderBy: pageOrderByMock });
     const pageWhereMock = vi.fn().mockReturnValue({ groupBy: pageGroupByMock });
     const pageFromMock = vi.fn().mockReturnValue({ where: pageWhereMock });
     const selectMock = vi

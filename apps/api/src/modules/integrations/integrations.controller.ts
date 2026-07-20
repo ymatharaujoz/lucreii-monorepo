@@ -29,12 +29,15 @@ import {
   ShopeeNotificationDto,
 } from "./integrations.dto";
 import { IntegrationsService } from "./integrations.service";
+import { OrderSpreadsheetImportService } from "./order-spreadsheet-import.service";
 
 @Controller("integrations")
 export class IntegrationsController {
   constructor(
     @Inject(IntegrationsService)
     private readonly integrationsService: IntegrationsService,
+    @Inject(OrderSpreadsheetImportService)
+    private readonly orderSpreadsheetImportService: OrderSpreadsheetImportService,
   ) {}
 
   @Get()
@@ -81,6 +84,43 @@ export class IntegrationsController {
     );
 
     return reply.send();
+  }
+
+  @Post(":provider/orders/import")
+  @UseGuards(EntitlementGuard)
+  async importOrdersSpreadsheet(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Param() params: IntegrationProviderParamDto,
+    @Req() request: FastifyRequest,
+  ) {
+    const companyId = this.requireSelectedCompanyId(authContext);
+    if (params.provider !== "mercadolivre") {
+      throw new BadRequestException(
+        "Importação por planilha ainda está disponível somente para o Mercado Livre.",
+      );
+    }
+
+    const data = await request.file();
+    if (!data) {
+      throw new BadRequestException("Nenhum arquivo enviado.");
+    }
+
+    if (
+      !data.filename.toLowerCase().endsWith(".xlsx") ||
+      data.mimetype !==
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    ) {
+      throw new BadRequestException("Apenas arquivos .xlsx são aceitos.");
+    }
+
+    return {
+      data: await this.orderSpreadsheetImportService.importMercadoLivreOrders({
+        buffer: await data.toBuffer(),
+        companyId,
+        organizationId: authContext.organization!.id,
+      }),
+      error: null,
+    };
   }
 
   @Get("shopee/callback")
