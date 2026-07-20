@@ -31,3 +31,5 @@ turbo-lint.log*
 .DS_Store
 *.tsbuildinfo
 testsprite_tests\tmp\config.json
+
+.superpowers
