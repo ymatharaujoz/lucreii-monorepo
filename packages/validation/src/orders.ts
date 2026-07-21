@@ -40,6 +40,11 @@ const orderCanonicalStatusSchema = z.enum([
   "pending_cancel",
   "cancelled",
 ]);
+const orderImportTagSchema = z.literal("ENVIO FLEX");
+const orderImportPendingFinancialFieldSchema = z.enum([
+  "shippingOrFixedFeeAmount",
+  "taxAmount",
+]);
 
 export const orderListFiltersSchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
@@ -127,6 +132,7 @@ export const orderListItemSchema = z.object({
   ).nullable(),
   totalProfitAmount: decimalField("Total profit amount").nullable(),
   itemsSold: z.number().int().min(0),
+  tags: z.array(orderImportTagSchema).optional(),
 });
 
 export const ordersListSummarySchema = z.object({
@@ -187,12 +193,17 @@ export const orderCompositionSchema = z.object({
   hasIncompleteCostData: z.boolean(),
   missingLinkedItemsCount: z.number().int().min(0),
   missingCostItemsCount: z.number().int().min(0),
+  pendingFinancialFields: z
+    .array(orderImportPendingFinancialFieldSchema)
+    .optional(),
 });
 
 export const orderDetailsSchema = z.object({
   composition: orderCompositionSchema,
   order: orderListItemSchema,
   items: z.array(orderLineItemSchema),
+  pendingFinancialFields: z.array(orderImportPendingFinancialFieldSchema),
+  tags: z.array(orderImportTagSchema),
 });
 
 export const orderCompositionUpdateSchema = z.object({

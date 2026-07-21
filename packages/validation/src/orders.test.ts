@@ -70,6 +70,7 @@ describe("orders validation schemas", () => {
           missingLinkedItemsCount: 1,
           netRevenueAmount: "165.00",
           packagingCostAmount: "8.00",
+          pendingFinancialFields: ["taxAmount"],
           productCostAmount: "60.00",
           refundBonusAmount: "0.00",
           revenueAmount: "200.00",
@@ -117,7 +118,10 @@ describe("orders validation schemas", () => {
           totalProfitAmount: null,
           totalWithFees: "200.00",
           totalWithoutFees: "180.00",
+          tags: ["ENVIO FLEX"],
         },
+        pendingFinancialFields: ["taxAmount"],
+        tags: ["ENVIO FLEX"],
       },
       error: null,
     });
@@ -199,6 +203,8 @@ describe("orders validation schemas", () => {
           totalWithFees: "29.90",
           totalWithoutFees: "19.36",
         },
+        pendingFinancialFields: [],
+        tags: [],
       },
       error: null,
     });
