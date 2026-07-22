@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { read, utils, write } from "xlsx";
+import type { ProductPerformanceListItem } from "@lucreii/types";
 import { ProductsService } from "./products.service";
 import { listSyncedProductsReadModel } from "@/modules/integrations/synced-products.read-model";
 
@@ -4071,9 +4072,7 @@ describe("ProductsService", () => {
   it("deletes product after validating organization ownership", async () => {
     const { db, financeService, service } = createService();
 
-    db.query.products.findMany.mockResolvedValue([
-      buildCatalogProductRow(),
-    ]);
+    db.query.products.findMany.mockResolvedValue([buildCatalogProductRow()]);
     vi.mocked(listSyncedProductsReadModel).mockResolvedValueOnce([]);
     db.delete = vi.fn().mockReturnValue({
       where: vi.fn().mockResolvedValue(undefined),
@@ -5897,10 +5896,12 @@ describe("ProductsService", () => {
       ]),
     );
     expect(
-      response.items.find((item) => item.channelLabel === "mercadolivre")?.commissionPct,
+      response.items.find((item) => item.channelLabel === "mercadolivre")
+        ?.commissionPct,
     ).toBeCloseTo(16.666667, 5);
     expect(
-      response.items.find((item) => item.channelLabel === "mercadolivre")?.advertisingCost,
+      response.items.find((item) => item.channelLabel === "mercadolivre")
+        ?.advertisingCost,
     ).toBe(12);
   });
 
@@ -6340,5 +6341,98 @@ describe("ProductsService", () => {
       referenceMonth: expect.stringMatching(/^\d{4}-\d{2}-01$/),
       taxRateDefault: "0.120000",
     });
+  });
+
+  it("rolls up every visible performance row and packages each sold catalog product once", async () => {
+    const { service } = createService();
+    const buildRow = (
+      overrides: Partial<
+        Pick<
+          ProductPerformanceListItem,
+          "id" | "productId" | "packagingCost" | "sales" | "sellingPrice"
+        >
+      >,
+    ) =>
+      ({
+        id: "performance-row",
+        packagingCost: 0,
+        productId: "product_1",
+        sales: 0,
+        sellingPrice: 0,
+        ...overrides,
+      }) as ProductPerformanceListItem;
+    const rows = [
+      buildRow({
+        id: "p1-channel-a",
+        packagingCost: 4,
+        productId: "product_1",
+        sales: 2,
+        sellingPrice: 100,
+      }),
+      buildRow({
+        id: "p1-channel-b",
+        packagingCost: 4,
+        productId: "product_1",
+        sales: 1,
+        sellingPrice: 100,
+      }),
+      buildRow({
+        id: "p2-no-sales",
+        packagingCost: 9,
+        productId: "product_2",
+        sales: 0,
+        sellingPrice: 500,
+      }),
+      ...Array.from({ length: 11 }, (_, index) =>
+        buildRow({
+          id: `p${index + 3}`,
+          packagingCost: 1,
+          productId: `product_${index + 3}`,
+          sales: 1,
+          sellingPrice: 10,
+        }),
+      ),
+    ];
+    const listPerformanceRowsSpy = vi
+      .spyOn(service, "listPerformanceRows")
+      .mockResolvedValue({
+        items: rows,
+        page: 1,
+        pageSize: Number.MAX_SAFE_INTEGER,
+        totalItems: rows.length,
+        totalPages: 1,
+      });
+
+    await expect(
+      service.readMonthlyPerformanceMarginRollup(
+        {
+          organizationId: "org_1",
+          selectedCompanyId: "company_1",
+          userId: "user_1",
+        },
+        {
+          marketplaces: ["mercadolivre"],
+          referenceMonth: "2026-06-01",
+        },
+      ),
+    ).resolves.toEqual({
+      packagingTotal: "15.00",
+      pdvTotal: "310.00",
+      salesTotal: 14,
+    });
+
+    expect(listPerformanceRowsSpy).toHaveBeenCalledWith(
+      {
+        organizationId: "org_1",
+        selectedCompanyId: "company_1",
+        userId: "user_1",
+      },
+      {
+        marketplaces: ["mercadolivre"],
+        page: 1,
+        pageSize: Number.MAX_SAFE_INTEGER,
+        referenceMonth: "2026-06-01",
+      },
+    );
   });
 });

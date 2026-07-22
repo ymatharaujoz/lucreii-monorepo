@@ -187,6 +187,12 @@ type PerformanceSalesLookup = {
   bySku: Map<string, number>;
 };
 
+export type MonthlyPerformanceMarginRollup = {
+  packagingTotal: string;
+  pdvTotal: string;
+  salesTotal: number;
+};
+
 function toCatalogGroupKey(itemId: string) {
   return `mercadolivre:${itemId}`;
 }
@@ -239,6 +245,19 @@ function toNumber(value: string | undefined) {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseMoneyToCents(value: string | number | null | undefined) {
+  const parsed = typeof value === "number" ? value : Number(value ?? 0);
+  return BigInt(Math.round((Number.isFinite(parsed) ? parsed : 0) * 100));
+}
+
+function formatCents(value: bigint) {
+  const sign = value < 0n ? "-" : "";
+  const absolute = value < 0n ? value * -1n : value;
+  const whole = absolute / 100n;
+  const cents = absolute % 100n;
+  return `${sign}${whole.toString()}.${cents.toString().padStart(2, "0")}`;
 }
 
 function toDecimalString(value: number, fractionDigits = 2) {
@@ -490,8 +509,10 @@ function countCompletedPerformanceFields(row: ProductPerformanceRow) {
     row.shippingUnit,
     row.fixedFeeUnit,
     row.marketplaceCommissionUnit,
-  ].filter((value) => value !== null && value !== undefined && String(value).trim() !== "")
-    .length;
+  ].filter(
+    (value) =>
+      value !== null && value !== undefined && String(value).trim() !== "",
+  ).length;
 }
 
 function pickPreferredPerformanceRow(
@@ -605,7 +626,10 @@ function buildPerformanceCatalogLookup(
 }
 
 function resolveNetLiquidSalesFromPerformanceRow(
-  row: Pick<ProductMonthlyPerformanceDisplayRow, "salesQuantity" | "returnsQuantity">,
+  row: Pick<
+    ProductMonthlyPerformanceDisplayRow,
+    "salesQuantity" | "returnsQuantity"
+  >,
 ) {
   const sales = Math.max(0, row.salesQuantity);
   return Math.max(0, sales - Math.min(Math.max(0, row.returnsQuantity), sales));
@@ -626,8 +650,9 @@ function derivePerformanceFinancials(
   const unitCost = toNumber(row.unitCost);
   const advertising = toNumber(row.advertisingCost);
   const marketplaceCommissionUnit =
-    toNumber(row.marketplaceCommissionUnit ?? row.marketplaceCommission ?? "0") ||
-    commissionRate * sellingPrice;
+    toNumber(
+      row.marketplaceCommissionUnit ?? row.marketplaceCommission ?? "0",
+    ) || commissionRate * sellingPrice;
 
   const revenue = sellingPrice * netLiquidSales;
   const totalCommission =
@@ -637,12 +662,12 @@ function derivePerformanceFinancials(
   const totalPackagingCost = packagingCost * netLiquidSales;
   const totalProductCost = unitCost * netLiquidSales;
   const totalProfit =
-    revenue
-    - totalCommission
-    - totalShippingOrFixedFee
-    - totalTax
-    - totalPackagingCost
-    - totalProductCost;
+    revenue -
+    totalCommission -
+    totalShippingOrFixedFee -
+    totalTax -
+    totalPackagingCost -
+    totalProductCost;
   const unitProfit = netLiquidSales > 0 ? totalProfit / netLiquidSales : null;
   const contributionMarginRatio =
     netLiquidSales > 0 && sellingPrice > 0
@@ -998,14 +1023,14 @@ export class ProductsService {
       productsList,
       syncedProducts,
     );
-    const flattenedProducts = 
-      this.flattenCatalogProductsForExport(groupedProducts); 
+    const flattenedProducts =
+      this.flattenCatalogProductsForExport(groupedProducts);
     const selectedIds = new Set(normalizedFilters.ids ?? []);
-    const search = normalizedFilters.search?.toLowerCase().trim() ?? ""; 
-    const marketplaces = normalizedFilters.marketplaces ?? []; 
- 
-    const rows = flattenedProducts 
-      .filter(({ exportName, product }) => { 
+    const search = normalizedFilters.search?.toLowerCase().trim() ?? "";
+    const marketplaces = normalizedFilters.marketplaces ?? [];
+
+    const rows = flattenedProducts
+      .filter(({ exportName, product }) => {
         if (product.isSyntheticParent) {
           return false;
         }
@@ -1014,9 +1039,9 @@ export class ProductsService {
           return false;
         }
 
-        if (search.length > 0) { 
-          const matchesSearch = 
-            exportName.toLowerCase().includes(search) || 
+        if (search.length > 0) {
+          const matchesSearch =
+            exportName.toLowerCase().includes(search) ||
             (product.sku?.toLowerCase().includes(search) ?? false);
 
           if (!matchesSearch) {
@@ -1101,9 +1126,9 @@ export class ProductsService {
     };
   }
 
-  private flattenCatalogProductsForExport( 
-    products: ProductListItem[], 
-  ): FlattenedCatalogExportProduct[] { 
+  private flattenCatalogProductsForExport(
+    products: ProductListItem[],
+  ): FlattenedCatalogExportProduct[] {
     return products.flatMap((product) => {
       const rows: FlattenedCatalogExportProduct[] = [
         {
@@ -1123,9 +1148,9 @@ export class ProductsService {
         }
       }
 
-      return rows; 
-    }); 
-  } 
+      return rows;
+    });
+  }
 
   private async importNewProductsFromSpreadsheet(
     scopedContext: Awaited<
@@ -1614,16 +1639,21 @@ export class ProductsService {
       normalizeComparableSku(existingProduct.sku) !==
         normalizeComparableSku(updated.sku)
     ) {
-      const linkedExternalProducts = await this.db.query.externalProducts.findMany({
-        where: (table) =>
-          and(
-            eq(table.organizationId, organizationId),
-            eq(table.companyId, scopedContext.companyId),
-            eq(table.linkedProductId, productId),
-          ),
-      });
+      const linkedExternalProducts =
+        await this.db.query.externalProducts.findMany({
+          where: (table) =>
+            and(
+              eq(table.organizationId, organizationId),
+              eq(table.companyId, scopedContext.companyId),
+              eq(table.linkedProductId, productId),
+            ),
+        });
       const linkedProviders = [
-        ...new Set(linkedExternalProducts.map((row) => row.provider as IntegrationProviderSlug)),
+        ...new Set(
+          linkedExternalProducts.map(
+            (row) => row.provider as IntegrationProviderSlug,
+          ),
+        ),
       ];
 
       for (const providerSlug of linkedProviders) {
@@ -1663,10 +1693,10 @@ export class ProductsService {
     );
   }
 
-  async deleteProduct( 
-    contextOrOrganizationId: TenantContext | string, 
-    productId: string, 
-  ): Promise<{ id: string }> { 
+  async deleteProduct(
+    contextOrOrganizationId: TenantContext | string,
+    productId: string,
+  ): Promise<{ id: string }> {
     const scopedContext = this.isTenantContext(contextOrOrganizationId)
       ? await this.requireScopedCompanyContext(contextOrOrganizationId)
       : null;
@@ -1701,15 +1731,17 @@ export class ProductsService {
       );
     }
 
-    return { id: productId }; 
-  } 
+    return { id: productId };
+  }
 
   async deleteProductsBulk(
     context: TenantContext,
     productIds: string[],
   ): Promise<{ ids: string[]; totalDeleted: number }> {
     const scopedContext = await this.requireScopedCompanyContext(context);
-    const normalizedIds = [...new Set(productIds.map((id) => id.trim()).filter(Boolean))];
+    const normalizedIds = [
+      ...new Set(productIds.map((id) => id.trim()).filter(Boolean)),
+    ];
 
     if (normalizedIds.length === 0) {
       throw new BadRequestException("Selecione ao menos um produto.");
@@ -1749,7 +1781,9 @@ export class ProductsService {
     contextOrOrganizationId: TenantContext | string,
     selectedProductIds: string[],
   ): Promise<string[]> {
-    const normalizedIds = [...new Set(selectedProductIds.map((id) => id.trim()).filter(Boolean))];
+    const normalizedIds = [
+      ...new Set(selectedProductIds.map((id) => id.trim()).filter(Boolean)),
+    ];
 
     if (normalizedIds.length === 0) {
       throw new BadRequestException("Selecione ao menos um produto.");
@@ -1761,7 +1795,9 @@ export class ProductsService {
     const organizationId = this.isTenantContext(contextOrOrganizationId)
       ? contextOrOrganizationId.organizationId
       : contextOrOrganizationId;
-    const productsList = await this.listProducts(scopedContext ?? organizationId);
+    const productsList = await this.listProducts(
+      scopedContext ?? organizationId,
+    );
     const syncedProducts = await listSyncedProductsReadModel({
       companyId: scopedContext?.companyId,
       db: this.db,
@@ -1779,7 +1815,10 @@ export class ProductsService {
       })),
       providerSlug: "mercadolivre",
     });
-    const groupedProducts = this.buildCatalogProducts(productsList, syncedProducts);
+    const groupedProducts = this.buildCatalogProducts(
+      productsList,
+      syncedProducts,
+    );
     const productById = new Map<string, ProductListItem>();
     const registerProduct = (product: ProductListItem) => {
       productById.set(product.id, product);
@@ -1821,10 +1860,10 @@ export class ProductsService {
 
     return [...targetProductIds];
   }
- 
-  async listProductCosts( 
-    contextOrOrganizationId: TenantContext | string, 
-  ): Promise<ProductCostRecord[]> { 
+
+  async listProductCosts(
+    contextOrOrganizationId: TenantContext | string,
+  ): Promise<ProductCostRecord[]> {
     const scopedContext = this.isTenantContext(contextOrOrganizationId)
       ? await this.requireScopedCompanyContext(contextOrOrganizationId)
       : null;
@@ -2404,41 +2443,47 @@ export class ProductsService {
       orders: [],
       products: [],
     };
-    const [productsList, monthlyPerformanceRows, syncedProducts, financeSnapshot, externalOrderRows] =
-      await Promise.all([
-        this.listProducts(scopedContext ?? context.organizationId),
-        this.readMonthlyPerformanceForAnalytics(context, scope),
-        Promise.all(
-          (["mercadolivre", "shopee", "shein"] as const).map((providerSlug) =>
-            listSyncedProductsReadModel({
-              companyId: scope.companyId ?? undefined,
-              db: this.db,
-              organizationId: context.organizationId,
-              productsList: rawProductRows,
-              providerSlug,
-            }),
-          ),
-        ).then((result) => result.flat()),
-        scopedContext
-          ? this.financeService.buildFinanceSnapshot(
-              context.organizationId,
-              scopedContext.companyId,
-            )
-          : Promise.resolve(emptyFinanceSnapshot),
-        scopedContext
-          ? this.db.query.externalOrders.findMany({
-              where: (table) =>
-                and(
-                  eq(table.organizationId, context.organizationId),
-                  eq(table.companyId, scopedContext.companyId),
-                ),
-              with: {
-                items: true,
-              },
-            })
-          : Promise.resolve([]),
-      ]);
-    const performanceCatalogLookup = buildPerformanceCatalogLookup(productsList);
+    const [
+      productsList,
+      monthlyPerformanceRows,
+      syncedProducts,
+      financeSnapshot,
+      externalOrderRows,
+    ] = await Promise.all([
+      this.listProducts(scopedContext ?? context.organizationId),
+      this.readMonthlyPerformanceForAnalytics(context, scope),
+      Promise.all(
+        (["mercadolivre", "shopee", "shein"] as const).map((providerSlug) =>
+          listSyncedProductsReadModel({
+            companyId: scope.companyId ?? undefined,
+            db: this.db,
+            organizationId: context.organizationId,
+            productsList: rawProductRows,
+            providerSlug,
+          }),
+        ),
+      ).then((result) => result.flat()),
+      scopedContext
+        ? this.financeService.buildFinanceSnapshot(
+            context.organizationId,
+            scopedContext.companyId,
+          )
+        : Promise.resolve(emptyFinanceSnapshot),
+      scopedContext
+        ? this.db.query.externalOrders.findMany({
+            where: (table) =>
+              and(
+                eq(table.organizationId, context.organizationId),
+                eq(table.companyId, scopedContext.companyId),
+              ),
+            with: {
+              items: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+    const performanceCatalogLookup =
+      buildPerformanceCatalogLookup(productsList);
     const syncedProductUnitLookup =
       buildSyncedProductUnitCompositionLookup(syncedProducts);
     const monthlyPerformanceDisplayRows = monthlyPerformanceRows.map((row) =>
@@ -2448,12 +2493,12 @@ export class ProductsService {
         syncedProductUnitLookup,
       ),
     );
-    const catalogProducts = this.buildCatalogProducts(productsList, syncedProducts);
+    const catalogProducts = this.buildCatalogProducts(
+      productsList,
+      syncedProducts,
+    );
     const performanceRows = this.deduplicatePerformanceRows(
-      this.buildPerformanceRows(
-        catalogProducts,
-        monthlyPerformanceDisplayRows,
-      ),
+      this.buildPerformanceRows(catalogProducts, monthlyPerformanceDisplayRows),
     );
     const eligibleOrderIds = new Set(
       externalOrderRows
@@ -2478,7 +2523,10 @@ export class ProductsService {
     const marketplaces = new Set(query.marketplaces ?? []);
     const searchNeedle = normalizePerformanceSortText(query.search);
     const filteredRows = visibleRows.filter((row) => {
-      if (marketplaces.size > 0 && !marketplaces.has(row.channelLabel as never)) {
+      if (
+        marketplaces.size > 0 &&
+        !marketplaces.has(row.channelLabel as never)
+      ) {
         return false;
       }
 
@@ -2498,11 +2546,16 @@ export class ProductsService {
     const sortedRows = [...filteredRows].sort((left, right) =>
       this.compareVisiblePerformanceRows(left, right, sortBy, sortDirection),
     );
-    const pageSize = Number.isFinite(query.pageSize) ? Math.trunc(query.pageSize ?? 10) : 10;
+    const pageSize = Number.isFinite(query.pageSize)
+      ? Math.trunc(query.pageSize ?? 10)
+      : 10;
     const totalItems = sortedRows.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const safePage = Math.min(
-      Math.max(1, Number.isFinite(query.page) ? Math.trunc(query.page ?? 1) : 1),
+      Math.max(
+        1,
+        Number.isFinite(query.page) ? Math.trunc(query.page ?? 1) : 1,
+      ),
       totalPages,
     );
     const start = (safePage - 1) * pageSize;
@@ -2513,6 +2566,46 @@ export class ProductsService {
       pageSize,
       totalItems,
       totalPages,
+    };
+  }
+
+  async readMonthlyPerformanceMarginRollup(
+    context: TenantContext,
+    query: {
+      marketplaces?: ProductPerformanceListQuery["marketplaces"];
+      referenceMonth: string;
+    },
+  ): Promise<MonthlyPerformanceMarginRollup> {
+    const response = await this.listPerformanceRows(context, {
+      marketplaces: query.marketplaces,
+      page: 1,
+      pageSize: Number.MAX_SAFE_INTEGER,
+      referenceMonth: query.referenceMonth,
+    });
+    const packagedProductIds = new Set<string>();
+    let salesTotal = 0;
+    let pdvTotalCents = 0n;
+    let packagingTotalCents = 0n;
+
+    for (const row of response.items) {
+      const sales = Number.isFinite(row.sales) ? Math.trunc(row.sales) : 0;
+      if (sales <= 0) {
+        continue;
+      }
+
+      salesTotal += sales;
+      pdvTotalCents += parseMoneyToCents(row.sellingPrice);
+
+      if (row.productId && !packagedProductIds.has(row.productId)) {
+        packagedProductIds.add(row.productId);
+        packagingTotalCents += parseMoneyToCents(row.packagingCost);
+      }
+    }
+
+    return {
+      packagingTotal: formatCents(packagingTotalCents),
+      pdvTotal: formatCents(pdvTotalCents),
+      salesTotal,
     };
   }
 
@@ -2543,32 +2636,41 @@ export class ProductsService {
       },
     ): ProductPerformanceListItem => {
       const product =
-        (row.productId ? byId.get(row.productId) ?? null : null) ??
+        (row.productId ? (byId.get(row.productId) ?? null) : null) ??
         bySku.get(normalizeComparableSku(row.sku) ?? "") ??
         null;
-      const financials = derivePerformanceFinancials(row, effectiveTaxRateDefault);
+      const financials = derivePerformanceFinancials(
+        row,
+        effectiveTaxRateDefault,
+      );
       const displayName =
-        overrides?.displayName ?? product?.name?.trim() ?? row.productName.trim();
+        overrides?.displayName ??
+        product?.name?.trim() ??
+        row.productName.trim();
       const name = overrides?.name ?? displayName;
       const variationLabel =
-        overrides?.variationLabel ?? product?.variationLabel ?? row.variationLabel ?? null;
+        overrides?.variationLabel ??
+        product?.variationLabel ??
+        row.variationLabel ??
+        null;
       const normalizedSku = normalizeComparableSku(row.sku);
       const salesCountByProductId = row.productId
-        ? salesLookup.byProductId.get(
+        ? (salesLookup.byProductId.get(
             `${row.referenceMonth}::${row.channel}::${row.productId}`,
-          ) ?? null
+          ) ?? null)
         : null;
       const salesCountBySku = normalizedSku
-        ? salesLookup.bySku.get(
+        ? (salesLookup.bySku.get(
             `${row.referenceMonth}::${row.channel}::${normalizedSku}`,
-          ) ?? 0
+          ) ?? 0)
         : 0;
 
       return {
         ...financials,
         adSpend: toNumber(row.advertisingCost),
         advertisingCost: toNumber(row.advertisingCost),
-        catalogGroupKey: product?.catalogGroupKey ?? row.catalogGroupKey ?? null,
+        catalogGroupKey:
+          product?.catalogGroupKey ?? row.catalogGroupKey ?? null,
         catalogRole: row.catalogRole,
         channelLabel: row.channel,
         children: [],
@@ -2581,13 +2683,15 @@ export class ProductsService {
         fixedFeeUnit: row.fixedFeeUnit ? toNumber(row.fixedFeeUnit) : undefined,
         id: row.productId ?? row.id,
         isActive: product?.isActive ?? true,
-        isSyntheticParent: row.isSyntheticParent ?? Boolean(product?.isSyntheticParent),
+        isSyntheticParent:
+          row.isSyntheticParent ?? Boolean(product?.isSyntheticParent),
         marketplaceCommissionUnit: row.marketplaceCommissionUnit
           ? toNumber(row.marketplaceCommissionUnit)
           : undefined,
         name,
         packagingCost: toNumber(row.packagingCost),
-        parentProductId: product?.parentProductId ?? row.parentProductId ?? null,
+        parentProductId:
+          product?.parentProductId ?? row.parentProductId ?? null,
         performanceId: row.id,
         productId: row.productId ?? product?.id ?? null,
         referenceMonth: row.referenceMonth,
@@ -2652,37 +2756,37 @@ export class ProductsService {
         return group.canonicalRow;
       }
 
-      const totals = group.rows.reduce(
-        (accumulator, currentRow) => {
-          const netSales = resolveNetSales(currentRow);
-          const salePrice = toNumber(currentRow.salePrice);
-          const revenue = salePrice * netSales;
-          const marketplaceCommissionUnit =
-            toNumber(
-              currentRow.marketplaceCommissionUnit ??
-                currentRow.marketplaceCommission,
-            ) || toNumber(currentRow.commissionRate) * salePrice;
+      const totals = group.rows.reduce((accumulator, currentRow) => {
+        const netSales = resolveNetSales(currentRow);
+        const salePrice = toNumber(currentRow.salePrice);
+        const revenue = salePrice * netSales;
+        const marketplaceCommissionUnit =
+          toNumber(
+            currentRow.marketplaceCommissionUnit ??
+              currentRow.marketplaceCommission,
+          ) || toNumber(currentRow.commissionRate) * salePrice;
 
-          accumulator.advertisingCostTotal += toNumber(
-            currentRow.advertisingCost,
-          );
-          accumulator.fixedFeeTotal += toNumber(currentRow.fixedFeeUnit) * netSales;
-          accumulator.marketplaceCommissionTotal +=
-            marketplaceCommissionUnit * netSales;
-          accumulator.netSalesTotal += netSales;
-          accumulator.returnsQuantity += currentRow.returnsQuantity;
-          accumulator.revenueTotal += revenue;
-          accumulator.salesQuantity += currentRow.salesQuantity;
-          accumulator.shippingFeeTotal += toNumber(currentRow.shippingFee) * netSales;
-          accumulator.shippingOrFixedFeeTotal +=
-            toNumber(currentRow.shippingOrFixedFeeUnit ?? currentRow.shippingFee) *
-            netSales;
-          accumulator.unitCostTotal += toNumber(currentRow.unitCost) * netSales;
+        accumulator.advertisingCostTotal += toNumber(
+          currentRow.advertisingCost,
+        );
+        accumulator.fixedFeeTotal +=
+          toNumber(currentRow.fixedFeeUnit) * netSales;
+        accumulator.marketplaceCommissionTotal +=
+          marketplaceCommissionUnit * netSales;
+        accumulator.netSalesTotal += netSales;
+        accumulator.returnsQuantity += currentRow.returnsQuantity;
+        accumulator.revenueTotal += revenue;
+        accumulator.salesQuantity += currentRow.salesQuantity;
+        accumulator.shippingFeeTotal +=
+          toNumber(currentRow.shippingFee) * netSales;
+        accumulator.shippingOrFixedFeeTotal +=
+          toNumber(
+            currentRow.shippingOrFixedFeeUnit ?? currentRow.shippingFee,
+          ) * netSales;
+        accumulator.unitCostTotal += toNumber(currentRow.unitCost) * netSales;
 
-          return accumulator;
-        },
-        createEmptyAccumulator(),
-      );
+        return accumulator;
+      }, createEmptyAccumulator());
       const canonicalRow = group.canonicalRow;
 
       if (totals.netSalesTotal <= 0 || totals.revenueTotal <= 0) {
@@ -2714,7 +2818,9 @@ export class ProductsService {
           6,
         ),
         fixedFeeUnit: toDecimalString(weightedFixedFeeUnit),
-        marketplaceCommission: toDecimalString(weightedMarketplaceCommissionUnit),
+        marketplaceCommission: toDecimalString(
+          weightedMarketplaceCommissionUnit,
+        ),
         marketplaceCommissionUnit: toDecimalString(
           weightedMarketplaceCommissionUnit,
         ),
@@ -2742,7 +2848,10 @@ export class ProductsService {
     const rightVariation = normalizePerformanceSortText(right.variationLabel);
     const leftParent = normalizePerformanceSortText(left.name);
     const rightParent = normalizePerformanceSortText(right.name);
-    const compareNumber = (a: number | null | undefined, b: number | null | undefined) => {
+    const compareNumber = (
+      a: number | null | undefined,
+      b: number | null | undefined,
+    ) => {
       const safeA = a ?? Number.NEGATIVE_INFINITY;
       const safeB = b ?? Number.NEGATIVE_INFINITY;
       return safeA === safeB ? 0 : safeA > safeB ? 1 : -1;
@@ -2797,7 +2906,10 @@ export class ProductsService {
       return fallbackParent;
     }
 
-    return compareText(normalizePerformanceSortText(left.sku), normalizePerformanceSortText(right.sku));
+    return compareText(
+      normalizePerformanceSortText(left.sku),
+      normalizePerformanceSortText(right.sku),
+    );
   }
 
   private buildAnalyticsCatalogStats(input: {
@@ -3592,7 +3704,10 @@ export class ProductsService {
 
     for (const [itemId, entries] of groupedEntries.entries()) {
       const parentEntry = entries.find((entry) => !entry.isVariation) ?? null;
-      const variationEntriesByProductId = new Map<string, (typeof entries)[number]>();
+      const variationEntriesByProductId = new Map<
+        string,
+        (typeof entries)[number]
+      >();
 
       for (const entry of entries) {
         if (!entry.productId || !entry.isVariation) {

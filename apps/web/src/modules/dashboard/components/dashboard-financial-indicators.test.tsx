@@ -129,7 +129,7 @@ describe("DashboardFinancialIndicators", () => {
     const ordersSummary: OrdersListSummary = {
       averageMargin: "0.2263",
       grossProfit: "999",
-      grossRevenue: "999",
+      grossRevenue: "25362.82",
       marginRevenue: "894.48",
       totalProfit: "202.51",
       ordersCount: 1,
@@ -147,6 +147,7 @@ describe("DashboardFinancialIndicators", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("Margem M");
     expect(text).toContain("4.42%");
+    expect(text).toContain("25.362,82");
     expect(text).toContain("202,51");
 
     view.unmount();
@@ -167,7 +168,10 @@ describe("DashboardFinancialIndicators", () => {
       <DashboardFinancialIndicators
         activeCompany={company}
         data={
-          { channels: [], products: [] } as unknown as DashboardProfitabilityResponse
+          {
+            channels: [],
+            products: [],
+          } as unknown as DashboardProfitabilityResponse
         }
         ordersSummary={ordersSummary}
       />,
@@ -184,7 +188,12 @@ describe("DashboardFinancialIndicators", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
-        data={{ channels: [], products: [] } as unknown as DashboardProfitabilityResponse}
+        data={
+          {
+            channels: [],
+            products: [],
+          } as unknown as DashboardProfitabilityResponse
+        }
         ordersSummary={{
           averageMargin: "0",
           grossProfit: "0",

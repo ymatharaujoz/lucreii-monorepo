@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
 import type { DatabaseClient } from "@lucreii/database";
 import type {
@@ -51,6 +52,10 @@ import {
   readMercadoLivreBillingOrderShippingCost,
   type MercadoLivreBillingOrderDetailsResponse,
 } from "@/modules/integrations/providers/mercadolivre.provider";
+import {
+  ProductsService,
+  type MonthlyPerformanceMarginRollup,
+} from "@/modules/products/products.service";
 
 type TenantContext = {
   organizationId: string;
@@ -1766,22 +1771,59 @@ function buildEmptyOrdersSummary(): OrdersListSummary {
 }
 
 type MonthlyMarginRollupInput = {
-  items: Array<Pick<OrderLineItem, "quantity" | "unitPrice">>;
-  composition: Pick<
-    OrderComposition,
-    | "marketplaceCommissionAmount"
-    | "shippingOrFixedFeeAmount"
-    | "shippingBreakdown"
-    | "taxAmount"
+  compositions: Array<
+    Pick<
+      OrderComposition,
+      | "marketplaceCommissionAmount"
+      | "shippingOrFixedFeeAmount"
+      | "shippingBreakdown"
+      | "taxAmount"
+    >
   >;
-  packagingCosts: Array<{
-    productId: string;
-    amount: string | number | null | undefined;
-  }>;
+  performance: MonthlyPerformanceMarginRollup;
 };
 
 export function calculateMonthlyMarginFinancials(
-  orders: MonthlyMarginRollupInput[],
+  input: MonthlyMarginRollupInput,
+) {
+  let marketplaceCommissionCents = 0n;
+  let shippingOrFixedFeeCents = 0n;
+  let taxCents = 0n;
+
+  for (const composition of input.compositions) {
+    marketplaceCommissionCents += parseMoneyToCents(
+      composition.marketplaceCommissionAmount,
+    );
+    const displayedShippingAmount =
+      composition.shippingBreakdown?.netShippingAmount ??
+      composition.shippingOrFixedFeeAmount;
+    const shippingCents = parseMoneyToCents(displayedShippingAmount);
+    shippingOrFixedFeeCents +=
+      shippingCents < 0n ? -shippingCents : shippingCents;
+    taxCents += parseMoneyToCents(composition.taxAmount);
+  }
+
+  const totalPdvCents = parseMoneyToCents(input.performance.pdvTotal);
+  const packagingCents = parseMoneyToCents(input.performance.packagingTotal);
+  const marginRevenueCents =
+    BigInt(Math.max(0, Math.trunc(input.performance.salesTotal))) *
+    totalPdvCents;
+  const totalProfitCents =
+    marginRevenueCents -
+    marketplaceCommissionCents -
+    shippingOrFixedFeeCents -
+    taxCents -
+    packagingCents -
+    totalPdvCents;
+
+  return {
+    marginRevenue: formatCents(marginRevenueCents),
+    totalProfit: formatCents(totalProfitCents),
+  };
+}
+
+function calculateLegacyOrderDetailMarginFinancials(
+  logicalOrders: LogicalOrder[],
 ) {
   let totalNetSales = 0;
   let totalPdvCents = 0n;
@@ -1791,29 +1833,35 @@ export function calculateMonthlyMarginFinancials(
   let packagingCents = 0n;
   const packagedProductIds = new Set<string>();
 
-  for (const order of orders) {
-    for (const item of order.items) {
+  for (const logicalOrder of logicalOrders) {
+    for (const item of logicalOrder.items) {
       totalNetSales += Math.max(0, item.quantity);
       totalPdvCents += parseMoneyToCents(item.unitPrice);
     }
 
     marketplaceCommissionCents += parseMoneyToCents(
-      order.composition.marketplaceCommissionAmount,
+      logicalOrder.composition.marketplaceCommissionAmount,
     );
     const displayedShippingAmount =
-      order.composition.shippingBreakdown?.netShippingAmount ??
-      order.composition.shippingOrFixedFeeAmount;
+      logicalOrder.composition.shippingBreakdown?.netShippingAmount ??
+      logicalOrder.composition.shippingOrFixedFeeAmount;
     const shippingCents = parseMoneyToCents(displayedShippingAmount);
-    shippingOrFixedFeeCents += shippingCents < 0n ? -shippingCents : shippingCents;
-    taxCents += parseMoneyToCents(order.composition.taxAmount);
+    shippingOrFixedFeeCents +=
+      shippingCents < 0n ? -shippingCents : shippingCents;
+    taxCents += parseMoneyToCents(logicalOrder.composition.taxAmount);
 
-    for (const packagingCost of order.packagingCosts) {
-      if (packagedProductIds.has(packagingCost.productId)) {
-        continue;
+    for (const row of logicalOrder.rows) {
+      for (const item of row.items) {
+        const linkedProduct = item.externalProduct?.linkedProduct;
+        if (!linkedProduct || packagedProductIds.has(linkedProduct.id)) {
+          continue;
+        }
+
+        packagedProductIds.add(linkedProduct.id);
+        packagingCents += parseMoneyToCents(
+          linkedProduct.financeDefaults?.packagingCost,
+        );
       }
-
-      packagedProductIds.add(packagingCost.productId);
-      packagingCents += parseMoneyToCents(packagingCost.amount);
     }
   }
 
@@ -1832,7 +1880,10 @@ export function calculateMonthlyMarginFinancials(
   };
 }
 
-function buildOrdersSummary(logicalOrders: LogicalOrder[]): OrdersListSummary {
+function buildOrdersSummary(
+  logicalOrders: LogicalOrder[],
+  monthlyMargin?: ReturnType<typeof calculateMonthlyMarginFinancials>,
+): OrdersListSummary {
   if (logicalOrders.length === 0) {
     return buildEmptyOrdersSummary();
   }
@@ -1855,35 +1906,36 @@ function buildOrdersSummary(logicalOrders: LogicalOrder[]): OrdersListSummary {
   }
 
   const averageMargin = grossRevenue > 0 ? grossProfit / grossRevenue : 0;
-  const monthlyMargin = calculateMonthlyMarginFinancials(
-    logicalOrders.map((logicalOrder) => ({
-      composition: logicalOrder.composition,
-      items: logicalOrder.items,
-      packagingCosts: logicalOrder.rows.flatMap((row) =>
-        row.items.flatMap((item) => {
-          const linkedProduct = item.externalProduct?.linkedProduct;
-          return linkedProduct
-            ? [
-                {
-                  amount: linkedProduct.financeDefaults?.packagingCost,
-                  productId: linkedProduct.id,
-                },
-              ]
-            : [];
-        }),
-      ),
-    })),
-  );
+  const resolvedMonthlyMargin =
+    monthlyMargin ?? calculateLegacyOrderDetailMarginFinancials(logicalOrders);
 
   return {
     averageMargin: averageMargin.toFixed(4),
     grossProfit: grossProfit.toFixed(4),
     grossRevenue: grossRevenue.toFixed(4),
-    marginRevenue: monthlyMargin.marginRevenue,
-    totalProfit: monthlyMargin.totalProfit,
+    marginRevenue: resolvedMonthlyMargin.marginRevenue,
+    totalProfit: resolvedMonthlyMargin.totalProfit,
     ordersCount: logicalOrders.length,
     unitsSold,
   };
+}
+
+function resolveCompleteReferenceMonth(filters: OrderListFilters) {
+  const orderedFrom = filters.orderedFrom?.trim();
+  const orderedTo = filters.orderedTo?.trim();
+  if (
+    !orderedFrom ||
+    !orderedTo ||
+    !/^\d{4}-\d{2}-01$/.test(orderedFrom) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(orderedTo)
+  ) {
+    return null;
+  }
+
+  const [year, month] = orderedFrom.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const expectedOrderedTo = `${orderedFrom.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
+  return orderedTo === expectedOrderedTo ? orderedFrom : null;
 }
 
 function getOrderListSortValue(row: OrderListItem, key: OrderSortKey) {
@@ -2024,6 +2076,9 @@ export class OrdersService {
     private readonly db: DatabaseClient,
     @Inject(API_RUNTIME_ENV)
     private readonly env?: ApiRuntimeEnv,
+    @Optional()
+    @Inject(ProductsService)
+    private readonly productsService?: ProductsService,
   ) {}
 
   async listOrders(
@@ -2283,7 +2338,11 @@ export class OrdersService {
       page: safePage,
       pageSize,
       summary: includeSummary
-        ? buildOrdersSummary(mapped)
+        ? await this.buildOrdersSummaryWithMonthlyRollup(
+            authContext,
+            filters,
+            mapped,
+          )
         : buildEmptyOrdersSummary(),
       totalItems,
       totalPages,
@@ -2598,6 +2657,44 @@ export class OrdersService {
     return this.getOrderDetails(authContext, orderRecordId);
   }
 
+  private async buildOrdersSummaryWithMonthlyRollup(
+    authContext: TenantContext,
+    filters: OrderListFilters,
+    logicalOrders: LogicalOrder[],
+  ) {
+    const referenceMonth = resolveCompleteReferenceMonth(filters);
+    const canUsePerformanceRollup =
+      Boolean(this.productsService) &&
+      Boolean(referenceMonth) &&
+      !filters.search?.trim() &&
+      !filters.saleId?.trim() &&
+      !filters.sku?.trim() &&
+      !filters.status;
+
+    if (
+      !canUsePerformanceRollup ||
+      !referenceMonth ||
+      logicalOrders.length === 0
+    ) {
+      return buildOrdersSummary(logicalOrders);
+    }
+
+    const performance =
+      await this.productsService!.readMonthlyPerformanceMarginRollup(
+        authContext,
+        {
+          marketplaces: filters.provider ? [filters.provider] : undefined,
+          referenceMonth,
+        },
+      );
+    const monthlyMargin = calculateMonthlyMarginFinancials({
+      compositions: logicalOrders.map(({ composition }) => composition),
+      performance,
+    });
+
+    return buildOrdersSummary(logicalOrders, monthlyMargin);
+  }
+
   private async buildOrdersSummaryForFilters(
     authContext: TenantContext,
     companyId: string,
@@ -2664,7 +2761,11 @@ export class OrdersService {
       return true;
     });
 
-    return buildOrdersSummary(filteredLogicalOrders);
+    return this.buildOrdersSummaryWithMonthlyRollup(
+      authContext,
+      filters,
+      filteredLogicalOrders,
+    );
   }
 
   private requireSelectedCompanyId(context: TenantContext) {

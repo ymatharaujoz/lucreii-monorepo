@@ -59,6 +59,7 @@ describe("orders validation schemas", () => {
     expect(result.data.items[0]?.orderId).toBe("MLB-1001");
     expect(result.data.items[0]?.displayOrderId).toBe("MLB-SALE-9001");
     expect(result.data.items[0]?.skus).toEqual(["SKU-1", "SKU-2"]);
+    expect(result.data.summary.grossRevenue).toBe("200.00");
     expect(result.data.summary.grossProfit).toBe("50.00");
     expect(result.data.summary.marginRevenue).toBe("600.00");
     expect(result.data.summary.totalProfit).toBe("42.00");

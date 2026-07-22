@@ -112,12 +112,16 @@ function IndicatorCard({
             {value}
           </p>
 
-          {subValue && <p className="mt-1 text-xs text-muted-foreground">{subValue}</p>}
+          {subValue && (
+            <p className="mt-1 text-xs text-muted-foreground">{subValue}</p>
+          )}
 
           {trend && (
             <div className="mt-2 flex items-center gap-1.5">
               <TrendIcon className={`h-3.5 w-3.5 ${trendColorClass}`} />
-              <span className={`text-xs font-medium ${trendColorClass}`}>{trend.value}</span>
+              <span className={`text-xs font-medium ${trendColorClass}`}>
+                {trend.value}
+              </span>
             </div>
           )}
         </div>
@@ -147,8 +151,12 @@ export function DashboardFinancialIndicators({
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const nextFixedCost = activeCompany ? Number.parseFloat(activeCompany.fixedCostDefault) || 0 : 0;
-    const nextTaxPercent = activeCompany ? (Number.parseFloat(activeCompany.taxRateDefault) || 0) * 100 : 0;
+    const nextFixedCost = activeCompany
+      ? Number.parseFloat(activeCompany.fixedCostDefault) || 0
+      : 0;
+    const nextTaxPercent = activeCompany
+      ? (Number.parseFloat(activeCompany.taxRateDefault) || 0) * 100
+      : 0;
 
     setFixedCost(nextFixedCost);
     setTaxPercent(nextTaxPercent);
@@ -184,8 +192,10 @@ export function DashboardFinancialIndicators({
           body: patch,
         },
       );
-      const nextFixedCost = Number.parseFloat(response.data.fixedCostDefault) || 0;
-      const nextTaxPercent = (Number.parseFloat(response.data.taxRateDefault) || 0) * 100;
+      const nextFixedCost =
+        Number.parseFloat(response.data.fixedCostDefault) || 0;
+      const nextTaxPercent =
+        (Number.parseFloat(response.data.taxRateDefault) || 0) * 100;
 
       setFixedCost(nextFixedCost);
       setTaxPercent(nextTaxPercent);
@@ -206,18 +216,28 @@ export function DashboardFinancialIndicators({
     }
   }, [activeCompany, fixedCostInput, taxPercentInput]);
 
-  const totalRevenue = ordersSummary ? normalizeNumber(ordersSummary.marginRevenue) : 0;
-  const totalProfit = ordersSummary ? normalizeNumber(ordersSummary.totalProfit) : 0;
+  const totalRevenue = ordersSummary
+    ? normalizeNumber(ordersSummary.grossRevenue)
+    : 0;
+  const marginRevenue = ordersSummary
+    ? normalizeNumber(ordersSummary.marginRevenue)
+    : 0;
+  const totalProfit = ordersSummary
+    ? normalizeNumber(ordersSummary.totalProfit)
+    : 0;
   const netProfit = totalProfit - fixedCost;
   const profitMarginRatio = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
-  const marginDisplayRatio = totalProfit !== 0 ? totalRevenue / totalProfit : 0;
-  const breakEvenPoint = profitMarginRatio > 0 ? fixedCost / profitMarginRatio : 0;
+  const marginDisplayRatio =
+    totalProfit !== 0 ? marginRevenue / totalProfit : 0;
+  const breakEvenPoint =
+    profitMarginRatio > 0 ? fixedCost / profitMarginRatio : 0;
   const revenueSub = ordersSummary
     ? `${ordersSummary.ordersCount} pedidos · ${ordersSummary.unitsSold} unidades`
     : summary
       ? `${summary.summary.ordersCount} pedidos · ${summary.summary.unitsSold} unidades`
       : `${data.products.length} produtos`;
-  const netProfitPercentOfRevenue = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+  const netProfitPercentOfRevenue =
+    totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
   return (
     <motion.div
@@ -229,7 +249,7 @@ export function DashboardFinancialIndicators({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <IndicatorCard
           label="Faturamento"
-          value={formatMoney(totalRevenue, {maximumFractionDigits: 2 })}
+          value={formatMoney(totalRevenue, { maximumFractionDigits: 2 })}
           subValue={revenueSub}
           icon={<DollarSign className="h-4 w-4" />}
           variant="default"
@@ -266,7 +286,10 @@ export function DashboardFinancialIndicators({
           variant={totalRevenue >= breakEvenPoint ? "success" : "warning"}
           trend={{
             direction: totalRevenue >= breakEvenPoint ? "up" : "down",
-            value: totalRevenue >= breakEvenPoint ? "Meta atingida" : "Abaixo da meta",
+            value:
+              totalRevenue >= breakEvenPoint
+                ? "Meta atingida"
+                : "Abaixo da meta",
           }}
         />
 
@@ -275,9 +298,12 @@ export function DashboardFinancialIndicators({
           value={formatMoney(netProfit, { maximumFractionDigits: 2 })}
           subValue="Após custos fixos e publicidade"
           icon={<PiggyBank className="h-4 w-4" />}
-          variant={netProfit > 0 ? "success" : netProfit < 0 ? "error" : "warning"}
+          variant={
+            netProfit > 0 ? "success" : netProfit < 0 ? "error" : "warning"
+          }
           trend={{
-            direction: netProfit > 0 ? "up" : netProfit < 0 ? "down" : "neutral",
+            direction:
+              netProfit > 0 ? "up" : netProfit < 0 ? "down" : "neutral",
             value:
               netProfit === 0
                 ? "Break-even"
@@ -287,8 +313,8 @@ export function DashboardFinancialIndicators({
       </div>
 
       <motion.div variants={itemVariants}>
-        <Card 
-          variant="outlined" 
+        <Card
+          variant="outlined"
           className="px-4 py-3 bg-surface-elevated/40 border border-border/80 rounded-xl shadow-[var(--shadow-xs)] hover:border-border-strong transition-all duration-300 backdrop-blur-xs"
         >
           {isEditing ? (
@@ -306,7 +332,9 @@ export function DashboardFinancialIndicators({
                       autoFocus
                       className="h-9 rounded-xl bg-background border border-border pl-10 pr-3 text-right text-xs font-semibold text-foreground shadow-[var(--shadow-xs)] hover:border-border-strong focus:border-accent/50 focus:ring-2 focus:ring-accent/15 focus:outline-none"
                       inputMode="decimal"
-                      onChange={(event) => setFixedCostInput(event.target.value)}
+                      onChange={(event) =>
+                        setFixedCostInput(event.target.value)
+                      }
                       placeholder="0,00"
                       type="text"
                       value={fixedCostInput}
@@ -314,7 +342,10 @@ export function DashboardFinancialIndicators({
                   </div>
                 </div>
 
-                <span aria-hidden className="hidden sm:block h-4 w-px bg-border/60" />
+                <span
+                  aria-hidden
+                  className="hidden sm:block h-4 w-px bg-border/60"
+                />
 
                 <div className="flex items-center gap-2 min-w-0 sm:max-w-[180px] flex-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 shrink-0">
@@ -324,7 +355,9 @@ export function DashboardFinancialIndicators({
                     <Input
                       className="h-9 rounded-xl bg-background border border-border pl-3 pr-10 text-right text-xs font-semibold text-foreground shadow-[var(--shadow-xs)] hover:border-border-strong focus:border-accent/50 focus:ring-2 focus:ring-accent/15 focus:outline-none"
                       inputMode="decimal"
-                      onChange={(event) => setTaxPercentInput(event.target.value)}
+                      onChange={(event) =>
+                        setTaxPercentInput(event.target.value)
+                      }
                       placeholder="0,00"
                       type="text"
                       value={taxPercentInput}
@@ -337,7 +370,9 @@ export function DashboardFinancialIndicators({
               </div>
 
               {feedbackMessage && (
-                <p className="text-xs font-medium text-muted-foreground self-center px-2">{feedbackMessage}</p>
+                <p className="text-xs font-medium text-muted-foreground self-center px-2">
+                  {feedbackMessage}
+                </p>
               )}
 
               <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
@@ -379,7 +414,10 @@ export function DashboardFinancialIndicators({
                   </div>
                 </div>
 
-                <span aria-hidden className="hidden sm:block h-4 w-px bg-border/60" />
+                <span
+                  aria-hidden
+                  className="hidden sm:block h-4 w-px bg-border/60"
+                />
 
                 <div className="flex items-center gap-2">
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent/8 text-accent">

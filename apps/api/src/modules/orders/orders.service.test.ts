@@ -10,31 +10,27 @@ describe("OrdersService", () => {
     vi.unstubAllGlobals();
   });
 
-  it("calculates monthly margin from order detail items, compositions and distinct sold products", () => {
+  it("calculates monthly margin from performance totals and order compositions", () => {
     expect(
-      calculateMonthlyMarginFinancials([
-        {
-          items: [{ quantity: 2, unitPrice: "200.00" }],
-          composition: {
+      calculateMonthlyMarginFinancials({
+        performance: {
+          packagingTotal: "94.91",
+          pdvTotal: "298.16",
+          salesTotal: 3,
+        },
+        compositions: [
+          {
             marketplaceCommissionAmount: "50.00",
             shippingOrFixedFeeAmount: "70.00",
             taxAmount: "50.00",
           },
-          packagingCosts: [{ amount: "94.91", productId: "product_1" }],
-        },
-        {
-          items: [{ quantity: 1, unitPrice: "98.16" }],
-          composition: {
+          {
             marketplaceCommissionAmount: "39.45",
             shippingOrFixedFeeAmount: "50.00",
             taxAmount: "39.45",
           },
-          packagingCosts: [
-            { amount: "94.91", productId: "product_1" },
-            { amount: "0.00", productId: "product_2" },
-          ],
-        },
-      ]),
+        ],
+      }),
     ).toEqual({
       marginRevenue: "894.48",
       totalProfit: "202.51",
@@ -42,10 +38,86 @@ describe("OrdersService", () => {
   });
 
   it("returns zero margin financials without monthly orders", () => {
-    expect(calculateMonthlyMarginFinancials([])).toEqual({
+    expect(
+      calculateMonthlyMarginFinancials({
+        performance: {
+          packagingTotal: "0.00",
+          pdvTotal: "0.00",
+          salesTotal: 0,
+        },
+        compositions: [],
+      }),
+    ).toEqual({
       marginRevenue: "0.00",
       totalProfit: "0.00",
     });
+  });
+
+  it("keeps gross revenue for Faturamento while using selected monthly marketplace performance for margin", async () => {
+    const readMonthlyPerformanceMarginRollup = vi.fn().mockResolvedValue({
+      packagingTotal: "94.91",
+      pdvTotal: "298.16",
+      salesTotal: 3,
+    });
+    const service = new OrdersService({} as never, undefined, {
+      readMonthlyPerformanceMarginRollup,
+    } as never);
+    const buildSummary = (
+      service as unknown as {
+        buildOrdersSummaryWithMonthlyRollup: (
+          ...args: unknown[]
+        ) => Promise<unknown>;
+      }
+    ).buildOrdersSummaryWithMonthlyRollup;
+
+    const summary = await buildSummary.call(
+      service,
+      {
+        organizationId: "org_1",
+        selectedCompanyId: "company_1",
+        userId: "user_1",
+      },
+      {
+        orderedFrom: "2026-06-01",
+        orderedTo: "2026-06-30",
+        provider: "mercadolivre",
+      },
+      [
+        {
+          composition: {
+            marketplaceCommissionAmount: "89.45",
+            netRevenueAmount: "150.00",
+            packagingCostAmount: "94.91",
+            productCostAmount: "0.00",
+            shippingOrFixedFeeAmount: "120.00",
+            taxAmount: "89.45",
+          },
+          items: [],
+          order: {
+            itemsSold: 3,
+            totalWithFees: "25362.82",
+          },
+          rows: [],
+        },
+      ],
+    );
+
+    expect(summary).toMatchObject({
+      grossRevenue: "25362.8200",
+      marginRevenue: "894.48",
+      totalProfit: "202.51",
+    });
+    expect(readMonthlyPerformanceMarginRollup).toHaveBeenCalledWith(
+      {
+        organizationId: "org_1",
+        selectedCompanyId: "company_1",
+        userId: "user_1",
+      },
+      {
+        marketplaces: ["mercadolivre"],
+        referenceMonth: "2026-06-01",
+      },
+    );
   });
 
   it("treats a matched zero shipment sender cost as resolved", async () => {
