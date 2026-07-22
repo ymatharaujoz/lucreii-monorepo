@@ -138,6 +138,7 @@ export const orderListItemSchema = z.object({
 export const ordersListSummarySchema = z.object({
   grossRevenue: decimalField("Gross revenue"),
   grossProfit: decimalField("Gross profit"),
+  totalProfit: decimalField("Total profit"),
   averageMargin: decimalField("Average margin"),
   ordersCount: z.number().int().min(0),
   unitsSold: z.number().int().min(0),

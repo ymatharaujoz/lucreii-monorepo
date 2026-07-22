@@ -56,7 +56,17 @@ const company: Company = {
 function buildProfitability(): DashboardProfitabilityResponse {
   return {
     channels: [],
-    products: [{ revenue: "821", grossProfit: "594" }],
+    products: [
+      {
+        revenue: "821",
+        grossProfit: "594",
+        marketplaceCommission: "0",
+        shippingCost: "0",
+        taxAmount: "0",
+        packagingCost: "0",
+        productCost: "227",
+      },
+    ],
   } as unknown as DashboardProfitabilityResponse;
 }
 
@@ -85,11 +95,12 @@ afterEach(() => {
 });
 
 describe("DashboardFinancialIndicators", () => {
-  it("exibe Margem Media como 72.35% quando lucro=594 e faturamento=821 (594/821*100)", () => {
+  it("exibe Margem Media como 4.42% quando faturamento=894.48 e lucro=202.51", () => {
     const ordersSummary: OrdersListSummary = {
-      averageMargin: "0.7235",
+      averageMargin: "0.2263",
       grossProfit: "594",
-      grossRevenue: "821",
+      grossRevenue: "894.48",
+      totalProfit: "202.51",
       ordersCount: 1,
       unitsSold: 1,
     };
@@ -104,9 +115,8 @@ describe("DashboardFinancialIndicators", () => {
 
     const text = document.body.textContent ?? "";
     expect(text).toContain("Margem M");
-    expect(text).toContain("72.35%");
-    expect(text).not.toMatch(/Margem[\s\S]{0,40}0\.72%/);
-    expect(text).not.toMatch(/Margem[\s\S]{0,40}0\.7%/);
+    expect(text).toContain("4.42%");
+    expect(text).toContain("202,51");
 
     view.unmount();
   });
@@ -116,6 +126,7 @@ describe("DashboardFinancialIndicators", () => {
       averageMargin: "0",
       grossProfit: "0",
       grossRevenue: "0",
+      totalProfit: "0",
       ordersCount: 0,
       unitsSold: 0,
     };
@@ -133,6 +144,75 @@ describe("DashboardFinancialIndicators", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("Margem M");
     expect(text).toContain("0.0%");
+
+    view.unmount();
+  });
+
+  it("exibe 0.00% quando lucro total e zero mesmo com faturamento", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        data={buildProfitability()}
+        ordersSummary={{
+          averageMargin: "0",
+          grossProfit: "0",
+          grossRevenue: "821",
+          totalProfit: "0",
+          ordersCount: 1,
+          unitsSold: 1,
+        }}
+      />,
+    );
+
+    expect(document.body.textContent ?? "").toContain("0.0%");
+
+    view.unmount();
+  });
+
+  it("preserva sinal negativo na margem invertida", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        data={buildProfitability()}
+        ordersSummary={{
+          averageMargin: "-0.2263",
+          grossProfit: "-594",
+          grossRevenue: "894.48",
+          totalProfit: "-202.51",
+          ordersCount: 1,
+          unitsSold: 1,
+        }}
+      />,
+    );
+
+    expect(document.body.textContent ?? "").toContain("-4.42%");
+
+    view.unmount();
+  });
+
+  it("calcula lucro total pelos custos dos produtos quando resumo de pedidos ainda nao chegou", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        data={
+          {
+            channels: [],
+            products: [
+              {
+                revenue: "894.48",
+                marketplaceCommission: "89.45",
+                shippingCost: "120.00",
+                taxAmount: "89.45",
+                packagingCost: "20.00",
+                productCost: "373.07",
+              },
+            ],
+          } as unknown as DashboardProfitabilityResponse
+        }
+      />,
+    );
+
+    expect(document.body.textContent ?? "").toContain("4.42%");
 
     view.unmount();
   });

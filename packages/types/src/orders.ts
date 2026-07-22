@@ -101,6 +101,7 @@ export type OrdersListResponse = {
 export type OrdersListSummary = {
   grossRevenue: string;
   grossProfit: string;
+  totalProfit: string;
   averageMargin: string;
   ordersCount: number;
   unitsSold: number;

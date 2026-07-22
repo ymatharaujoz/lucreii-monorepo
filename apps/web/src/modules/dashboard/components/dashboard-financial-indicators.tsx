@@ -165,8 +165,15 @@ export function DashboardFinancialIndicators({
     let totalProfit = 0;
 
     for (const product of data.products) {
-      totalRevenue += parseDecimal(product.revenue);
-      totalProfit += parseDecimal(product.grossProfit);
+      const revenue = parseDecimal(product.revenue);
+      totalRevenue += revenue;
+      totalProfit +=
+        revenue -
+        parseDecimal(product.marketplaceCommission) -
+        parseDecimal(product.shippingCost) -
+        parseDecimal(product.taxAmount) -
+        parseDecimal(product.packagingCost) -
+        parseDecimal(product.productCost);
     }
 
     return {
@@ -232,12 +239,12 @@ export function DashboardFinancialIndicators({
         ? normalizeNumber(summary.summary.grossRevenue)
         : financials.totalRevenue;
   const totalProfit = ordersSummary
-    ? normalizeNumber(ordersSummary.grossProfit)
+    ? normalizeNumber(ordersSummary.totalProfit ?? ordersSummary.grossProfit)
     : financials.totalProfit;
-    const netProfit = totalProfit - fixedCost;
-    const averageMargin = totalRevenue > 0 ? netProfit / totalRevenue : 0;
-    const averageMarginPercent = averageMargin * 100;
-    const breakEvenPoint = averageMargin > 0 ? fixedCost / averageMargin : 0;
+  const netProfit = totalProfit - fixedCost;
+  const profitMarginRatio = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
+  const marginDisplayRatio = totalProfit !== 0 ? totalRevenue / totalProfit : 0;
+  const breakEvenPoint = profitMarginRatio > 0 ? fixedCost / profitMarginRatio : 0;
   const revenueSub = ordersSummary
     ? `${ordersSummary.ordersCount} pedidos · ${ordersSummary.unitsSold} unidades`
     : summary
@@ -263,21 +270,21 @@ export function DashboardFinancialIndicators({
 
         <IndicatorCard
           label="Margem Média"
-          value={formatPercent(averageMarginPercent, { digits: 2, truncate: true })}
+          value={formatPercent(marginDisplayRatio, { digits: 2 })}
           subValue={`Lucro Total: ${formatMoney(totalProfit, { maximumFractionDigits: 2 })}`}
           icon={<Percent className="h-4 w-4" />}
           variant={
-            averageMargin > 0.2
+            profitMarginRatio > 0.2
               ? "success"
-              : averageMargin > 0
+              : profitMarginRatio > 0
                 ? "warning"
                 : "error"
           }
           trend={{
             direction:
-              averageMargin > 0.3
+              profitMarginRatio > 0.3
                 ? "up"
-                : averageMargin > 0
+                : profitMarginRatio > 0
                   ? "neutral"
                   : "down",
             value: totalProfit >= 0 ? "Lucrativo" : "Prejuízo",

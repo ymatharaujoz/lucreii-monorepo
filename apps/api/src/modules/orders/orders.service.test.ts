@@ -1,10 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { read, utils } from "xlsx";
-import { OrdersService } from "./orders.service";
+import {
+  calculateTotalProfitFromComposition,
+  OrdersService,
+} from "./orders.service";
 
 describe("OrdersService", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("calculates total profit from revenue and requested cost components", () => {
+    expect(
+      calculateTotalProfitFromComposition({
+        revenueAmount: "894.48",
+        marketplaceCommissionAmount: "89.45",
+        shippingOrFixedFeeAmount: "120.00",
+        taxAmount: "89.45",
+        packagingCostAmount: "20.00",
+        productCostAmount: "373.07",
+      }),
+    ).toBeCloseTo(202.51, 10);
   });
 
   it("treats a matched zero shipment sender cost as resolved", async () => {
@@ -2805,6 +2821,7 @@ describe("OrdersService", () => {
         averageMargin: "0.5800",
         grossProfit: "116.0000",
         grossRevenue: "200.0000",
+        totalProfit: "95.0000",
         ordersCount: 1,
         unitsSold: 3,
       },

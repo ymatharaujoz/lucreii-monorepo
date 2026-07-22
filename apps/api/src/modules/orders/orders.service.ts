@@ -1758,9 +1758,31 @@ function buildEmptyOrdersSummary(): OrdersListSummary {
     averageMargin: "0.00",
     grossProfit: "0.00",
     grossRevenue: "0.00",
+    totalProfit: "0.00",
     ordersCount: 0,
     unitsSold: 0,
   };
+}
+
+export function calculateTotalProfitFromComposition(
+  composition: Pick<
+    OrderComposition,
+    | "revenueAmount"
+    | "marketplaceCommissionAmount"
+    | "shippingOrFixedFeeAmount"
+    | "taxAmount"
+    | "packagingCostAmount"
+    | "productCostAmount"
+  >,
+) {
+  return (
+    toNumber(composition.revenueAmount) -
+    toNumber(composition.marketplaceCommissionAmount) -
+    toNumber(composition.shippingOrFixedFeeAmount) -
+    toNumber(composition.taxAmount) -
+    toNumber(composition.packagingCostAmount) -
+    toNumber(composition.productCostAmount)
+  );
 }
 
 function buildOrdersSummary(logicalOrders: LogicalOrder[]): OrdersListSummary {
@@ -1770,6 +1792,7 @@ function buildOrdersSummary(logicalOrders: LogicalOrder[]): OrdersListSummary {
 
   let grossRevenue = 0;
   let grossProfit = 0;
+  let totalProfit = 0;
   let unitsSold = 0;
 
   for (const logicalOrder of logicalOrders) {
@@ -1779,9 +1802,11 @@ function buildOrdersSummary(logicalOrders: LogicalOrder[]): OrdersListSummary {
       toNumber(composition.netRevenueAmount) -
       toNumber(composition.productCostAmount) -
       toNumber(composition.packagingCostAmount);
+    const orderTotalProfit = calculateTotalProfitFromComposition(composition);
 
     grossRevenue += toNumber(order.totalWithFees);
     grossProfit += orderGrossProfit;
+    totalProfit += orderTotalProfit;
     unitsSold += order.itemsSold;
   }
 
@@ -1791,6 +1816,7 @@ function buildOrdersSummary(logicalOrders: LogicalOrder[]): OrdersListSummary {
     averageMargin: averageMargin.toFixed(4),
     grossProfit: grossProfit.toFixed(4),
     grossRevenue: grossRevenue.toFixed(4),
+    totalProfit: totalProfit.toFixed(4),
     ordersCount: logicalOrders.length,
     unitsSold,
   };
