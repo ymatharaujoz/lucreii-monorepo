@@ -192,6 +192,10 @@ function parseMoneyToCents(value: string | number | null | undefined) {
   return BigInt(Math.round(toNumber(value) * 100));
 }
 
+function absoluteCents(value: bigint) {
+  return value < 0n ? -value : value;
+}
+
 function formatCents(value: bigint) {
   const sign = value < 0n ? "-" : "";
   const absolute = value < 0n ? value * -1n : value;
@@ -1791,30 +1795,32 @@ export function calculateMonthlyMarginFinancials(
   let taxCents = 0n;
 
   for (const composition of input.compositions) {
-    marketplaceCommissionCents += parseMoneyToCents(
-      composition.marketplaceCommissionAmount,
+    marketplaceCommissionCents += absoluteCents(
+      parseMoneyToCents(composition.marketplaceCommissionAmount),
     );
     const displayedShippingAmount =
       composition.shippingBreakdown?.netShippingAmount ??
       composition.shippingOrFixedFeeAmount;
-    const shippingCents = parseMoneyToCents(displayedShippingAmount);
-    shippingOrFixedFeeCents +=
-      shippingCents < 0n ? -shippingCents : shippingCents;
-    taxCents += parseMoneyToCents(composition.taxAmount);
+    shippingOrFixedFeeCents += absoluteCents(
+      parseMoneyToCents(displayedShippingAmount),
+    );
+    taxCents += absoluteCents(parseMoneyToCents(composition.taxAmount));
   }
 
-  const totalPdvCents = parseMoneyToCents(input.performance.pdvTotal);
-  const packagingCents = parseMoneyToCents(input.performance.packagingTotal);
-  const marginRevenueCents =
-    BigInt(Math.max(0, Math.trunc(input.performance.salesTotal))) *
-    totalPdvCents;
+  const marginRevenueCents = parseMoneyToCents(input.performance.marginRevenue);
+  const packagingCents = absoluteCents(
+    parseMoneyToCents(input.performance.packagingTotal),
+  );
+  const productCostCents = absoluteCents(
+    parseMoneyToCents(input.performance.productCostTotal),
+  );
   const totalProfitCents =
     marginRevenueCents -
     marketplaceCommissionCents -
     shippingOrFixedFeeCents -
     taxCents -
     packagingCents -
-    totalPdvCents;
+    productCostCents;
 
   return {
     marginRevenue: formatCents(marginRevenueCents),
@@ -1825,54 +1831,59 @@ export function calculateMonthlyMarginFinancials(
 function calculateLegacyOrderDetailMarginFinancials(
   logicalOrders: LogicalOrder[],
 ) {
-  let totalNetSales = 0;
-  let totalPdvCents = 0n;
+  let marginRevenueCents = 0n;
+  let productCostCents = 0n;
   let marketplaceCommissionCents = 0n;
   let shippingOrFixedFeeCents = 0n;
   let taxCents = 0n;
   let packagingCents = 0n;
-  const packagedProductIds = new Set<string>();
 
   for (const logicalOrder of logicalOrders) {
-    for (const item of logicalOrder.items) {
-      totalNetSales += Math.max(0, item.quantity);
-      totalPdvCents += parseMoneyToCents(item.unitPrice);
+    for (const row of logicalOrder.rows) {
+      for (const item of row.items) {
+        const quantity = Math.max(0, item.quantity);
+        if (quantity <= 0) {
+          continue;
+        }
+
+        const quantityBigInt = BigInt(quantity);
+        marginRevenueCents +=
+          parseMoneyToCents(item.unitPrice) * quantityBigInt;
+
+        const linkedProduct = item.externalProduct?.linkedProduct;
+        packagingCents +=
+          absoluteCents(
+            parseMoneyToCents(linkedProduct?.financeDefaults?.packagingCost),
+          ) * quantityBigInt;
+        const latestCostAmount = resolveLatestCostAmount(linkedProduct);
+        if (latestCostAmount !== null) {
+          productCostCents +=
+            absoluteCents(parseMoneyToCents(latestCostAmount)) * quantityBigInt;
+        }
+      }
     }
 
-    marketplaceCommissionCents += parseMoneyToCents(
-      logicalOrder.composition.marketplaceCommissionAmount,
+    marketplaceCommissionCents += absoluteCents(
+      parseMoneyToCents(logicalOrder.composition.marketplaceCommissionAmount),
     );
     const displayedShippingAmount =
       logicalOrder.composition.shippingBreakdown?.netShippingAmount ??
       logicalOrder.composition.shippingOrFixedFeeAmount;
-    const shippingCents = parseMoneyToCents(displayedShippingAmount);
-    shippingOrFixedFeeCents +=
-      shippingCents < 0n ? -shippingCents : shippingCents;
-    taxCents += parseMoneyToCents(logicalOrder.composition.taxAmount);
-
-    for (const row of logicalOrder.rows) {
-      for (const item of row.items) {
-        const linkedProduct = item.externalProduct?.linkedProduct;
-        if (!linkedProduct || packagedProductIds.has(linkedProduct.id)) {
-          continue;
-        }
-
-        packagedProductIds.add(linkedProduct.id);
-        packagingCents += parseMoneyToCents(
-          linkedProduct.financeDefaults?.packagingCost,
-        );
-      }
-    }
+    shippingOrFixedFeeCents += absoluteCents(
+      parseMoneyToCents(displayedShippingAmount),
+    );
+    taxCents += absoluteCents(
+      parseMoneyToCents(logicalOrder.composition.taxAmount),
+    );
   }
 
-  const marginRevenueCents = BigInt(totalNetSales) * totalPdvCents;
   const totalProfitCents =
     marginRevenueCents -
     marketplaceCommissionCents -
     shippingOrFixedFeeCents -
     taxCents -
     packagingCents -
-    totalPdvCents;
+    productCostCents;
 
   return {
     marginRevenue: formatCents(marginRevenueCents),

@@ -10,24 +10,24 @@ describe("OrdersService", () => {
     vi.unstubAllGlobals();
   });
 
-  it("calculates monthly margin from performance totals and order compositions", () => {
+  it("calculates monthly margin from line revenue and order compositions", () => {
     expect(
       calculateMonthlyMarginFinancials({
         performance: {
           packagingTotal: "94.91",
-          pdvTotal: "298.16",
-          salesTotal: 3,
+          marginRevenue: "894.48",
+          productCostTotal: "298.16",
         },
         compositions: [
           {
-            marketplaceCommissionAmount: "50.00",
-            shippingOrFixedFeeAmount: "70.00",
-            taxAmount: "50.00",
+            marketplaceCommissionAmount: "-50.00",
+            shippingOrFixedFeeAmount: "-70.00",
+            taxAmount: "-50.00",
           },
           {
-            marketplaceCommissionAmount: "39.45",
-            shippingOrFixedFeeAmount: "50.00",
-            taxAmount: "39.45",
+            marketplaceCommissionAmount: "-39.45",
+            shippingOrFixedFeeAmount: "-50.00",
+            taxAmount: "-39.45",
           },
         ],
       }),
@@ -42,8 +42,8 @@ describe("OrdersService", () => {
       calculateMonthlyMarginFinancials({
         performance: {
           packagingTotal: "0.00",
-          pdvTotal: "0.00",
-          salesTotal: 0,
+          marginRevenue: "0.00",
+          productCostTotal: "0.00",
         },
         compositions: [],
       }),
@@ -53,11 +53,27 @@ describe("OrdersService", () => {
     });
   });
 
+  it("preserves negative profit after subtracting normalized costs", () => {
+    expect(
+      calculateMonthlyMarginFinancials({
+        performance: {
+          packagingTotal: "0.00",
+          marginRevenue: "100.00",
+          productCostTotal: "120.00",
+        },
+        compositions: [],
+      }),
+    ).toEqual({
+      marginRevenue: "100.00",
+      totalProfit: "-20.00",
+    });
+  });
+
   it("keeps gross revenue for Faturamento while using selected monthly marketplace performance for margin", async () => {
     const readMonthlyPerformanceMarginRollup = vi.fn().mockResolvedValue({
       packagingTotal: "94.91",
-      pdvTotal: "298.16",
-      salesTotal: 3,
+      marginRevenue: "894.48",
+      productCostTotal: "298.16",
     });
     const service = new OrdersService({} as never, undefined, {
       readMonthlyPerformanceMarginRollup,

@@ -6343,22 +6343,32 @@ describe("ProductsService", () => {
     });
   });
 
-  it("rolls up every visible performance row and packages each sold catalog product once", async () => {
+  it("rolls up every visible performance row by net quantity before pagination", async () => {
     const { service } = createService();
     const buildRow = (
       overrides: Partial<
         Pick<
           ProductPerformanceListItem,
-          "id" | "productId" | "packagingCost" | "sales" | "sellingPrice"
+          | "id"
+          | "productId"
+          | "netLiquidSales"
+          | "packagingCost"
+          | "returns"
+          | "sales"
+          | "sellingPrice"
+          | "unitCost"
         >
       >,
     ) =>
       ({
         id: "performance-row",
+        netLiquidSales: 0,
         packagingCost: 0,
         productId: "product_1",
+        returns: 0,
         sales: 0,
         sellingPrice: 0,
+        unitCost: 0,
         ...overrides,
       }) as ProductPerformanceListItem;
     const rows = [
@@ -6366,30 +6376,40 @@ describe("ProductsService", () => {
         id: "p1-channel-a",
         packagingCost: 4,
         productId: "product_1",
+        netLiquidSales: 2,
         sales: 2,
         sellingPrice: 100,
+        unitCost: 20,
       }),
       buildRow({
         id: "p1-channel-b",
-        packagingCost: 4,
+        packagingCost: -4,
         productId: "product_1",
+        netLiquidSales: 1,
+        returns: 0,
         sales: 1,
         sellingPrice: 100,
+        unitCost: -20,
       }),
       buildRow({
         id: "p2-no-sales",
         packagingCost: 9,
         productId: "product_2",
-        sales: 0,
+        netLiquidSales: 0,
+        returns: 2,
+        sales: 2,
         sellingPrice: 500,
+        unitCost: 200,
       }),
       ...Array.from({ length: 11 }, (_, index) =>
         buildRow({
           id: `p${index + 3}`,
           packagingCost: 1,
           productId: `product_${index + 3}`,
+          netLiquidSales: 1,
           sales: 1,
           sellingPrice: 10,
+          unitCost: 2,
         }),
       ),
     ];
@@ -6416,9 +6436,9 @@ describe("ProductsService", () => {
         },
       ),
     ).resolves.toEqual({
-      packagingTotal: "15.00",
-      pdvTotal: "310.00",
-      salesTotal: 14,
+      marginRevenue: "410.00",
+      packagingTotal: "23.00",
+      productCostTotal: "82.00",
     });
 
     expect(listPerformanceRowsSpy).toHaveBeenCalledWith(

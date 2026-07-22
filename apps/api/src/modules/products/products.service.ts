@@ -188,9 +188,9 @@ type PerformanceSalesLookup = {
 };
 
 export type MonthlyPerformanceMarginRollup = {
+  marginRevenue: string;
   packagingTotal: string;
-  pdvTotal: string;
-  salesTotal: number;
+  productCostTotal: string;
 };
 
 function toCatalogGroupKey(itemId: string) {
@@ -250,6 +250,10 @@ function toNumber(value: string | undefined) {
 function parseMoneyToCents(value: string | number | null | undefined) {
   const parsed = typeof value === "number" ? value : Number(value ?? 0);
   return BigInt(Math.round((Number.isFinite(parsed) ? parsed : 0) * 100));
+}
+
+function absoluteCents(value: bigint) {
+  return value < 0n ? -value : value;
 }
 
 function formatCents(value: bigint) {
@@ -2582,30 +2586,30 @@ export class ProductsService {
       pageSize: Number.MAX_SAFE_INTEGER,
       referenceMonth: query.referenceMonth,
     });
-    const packagedProductIds = new Set<string>();
-    let salesTotal = 0;
-    let pdvTotalCents = 0n;
+    let marginRevenueCents = 0n;
     let packagingTotalCents = 0n;
+    let productCostTotalCents = 0n;
 
     for (const row of response.items) {
-      const sales = Number.isFinite(row.sales) ? Math.trunc(row.sales) : 0;
-      if (sales <= 0) {
+      const netLiquidSales = Number.isFinite(row.netLiquidSales)
+        ? Math.trunc(row.netLiquidSales)
+        : 0;
+      if (netLiquidSales <= 0) {
         continue;
       }
 
-      salesTotal += sales;
-      pdvTotalCents += parseMoneyToCents(row.sellingPrice);
-
-      if (row.productId && !packagedProductIds.has(row.productId)) {
-        packagedProductIds.add(row.productId);
-        packagingTotalCents += parseMoneyToCents(row.packagingCost);
-      }
+      const quantity = BigInt(netLiquidSales);
+      marginRevenueCents += parseMoneyToCents(row.sellingPrice) * quantity;
+      packagingTotalCents +=
+        absoluteCents(parseMoneyToCents(row.packagingCost)) * quantity;
+      productCostTotalCents +=
+        absoluteCents(parseMoneyToCents(row.unitCost)) * quantity;
     }
 
     return {
+      marginRevenue: formatCents(marginRevenueCents),
       packagingTotal: formatCents(packagingTotalCents),
-      pdvTotal: formatCents(pdvTotalCents),
-      salesTotal,
+      productCostTotal: formatCents(productCostTotalCents),
     };
   }
 
