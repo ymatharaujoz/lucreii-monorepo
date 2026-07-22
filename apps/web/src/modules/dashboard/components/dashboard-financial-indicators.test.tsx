@@ -58,6 +58,8 @@ function buildProfitability(): DashboardProfitabilityResponse {
     channels: [],
     products: [
       {
+        netSales: 1,
+        salePrice: "821",
         revenue: "821",
         grossProfit: "594",
         marketplaceCommission: "0",
@@ -65,6 +67,34 @@ function buildProfitability(): DashboardProfitabilityResponse {
         taxAmount: "0",
         packagingCost: "0",
         productCost: "227",
+      },
+    ],
+  } as unknown as DashboardProfitabilityResponse;
+}
+
+function buildMonthlyProfitability(): DashboardProfitabilityResponse {
+  return {
+    channels: [],
+    products: [
+      {
+        netSales: 2,
+        salePrice: "250.00",
+        revenue: "500.00",
+        marketplaceCommission: "50.00",
+        shippingCost: "70.00",
+        taxAmount: "50.00",
+        packagingCost: "10.00",
+        productCost: "200.00",
+      },
+      {
+        netSales: 1,
+        salePrice: "394.48",
+        revenue: "394.48",
+        marketplaceCommission: "39.45",
+        shippingCost: "50.00",
+        taxAmount: "39.45",
+        packagingCost: "10.00",
+        productCost: "173.07",
       },
     ],
   } as unknown as DashboardProfitabilityResponse;
@@ -98,9 +128,9 @@ describe("DashboardFinancialIndicators", () => {
   it("exibe Margem Media como 4.42% quando faturamento=894.48 e lucro=202.51", () => {
     const ordersSummary: OrdersListSummary = {
       averageMargin: "0.2263",
-      grossProfit: "594",
-      grossRevenue: "894.48",
-      totalProfit: "202.51",
+      grossProfit: "999",
+      grossRevenue: "999",
+      totalProfit: "999",
       ordersCount: 1,
       unitsSold: 1,
     };
@@ -108,7 +138,7 @@ describe("DashboardFinancialIndicators", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
-        data={buildProfitability()}
+        data={buildMonthlyProfitability()}
         ordersSummary={ordersSummary}
       />,
     );
@@ -152,7 +182,7 @@ describe("DashboardFinancialIndicators", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
-        data={buildProfitability()}
+        data={{ channels: [], products: [] } as unknown as DashboardProfitabilityResponse}
         ordersSummary={{
           averageMargin: "0",
           grossProfit: "0",
@@ -173,7 +203,23 @@ describe("DashboardFinancialIndicators", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
-        data={buildProfitability()}
+        data={
+          {
+            channels: [],
+            products: [
+              {
+                netSales: 1,
+                salePrice: "894.48",
+                revenue: "894.48",
+                marketplaceCommission: "0",
+                shippingCost: "0",
+                taxAmount: "0",
+                packagingCost: "0",
+                productCost: "1096.99",
+              },
+            ],
+          } as unknown as DashboardProfitabilityResponse
+        }
         ordersSummary={{
           averageMargin: "-0.2263",
           grossProfit: "-594",
@@ -197,16 +243,7 @@ describe("DashboardFinancialIndicators", () => {
         data={
           {
             channels: [],
-            products: [
-              {
-                revenue: "894.48",
-                marketplaceCommission: "89.45",
-                shippingCost: "120.00",
-                taxAmount: "89.45",
-                packagingCost: "20.00",
-                productCost: "373.07",
-              },
-            ],
+            products: buildMonthlyProfitability().products,
           } as unknown as DashboardProfitabilityResponse
         }
       />,

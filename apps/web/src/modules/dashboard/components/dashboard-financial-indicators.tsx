@@ -165,7 +165,7 @@ export function DashboardFinancialIndicators({
     let totalProfit = 0;
 
     for (const product of data.products) {
-      const revenue = parseDecimal(product.revenue);
+      const revenue = normalizeNumber(product.netSales) * parseDecimal(product.salePrice);
       totalRevenue += revenue;
       totalProfit +=
         revenue -
@@ -181,6 +181,8 @@ export function DashboardFinancialIndicators({
       totalRevenue,
     };
   }, [data.products]);
+
+  const hasProductRollup = data.products.length > 0;
 
   const cancelEditing = useCallback(() => {
     setFixedCostInput(formatCurrencyInput(fixedCost));
@@ -232,15 +234,18 @@ export function DashboardFinancialIndicators({
     }
   }, [activeCompany, fixedCostInput, taxPercentInput]);
 
-  const totalRevenue =
-    ordersSummary
+  const totalRevenue = hasProductRollup
+    ? financials.totalRevenue
+    : ordersSummary
       ? normalizeNumber(ordersSummary.grossRevenue)
       : summary
         ? normalizeNumber(summary.summary.grossRevenue)
         : financials.totalRevenue;
-  const totalProfit = ordersSummary
-    ? normalizeNumber(ordersSummary.totalProfit ?? ordersSummary.grossProfit)
-    : financials.totalProfit;
+  const totalProfit = hasProductRollup
+    ? financials.totalProfit
+    : ordersSummary
+      ? normalizeNumber(ordersSummary.totalProfit ?? ordersSummary.grossProfit)
+      : financials.totalProfit;
   const netProfit = totalProfit - fixedCost;
   const profitMarginRatio = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
   const marginDisplayRatio = totalProfit !== 0 ? totalRevenue / totalProfit : 0;
