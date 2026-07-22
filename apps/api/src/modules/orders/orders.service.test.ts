@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { read, utils } from "xlsx";
 import {
-  calculateTotalProfitFromComposition,
+  calculateMonthlyMarginFinancials,
   OrdersService,
 } from "./orders.service";
 
@@ -10,17 +10,42 @@ describe("OrdersService", () => {
     vi.unstubAllGlobals();
   });
 
-  it("calculates total profit from revenue and requested cost components", () => {
+  it("calculates monthly margin from order detail items, compositions and distinct sold products", () => {
     expect(
-      calculateTotalProfitFromComposition({
-        revenueAmount: "894.48",
-        marketplaceCommissionAmount: "89.45",
-        shippingOrFixedFeeAmount: "120.00",
-        taxAmount: "89.45",
-        packagingCostAmount: "20.00",
-        productCostAmount: "373.07",
-      }),
-    ).toBeCloseTo(202.51, 10);
+      calculateMonthlyMarginFinancials([
+        {
+          items: [{ quantity: 2, unitPrice: "200.00" }],
+          composition: {
+            marketplaceCommissionAmount: "50.00",
+            shippingOrFixedFeeAmount: "70.00",
+            taxAmount: "50.00",
+          },
+          packagingCosts: [{ amount: "94.91", productId: "product_1" }],
+        },
+        {
+          items: [{ quantity: 1, unitPrice: "98.16" }],
+          composition: {
+            marketplaceCommissionAmount: "39.45",
+            shippingOrFixedFeeAmount: "50.00",
+            taxAmount: "39.45",
+          },
+          packagingCosts: [
+            { amount: "94.91", productId: "product_1" },
+            { amount: "0.00", productId: "product_2" },
+          ],
+        },
+      ]),
+    ).toEqual({
+      marginRevenue: "894.48",
+      totalProfit: "202.51",
+    });
+  });
+
+  it("returns zero margin financials without monthly orders", () => {
+    expect(calculateMonthlyMarginFinancials([])).toEqual({
+      marginRevenue: "0.00",
+      totalProfit: "0.00",
+    });
   });
 
   it("treats a matched zero shipment sender cost as resolved", async () => {
@@ -2818,10 +2843,11 @@ describe("OrdersService", () => {
       ),
     ).resolves.toEqual({
       summary: {
-        averageMargin: "0.5800",
-        grossProfit: "116.0000",
+        averageMargin: "0.5950",
+        grossProfit: "119.0000",
         grossRevenue: "200.0000",
-        totalProfit: "95.0000",
+        marginRevenue: "420.00",
+        totalProfit: "222.00",
         ordersCount: 1,
         unitsSold: 3,
       },

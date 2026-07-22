@@ -1758,31 +1758,78 @@ function buildEmptyOrdersSummary(): OrdersListSummary {
     averageMargin: "0.00",
     grossProfit: "0.00",
     grossRevenue: "0.00",
+    marginRevenue: "0.00",
     totalProfit: "0.00",
     ordersCount: 0,
     unitsSold: 0,
   };
 }
 
-export function calculateTotalProfitFromComposition(
+type MonthlyMarginRollupInput = {
+  items: Array<Pick<OrderLineItem, "quantity" | "unitPrice">>;
   composition: Pick<
     OrderComposition,
-    | "revenueAmount"
     | "marketplaceCommissionAmount"
     | "shippingOrFixedFeeAmount"
+    | "shippingBreakdown"
     | "taxAmount"
-    | "packagingCostAmount"
-    | "productCostAmount"
-  >,
+  >;
+  packagingCosts: Array<{
+    productId: string;
+    amount: string | number | null | undefined;
+  }>;
+};
+
+export function calculateMonthlyMarginFinancials(
+  orders: MonthlyMarginRollupInput[],
 ) {
-  return (
-    toNumber(composition.revenueAmount) -
-    toNumber(composition.marketplaceCommissionAmount) -
-    toNumber(composition.shippingOrFixedFeeAmount) -
-    toNumber(composition.taxAmount) -
-    toNumber(composition.packagingCostAmount) -
-    toNumber(composition.productCostAmount)
-  );
+  let totalNetSales = 0;
+  let totalPdvCents = 0n;
+  let marketplaceCommissionCents = 0n;
+  let shippingOrFixedFeeCents = 0n;
+  let taxCents = 0n;
+  let packagingCents = 0n;
+  const packagedProductIds = new Set<string>();
+
+  for (const order of orders) {
+    for (const item of order.items) {
+      totalNetSales += Math.max(0, item.quantity);
+      totalPdvCents += parseMoneyToCents(item.unitPrice);
+    }
+
+    marketplaceCommissionCents += parseMoneyToCents(
+      order.composition.marketplaceCommissionAmount,
+    );
+    const displayedShippingAmount =
+      order.composition.shippingBreakdown?.netShippingAmount ??
+      order.composition.shippingOrFixedFeeAmount;
+    const shippingCents = parseMoneyToCents(displayedShippingAmount);
+    shippingOrFixedFeeCents += shippingCents < 0n ? -shippingCents : shippingCents;
+    taxCents += parseMoneyToCents(order.composition.taxAmount);
+
+    for (const packagingCost of order.packagingCosts) {
+      if (packagedProductIds.has(packagingCost.productId)) {
+        continue;
+      }
+
+      packagedProductIds.add(packagingCost.productId);
+      packagingCents += parseMoneyToCents(packagingCost.amount);
+    }
+  }
+
+  const marginRevenueCents = BigInt(totalNetSales) * totalPdvCents;
+  const totalProfitCents =
+    marginRevenueCents -
+    marketplaceCommissionCents -
+    shippingOrFixedFeeCents -
+    taxCents -
+    packagingCents -
+    totalPdvCents;
+
+  return {
+    marginRevenue: formatCents(marginRevenueCents),
+    totalProfit: formatCents(totalProfitCents),
+  };
 }
 
 function buildOrdersSummary(logicalOrders: LogicalOrder[]): OrdersListSummary {
@@ -1792,7 +1839,6 @@ function buildOrdersSummary(logicalOrders: LogicalOrder[]): OrdersListSummary {
 
   let grossRevenue = 0;
   let grossProfit = 0;
-  let totalProfit = 0;
   let unitsSold = 0;
 
   for (const logicalOrder of logicalOrders) {
@@ -1802,21 +1848,39 @@ function buildOrdersSummary(logicalOrders: LogicalOrder[]): OrdersListSummary {
       toNumber(composition.netRevenueAmount) -
       toNumber(composition.productCostAmount) -
       toNumber(composition.packagingCostAmount);
-    const orderTotalProfit = calculateTotalProfitFromComposition(composition);
 
     grossRevenue += toNumber(order.totalWithFees);
     grossProfit += orderGrossProfit;
-    totalProfit += orderTotalProfit;
     unitsSold += order.itemsSold;
   }
 
   const averageMargin = grossRevenue > 0 ? grossProfit / grossRevenue : 0;
+  const monthlyMargin = calculateMonthlyMarginFinancials(
+    logicalOrders.map((logicalOrder) => ({
+      composition: logicalOrder.composition,
+      items: logicalOrder.items,
+      packagingCosts: logicalOrder.rows.flatMap((row) =>
+        row.items.flatMap((item) => {
+          const linkedProduct = item.externalProduct?.linkedProduct;
+          return linkedProduct
+            ? [
+                {
+                  amount: linkedProduct.financeDefaults?.packagingCost,
+                  productId: linkedProduct.id,
+                },
+              ]
+            : [];
+        }),
+      ),
+    })),
+  );
 
   return {
     averageMargin: averageMargin.toFixed(4),
     grossProfit: grossProfit.toFixed(4),
     grossRevenue: grossRevenue.toFixed(4),
-    totalProfit: totalProfit.toFixed(4),
+    marginRevenue: monthlyMargin.marginRevenue,
+    totalProfit: monthlyMargin.totalProfit,
     ordersCount: logicalOrders.length,
     unitsSold,
   };

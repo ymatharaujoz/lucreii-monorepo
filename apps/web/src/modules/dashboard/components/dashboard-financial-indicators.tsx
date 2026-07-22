@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   TrendingUp,
@@ -126,10 +126,6 @@ function IndicatorCard({
   );
 }
 
-function parseDecimal(value: string): number {
-  return Number.parseFloat(value) || 0;
-}
-
 function normalizeNumber(value: string | number | undefined | null): number {
   if (value === undefined || value === null) return 0;
   const parsed = typeof value === "string" ? Number.parseFloat(value) : value;
@@ -159,30 +155,6 @@ export function DashboardFinancialIndicators({
     setFixedCostInput(formatCurrencyInput(nextFixedCost));
     setTaxPercentInput(formatCurrencyInput(nextTaxPercent));
   }, [activeCompany]);
-
-  const financials = useMemo(() => {
-    let totalRevenue = 0;
-    let totalProfit = 0;
-
-    for (const product of data.products) {
-      const revenue = normalizeNumber(product.netSales) * parseDecimal(product.salePrice);
-      totalRevenue += revenue;
-      totalProfit +=
-        revenue -
-        parseDecimal(product.marketplaceCommission) -
-        parseDecimal(product.shippingCost) -
-        parseDecimal(product.taxAmount) -
-        parseDecimal(product.packagingCost) -
-        parseDecimal(product.productCost);
-    }
-
-    return {
-      totalProfit,
-      totalRevenue,
-    };
-  }, [data.products]);
-
-  const hasProductRollup = data.products.length > 0;
 
   const cancelEditing = useCallback(() => {
     setFixedCostInput(formatCurrencyInput(fixedCost));
@@ -234,18 +206,8 @@ export function DashboardFinancialIndicators({
     }
   }, [activeCompany, fixedCostInput, taxPercentInput]);
 
-  const totalRevenue = hasProductRollup
-    ? financials.totalRevenue
-    : ordersSummary
-      ? normalizeNumber(ordersSummary.grossRevenue)
-      : summary
-        ? normalizeNumber(summary.summary.grossRevenue)
-        : financials.totalRevenue;
-  const totalProfit = hasProductRollup
-    ? financials.totalProfit
-    : ordersSummary
-      ? normalizeNumber(ordersSummary.totalProfit ?? ordersSummary.grossProfit)
-      : financials.totalProfit;
+  const totalRevenue = ordersSummary ? normalizeNumber(ordersSummary.marginRevenue) : 0;
+  const totalProfit = ordersSummary ? normalizeNumber(ordersSummary.totalProfit) : 0;
   const netProfit = totalProfit - fixedCost;
   const profitMarginRatio = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
   const marginDisplayRatio = totalProfit !== 0 ? totalRevenue / totalProfit : 0;

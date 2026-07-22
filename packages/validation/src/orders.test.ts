@@ -14,6 +14,7 @@ describe("orders validation schemas", () => {
           averageMargin: "0.25",
           grossProfit: "50.00",
           grossRevenue: "200.00",
+          marginRevenue: "600.00",
           totalProfit: "42.00",
           ordersCount: 1,
           unitsSold: 3,
@@ -59,6 +60,7 @@ describe("orders validation schemas", () => {
     expect(result.data.items[0]?.displayOrderId).toBe("MLB-SALE-9001");
     expect(result.data.items[0]?.skus).toEqual(["SKU-1", "SKU-2"]);
     expect(result.data.summary.grossProfit).toBe("50.00");
+    expect(result.data.summary.marginRevenue).toBe("600.00");
     expect(result.data.summary.totalProfit).toBe("42.00");
   });
 

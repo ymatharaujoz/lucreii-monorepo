@@ -12,7 +12,7 @@ Para o conjunto de pedidos filtrado pelo mês:
 - `Custo do Produto Total (PDV)` é a soma de `items.unitPrice`, o campo exibido como `Preço de Venda`, de todos os itens.
 - `Receita` é literalmente `Vendas Líquidas Total × Custo do Produto Total (PDV)`.
 - `Comissão Meli Total` é a soma de `composition.marketplaceCommissionAmount`.
-- `Taxa/Frete Total` é a soma de `composition.shippingOrFixedFeeAmount`.
+- `Taxa/Frete Total` é a soma do valor exibido na composição: `shippingBreakdown.netShippingAmount` quando disponível; caso contrário, `composition.shippingOrFixedFeeAmount`. O valor segue a exibição monetária positiva do modal.
 - `Imposto Total` é a soma de `composition.taxAmount`.
 - `Embalagem Total` é a soma de `financeDefaults.packagingCost` do catálogo para cada produto distinto vinculado a pelo menos um item vendido no mês. O valor do catálogo entra uma vez por produto, não uma vez por pedido ou unidade.
 - `Custo do Produto Total` é o mesmo total de `Preço de Venda` definido acima.

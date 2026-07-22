@@ -135,8 +135,17 @@ export function useDashboardData(
     retry: 2,
   });
 
-  const isLoading = summaryQuery.isLoading || chartsQuery.isLoading || profitabilityQuery.isLoading;
-  const error = summaryQuery.error || chartsQuery.error || profitabilityQuery.error || null;
+  const isLoading =
+    ordersSummaryQuery.isLoading ||
+    summaryQuery.isLoading ||
+    chartsQuery.isLoading ||
+    profitabilityQuery.isLoading;
+  const error =
+    ordersSummaryQuery.error ||
+    summaryQuery.error ||
+    chartsQuery.error ||
+    profitabilityQuery.error ||
+    null;
   const financialState = determineDashboardFinancialState(
     summaryQuery.data,
     chartsQuery.data,

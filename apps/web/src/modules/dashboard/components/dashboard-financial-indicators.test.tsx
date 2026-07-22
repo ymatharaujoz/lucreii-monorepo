@@ -130,7 +130,8 @@ describe("DashboardFinancialIndicators", () => {
       averageMargin: "0.2263",
       grossProfit: "999",
       grossRevenue: "999",
-      totalProfit: "999",
+      marginRevenue: "894.48",
+      totalProfit: "202.51",
       ordersCount: 1,
       unitsSold: 1,
     };
@@ -156,6 +157,7 @@ describe("DashboardFinancialIndicators", () => {
       averageMargin: "0",
       grossProfit: "0",
       grossRevenue: "0",
+      marginRevenue: "0",
       totalProfit: "0",
       ordersCount: 0,
       unitsSold: 0,
@@ -187,6 +189,7 @@ describe("DashboardFinancialIndicators", () => {
           averageMargin: "0",
           grossProfit: "0",
           grossRevenue: "821",
+          marginRevenue: "821",
           totalProfit: "0",
           ordersCount: 1,
           unitsSold: 1,
@@ -224,6 +227,7 @@ describe("DashboardFinancialIndicators", () => {
           averageMargin: "-0.2263",
           grossProfit: "-594",
           grossRevenue: "894.48",
+          marginRevenue: "894.48",
           totalProfit: "-202.51",
           ordersCount: 1,
           unitsSold: 1,
@@ -236,7 +240,7 @@ describe("DashboardFinancialIndicators", () => {
     view.unmount();
   });
 
-  it("calcula lucro total pelos custos dos produtos quando resumo de pedidos ainda nao chegou", () => {
+  it("nao usa a rentabilidade agregada de produtos sem o resumo mensal dos pedidos", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
@@ -249,7 +253,7 @@ describe("DashboardFinancialIndicators", () => {
       />,
     );
 
-    expect(document.body.textContent ?? "").toContain("4.42%");
+    expect(document.body.textContent ?? "").toContain("0.0%");
 
     view.unmount();
   });
