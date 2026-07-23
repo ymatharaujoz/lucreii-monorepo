@@ -6425,6 +6425,15 @@ describe("ProductsService", () => {
       pageTwo.items[0].performanceId,
     );
     expect(pageTwo.items[0].performanceId).toBe("performance_11");
+
+    const pageTwoFromRawQuery = await service.listPerformanceRows(context, {
+      page: "2" as unknown as number,
+      pageSize: "10" as unknown as number,
+      referenceMonth: "2026-06-01",
+    });
+
+    expect(pageTwoFromRawQuery.page).toBe(2);
+    expect(pageTwoFromRawQuery.items[0].performanceId).toBe("performance_11");
   });
 
   it("rolls up every visible performance row by net quantity before pagination", async () => {

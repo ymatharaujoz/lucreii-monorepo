@@ -2554,15 +2554,21 @@ export class ProductsService {
     const sortedRows = [...filteredRows].sort((left, right) =>
       this.compareVisiblePerformanceRows(left, right, sortBy, sortDirection),
     );
-    const pageSize = Number.isFinite(query.pageSize)
-      ? Math.trunc(query.pageSize ?? 10)
-      : 10;
+    // Query parameters can still arrive as strings when the service is called
+    // outside Nest's validation pipe (or while an older API instance is live).
+    // Normalize them here so pagination cannot silently fall back to page 1.
+    const requestedPageSize = Number(query.pageSize ?? 10);
+    const pageSize =
+      Number.isFinite(requestedPageSize) && requestedPageSize > 0
+        ? Math.trunc(requestedPageSize)
+        : 10;
     const totalItems = sortedRows.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const requestedPage = Number(query.page ?? 1);
     const safePage = Math.min(
       Math.max(
         1,
-        Number.isFinite(query.page) ? Math.trunc(query.page ?? 1) : 1,
+        Number.isFinite(requestedPage) ? Math.trunc(requestedPage) : 1,
       ),
       totalPages,
     );
