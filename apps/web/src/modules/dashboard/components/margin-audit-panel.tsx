@@ -55,14 +55,14 @@ export function MarginAuditPanel({
 
   const rows: AuditRowProps[] = [
     {
-      description: `${audit.eligiblePerformanceRows} de ${audit.totalPerformanceRows} linhas da performance; somente venda líquida positiva.`,
-      formula: "Σ venda líquida por linha",
+      description: `${audit.eligiblePerformanceRows} de ${audit.totalPerformanceRows} linhas da performance; somente linhas com Vendas > 0.`,
+      formula: "Σ VENDAS na tabela de performance",
       label: "Vendas líquidas total",
       value: formatNumber(audit.netLiquidSalesTotal),
     },
     {
-      description: "Soma da coluna PDV nas linhas com venda líquida positiva.",
-      formula: "Σ PDV | venda líquida > 0",
+      description: "Soma da coluna PDV nas linhas com Vendas > 0.",
+      formula: "Σ PDV | VENDAS > 0",
       label: "Custo do Produto Total (PDV)",
       value: formatMoney(audit.pdvTotal, { maximumFractionDigits: 2 }),
     },

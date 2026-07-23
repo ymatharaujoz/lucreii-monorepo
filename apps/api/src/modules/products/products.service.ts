@@ -2604,16 +2604,16 @@ export class ProductsService {
     let eligiblePerformanceRows = 0;
 
     for (const row of response.items) {
-      const netLiquidSales = Number.isFinite(row.netLiquidSales)
-        ? Math.trunc(row.netLiquidSales)
+      const displayedSales = Number.isFinite(row.sales)
+        ? Math.trunc(row.sales)
         : 0;
-      if (netLiquidSales <= 0) {
+      if (displayedSales <= 0) {
         continue;
       }
 
       eligiblePerformanceRows += 1;
-      netLiquidSalesTotal += netLiquidSales;
-      const quantity = BigInt(netLiquidSales);
+      netLiquidSalesTotal += displayedSales;
+      const quantity = BigInt(displayedSales);
       pdvTotalCents += parseMoneyToCents(row.sellingPrice);
       marginRevenueCents += parseMoneyToCents(row.sellingPrice) * quantity;
       packagingTotalCents +=

@@ -34,6 +34,7 @@ describe("MarginAuditPanel", () => {
 
     expect(normalizedMarkup).toContain("Auditoria da margem média");
     expect(normalizedMarkup).toContain("Vendas líquidas total");
+    expect(normalizedMarkup).toContain("Σ VENDAS na tabela de performance");
     expect(normalizedMarkup).toContain("3 × R$ 298,16");
     expect(normalizedMarkup).toContain(
       "Σ (PDV da linha × venda líquida da linha)",

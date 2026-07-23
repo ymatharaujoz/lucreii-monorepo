@@ -6436,7 +6436,7 @@ describe("ProductsService", () => {
     expect(pageTwoFromRawQuery.items[0].performanceId).toBe("performance_11");
   });
 
-  it("rolls up every visible performance row by net quantity before pagination", async () => {
+  it("rolls up every visible performance row by displayed sales before pagination", async () => {
     const { service } = createService();
     const buildRow = (
       overrides: Partial<
@@ -6470,7 +6470,7 @@ describe("ProductsService", () => {
         packagingCost: 4,
         productId: "product_1",
         netLiquidSales: 2,
-        sales: 2,
+        sales: 3,
         sellingPrice: 100,
         unitCost: 20,
       }),
@@ -6529,12 +6529,12 @@ describe("ProductsService", () => {
         },
       ),
     ).resolves.toEqual({
-      eligiblePerformanceRows: 13,
-      marginRevenue: "410.00",
-      netLiquidSalesTotal: 14,
-      packagingTotal: "23.00",
-      pdvTotal: "310.00",
-      productCostTotal: "82.00",
+      eligiblePerformanceRows: 14,
+      marginRevenue: "1510.00",
+      netLiquidSalesTotal: 17,
+      packagingTotal: "45.00",
+      pdvTotal: "810.00",
+      productCostTotal: "502.00",
       totalPerformanceRows: 14,
     });
 
