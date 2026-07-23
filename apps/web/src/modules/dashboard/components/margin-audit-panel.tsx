@@ -61,15 +61,15 @@ export function MarginAuditPanel({
       value: formatNumber(audit.netLiquidSalesTotal),
     },
     {
-      description: "Soma da coluna PDV nas linhas com Vendas > 0.",
-      formula: "Σ PDV | VENDAS > 0",
+      description: "Soma de VENDAS × PDV em cada linha com Vendas > 0.",
+      formula: "Σ (VENDAS × PDV) | VENDAS > 0",
       label: "Custo do Produto Total (PDV)",
       value: formatMoney(audit.pdvTotal, { maximumFractionDigits: 2 }),
     },
     {
       description:
         "Multiplicação dos dois totais informados; exibida para comparação.",
-      formula: `${formatNumber(audit.netLiquidSalesTotal)} × ${formatMoney(audit.pdvTotal, { maximumFractionDigits: 2 })}`,
+      formula: `${formatNumber(audit.netLiquidSalesTotal)} × Σ PDV (${formatMoney(audit.unitPdvTotal, { maximumFractionDigits: 2 })})`,
       label: "Receita pela fórmula informada",
       value: formatMoney(audit.aggregateRevenue, { maximumFractionDigits: 2 }),
     },

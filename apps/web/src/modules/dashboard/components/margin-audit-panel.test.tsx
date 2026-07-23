@@ -13,12 +13,13 @@ const audit: OrdersMarginAudit = {
   marketplaceCommissionTotal: "89.45",
   netLiquidSalesTotal: 3,
   packagingTotal: "94.91",
-  pdvTotal: "298.16",
+  pdvTotal: "894.48",
   productCostTotal: "298.16",
   shippingOrFixedFeeTotal: "120.00",
   taxTotal: "89.45",
   totalPerformanceRows: 2,
   totalProfit: "202.51",
+  unitPdvTotal: "298.16",
 };
 
 describe("MarginAuditPanel", () => {
@@ -35,7 +36,8 @@ describe("MarginAuditPanel", () => {
     expect(normalizedMarkup).toContain("Auditoria da margem média");
     expect(normalizedMarkup).toContain("Vendas líquidas total");
     expect(normalizedMarkup).toContain("Σ VENDAS na tabela de performance");
-    expect(normalizedMarkup).toContain("3 × R$ 298,16");
+    expect(normalizedMarkup).toContain("3 × Σ PDV (R$ 298,16)");
+    expect(normalizedMarkup).toContain("Σ (VENDAS × PDV) | VENDAS &gt; 0");
     expect(normalizedMarkup).toContain(
       "Σ (PDV da linha × venda líquida da linha)",
     );

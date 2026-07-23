@@ -85,12 +85,13 @@ describe("orders validation schemas", () => {
         marketplaceCommissionTotal: "89.45",
         netLiquidSalesTotal: 29,
         packagingTotal: "94.91",
-        pdvTotal: "298.16",
+        pdvTotal: "894.48",
         productCostTotal: "298.16",
         shippingOrFixedFeeTotal: "120.00",
         taxTotal: "89.45",
         totalPerformanceRows: 10,
         totalProfit: "202.51",
+        unitPdvTotal: "298.16",
       },
     });
 

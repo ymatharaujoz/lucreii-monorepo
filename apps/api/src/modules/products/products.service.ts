@@ -193,6 +193,7 @@ export type MonthlyPerformanceMarginRollup = {
   netLiquidSalesTotal: number;
   packagingTotal: string;
   pdvTotal: string;
+  unitPdvTotal: string;
   productCostTotal: string;
   totalPerformanceRows: number;
 };
@@ -2599,6 +2600,7 @@ export class ProductsService {
     let marginRevenueCents = 0n;
     let netLiquidSalesTotal = 0;
     let pdvTotalCents = 0n;
+    let unitPdvTotalCents = 0n;
     let packagingTotalCents = 0n;
     let productCostTotalCents = 0n;
     let eligiblePerformanceRows = 0;
@@ -2614,8 +2616,10 @@ export class ProductsService {
       eligiblePerformanceRows += 1;
       netLiquidSalesTotal += displayedSales;
       const quantity = BigInt(displayedSales);
-      pdvTotalCents += parseMoneyToCents(row.sellingPrice);
-      marginRevenueCents += parseMoneyToCents(row.sellingPrice) * quantity;
+      const sellingPriceCents = parseMoneyToCents(row.sellingPrice);
+      unitPdvTotalCents += sellingPriceCents;
+      pdvTotalCents += sellingPriceCents * quantity;
+      marginRevenueCents += sellingPriceCents * quantity;
       packagingTotalCents +=
         absoluteCents(parseMoneyToCents(row.packagingCost)) * quantity;
       productCostTotalCents +=
@@ -2630,6 +2634,7 @@ export class ProductsService {
       pdvTotal: formatCents(pdvTotalCents),
       productCostTotal: formatCents(productCostTotalCents),
       totalPerformanceRows: response.items.length,
+      unitPdvTotal: formatCents(unitPdvTotalCents),
     };
   }
 

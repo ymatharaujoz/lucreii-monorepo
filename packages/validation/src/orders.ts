@@ -156,6 +156,7 @@ export const ordersListSummarySchema = z.object({
       netLiquidSalesTotal: z.number().int().min(0),
       packagingTotal: decimalField("Audit packaging total"),
       pdvTotal: decimalField("Audit PDV total"),
+      unitPdvTotal: decimalField("Audit unit PDV total"),
       productCostTotal: decimalField("Audit product cost total"),
       aggregateRevenue: decimalField("Audit aggregate revenue"),
       shippingOrFixedFeeTotal: decimalField("Audit shipping total"),

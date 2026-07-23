@@ -108,6 +108,7 @@ export type OrdersMarginAudit = {
   netLiquidSalesTotal: number;
   packagingTotal: string;
   pdvTotal: string;
+  unitPdvTotal: string;
   productCostTotal: string;
   aggregateRevenue: string;
   shippingOrFixedFeeTotal: string;

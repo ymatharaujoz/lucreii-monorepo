@@ -6533,9 +6533,10 @@ describe("ProductsService", () => {
       marginRevenue: "1510.00",
       netLiquidSalesTotal: 17,
       packagingTotal: "45.00",
-      pdvTotal: "810.00",
+      pdvTotal: "1510.00",
       productCostTotal: "502.00",
       totalPerformanceRows: 14,
+      unitPdvTotal: "810.00",
     });
 
     expect(listPerformanceRowsSpy).toHaveBeenCalledWith(
@@ -6551,5 +6552,53 @@ describe("ProductsService", () => {
         referenceMonth: "2026-06-01",
       },
     );
+  });
+
+  it("calculates total PDV from displayed sales times displayed PDV", async () => {
+    const { service } = createService();
+    vi.spyOn(service, "listPerformanceRows").mockResolvedValue({
+      items: [
+        {
+          id: "performance-a",
+          netLiquidSales: 0,
+          packagingCost: 0,
+          productId: "product-a",
+          returns: 0,
+          sales: 2,
+          sellingPrice: 100,
+          unitCost: 20,
+        },
+        {
+          id: "performance-b",
+          netLiquidSales: 0,
+          packagingCost: 0,
+          productId: "product-b",
+          returns: 0,
+          sales: 1,
+          sellingPrice: 649.58,
+          unitCost: 20,
+        },
+      ] as ProductPerformanceListItem[],
+      page: 1,
+      pageSize: Number.MAX_SAFE_INTEGER,
+      totalItems: 2,
+      totalPages: 1,
+    });
+
+    await expect(
+      service.readMonthlyPerformanceMarginRollup(
+        {
+          organizationId: "org_1",
+          selectedCompanyId: "company_1",
+          userId: "user_1",
+        },
+        { referenceMonth: "2026-06-01" },
+      ),
+    ).resolves.toMatchObject({
+      marginRevenue: "849.58",
+      netLiquidSalesTotal: 3,
+      pdvTotal: "849.58",
+      unitPdvTotal: "749.58",
+    });
   });
 });

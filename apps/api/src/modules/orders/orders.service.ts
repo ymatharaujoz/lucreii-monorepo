@@ -1824,7 +1824,7 @@ export function calculateMonthlyMarginFinancials(
     productCostCents;
   const aggregateRevenueCents =
     BigInt(Math.max(0, Math.trunc(input.performance.netLiquidSalesTotal))) *
-    parseMoneyToCents(input.performance.pdvTotal);
+    parseMoneyToCents(input.performance.unitPdvTotal);
   const marginAudit: OrdersMarginAudit = {
     aggregateRevenue: formatCents(aggregateRevenueCents),
     compositionCount: input.compositions.length,
@@ -1841,6 +1841,7 @@ export function calculateMonthlyMarginFinancials(
     taxTotal: formatCents(taxCents),
     totalPerformanceRows: input.performance.totalPerformanceRows,
     totalProfit: formatCents(totalProfitCents),
+    unitPdvTotal: input.performance.unitPdvTotal,
   };
 
   return {
