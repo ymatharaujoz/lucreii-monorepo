@@ -34,13 +34,16 @@ describe("MarginAuditPanel", () => {
     const normalizedMarkup = markup.replace(/\u00a0/g, " ");
 
     expect(normalizedMarkup).toContain("Auditoria da margem média");
-    expect(normalizedMarkup).toContain("Vendas líquidas total");
+    expect(normalizedMarkup).toContain("Vendas total");
+    expect(normalizedMarkup).toContain("Receita por linhas (PDV)");
     expect(normalizedMarkup).toContain("Σ VENDAS na tabela de performance");
     expect(normalizedMarkup).toContain("3 × Σ PDV (R$ 298,16)");
     expect(normalizedMarkup).toContain("Σ (VENDAS × PDV) | VENDAS &gt; 0");
     expect(normalizedMarkup).toContain(
       "Σ (PDV da linha × venda líquida da linha)",
     );
+    expect(normalizedMarkup).toContain("Σ EMBALAGEM nos cards COMPOSIÇÃO");
+    expect(normalizedMarkup).toContain("Σ CUSTO PRODUTO nos cards COMPOSIÇÃO");
     expect(normalizedMarkup).toContain("R$ 202,51");
     expect(normalizedMarkup).toContain(
       "Faturamento mantido no card: R$ 25.362,82",

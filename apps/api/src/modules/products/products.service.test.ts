@@ -6530,6 +6530,22 @@ describe("ProductsService", () => {
       ),
     ).resolves.toEqual({
       eligiblePerformanceRows: 14,
+      lines: expect.arrayContaining([
+        {
+          channel: "",
+          productId: "product_1",
+          sales: 3,
+          sellingPrice: "100.00",
+          sku: null,
+        },
+        {
+          channel: "",
+          productId: "product_1",
+          sales: 1,
+          sellingPrice: "100.00",
+          sku: null,
+        },
+      ]),
       marginRevenue: "1510.00",
       netLiquidSalesTotal: 17,
       packagingTotal: "45.00",

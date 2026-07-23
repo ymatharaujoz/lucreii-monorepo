@@ -14,7 +14,16 @@ describe("OrdersService", () => {
     expect(
       calculateMonthlyMarginFinancials({
         performance: {
-          eligiblePerformanceRows: 2,
+          eligiblePerformanceRows: 1,
+          lines: [
+            {
+              channel: "mercadolivre",
+              productId: "product_1",
+              sales: 3,
+              sellingPrice: "298.16",
+              sku: "SKU-1",
+            },
+          ],
           packagingTotal: "94.91",
           marginRevenue: "894.48",
           netLiquidSalesTotal: 3,
@@ -35,12 +44,24 @@ describe("OrdersService", () => {
             taxAmount: "-39.45",
           },
         ],
+        orderProductFinancials: [
+          {
+            channel: "mercadolivre",
+            marketplaceCommissionAmount: "89.45",
+            packagingCostAmount: "94.91",
+            productCostAmount: "298.16",
+            productId: "product_1",
+            shippingOrFixedFeeAmount: "120.00",
+            sku: "SKU-1",
+            taxAmount: "89.45",
+          },
+        ],
       }),
     ).toEqual({
       marginAudit: {
         aggregateRevenue: "894.48",
         compositionCount: 2,
-        eligiblePerformanceRows: 2,
+        eligiblePerformanceRows: 1,
         grossRevenue: "0.00",
         lineRevenue: "894.48",
         marginRevenue: "894.48",
@@ -65,6 +86,7 @@ describe("OrdersService", () => {
       calculateMonthlyMarginFinancials({
         performance: {
           eligiblePerformanceRows: 0,
+          lines: [],
           packagingTotal: "0.00",
           marginRevenue: "0.00",
           netLiquidSalesTotal: 0,
@@ -74,6 +96,7 @@ describe("OrdersService", () => {
           unitPdvTotal: "0.00",
         },
         compositions: [],
+        orderProductFinancials: [],
       }),
     ).toEqual({
       marginAudit: {
@@ -104,6 +127,15 @@ describe("OrdersService", () => {
       calculateMonthlyMarginFinancials({
         performance: {
           eligiblePerformanceRows: 1,
+          lines: [
+            {
+              channel: "mercadolivre",
+              productId: "product_1",
+              sales: 1,
+              sellingPrice: "100.00",
+              sku: "SKU-1",
+            },
+          ],
           packagingTotal: "0.00",
           marginRevenue: "100.00",
           netLiquidSalesTotal: 1,
@@ -113,6 +145,18 @@ describe("OrdersService", () => {
           unitPdvTotal: "100.00",
         },
         compositions: [],
+        orderProductFinancials: [
+          {
+            channel: "mercadolivre",
+            marketplaceCommissionAmount: "0.00",
+            packagingCostAmount: "0.00",
+            productCostAmount: "120.00",
+            productId: "product_1",
+            shippingOrFixedFeeAmount: "0.00",
+            sku: "SKU-1",
+            taxAmount: "0.00",
+          },
+        ],
       }),
     ).toEqual({
       marginAudit: {
@@ -138,9 +182,96 @@ describe("OrdersService", () => {
     });
   });
 
+  it("sums profit independently for each performance product line", () => {
+    expect(
+      calculateMonthlyMarginFinancials({
+        performance: {
+          eligiblePerformanceRows: 2,
+          lines: [
+            {
+              channel: "mercadolivre",
+              productId: "product_1",
+              sales: 2,
+              sellingPrice: "100.00",
+              sku: "SKU-1",
+            },
+            {
+              channel: "mercadolivre",
+              productId: "product_2",
+              sales: 1,
+              sellingPrice: "50.00",
+              sku: "SKU-2",
+            },
+          ],
+          packagingTotal: "12.00",
+          marginRevenue: "250.00",
+          netLiquidSalesTotal: 3,
+          pdvTotal: "250.00",
+          productCostTotal: "60.00",
+          totalPerformanceRows: 2,
+          unitPdvTotal: "150.00",
+        },
+        compositions: [],
+        orderProductFinancials: [
+          {
+            channel: "mercadolivre",
+            marketplaceCommissionAmount: "24.00",
+            packagingCostAmount: "8.00",
+            productCostAmount: "40.00",
+            productId: "product_1",
+            shippingOrFixedFeeAmount: "12.00",
+            sku: "SKU-1",
+            taxAmount: "8.00",
+          },
+          {
+            channel: "mercadolivre",
+            marketplaceCommissionAmount: "6.00",
+            packagingCostAmount: "4.00",
+            productCostAmount: "20.00",
+            productId: "product_2",
+            shippingOrFixedFeeAmount: "3.00",
+            sku: "SKU-2",
+            taxAmount: "2.00",
+          },
+          {
+            channel: "shopee",
+            marketplaceCommissionAmount: "999.00",
+            packagingCostAmount: "999.00",
+            productCostAmount: "999.00",
+            productId: "product_1",
+            shippingOrFixedFeeAmount: "999.00",
+            sku: "SKU-1",
+            taxAmount: "999.00",
+          },
+        ],
+      }),
+    ).toMatchObject({
+      marginAudit: expect.objectContaining({
+        lineRevenue: "250.00",
+        marketplaceCommissionTotal: "30.00",
+        packagingTotal: "12.00",
+        productCostTotal: "60.00",
+        shippingOrFixedFeeTotal: "15.00",
+        taxTotal: "10.00",
+        totalProfit: "123.00",
+      }),
+      marginRevenue: "250.00",
+      totalProfit: "123.00",
+    });
+  });
+
   it("keeps gross revenue for Faturamento while using selected monthly marketplace performance for margin", async () => {
     const readMonthlyPerformanceMarginRollup = vi.fn().mockResolvedValue({
-      eligiblePerformanceRows: 2,
+      eligiblePerformanceRows: 1,
+      lines: [
+        {
+          channel: "mercadolivre",
+          productId: "product_1",
+          sales: 3,
+          sellingPrice: "298.16",
+          sku: "SKU-1",
+        },
+      ],
       packagingTotal: "94.91",
       marginRevenue: "894.48",
       netLiquidSalesTotal: 3,
@@ -178,11 +309,19 @@ describe("OrdersService", () => {
             marketplaceCommissionAmount: "89.45",
             netRevenueAmount: "150.00",
             packagingCostAmount: "94.91",
-            productCostAmount: "0.00",
+            productCostAmount: "298.16",
             shippingOrFixedFeeAmount: "120.00",
             taxAmount: "89.45",
           },
-          items: [],
+          items: [
+            {
+              channel: "mercadolivre",
+              linkedProductId: "product_1",
+              quantity: 3,
+              sku: "SKU-1",
+              totalPrice: "894.48",
+            },
+          ],
           order: {
             itemsSold: 3,
             totalWithFees: "25362.82",

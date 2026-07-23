@@ -187,8 +187,17 @@ type PerformanceSalesLookup = {
   bySku: Map<string, number>;
 };
 
+export type MonthlyPerformanceMarginLine = {
+  channel: string;
+  productId: string | null;
+  sales: number;
+  sellingPrice: string;
+  sku: string | null;
+};
+
 export type MonthlyPerformanceMarginRollup = {
   eligiblePerformanceRows: number;
+  lines: MonthlyPerformanceMarginLine[];
   marginRevenue: string;
   netLiquidSalesTotal: number;
   packagingTotal: string;
@@ -2604,6 +2613,7 @@ export class ProductsService {
     let packagingTotalCents = 0n;
     let productCostTotalCents = 0n;
     let eligiblePerformanceRows = 0;
+    const lines: MonthlyPerformanceMarginLine[] = [];
 
     for (const row of response.items) {
       const displayedSales = Number.isFinite(row.sales)
@@ -2617,6 +2627,13 @@ export class ProductsService {
       netLiquidSalesTotal += displayedSales;
       const quantity = BigInt(displayedSales);
       const sellingPriceCents = parseMoneyToCents(row.sellingPrice);
+      lines.push({
+        channel: row.channelLabel ?? "",
+        productId: row.productId,
+        sales: displayedSales,
+        sellingPrice: formatCents(sellingPriceCents),
+        sku: row.sku?.trim() || null,
+      });
       unitPdvTotalCents += sellingPriceCents;
       pdvTotalCents += sellingPriceCents * quantity;
       marginRevenueCents += sellingPriceCents * quantity;
@@ -2628,6 +2645,7 @@ export class ProductsService {
 
     return {
       eligiblePerformanceRows,
+      lines,
       marginRevenue: formatCents(marginRevenueCents),
       netLiquidSalesTotal,
       packagingTotal: formatCents(packagingTotalCents),

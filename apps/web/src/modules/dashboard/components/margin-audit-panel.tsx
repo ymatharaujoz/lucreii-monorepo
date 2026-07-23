@@ -57,13 +57,14 @@ export function MarginAuditPanel({
     {
       description: `${audit.eligiblePerformanceRows} de ${audit.totalPerformanceRows} linhas da performance; somente linhas com Vendas > 0.`,
       formula: "Σ VENDAS na tabela de performance",
-      label: "Vendas líquidas total",
+      label: "Vendas total",
       value: formatNumber(audit.netLiquidSalesTotal),
     },
     {
-      description: "Soma de VENDAS × PDV em cada linha com Vendas > 0.",
+      description:
+        "Soma de VENDAS × PDV em cada linha da performance com Vendas > 0.",
       formula: "Σ (VENDAS × PDV) | VENDAS > 0",
-      label: "Custo do Produto Total (PDV)",
+      label: "Receita por linhas (PDV)",
       value: formatMoney(audit.pdvTotal, { maximumFractionDigits: 2 }),
     },
     {
@@ -105,15 +106,15 @@ export function MarginAuditPanel({
     },
     {
       description:
-        "Embalagem unitária multiplicada pela venda líquida de cada linha elegível.",
-      formula: "Σ (EMBALAGEM unitária × venda líquida)",
+        "Soma dos valores de EMBALAGEM exibidos nos cards COMPOSIÇÃO dos pedidos vinculados.",
+      formula: "Σ EMBALAGEM nos cards COMPOSIÇÃO",
       label: "Embalagem total",
       value: formatMoney(audit.packagingTotal, { maximumFractionDigits: 2 }),
     },
     {
       description:
-        "Custo unitário do produto multiplicado pela venda líquida de cada linha elegível.",
-      formula: "Σ (CUSTO unitário × venda líquida)",
+        "Soma dos valores de CUSTO PRODUTO exibidos nos cards COMPOSIÇÃO dos pedidos vinculados.",
+      formula: "Σ CUSTO PRODUTO nos cards COMPOSIÇÃO",
       label: "Custo do produto total",
       value: formatMoney(audit.productCostTotal, { maximumFractionDigits: 2 }),
     },

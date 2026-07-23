@@ -55,6 +55,7 @@ import {
 } from "@/modules/integrations/providers/mercadolivre.provider";
 import {
   ProductsService,
+  type MonthlyPerformanceMarginLine,
   type MonthlyPerformanceMarginRollup,
 } from "@/modules/products/products.service";
 
@@ -1785,36 +1786,156 @@ type MonthlyMarginRollupInput = {
       | "taxAmount"
     >
   >;
+  orderProductFinancials: MonthlyOrderProductFinancialLine[];
   performance: MonthlyPerformanceMarginRollup;
 };
+
+type MonthlyOrderProductFinancialLine = {
+  channel: string;
+  marketplaceCommissionAmount: string;
+  packagingCostAmount: string;
+  productCostAmount: string;
+  productId: string | null;
+  shippingOrFixedFeeAmount: string;
+  sku: string | null;
+  taxAmount: string;
+};
+
+function normalizeFinancialSku(value: string | null | undefined) {
+  const normalized = value?.trim().toUpperCase();
+  return normalized || null;
+}
+
+function buildMonthlyOrderProductFinancials(
+  logicalOrders: LogicalOrder[],
+): MonthlyOrderProductFinancialLine[] {
+  return logicalOrders.flatMap((logicalOrder) => {
+    const items = logicalOrder.items;
+    if (items.length === 0) {
+      return [];
+    }
+
+    const revenueWeights = items.map((item) =>
+      absoluteCents(parseMoneyToCents(item.totalPrice)),
+    );
+    const quantityWeights = items.map((item) =>
+      BigInt(Math.max(0, Math.trunc(item.quantity))),
+    );
+    const revenueWeightTotal = revenueWeights.reduce(
+      (total, weight) => total + weight,
+      0n,
+    );
+    const allocationWeights =
+      revenueWeightTotal > 0n ? revenueWeights : quantityWeights;
+    const composition = logicalOrder.composition;
+    const displayedShippingAmount =
+      composition.shippingBreakdown?.netShippingAmount ??
+      composition.shippingOrFixedFeeAmount;
+    const commissionAllocations = allocateCentsByWeights(
+      absoluteCents(parseMoneyToCents(composition.marketplaceCommissionAmount)),
+      allocationWeights,
+    );
+    const shippingAllocations = allocateCentsByWeights(
+      absoluteCents(parseMoneyToCents(displayedShippingAmount)),
+      allocationWeights,
+    );
+    const taxAllocations = allocateCentsByWeights(
+      absoluteCents(parseMoneyToCents(composition.taxAmount)),
+      allocationWeights,
+    );
+    const packagingAllocations = allocateCentsByWeights(
+      absoluteCents(parseMoneyToCents(composition.packagingCostAmount)),
+      quantityWeights,
+    );
+    const productCostAllocations = allocateCentsByWeights(
+      absoluteCents(parseMoneyToCents(composition.productCostAmount)),
+      quantityWeights,
+    );
+
+    return items.map((item, index) => ({
+      channel: item.channel,
+      marketplaceCommissionAmount: formatCents(
+        commissionAllocations[index] ?? 0n,
+      ),
+      packagingCostAmount: formatCents(packagingAllocations[index] ?? 0n),
+      productCostAmount: formatCents(productCostAllocations[index] ?? 0n),
+      productId: item.linkedProductId,
+      shippingOrFixedFeeAmount: formatCents(shippingAllocations[index] ?? 0n),
+      sku: normalizeFinancialSku(item.sku),
+      taxAmount: formatCents(taxAllocations[index] ?? 0n),
+    }));
+  });
+}
+
+function matchesMonthlyPerformanceLine(
+  performanceLine: MonthlyPerformanceMarginLine,
+  orderProductFinancial: MonthlyOrderProductFinancialLine,
+) {
+  if (
+    performanceLine.channel &&
+    orderProductFinancial.channel &&
+    performanceLine.channel !== orderProductFinancial.channel
+  ) {
+    return false;
+  }
+
+  const productMatches =
+    performanceLine.productId !== null &&
+    orderProductFinancial.productId !== null &&
+    performanceLine.productId === orderProductFinancial.productId;
+  const skuMatches =
+    normalizeFinancialSku(performanceLine.sku) !== null &&
+    normalizeFinancialSku(performanceLine.sku) ===
+      normalizeFinancialSku(orderProductFinancial.sku);
+
+  return productMatches || skuMatches;
+}
 
 export function calculateMonthlyMarginFinancials(
   input: MonthlyMarginRollupInput,
 ) {
+  let marginRevenueCents = 0n;
   let marketplaceCommissionCents = 0n;
   let shippingOrFixedFeeCents = 0n;
   let taxCents = 0n;
+  let packagingCents = 0n;
+  let productCostCents = 0n;
 
-  for (const composition of input.compositions) {
-    marketplaceCommissionCents += absoluteCents(
-      parseMoneyToCents(composition.marketplaceCommissionAmount),
-    );
-    const displayedShippingAmount =
-      composition.shippingBreakdown?.netShippingAmount ??
-      composition.shippingOrFixedFeeAmount;
-    shippingOrFixedFeeCents += absoluteCents(
-      parseMoneyToCents(displayedShippingAmount),
-    );
-    taxCents += absoluteCents(parseMoneyToCents(composition.taxAmount));
+  for (const performanceLine of input.performance.lines) {
+    if (performanceLine.sales <= 0) {
+      continue;
+    }
+
+    const lineRevenueCents =
+      parseMoneyToCents(performanceLine.sellingPrice) *
+      BigInt(Math.trunc(performanceLine.sales));
+    marginRevenueCents += lineRevenueCents;
+
+    for (const orderProductFinancial of input.orderProductFinancials) {
+      if (
+        !matchesMonthlyPerformanceLine(performanceLine, orderProductFinancial)
+      ) {
+        continue;
+      }
+
+      marketplaceCommissionCents += absoluteCents(
+        parseMoneyToCents(orderProductFinancial.marketplaceCommissionAmount),
+      );
+      shippingOrFixedFeeCents += absoluteCents(
+        parseMoneyToCents(orderProductFinancial.shippingOrFixedFeeAmount),
+      );
+      taxCents += absoluteCents(
+        parseMoneyToCents(orderProductFinancial.taxAmount),
+      );
+      packagingCents += absoluteCents(
+        parseMoneyToCents(orderProductFinancial.packagingCostAmount),
+      );
+      productCostCents += absoluteCents(
+        parseMoneyToCents(orderProductFinancial.productCostAmount),
+      );
+    }
   }
 
-  const marginRevenueCents = parseMoneyToCents(input.performance.marginRevenue);
-  const packagingCents = absoluteCents(
-    parseMoneyToCents(input.performance.packagingTotal),
-  );
-  const productCostCents = absoluteCents(
-    parseMoneyToCents(input.performance.productCostTotal),
-  );
   const totalProfitCents =
     marginRevenueCents -
     marketplaceCommissionCents -
@@ -2730,6 +2851,7 @@ export class OrdersService {
       );
     const monthlyMargin = calculateMonthlyMarginFinancials({
       compositions: logicalOrders.map(({ composition }) => composition),
+      orderProductFinancials: buildMonthlyOrderProductFinancials(logicalOrders),
       performance,
     });
 
