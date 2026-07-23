@@ -4,6 +4,7 @@ import React, { act } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProductPerformanceListItem } from "@lucreii/types";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -11,12 +12,19 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 import { ProductsHome } from "./products-home";
 
-const { apiClientMocks, refetchMock, refreshMock, useProductDataMock } = vi.hoisted(() => ({
+const {
+  apiClientMocks,
+  performanceQueryMock,
+  refetchMock,
+  refreshMock,
+  useProductDataMock,
+} = vi.hoisted(() => ({
   apiClientMocks: {
     delete: vi.fn(),
     download: vi.fn(),
     patch: vi.fn(),
   },
+  performanceQueryMock: vi.fn(),
   refetchMock: vi.fn(),
   refreshMock: vi.fn(),
   useProductDataMock: vi.fn(),
@@ -43,6 +51,10 @@ vi.mock("../calculations/product-insights", () => ({
 vi.mock("../hooks/use-product-data", () => ({
   formatReferenceMonthPtBr: () => "junho de 2026",
   useProductData: useProductDataMock,
+}));
+
+vi.mock("../hooks/use-product-performance-data", () => ({
+  useProductPerformancePage: performanceQueryMock,
 }));
 
 useProductDataMock.mockReturnValue({
@@ -188,6 +200,53 @@ vi.mock("@/lib/api/client", () => ({
   apiClient: apiClientMocks,
 }));
 
+function buildPerformanceRow(suffix: string): ProductPerformanceListItem {
+  return {
+    actualRoas: null,
+    adSpend: 0,
+    advertisingCost: 0,
+    catalogGroupKey: null,
+    catalogRole: "standalone",
+    children: [],
+    channelLabel: "mercadolivre",
+    commissionPct: 0,
+    contributionMarginRatio: null,
+    coverImageUrl: null,
+    displayName: `Produto performance ${suffix}`,
+    fixedFeeUnit: 0,
+    id: `product-${suffix}`,
+    isActive: true,
+    isSyntheticParent: false,
+    marketplaceCommissionUnit: 0,
+    minimumRoas: null,
+    name: `Produto performance ${suffix}`,
+    netLiquidSales: 1,
+    packagingCost: 1,
+    parentProductId: null,
+    performanceId: `performance-${suffix}`,
+    productId: `product-${suffix}`,
+    referenceMonth: "2026-06-01",
+    returns: 0,
+    revenue: 100,
+    roiRatio: null,
+    sales: 1,
+    sellingPrice: 100,
+    shipping: 0,
+    shippingOrFixedFeeSource: "none",
+    shippingOrFixedFeeUnit: 0,
+    shippingUnit: 0,
+    sku: `SKU-${suffix}`,
+    taxPct: 0,
+    totalCommission: 0,
+    totalPackagingCost: 1,
+    totalProductCost: 10,
+    totalProfit: 89,
+    unitCost: 10,
+    unitProfit: 89,
+    variationLabel: null,
+  };
+}
+
 function mount(node: React.ReactNode) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -224,7 +283,7 @@ function changeInputValue(element: HTMLInputElement, value: string) {
   });
 }
 
-function renderProductsHome() {
+function renderProductsHome(view: "catalog" | "performance" = "catalog") {
   const queryClient = new QueryClient({
     defaultOptions: {
       mutations: { retry: false },
@@ -234,7 +293,7 @@ function renderProductsHome() {
 
   return mount(
     <QueryClientProvider client={queryClient}>
-      <ProductsHome view="catalog" />
+      <ProductsHome view={view} />
     </QueryClientProvider>,
   );
 }
@@ -245,6 +304,13 @@ afterEach(() => {
 });
 
 beforeEach(() => {
+  performanceQueryMock.mockReset();
+  performanceQueryMock.mockReturnValue({
+    data: null,
+    error: null,
+    isLoading: false,
+    isPlaceholderData: false,
+  });
   refreshMock.mockReset();
   refetchMock.mockReset();
   apiClientMocks.delete.mockReset();
@@ -693,6 +759,52 @@ describe("ProductsHome catalog modal", () => {
     ) as HTMLInputElement;
 
     expect(checkbox.disabled).toBe(true);
+
+    view.unmount();
+  });
+});
+
+describe("ProductsHome performance pagination", () => {
+  it("renders the rows returned for page 2 and preserves the requested page", () => {
+    const pageOneRow = buildPerformanceRow("page-1");
+    const pageTwoRow = buildPerformanceRow("page-2");
+
+    performanceQueryMock.mockImplementation((filters: { page?: number }) => {
+      const page = filters.page ?? 1;
+      const row = page === 2 ? pageTwoRow : pageOneRow;
+
+      return {
+        data: {
+          items: [row],
+          page,
+          pageSize: 10,
+          totalItems: 11,
+          totalPages: 2,
+        },
+        error: null,
+        isLoading: false,
+        isPlaceholderData: false,
+      };
+    });
+
+    const view = renderProductsHome("performance");
+
+    expect(document.body.textContent).toContain("Produto performance page-1");
+
+    const pageTwoButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "2",
+    );
+    expect(pageTwoButton).toBeDefined();
+
+    click(pageTwoButton!);
+
+    expect(performanceQueryMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 2 }),
+      true,
+    );
+    expect(document.body.textContent).toContain("Produto performance page-2");
+    expect(document.body.textContent).not.toContain("Produto performance page-1");
+    expect(document.body.textContent).toContain("Página 2 de 2");
 
     view.unmount();
   });

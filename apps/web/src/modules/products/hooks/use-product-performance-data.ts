@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type {
   ProductPerformanceListQuery,
   ProductPerformanceListResponse,
@@ -69,6 +69,7 @@ export function useProductPerformancePage(
 
   return useQuery({
     enabled,
+    placeholderData: keepPreviousData,
     queryFn: () => fetchProductPerformancePage(filters),
     queryKey: [
       ...productPerformanceQueryKey,

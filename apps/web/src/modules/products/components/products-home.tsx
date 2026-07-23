@@ -1900,7 +1900,9 @@ export function ProductsHome({
             pagination={
               performanceQuery.data
                 ? {
-                    currentPage: performanceQuery.data.page,
+                    currentPage: performanceQuery.isPlaceholderData
+                      ? performancePage
+                      : performanceQuery.data.page,
                     pageSize: performanceQuery.data.pageSize,
                     totalItems: performanceQuery.data.totalItems,
                     totalPages: performanceQuery.data.totalPages,

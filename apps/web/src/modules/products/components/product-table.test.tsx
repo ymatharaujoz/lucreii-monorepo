@@ -149,6 +149,42 @@ afterEach(() => {
 });
 
 describe("ProductTable", () => {
+  it("keeps loading state visible while a server page is being fetched", () => {
+    const view = renderWithClient(
+      <ProductTable
+        error={false}
+        loading
+        onPageChange={() => {}}
+        pagination={{ currentPage: 2, pageSize: 10, totalItems: 11, totalPages: 2 }}
+        rows={[]}
+        serverMode
+      />,
+    );
+
+    expect(document.body.textContent).toContain("Carregando produtos...");
+    expect(document.body.textContent).not.toContain("Nenhum dado mensal neste mÃªs");
+
+    view.unmount();
+  });
+
+  it("shows the request error instead of an empty state for a failed server page", () => {
+    const view = renderWithClient(
+      <ProductTable
+        error
+        loading={false}
+        onPageChange={() => {}}
+        pagination={{ currentPage: 2, pageSize: 10, totalItems: 11, totalPages: 2 }}
+        rows={[]}
+        serverMode
+      />,
+    );
+
+    expect(document.body.textContent).toContain("Nao foi possivel carregar os produtos.");
+    expect(document.body.textContent).not.toContain("Nenhum dado mensal neste mÃªs");
+
+    view.unmount();
+  });
+
   it("renders one row per variation using combined product and variation title", () => {
     const rows = [
       buildRow(1, {

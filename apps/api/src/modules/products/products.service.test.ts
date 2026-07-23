@@ -6343,6 +6343,90 @@ describe("ProductsService", () => {
     });
   });
 
+  it("returns distinct rows for consecutive performance pages with deterministic ordering", async () => {
+    const { db, financeService, service } = createService();
+    const products = Array.from({ length: 11 }, (_, index) => {
+      const suffix = String(index + 1).padStart(2, "0");
+
+      return buildCatalogProductRow({
+        companyId: "company_1",
+        id: `product_${suffix}`,
+        name: "Produto paginado",
+        sku: "SKU-PAGINADO",
+      });
+    });
+    const performanceRows = products.map((product, index) => {
+      const suffix = String(index + 1).padStart(2, "0");
+
+      return {
+        advertisingCost: "0.00",
+        channel: "mercadolivre",
+        commissionRate: "0.100000",
+        companyId: "company_1",
+        createdAt: new Date(`2026-06-01T00:${suffix}:00.000Z`),
+        id: `performance_${suffix}`,
+        notes: null,
+        organizationId: "org_1",
+        packagingCost: "1.00",
+        productId: product.id,
+        productName: "Produto paginado",
+        referenceMonth: "2026-06-01",
+        returnsQuantity: 0,
+        salePrice: "100.00",
+        salesQuantity: 1,
+        shippingFee: "0.00",
+        sku: "SKU-PAGINADO",
+        unitCost: "10.00",
+        updatedAt: new Date(`2026-06-01T00:${suffix}:00.000Z`),
+        userId: "user_1",
+      };
+    });
+
+    db.query.companies.findMany.mockResolvedValue([
+      {
+        id: "company_1",
+        isActive: true,
+        taxRateDefault: "0.100000",
+      },
+    ]);
+    db.query.products.findMany.mockResolvedValue(products);
+    db.query.productMonthlyPerformance.findMany.mockResolvedValue(
+      performanceRows,
+    );
+    financeService.buildFinanceSnapshot.mockResolvedValue({
+      adCosts: [],
+      manualExpenses: [],
+      orders: [],
+      products: [],
+    });
+
+    const context = {
+      organizationId: "org_1",
+      selectedCompanyId: "company_1",
+      userId: "user_1",
+    };
+    const pageOne = await service.listPerformanceRows(context, {
+      page: 1,
+      pageSize: 10,
+      referenceMonth: "2026-06-01",
+    });
+    const pageTwo = await service.listPerformanceRows(context, {
+      page: 2,
+      pageSize: 10,
+      referenceMonth: "2026-06-01",
+    });
+
+    expect(pageOne.totalItems).toBe(11);
+    expect(pageOne.totalPages).toBe(2);
+    expect(pageOne.page).toBe(1);
+    expect(pageTwo.page).toBe(2);
+    expect(pageTwo.items).toHaveLength(1);
+    expect(pageOne.items.map((row) => row.performanceId)).not.toContain(
+      pageTwo.items[0].performanceId,
+    );
+    expect(pageTwo.items[0].performanceId).toBe("performance_11");
+  });
+
   it("rolls up every visible performance row by net quantity before pagination", async () => {
     const { service } = createService();
     const buildRow = (

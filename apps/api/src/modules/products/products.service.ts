@@ -2924,10 +2924,16 @@ export class ProductsService {
       return fallbackParent;
     }
 
-    return compareText(
+    const fallbackSku = compareText(
       normalizePerformanceSortText(left.sku),
       normalizePerformanceSortText(right.sku),
     );
+
+    if (fallbackSku !== 0) {
+      return fallbackSku;
+    }
+
+    return compareText(left.performanceId, right.performanceId);
   }
 
   private buildAnalyticsCatalogStats(input: {

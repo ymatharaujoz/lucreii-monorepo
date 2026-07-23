@@ -450,7 +450,7 @@ export function ProductTable({
     );
   };
 
-  if (displayRows.length === 0) {
+  if (displayRows.length === 0 && !loading && !error) {
     return (
       <Card padding="lg" className={className}>
         <div className="mb-4">
