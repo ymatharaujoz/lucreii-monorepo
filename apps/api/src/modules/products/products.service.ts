@@ -188,9 +188,13 @@ type PerformanceSalesLookup = {
 };
 
 export type MonthlyPerformanceMarginRollup = {
+  eligiblePerformanceRows: number;
   marginRevenue: string;
+  netLiquidSalesTotal: number;
   packagingTotal: string;
+  pdvTotal: string;
   productCostTotal: string;
+  totalPerformanceRows: number;
 };
 
 function toCatalogGroupKey(itemId: string) {
@@ -2587,8 +2591,11 @@ export class ProductsService {
       referenceMonth: query.referenceMonth,
     });
     let marginRevenueCents = 0n;
+    let netLiquidSalesTotal = 0;
+    let pdvTotalCents = 0n;
     let packagingTotalCents = 0n;
     let productCostTotalCents = 0n;
+    let eligiblePerformanceRows = 0;
 
     for (const row of response.items) {
       const netLiquidSales = Number.isFinite(row.netLiquidSales)
@@ -2598,7 +2605,10 @@ export class ProductsService {
         continue;
       }
 
+      eligiblePerformanceRows += 1;
+      netLiquidSalesTotal += netLiquidSales;
       const quantity = BigInt(netLiquidSales);
+      pdvTotalCents += parseMoneyToCents(row.sellingPrice);
       marginRevenueCents += parseMoneyToCents(row.sellingPrice) * quantity;
       packagingTotalCents +=
         absoluteCents(parseMoneyToCents(row.packagingCost)) * quantity;
@@ -2607,9 +2617,13 @@ export class ProductsService {
     }
 
     return {
+      eligiblePerformanceRows,
       marginRevenue: formatCents(marginRevenueCents),
+      netLiquidSalesTotal,
       packagingTotal: formatCents(packagingTotalCents),
+      pdvTotal: formatCents(pdvTotalCents),
       productCostTotal: formatCents(productCostTotalCents),
+      totalPerformanceRows: response.items.length,
     };
   }
 

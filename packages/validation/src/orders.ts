@@ -143,6 +143,27 @@ export const ordersListSummarySchema = z.object({
   averageMargin: decimalField("Average margin"),
   ordersCount: z.number().int().min(0),
   unitsSold: z.number().int().min(0),
+  marginAudit: z
+    .object({
+      compositionCount: z.number().int().min(0),
+      eligiblePerformanceRows: z.number().int().min(0),
+      grossRevenue: decimalField("Audit gross revenue"),
+      lineRevenue: decimalField("Audit line revenue"),
+      marginRevenue: decimalField("Audit margin revenue"),
+      marketplaceCommissionTotal: decimalField(
+        "Audit marketplace commission total",
+      ),
+      netLiquidSalesTotal: z.number().int().min(0),
+      packagingTotal: decimalField("Audit packaging total"),
+      pdvTotal: decimalField("Audit PDV total"),
+      productCostTotal: decimalField("Audit product cost total"),
+      aggregateRevenue: decimalField("Audit aggregate revenue"),
+      shippingOrFixedFeeTotal: decimalField("Audit shipping total"),
+      taxTotal: decimalField("Audit tax total"),
+      totalPerformanceRows: z.number().int().min(0),
+      totalProfit: decimalField("Audit total profit"),
+    })
+    .optional(),
 });
 
 export const ordersListResponseSchema = z.object({

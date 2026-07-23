@@ -3,6 +3,7 @@ import {
   orderDetailsApiResponseSchema,
   orderCompositionUpdateSchema,
   orderExportQuerySchema,
+  ordersListSummarySchema,
   ordersListApiResponseSchema,
 } from "./orders";
 
@@ -63,6 +64,38 @@ describe("orders validation schemas", () => {
     expect(result.data.summary.grossProfit).toBe("50.00");
     expect(result.data.summary.marginRevenue).toBe("600.00");
     expect(result.data.summary.totalProfit).toBe("42.00");
+  });
+
+  it("accepts the monthly margin audit breakdown", () => {
+    const result = ordersListSummarySchema.parse({
+      averageMargin: "0.5950",
+      grossProfit: "119.0000",
+      grossRevenue: "25362.8200",
+      marginRevenue: "894.48",
+      totalProfit: "202.51",
+      ordersCount: 28,
+      unitsSold: 29,
+      marginAudit: {
+        aggregateRevenue: "894.48",
+        compositionCount: 28,
+        eligiblePerformanceRows: 4,
+        grossRevenue: "25362.8200",
+        lineRevenue: "894.48",
+        marginRevenue: "894.48",
+        marketplaceCommissionTotal: "89.45",
+        netLiquidSalesTotal: 29,
+        packagingTotal: "94.91",
+        pdvTotal: "298.16",
+        productCostTotal: "298.16",
+        shippingOrFixedFeeTotal: "120.00",
+        taxTotal: "89.45",
+        totalPerformanceRows: 10,
+        totalProfit: "202.51",
+      },
+    });
+
+    expect(result.marginAudit?.aggregateRevenue).toBe("894.48");
+    expect(result.marginAudit?.grossRevenue).toBe("25362.8200");
   });
 
   it("accepts order detail responses with line items", () => {

@@ -14,9 +14,13 @@ describe("OrdersService", () => {
     expect(
       calculateMonthlyMarginFinancials({
         performance: {
+          eligiblePerformanceRows: 2,
           packagingTotal: "94.91",
           marginRevenue: "894.48",
+          netLiquidSalesTotal: 3,
+          pdvTotal: "298.16",
           productCostTotal: "298.16",
+          totalPerformanceRows: 2,
         },
         compositions: [
           {
@@ -32,6 +36,23 @@ describe("OrdersService", () => {
         ],
       }),
     ).toEqual({
+      marginAudit: {
+        aggregateRevenue: "894.48",
+        compositionCount: 2,
+        eligiblePerformanceRows: 2,
+        grossRevenue: "0.00",
+        lineRevenue: "894.48",
+        marginRevenue: "894.48",
+        marketplaceCommissionTotal: "89.45",
+        netLiquidSalesTotal: 3,
+        packagingTotal: "94.91",
+        pdvTotal: "298.16",
+        productCostTotal: "298.16",
+        shippingOrFixedFeeTotal: "120.00",
+        taxTotal: "89.45",
+        totalPerformanceRows: 2,
+        totalProfit: "202.51",
+      },
       marginRevenue: "894.48",
       totalProfit: "202.51",
     });
@@ -41,13 +62,34 @@ describe("OrdersService", () => {
     expect(
       calculateMonthlyMarginFinancials({
         performance: {
+          eligiblePerformanceRows: 0,
           packagingTotal: "0.00",
           marginRevenue: "0.00",
+          netLiquidSalesTotal: 0,
+          pdvTotal: "0.00",
           productCostTotal: "0.00",
+          totalPerformanceRows: 0,
         },
         compositions: [],
       }),
     ).toEqual({
+      marginAudit: {
+        aggregateRevenue: "0.00",
+        compositionCount: 0,
+        eligiblePerformanceRows: 0,
+        grossRevenue: "0.00",
+        lineRevenue: "0.00",
+        marginRevenue: "0.00",
+        marketplaceCommissionTotal: "0.00",
+        netLiquidSalesTotal: 0,
+        packagingTotal: "0.00",
+        pdvTotal: "0.00",
+        productCostTotal: "0.00",
+        shippingOrFixedFeeTotal: "0.00",
+        taxTotal: "0.00",
+        totalPerformanceRows: 0,
+        totalProfit: "0.00",
+      },
       marginRevenue: "0.00",
       totalProfit: "0.00",
     });
@@ -57,13 +99,34 @@ describe("OrdersService", () => {
     expect(
       calculateMonthlyMarginFinancials({
         performance: {
+          eligiblePerformanceRows: 1,
           packagingTotal: "0.00",
           marginRevenue: "100.00",
+          netLiquidSalesTotal: 1,
+          pdvTotal: "100.00",
           productCostTotal: "120.00",
+          totalPerformanceRows: 1,
         },
         compositions: [],
       }),
     ).toEqual({
+      marginAudit: {
+        aggregateRevenue: "100.00",
+        compositionCount: 0,
+        eligiblePerformanceRows: 1,
+        grossRevenue: "0.00",
+        lineRevenue: "100.00",
+        marginRevenue: "100.00",
+        marketplaceCommissionTotal: "0.00",
+        netLiquidSalesTotal: 1,
+        packagingTotal: "0.00",
+        pdvTotal: "100.00",
+        productCostTotal: "120.00",
+        shippingOrFixedFeeTotal: "0.00",
+        taxTotal: "0.00",
+        totalPerformanceRows: 1,
+        totalProfit: "-20.00",
+      },
       marginRevenue: "100.00",
       totalProfit: "-20.00",
     });
@@ -71,9 +134,13 @@ describe("OrdersService", () => {
 
   it("keeps gross revenue for Faturamento while using selected monthly marketplace performance for margin", async () => {
     const readMonthlyPerformanceMarginRollup = vi.fn().mockResolvedValue({
+      eligiblePerformanceRows: 2,
       packagingTotal: "94.91",
       marginRevenue: "894.48",
+      netLiquidSalesTotal: 3,
+      pdvTotal: "298.16",
       productCostTotal: "298.16",
+      totalPerformanceRows: 2,
     });
     const service = new OrdersService({} as never, undefined, {
       readMonthlyPerformanceMarginRollup,
@@ -122,6 +189,12 @@ describe("OrdersService", () => {
       grossRevenue: "25362.8200",
       marginRevenue: "894.48",
       totalProfit: "202.51",
+      marginAudit: expect.objectContaining({
+        aggregateRevenue: "894.48",
+        grossRevenue: "25362.8200",
+        lineRevenue: "894.48",
+        totalProfit: "202.51",
+      }),
     });
     expect(readMonthlyPerformanceMarginRollup).toHaveBeenCalledWith(
       {

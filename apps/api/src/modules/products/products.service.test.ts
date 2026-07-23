@@ -6436,9 +6436,13 @@ describe("ProductsService", () => {
         },
       ),
     ).resolves.toEqual({
+      eligiblePerformanceRows: 13,
       marginRevenue: "410.00",
+      netLiquidSalesTotal: 14,
       packagingTotal: "23.00",
+      pdvTotal: "310.00",
       productCostTotal: "82.00",
+      totalPerformanceRows: 14,
     });
 
     expect(listPerformanceRowsSpy).toHaveBeenCalledWith(

@@ -98,6 +98,24 @@ export type OrdersListResponse = {
   totalPages: number;
 };
 
+export type OrdersMarginAudit = {
+  compositionCount: number;
+  eligiblePerformanceRows: number;
+  grossRevenue: string;
+  lineRevenue: string;
+  marginRevenue: string;
+  marketplaceCommissionTotal: string;
+  netLiquidSalesTotal: number;
+  packagingTotal: string;
+  pdvTotal: string;
+  productCostTotal: string;
+  aggregateRevenue: string;
+  shippingOrFixedFeeTotal: string;
+  taxTotal: string;
+  totalPerformanceRows: number;
+  totalProfit: string;
+};
+
 export type OrdersListSummary = {
   grossRevenue: string;
   grossProfit: string;
@@ -106,6 +124,7 @@ export type OrdersListSummary = {
   averageMargin: string;
   ordersCount: number;
   unitsSold: number;
+  marginAudit?: OrdersMarginAudit;
 };
 
 export type OrderLineItem = {

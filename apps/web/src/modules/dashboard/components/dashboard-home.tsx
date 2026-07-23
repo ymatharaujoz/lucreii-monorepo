@@ -17,6 +17,7 @@ import { containerVariants, fadeInVariants } from "@/lib/animations";
 import { SkeletonChart, SkeletonGrid } from "@/components/ui-premium/skeleton-grid";
 import { DashboardHeader } from "./dashboard-header";
 import { DashboardFinancialIndicators } from "./dashboard-financial-indicators";
+import { MarginAuditPanel } from "./margin-audit-panel";
 import { ChartsSection } from "./charts-section";
 import { MarketplacesSection } from "./marketplaces-section";
 import { InsightsSection } from "./insights-section";
@@ -162,7 +163,12 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
   }
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-5">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="space-y-5"
+    >
       <DashboardHeader
         companyName={companyName}
         businessStatus={businessStatus}
@@ -201,13 +207,20 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
       </div>
 
       {profitabilityQuery.data && (
-        <section>
+        <section className="space-y-3">
           <DashboardFinancialIndicators
             activeCompany={activeCompany}
             data={profitabilityQuery.data}
             ordersSummary={ordersSummaryQuery.data?.summary}
             summary={summaryQuery.data ?? undefined}
           />
+          {ordersSummaryQuery.data?.summary.marginAudit && (
+            <MarginAuditPanel
+              audit={ordersSummaryQuery.data.summary.marginAudit}
+              provider={providerFilter}
+              referenceMonth={referenceMonth}
+            />
+          )}
         </section>
       )}
 

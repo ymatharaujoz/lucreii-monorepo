@@ -36,6 +36,7 @@ import type {
   OrderImportTag,
   OrderLineItem,
   OrderListFilters,
+  OrdersMarginAudit,
   OrderListItem,
   OrdersListSummary,
   OrdersListResponse,
@@ -1821,8 +1822,29 @@ export function calculateMonthlyMarginFinancials(
     taxCents -
     packagingCents -
     productCostCents;
+  const aggregateRevenueCents =
+    BigInt(Math.max(0, Math.trunc(input.performance.netLiquidSalesTotal))) *
+    parseMoneyToCents(input.performance.pdvTotal);
+  const marginAudit: OrdersMarginAudit = {
+    aggregateRevenue: formatCents(aggregateRevenueCents),
+    compositionCount: input.compositions.length,
+    eligiblePerformanceRows: input.performance.eligiblePerformanceRows,
+    grossRevenue: "0.00",
+    lineRevenue: formatCents(marginRevenueCents),
+    marginRevenue: formatCents(marginRevenueCents),
+    marketplaceCommissionTotal: formatCents(marketplaceCommissionCents),
+    netLiquidSalesTotal: input.performance.netLiquidSalesTotal,
+    packagingTotal: formatCents(packagingCents),
+    pdvTotal: input.performance.pdvTotal,
+    productCostTotal: formatCents(productCostCents),
+    shippingOrFixedFeeTotal: formatCents(shippingOrFixedFeeCents),
+    taxTotal: formatCents(taxCents),
+    totalPerformanceRows: input.performance.totalPerformanceRows,
+    totalProfit: formatCents(totalProfitCents),
+  };
 
   return {
+    marginAudit,
     marginRevenue: formatCents(marginRevenueCents),
     totalProfit: formatCents(totalProfitCents),
   };
@@ -1919,6 +1941,12 @@ function buildOrdersSummary(
   const averageMargin = grossRevenue > 0 ? grossProfit / grossRevenue : 0;
   const resolvedMonthlyMargin =
     monthlyMargin ?? calculateLegacyOrderDetailMarginFinancials(logicalOrders);
+  const marginAudit = monthlyMargin?.marginAudit
+    ? {
+        ...monthlyMargin.marginAudit,
+        grossRevenue: grossRevenue.toFixed(4),
+      }
+    : null;
 
   return {
     averageMargin: averageMargin.toFixed(4),
@@ -1928,6 +1956,7 @@ function buildOrdersSummary(
     totalProfit: resolvedMonthlyMargin.totalProfit,
     ordersCount: logicalOrders.length,
     unitsSold,
+    ...(marginAudit ? { marginAudit } : {}),
   };
 }
 
