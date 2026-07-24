@@ -6,7 +6,6 @@ import {
   DollarSign,
   Minus,
   Percent,
-  PiggyBank,
   Scale,
   Settings2,
   TrendingDown,
@@ -65,10 +64,6 @@ function normalizeNumber(value: string | number | undefined | null): number {
 
 function formatIndicatorPercent(value: string) {
   return `${normalizeNumber(value).toFixed(2)}%`;
-}
-
-function formatIndicatorValue(value: string) {
-  return normalizeNumber(value).toFixed(2);
 }
 
 function IndicatorCard({
@@ -214,9 +209,6 @@ export function DashboardFinancialIndicators({
   ]);
 
   const totalProfit = normalizeNumber(financialIndicators.totalProfit);
-  const realProfit = normalizeNumber(financialIndicators.realProfit);
-  const netProfit = normalizeNumber(financialIndicators.netProfit);
-  const netMargin = normalizeNumber(financialIndicators.netMarginPercent);
   const revenue = normalizeNumber(financialIndicators.revenue);
   const breakEven = normalizeNumber(financialIndicators.breakEvenRevenue);
   const fixedCostResolved = normalizeNumber(financialIndicators.fixedCost);
@@ -246,53 +238,7 @@ export function DashboardFinancialIndicators({
             direction: totalProfit > 0 ? "up" : totalProfit < 0 ? "down" : "neutral",
             value: totalProfit >= 0 ? "Lucrativo" : "Prejuízo",
           }}
-          value={formatIndicatorValue(financialIndicators.averageMarginPercent)}
-          variant={totalProfit > 0 ? "success" : totalProfit < 0 ? "error" : "warning"}
-        />
-        <IndicatorCard
-          icon={<Percent className="h-4 w-4" />}
-          label="Margem Líquida"
-          subValue={`Lucro Líquido: ${formatMoney(financialIndicators.netProfit, { maximumFractionDigits: 2 })}`}
-          value={formatIndicatorPercent(financialIndicators.netMarginPercent)}
-          variant={netMargin > 0 ? "success" : netMargin < 0 ? "error" : "warning"}
-        />
-        <IndicatorCard
-          icon={<Scale className="h-4 w-4" />}
-          label="Total Variáveis"
-          subValue="Comissão, frete, imposto, embalagem e produto"
-          value={formatMoney(financialIndicators.variableCosts, {
-            maximumFractionDigits: 2,
-          })}
-        />
-        <IndicatorCard
-          icon={<PiggyBank className="h-4 w-4" />}
-          label="Lucro Real"
-          subValue={`Lucro Total − Custo Fixo (${formatMoney(financialIndicators.fixedCost, { maximumFractionDigits: 2 })})`}
-          value={formatMoney(financialIndicators.realProfit, {
-            maximumFractionDigits: 2,
-          })}
-          variant={realProfit > 0 ? "success" : realProfit < 0 ? "error" : "warning"}
-        />
-        <IndicatorCard
-          icon={<PiggyBank className="h-4 w-4" />}
-          label="Lucro Líquido"
-          subValue="Após custos fixos e publicidade"
-          trend={{
-            direction: netProfit > 0 ? "up" : netProfit < 0 ? "down" : "neutral",
-            value: `${netMargin.toFixed(1)}% do faturamento`,
-          }}
-          value={formatMoney(financialIndicators.netProfit, {
-            maximumFractionDigits: 2,
-          })}
-          variant={netProfit > 0 ? "success" : netProfit < 0 ? "error" : "warning"}
-        />
-        <IndicatorCard
-          icon={<TrendingUp className="h-4 w-4" />}
-          label="Lucro Total"
-          subValue="Faturamento − Total Variáveis"
-          value={formatMoney(financialIndicators.totalProfit, {
-            maximumFractionDigits: 2,
-          })}
+          value={formatIndicatorPercent(financialIndicators.averageMarginPercent)}
           variant={totalProfit > 0 ? "success" : totalProfit < 0 ? "error" : "warning"}
         />
         <IndicatorCard
@@ -307,14 +253,6 @@ export function DashboardFinancialIndicators({
             maximumFractionDigits: 2,
           })}
           variant={revenue >= breakEven && breakEven > 0 ? "success" : "warning"}
-        />
-        <IndicatorCard
-          icon={<DollarSign className="h-4 w-4" />}
-          label="Publicidade"
-          subValue="Investimento abatido no lucro líquido"
-          value={formatMoney(financialIndicators.advertising, {
-            maximumFractionDigits: 2,
-          })}
         />
       </div>
 

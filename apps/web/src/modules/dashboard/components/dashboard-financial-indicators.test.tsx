@@ -46,7 +46,7 @@ const company: Company = {
 
 const indicators: DashboardFinancialIndicatorsData = {
   advertising: "1481.33",
-  averageMarginPercent: "28.38",
+  averageMarginPercent: "2.98",
   breakEvenRevenue: "10528.27",
   fixedCost: "2987.71",
   fixedCostSource: "monthly",
@@ -84,7 +84,7 @@ afterEach(() => {
 });
 
 describe("DashboardFinancialIndicators", () => {
-  it("exibe os nove indicadores da fonte financeira dedicada", () => {
+  it("exibe somente faturamento, margem média e ponto de equilíbrio", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
@@ -95,14 +95,16 @@ describe("DashboardFinancialIndicators", () => {
 
     expect(text).toContain("27.359,77");
     expect(text).toContain("28 vendas líquidas");
-    expect(text).toContain("28.38");
-    expect(text).toContain("12.04%");
-    expect(text).toContain("19.595,62");
-    expect(text).toContain("4.776,44");
-    expect(text).toContain("3.295,11");
-    expect(text).toContain("7.764,15");
+    expect(text).toContain("2.98%");
     expect(text).toContain("10.528,27");
-    expect(text).toContain("1.481,33");
+    expect(text).toContain("Faturamento");
+    expect(text).toContain("Margem Média");
+    expect(text).toContain("Ponto de Equilíbrio");
+    expect(text).not.toContain("Margem Líquida");
+    expect(text).not.toContain("Total Variáveis");
+    expect(text).not.toContain("Lucro Real");
+    expect(text).not.toContain("Lucro Líquido");
+    expect(text).not.toContain("Publicidade");
 
     expect(document.querySelectorAll("[class*=grid]").length).toBeGreaterThan(0);
     view.unmount();
@@ -114,7 +116,7 @@ describe("DashboardFinancialIndicators", () => {
         activeCompany={company}
         financialIndicators={{
           ...indicators,
-          averageMarginPercent: "28.63",
+          averageMarginPercent: "-2.98",
           breakEvenRevenue: "10961.24",
           fixedCost: "3138.54",
           fixedCostSource: "monthly",
@@ -122,14 +124,15 @@ describe("DashboardFinancialIndicators", () => {
           netProfit: "-1539.00",
           realProfit: "-1462.07",
           revenue: "5855.02",
-          totalProfit: "1676.47",
+          totalProfit: "-1676.47",
           variableCosts: "4178.55",
         }}
       />,
     );
 
-    expect(document.body.textContent ?? "").toContain("-26.29%");
-    expect(document.body.textContent ?? "").toContain("-R$ 1.539,00");
+    expect(document.body.textContent ?? "").toContain("-2.98%");
+    expect(document.body.textContent ?? "").toContain("Prejuízo");
+    expect(document.body.textContent ?? "").toContain("-R$ 1.676,47");
     view.unmount();
   });
 

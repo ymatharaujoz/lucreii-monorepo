@@ -17,7 +17,6 @@ import { containerVariants, fadeInVariants } from "@/lib/animations";
 import { SkeletonChart, SkeletonGrid } from "@/components/ui-premium/skeleton-grid";
 import { DashboardHeader } from "./dashboard-header";
 import { DashboardFinancialIndicators } from "./dashboard-financial-indicators";
-import { MarginAuditPanel } from "./margin-audit-panel";
 import { ChartsSection } from "./charts-section";
 import { MarketplacesSection } from "./marketplaces-section";
 import { InsightsSection } from "./insights-section";
@@ -212,11 +211,6 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
             activeCompany={activeCompany}
             financialIndicators={financialIndicatorsQuery.data}
             onDefaultsSaved={refetchAll}
-          />
-          <MarginAuditPanel
-            indicators={financialIndicatorsQuery.data}
-            provider={providerFilter}
-            referenceMonth={referenceMonth}
           />
         </section>
       )}
