@@ -251,6 +251,7 @@ export function DashboardFinancialIndicators({
           }}
           value={formatMoney(financialIndicators.breakEvenRevenue, {
             maximumFractionDigits: 2,
+            minimumFractionDigits: 2,
           })}
           variant={revenue >= breakEven && breakEven > 0 ? "success" : "warning"}
         />

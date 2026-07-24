@@ -81,7 +81,7 @@ describe("FinancialIndicatorsService", () => {
     ).read("org-1", "user-1", "company-1", undefined, "2026-04-01");
 
     expect(result).toMatchObject({
-      breakEvenRevenue: "185.19",
+      breakEvenRevenue: "5405.41",
       fixedCost: "100.00",
       fixedCostSource: "company_default",
       netProfit: "-49.00",

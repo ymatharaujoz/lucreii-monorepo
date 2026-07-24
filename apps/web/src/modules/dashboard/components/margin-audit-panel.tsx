@@ -180,6 +180,7 @@ export function MarginAuditPanel({
               {indicators.netMarginPercent}% · Ponto de equilíbrio:{" "}
               {formatMoney(indicators.breakEvenRevenue, {
                 maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
               })}
               .
             </p>

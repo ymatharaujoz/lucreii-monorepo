@@ -232,14 +232,16 @@ export function calculateFinancialIndicatorsFromTotals(
   const totalProfit = revenue - variableCosts;
   const realProfit = totalProfit - fixedCost;
   const netProfit = realProfit - advertising;
+  const averageMarginPercent = formatProfitRatio(revenue, totalProfit);
+  const averageMarginPercentCents = parseDecimalCents(averageMarginPercent);
   const breakEvenRevenue =
-    revenue > 0n && totalProfit > 0n
-      ? roundDivision(fixedCost * revenue, totalProfit)
+    averageMarginPercentCents > 0n
+      ? roundDivision(fixedCost * 10_000n, averageMarginPercentCents)
       : 0n;
 
   return {
     advertising: formatCents(advertising),
-    averageMarginPercent: formatProfitRatio(revenue, totalProfit),
+    averageMarginPercent,
     breakEvenRevenue: formatCents(breakEvenRevenue),
     fixedCost: formatCents(fixedCost),
     marketplaceCommission: formatCents(marketplaceCommission),

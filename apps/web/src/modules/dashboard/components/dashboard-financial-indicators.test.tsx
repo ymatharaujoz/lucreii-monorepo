@@ -47,8 +47,8 @@ const company: Company = {
 const indicators: DashboardFinancialIndicatorsData = {
   advertising: "1481.33",
   averageMarginPercent: "2.98",
-  breakEvenRevenue: "10528.27",
-  fixedCost: "2987.71",
+  breakEvenRevenue: "6711.41",
+  fixedCost: "200.00",
   fixedCostSource: "monthly",
   marketplaceCommission: "7000.00",
   netMarginPercent: "12.04",
@@ -96,7 +96,7 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("27.359,77");
     expect(text).toContain("28 vendas líquidas");
     expect(text).toContain("2.98%");
-    expect(text).toContain("10.528,27");
+    expect(text).toContain("R$\u00a06.711,41");
     expect(text).toContain("Faturamento");
     expect(text).toContain("Margem Média");
     expect(text).toContain("Ponto de Equilíbrio");

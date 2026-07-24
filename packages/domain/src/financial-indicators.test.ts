@@ -27,7 +27,7 @@ describe("calculateFinancialIndicators", () => {
     ).toEqual({
       advertising: "3.00",
       averageMarginPercent: "1.89",
-      breakEvenRevenue: "188.68",
+      breakEvenRevenue: "5291.01",
       fixedCost: "100.00",
       marketplaceCommission: "20.00",
       netMarginPercent: "1.50",
@@ -97,7 +97,7 @@ describe("calculateFinancialIndicators", () => {
       }),
     ).toMatchObject({
       averageMarginPercent: "4.00",
-      breakEvenRevenue: "120.00",
+      breakEvenRevenue: "750.00",
       netMarginPercent: "-10.00",
       netProfit: "-12.00",
       realProfit: "0.00",
@@ -106,10 +106,10 @@ describe("calculateFinancialIndicators", () => {
     });
   });
 
-  it("formats average margin as revenue divided by total profit", () => {
+  it("calculates break-even from the rounded average margin percentage", () => {
     const result = calculateFinancialIndicatorsFromTotals({
       advertising: "0.00",
-      fixedCost: "0.00",
+      fixedCost: "200.00",
       marketplaceCommission: "100.00",
       netSales: 29,
       packagingCost: "50.00",
@@ -121,5 +121,23 @@ describe("calculateFinancialIndicators", () => {
 
     expect(result.totalProfit).toBe("300.06");
     expect(result.averageMarginPercent).toBe("2.98");
+    expect(result.breakEvenRevenue).toBe("6711.41");
+  });
+
+  it("returns zero break-even for a non-positive average margin", () => {
+    const result = calculateFinancialIndicatorsFromTotals({
+      advertising: "0.00",
+      fixedCost: "200.00",
+      marketplaceCommission: "150.00",
+      netSales: 1,
+      packagingCost: "0.00",
+      productCost: "0.00",
+      revenue: "100.00",
+      shippingCost: "0.00",
+      taxAmount: "0.00",
+    });
+
+    expect(result.averageMarginPercent).toBe("-2.00");
+    expect(result.breakEvenRevenue).toBe("0.00");
   });
 });

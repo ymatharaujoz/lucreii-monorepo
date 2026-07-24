@@ -2,7 +2,10 @@ import { parseProtectedNumber } from "@/lib/protected-numbers";
 
 export function formatMoney(
   value: number | string | null | undefined,
-  options?: { maximumFractionDigits?: number },
+  options?: {
+    maximumFractionDigits?: number;
+    minimumFractionDigits?: number;
+  },
 ) {
   const numeric = normalizeNumber(value);
   if (numeric === null) return "â€”";
@@ -11,6 +14,9 @@ export function formatMoney(
     currency: "BRL",
     style: "currency",
     maximumFractionDigits: options?.maximumFractionDigits ?? 0,
+    ...(options?.minimumFractionDigits === undefined
+      ? {}
+      : { minimumFractionDigits: options.minimumFractionDigits }),
   }).format(numeric);
 }
 
