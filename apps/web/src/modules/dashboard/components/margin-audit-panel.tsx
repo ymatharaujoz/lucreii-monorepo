@@ -47,58 +47,62 @@ export function MarginAuditPanel({
     : "Todos os marketplaces";
   const rows: AuditRowProps[] = [
     {
-      description: "Vendas menos devoluções, agregadas nas linhas da performance.",
-      formula: "Σ (VENDAS − DEVOLUÇÕES)",
+      description:
+        "Itens dos pedidos com Lucro Total calculável na exportação.",
+      formula: "Σ ITENS DE PEDIDOS ELEGÍVEIS",
       label: "Venda líquida",
       value: new Intl.NumberFormat("pt-BR").format(indicators.netSales),
     },
     {
-      description: "Preço de venda da linha multiplicado pela venda líquida.",
-      formula: "Σ (PDV × VENDA LÍQUIDA)",
+      description: "Faturamento dos mesmos pedidos elegíveis da exportação.",
+      formula: "Σ FATURAMENTO DE PEDIDOS ELEGÍVEIS",
       label: "Faturamento",
       value: formatMoney(indicators.revenue, { maximumFractionDigits: 2 }),
     },
     {
-      description: "Comissão calculada sobre a receita de cada linha.",
-      formula: "Σ (RECEITA × COMISSÃO)",
+      description: "Comissão registrada na composição de cada pedido elegível.",
+      formula: "Σ COMISSÃO DE PEDIDOS",
       label: "Comissão marketplace",
       value: formatMoney(indicators.marketplaceCommission, {
         maximumFractionDigits: 2,
       }),
     },
     {
-      description: "Frete unitário multiplicado pela venda líquida.",
-      formula: "Σ (FRETE × VENDA LÍQUIDA)",
+      description:
+        "Frete e taxa fixa registrados na composição de cada pedido.",
+      formula: "Σ FRETE/TAXA FIXA DE PEDIDOS",
       label: "Frete",
       value: formatMoney(indicators.shippingCost, {
         maximumFractionDigits: 2,
       }),
     },
     {
-      description: "Alíquota da empresa aplicada ao faturamento.",
-      formula: "Σ (RECEITA × ALÍQUOTA)",
+      description: "Imposto registrado na composição de cada pedido elegível.",
+      formula: "Σ IMPOSTO DE PEDIDOS",
       label: "Imposto",
       value: formatMoney(indicators.taxAmount, { maximumFractionDigits: 2 }),
     },
     {
-      description: "Custo unitário de embalagem multiplicado pela venda líquida.",
-      formula: "Σ (EMBALAGEM × VENDA LÍQUIDA)",
+      description:
+        "Custo de embalagem registrado na composição de cada pedido.",
+      formula: "Σ EMBALAGEM DE PEDIDOS",
       label: "Embalagem",
       value: formatMoney(indicators.packagingCost, {
         maximumFractionDigits: 2,
       }),
     },
     {
-      description: "Custo unitário do produto multiplicado pela venda líquida.",
-      formula: "Σ (CUSTO PRODUTO × VENDA LÍQUIDA)",
+      description:
+        "Custo dos produtos registrado na composição de cada pedido.",
+      formula: "Σ CUSTO DE PRODUTO DE PEDIDOS",
       label: "Custo do produto",
       value: formatMoney(indicators.productCost, {
         maximumFractionDigits: 2,
       }),
     },
     {
-      description: "Soma dos cinco componentes variáveis.",
-      formula: "COMISSÃO + FRETE + IMPOSTO + EMBALAGEM + PRODUTO",
+      description: "Custos dos pedidos, descontados bônus e reembolsos.",
+      formula: "COMISSÃO + FRETE + IMPOSTO + EMBALAGEM + PRODUTO − BÔNUS",
       label: "Total variáveis",
       value: formatMoney(indicators.variableCosts, {
         maximumFractionDigits: 2,
@@ -156,11 +160,12 @@ export function MarginAuditPanel({
               Auditoria dos indicadores financeiros
             </h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {formatReferenceMonthPtBr(referenceMonth)} · {scopeLabel} · fonte: performance
+              {formatReferenceMonthPtBr(referenceMonth)} · {scopeLabel} · fonte:
+              pedidos exportados
             </p>
           </div>
           <span className="text-[11px] font-semibold text-muted-foreground">
-            Detalhar cálculo
+            Pedidos sem Lucro Total calculável são excluídos
           </span>
         </summary>
         <div className="border-t border-border/70">
@@ -171,7 +176,12 @@ export function MarginAuditPanel({
           </div>
           <div className="border-t border-border/70 bg-surface-strong/30 px-4 py-3 sm:px-5">
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Margem média: {indicators.averageMarginPercent}% · Margem líquida: {indicators.netMarginPercent}% · Ponto de equilíbrio: {formatMoney(indicators.breakEvenRevenue, { maximumFractionDigits: 2 })}.
+              Margem média: {indicators.averageMarginPercent}% · Margem líquida:{" "}
+              {indicators.netMarginPercent}% · Ponto de equilíbrio:{" "}
+              {formatMoney(indicators.breakEvenRevenue, {
+                maximumFractionDigits: 2,
+              })}
+              .
             </p>
           </div>
         </div>

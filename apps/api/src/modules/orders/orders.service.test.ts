@@ -6399,4 +6399,119 @@ describe("OrdersService", () => {
     expect(rows[0]?.["ID da Venda"]).toBe("2000013650735359");
     expect(rows[0]?.["SKUs"]).toBe("SUPORTE-02-PRETO\nSUPORTE-02-BRANCO");
   });
+
+  it("matches exported Lucro Total sum and ignores orders without calculable profit", async () => {
+    const service = new OrdersService({} as never);
+    const exportOrderFields = {
+      contributionMarginPercent: null,
+      displayOrderId: "ORDER-1",
+      orderDate: "2026-06-20",
+      provider: "mercadolivre",
+      skus: ["SKU-1"],
+      statusLabel: "Pagamento aprovado",
+    };
+    const logicalOrders = [
+      {
+        composition: {
+          marketplaceCommissionAmount: "10.00",
+          packagingCostAmount: "5.00",
+          productCostAmount: "40.00",
+          refundBonusAmount: "0.00",
+          shippingOrFixedFeeAmount: "5.00",
+          taxAmount: "10.00",
+        },
+        items: [],
+        order: {
+          ...exportOrderFields,
+          itemsSold: 2,
+          totalProfitAmount: "30.00",
+          totalWithFees: "100.00",
+        },
+      },
+      {
+        composition: {
+          marketplaceCommissionAmount: "5.00",
+          packagingCostAmount: "2.00",
+          productCostAmount: "20.00",
+          refundBonusAmount: "0.00",
+          shippingOrFixedFeeAmount: "3.00",
+          taxAmount: "5.00",
+        },
+        items: [],
+        order: {
+          ...exportOrderFields,
+          itemsSold: 1,
+          totalProfitAmount: null,
+          totalWithFees: "50.00",
+        },
+      },
+      {
+        composition: {
+          marketplaceCommissionAmount: "5.00",
+          packagingCostAmount: "3.00",
+          productCostAmount: "13.00",
+          refundBonusAmount: "0.00",
+          shippingOrFixedFeeAmount: "2.00",
+          taxAmount: "2.00",
+        },
+        items: [],
+        order: {
+          ...exportOrderFields,
+          itemsSold: 1,
+          totalProfitAmount: "-5.00",
+          totalWithFees: "20.00",
+        },
+      },
+    ] as never[];
+    const readLogicalOrdersForExport = vi
+      .spyOn(
+        service as unknown as {
+          readLogicalOrdersForExport: () => Promise<unknown>;
+        },
+        "readLogicalOrdersForExport",
+      )
+      .mockResolvedValue(logicalOrders);
+    const context = {
+      organizationId: "org_123",
+      selectedCompanyId: "company_123",
+      userId: "user_123",
+    };
+
+    const summary = await service.readExportedFinancialSummary(context, {
+      provider: "mercadolivre",
+      referenceMonth: "2026-06-01",
+    });
+    const fileBuffer = await service.exportOrdersSpreadsheet(context, {
+      orderedFrom: "2026-06-01",
+      orderedTo: "2026-06-30",
+      provider: "mercadolivre",
+    });
+    const workbook = read(fileBuffer, { type: "buffer" });
+    const rows = utils.sheet_to_json<Record<string, unknown>>(
+      workbook.Sheets[workbook.SheetNames[0]!],
+    );
+    const exportedProfit = rows.reduce(
+      (total, row) => total + Number(row["Lucro Total"] ?? 0),
+      0,
+    );
+
+    expect(summary).toEqual({
+      marketplaceCommission: "15.00",
+      netSales: 3,
+      packagingCost: "8.00",
+      productCost: "53.00",
+      refundBonus: "0.00",
+      revenue: "120.00",
+      shippingCost: "7.00",
+      taxAmount: "12.00",
+      totalProfit: "25.00",
+      variableCosts: "95.00",
+    });
+    expect(exportedProfit).toBe(25);
+    expect(readLogicalOrdersForExport).toHaveBeenNthCalledWith(1, context, {
+      orderedFrom: "2026-06-01",
+      orderedTo: "2026-06-30",
+      provider: "mercadolivre",
+    });
+  });
 });

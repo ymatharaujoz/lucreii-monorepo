@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateFinancialIndicators,
+  calculateFinancialIndicatorsFromTotals,
   sumMoneyValues,
 } from "./financial-indicators";
 
@@ -78,5 +79,30 @@ describe("calculateFinancialIndicators", () => {
 
   it("sums fixed-cost rows without floating-point drift", () => {
     expect(sumMoneyValues(["2987.70", "0.01", "0.005"])).toBe("2987.72");
+  });
+
+  it("recalculates dependent indicators from canonical order totals", () => {
+    expect(
+      calculateFinancialIndicatorsFromTotals({
+        advertising: "12.00",
+        fixedCost: "30.00",
+        marketplaceCommission: "15.00",
+        netSales: 3,
+        packagingCost: "8.00",
+        productCost: "53.00",
+        refundBonus: "5.00",
+        revenue: "120.00",
+        shippingCost: "7.00",
+        taxAmount: "12.00",
+      }),
+    ).toMatchObject({
+      averageMarginPercent: "25.00",
+      breakEvenRevenue: "120.00",
+      netMarginPercent: "-10.00",
+      netProfit: "-12.00",
+      realProfit: "0.00",
+      totalProfit: "30.00",
+      variableCosts: "90.00",
+    });
   });
 });

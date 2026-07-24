@@ -34,6 +34,19 @@ export type FinancialIndicatorCalculationResult = {
   variableCosts: string;
 };
 
+export type FinancialIndicatorTotalsInput = {
+  advertising: string | number | null | undefined;
+  fixedCost: string | number | null | undefined;
+  marketplaceCommission: string | number | null | undefined;
+  netSales: number;
+  packagingCost: string | number | null | undefined;
+  productCost: string | number | null | undefined;
+  refundBonus?: string | number | null | undefined;
+  revenue: string | number | null | undefined;
+  shippingCost: string | number | null | undefined;
+  taxAmount: string | number | null | undefined;
+};
+
 const CENT_SCALE = 100n;
 const RATE_SCALE = 1_000_000n;
 const ZERO_PERCENT = "0.00";
@@ -64,9 +77,10 @@ function parseDecimalCents(value: string | number | null | undefined): bigint {
   const sign = normalized.startsWith("-") ? -1n : 1n;
   const unsigned = normalized.replace(/^-/, "");
   const [whole, fraction = ""] = unsigned.split(".");
-  const roundedFraction = fraction.length > 2
-    ? BigInt(fraction.slice(0, 2)) + (Number(fraction[2]) >= 5 ? 1n : 0n)
-    : BigInt((fraction + "00").slice(0, 2));
+  const roundedFraction =
+    fraction.length > 2
+      ? BigInt(fraction.slice(0, 2)) + (Number(fraction[2]) >= 5 ? 1n : 0n)
+      : BigInt((fraction + "00").slice(0, 2));
 
   return sign * (BigInt(whole) * CENT_SCALE + roundedFraction);
 }
@@ -168,13 +182,44 @@ export function calculateFinancialIndicators(
     );
     shippingCost += parseDecimalCents(line.shippingFee) * BigInt(lineNetSales);
     taxAmount += multiplyByRate(lineRevenue, taxRate);
-    packagingCost += parseDecimalCents(line.packagingCost) * BigInt(lineNetSales);
+    packagingCost +=
+      parseDecimalCents(line.packagingCost) * BigInt(lineNetSales);
     productCost += parseDecimalCents(line.unitCost) * BigInt(lineNetSales);
     advertising += parseDecimalCents(line.advertisingCost);
   }
 
+  return calculateFinancialIndicatorsFromTotals({
+    advertising: formatCents(advertising),
+    fixedCost: formatCents(fixedCost),
+    marketplaceCommission: formatCents(marketplaceCommission),
+    netSales,
+    packagingCost: formatCents(packagingCost),
+    productCost: formatCents(productCost),
+    revenue: formatCents(revenue),
+    shippingCost: formatCents(shippingCost),
+    taxAmount: formatCents(taxAmount),
+  });
+}
+
+export function calculateFinancialIndicatorsFromTotals(
+  input: FinancialIndicatorTotalsInput,
+): FinancialIndicatorCalculationResult {
+  const advertising = parseDecimalCents(input.advertising);
+  const fixedCost = parseDecimalCents(input.fixedCost);
+  const marketplaceCommission = parseDecimalCents(input.marketplaceCommission);
+  const packagingCost = parseDecimalCents(input.packagingCost);
+  const productCost = parseDecimalCents(input.productCost);
+  const refundBonus = parseDecimalCents(input.refundBonus);
+  const revenue = parseDecimalCents(input.revenue);
+  const shippingCost = parseDecimalCents(input.shippingCost);
+  const taxAmount = parseDecimalCents(input.taxAmount);
   const variableCosts =
-    marketplaceCommission + shippingCost + taxAmount + packagingCost + productCost;
+    marketplaceCommission +
+    shippingCost +
+    taxAmount +
+    packagingCost +
+    productCost -
+    refundBonus;
   const totalProfit = revenue - variableCosts;
   const realProfit = totalProfit - fixedCost;
   const netProfit = realProfit - advertising;
@@ -191,7 +236,7 @@ export function calculateFinancialIndicators(
     marketplaceCommission: formatCents(marketplaceCommission),
     netMarginPercent: formatPercent(netProfit, revenue),
     netProfit: formatCents(netProfit),
-    netSales,
+    netSales: Math.max(0, Math.trunc(input.netSales)),
     packagingCost: formatCents(packagingCost),
     productCost: formatCents(productCost),
     realProfit: formatCents(realProfit),
@@ -206,5 +251,7 @@ export function calculateFinancialIndicators(
 export function sumMoneyValues(
   values: readonly (string | number | null | undefined)[],
 ): string {
-  return formatCents(values.reduce((sum, value) => sum + parseDecimalCents(value), 0n));
+  return formatCents(
+    values.reduce((sum, value) => sum + parseDecimalCents(value), 0n),
+  );
 }

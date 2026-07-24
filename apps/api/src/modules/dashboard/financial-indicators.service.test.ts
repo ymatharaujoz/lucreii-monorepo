@@ -11,10 +11,7 @@ function buildDb() {
   };
 }
 
-function buildProductsService(
-  items: unknown[] = [],
-  totalPages = 1,
-) {
+function buildProductsService(items: unknown[] = [], totalPages = 1) {
   return {
     listPerformanceRows: vi.fn().mockResolvedValue({
       items,
@@ -22,6 +19,33 @@ function buildProductsService(
       pageSize: 100,
       totalItems: items.length,
       totalPages,
+    }),
+  };
+}
+
+function buildOrdersService(
+  overrides: Partial<{
+    marketplaceCommission: string;
+    netSales: number;
+    packagingCost: string;
+    productCost: string;
+    refundBonus: string;
+    revenue: string;
+    shippingCost: string;
+    taxAmount: string;
+  }> = {},
+) {
+  return {
+    readExportedFinancialSummary: vi.fn().mockResolvedValue({
+      marketplaceCommission: "10.00",
+      netSales: 1,
+      packagingCost: "2.00",
+      productCost: "20.00",
+      refundBonus: "0.00",
+      revenue: "100.00",
+      shippingCost: "5.00",
+      taxAmount: "10.00",
+      ...overrides,
     }),
   };
 }
@@ -48,27 +72,31 @@ describe("FinancialIndicatorsService", () => {
         unitCost: "20.00",
       },
     ]);
+    const ordersService = buildOrdersService({ productCost: "19.00" });
 
     const result = await new FinancialIndicatorsService(
       db as never,
       productsService as never,
-    ).read(
-      "org-1",
-      "user-1",
-      "company-1",
-      undefined,
-      "2026-04-01",
-    );
+      ordersService as never,
+    ).read("org-1", "user-1", "company-1", undefined, "2026-04-01");
 
     expect(result).toMatchObject({
-      breakEvenRevenue: "188.68",
+      breakEvenRevenue: "185.19",
       fixedCost: "100.00",
       fixedCostSource: "company_default",
-      netProfit: "-50.00",
+      netProfit: "-49.00",
       revenue: "100.00",
-      totalProfit: "53.00",
-      variableCosts: "47.00",
+      totalProfit: "54.00",
+      variableCosts: "46.00",
     });
+    expect(ordersService.readExportedFinancialSummary).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        selectedCompanyId: "company-1",
+        userId: "user-1",
+      },
+      { provider: undefined, referenceMonth: "2026-04-01" },
+    );
   });
 
   it("sums only the selected month's fixed costs and forwards the marketplace filter", async () => {
@@ -79,17 +107,21 @@ describe("FinancialIndicatorsService", () => {
       { amount: "5.50" },
     ]);
     const productsService = buildProductsService();
+    const ordersService = buildOrdersService({
+      marketplaceCommission: "0.00",
+      netSales: 0,
+      packagingCost: "0.00",
+      productCost: "0.00",
+      revenue: "0.00",
+      shippingCost: "0.00",
+      taxAmount: "0.00",
+    });
 
     const result = await new FinancialIndicatorsService(
       db as never,
       productsService as never,
-    ).read(
-      "org-1",
-      "user-1",
-      "company-1",
-      "shopee",
-      "2026-05-01",
-    );
+      ordersService as never,
+    ).read("org-1", "user-1", "company-1", "shopee", "2026-05-01");
 
     expect(result.fixedCost).toBe("15.50");
     expect(result.fixedCostSource).toBe("monthly");
@@ -128,10 +160,20 @@ describe("FinancialIndicatorsService", () => {
         unitCost: "0.00",
       },
     ]);
+    const ordersService = buildOrdersService({
+      marketplaceCommission: "0.00",
+      netSales: 28,
+      packagingCost: "0.00",
+      productCost: "0.00",
+      revenue: "280.00",
+      shippingCost: "0.00",
+      taxAmount: "0.00",
+    });
 
     const result = await new FinancialIndicatorsService(
       db as never,
       productsService as never,
+      ordersService as never,
     ).read("org-1", "user-1", "company-1", "shopee", "2026-04-01");
 
     expect(result.netSales).toBe(28);
@@ -159,31 +201,43 @@ describe("FinancialIndicatorsService", () => {
     });
     db.query.fixedCosts.findMany.mockResolvedValue([]);
     const productsService = {
-      listPerformanceRows: vi.fn().mockImplementation(({},{ page }: { page: number }) =>
-        Promise.resolve({
-          items: [
-            {
-              advertisingCost: "0.00",
-              commissionPct: 0,
-              packagingCost: "0.00",
-              returns: 0,
-              sales: page === 1 ? 28 : 4,
-              sellingPrice: 10,
-              shipping: 0,
-              unitCost: "0.00",
-            },
-          ],
-          page,
-          pageSize: 100,
-          totalItems: 2,
-          totalPages: 2,
-        }),
-      ),
+      listPerformanceRows: vi
+        .fn()
+        .mockImplementation(({}, { page }: { page: number }) =>
+          Promise.resolve({
+            items: [
+              {
+                advertisingCost: "0.00",
+                commissionPct: 0,
+                packagingCost: "0.00",
+                returns: 0,
+                sales: page === 1 ? 28 : 4,
+                sellingPrice: 10,
+                shipping: 0,
+                unitCost: "0.00",
+              },
+            ],
+            page,
+            pageSize: 100,
+            totalItems: 2,
+            totalPages: 2,
+          }),
+        ),
     };
+    const ordersService = buildOrdersService({
+      marketplaceCommission: "0.00",
+      netSales: 32,
+      packagingCost: "0.00",
+      productCost: "0.00",
+      revenue: "320.00",
+      shippingCost: "0.00",
+      taxAmount: "0.00",
+    });
 
     const result = await new FinancialIndicatorsService(
       db as never,
       productsService as never,
+      ordersService as never,
     ).read("org-1", "user-1", "company-1", undefined, "2026-04-01");
 
     expect(result.netSales).toBe(32);

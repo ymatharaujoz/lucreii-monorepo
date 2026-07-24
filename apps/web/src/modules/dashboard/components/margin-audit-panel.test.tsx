@@ -34,8 +34,9 @@ describe("MarginAuditPanel", () => {
     );
 
     expect(markup).toContain("Auditoria dos indicadores financeiros");
-    expect(markup).toContain("Σ (VENDAS − DEVOLUÇÕES)");
+    expect(markup).toContain("Σ ITENS DE PEDIDOS ELEGÍVEIS");
     expect(markup).toContain("Comissão marketplace");
+    expect(markup).toContain("fonte: pedidos exportados");
     expect(markup).toContain("Soma dos lançamentos de custo fixo");
     const normalizedMarkup = markup.replace(/\u00a0/g, " ");
     expect(normalizedMarkup).toContain("R$ 3.295,11");

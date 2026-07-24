@@ -36,6 +36,7 @@ import type {
   OrderImportTag,
   OrderLineItem,
   OrderListFilters,
+  IntegrationProviderSlug,
   OrdersMarginAudit,
   OrderListItem,
   OrdersListSummary,
@@ -99,6 +100,19 @@ type LogicalOrder = {
   items: OrderLineItem[];
   order: OrderListItem;
   rows: OrderRow[];
+};
+
+export type ExportedOrderFinancialSummary = {
+  marketplaceCommission: string;
+  netSales: number;
+  packagingCost: string;
+  productCost: string;
+  refundBonus: string;
+  revenue: string;
+  shippingCost: string;
+  taxAmount: string;
+  totalProfit: string;
+  variableCosts: string;
 };
 
 type MercadoLivreOrderDetailResponse = {
@@ -204,6 +218,62 @@ function formatCents(value: bigint) {
   const whole = absolute / 100n;
   const cents = absolute % 100n;
   return `${sign}${whole.toString()}.${cents.toString().padStart(2, "0")}`;
+}
+
+function buildReferenceMonthOrderRange(referenceMonth: string) {
+  const [year, month] = referenceMonth.slice(0, 7).split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0));
+
+  return {
+    orderedFrom: referenceMonth,
+    orderedTo: lastDay.toISOString().slice(0, 10),
+  };
+}
+
+function summarizeExportedOrderFinancials(
+  logicalOrders: LogicalOrder[],
+): ExportedOrderFinancialSummary {
+  let marketplaceCommission = 0n;
+  let netSales = 0;
+  let packagingCost = 0n;
+  let productCost = 0n;
+  let refundBonus = 0n;
+  let revenue = 0n;
+  let shippingCost = 0n;
+  let taxAmount = 0n;
+  let totalProfit = 0n;
+
+  for (const logicalOrder of logicalOrders) {
+    if (logicalOrder.order.totalProfitAmount === null) {
+      continue;
+    }
+
+    const composition = logicalOrder.composition;
+    marketplaceCommission += parseMoneyToCents(
+      composition.marketplaceCommissionAmount,
+    );
+    netSales += logicalOrder.order.itemsSold;
+    packagingCost += parseMoneyToCents(composition.packagingCostAmount);
+    productCost += parseMoneyToCents(composition.productCostAmount);
+    refundBonus += parseMoneyToCents(composition.refundBonusAmount);
+    revenue += parseMoneyToCents(logicalOrder.order.totalWithFees);
+    shippingCost += parseMoneyToCents(composition.shippingOrFixedFeeAmount);
+    taxAmount += parseMoneyToCents(composition.taxAmount);
+    totalProfit += parseMoneyToCents(logicalOrder.order.totalProfitAmount);
+  }
+
+  return {
+    marketplaceCommission: formatCents(marketplaceCommission),
+    netSales,
+    packagingCost: formatCents(packagingCost),
+    productCost: formatCents(productCost),
+    refundBonus: formatCents(refundBonus),
+    revenue: formatCents(revenue),
+    shippingCost: formatCents(shippingCost),
+    taxAmount: formatCents(taxAmount),
+    totalProfit: formatCents(totalProfit),
+    variableCosts: formatCents(revenue - totalProfit),
+  };
 }
 
 function allocateCentsByWeights(totalCents: bigint, weights: bigint[]) {
@@ -2511,128 +2581,27 @@ export class OrdersService {
     };
   }
 
+  async readExportedFinancialSummary(
+    authContext: TenantContext,
+    input: {
+      provider?: IntegrationProviderSlug;
+      referenceMonth: string;
+    },
+  ): Promise<ExportedOrderFinancialSummary> {
+    const monthRange = buildReferenceMonthOrderRange(input.referenceMonth);
+    const logicalOrders = await this.readLogicalOrdersForExport(authContext, {
+      ...monthRange,
+      ...(input.provider ? { provider: input.provider } : {}),
+    });
+
+    return summarizeExportedOrderFinancials(logicalOrders);
+  }
+
   async exportOrdersSpreadsheet(
     authContext: TenantContext,
     filters: OrderExportFilters = {},
   ): Promise<Buffer> {
-    const companyId = this.requireSelectedCompanyId(authContext);
-    const normalizedFilters = orderExportQuerySchema.parse(filters);
-    const sortBy = "orderedAt" satisfies NonNullable<
-      OrderListFilters["sortBy"]
-    >;
-    const sortDirection = "desc" as const;
-    const saleIdNeedle = normalizedFilters.saleId?.trim();
-    const skuNeedle = normalizedFilters.sku?.trim();
-    const baseWhereConditions = [
-      eq(externalOrders.organizationId, authContext.organizationId),
-      eq(externalOrders.companyId, companyId),
-      ...(saleIdNeedle ? [buildSaleIdWhere(saleIdNeedle)] : []),
-      ...(skuNeedle ? [buildSkuWhere(skuNeedle)] : []),
-      ...(normalizedFilters.provider
-        ? [eq(externalOrders.provider, normalizedFilters.provider)]
-        : []),
-      ...(normalizedFilters.orderedFrom
-        ? [
-            sql`${externalOrders.orderedAt}::date >= ${normalizedFilters.orderedFrom}`,
-          ]
-        : []),
-      ...(normalizedFilters.orderedTo
-        ? [
-            sql`${externalOrders.orderedAt}::date <= ${normalizedFilters.orderedTo}`,
-          ]
-        : []),
-    ];
-    const baseWhere = and(...baseWhereConditions);
-    const [company] = await Promise.all([
-      this.db.query.companies.findFirst({
-        where: (table) =>
-          and(
-            eq(table.id, companyId),
-            eq(table.organizationId, authContext.organizationId),
-          ),
-      }),
-    ]);
-    const rows = await this.db.query.externalOrders.findMany({
-      orderBy: (table) => [desc(table.orderedAt), desc(table.createdAt)],
-      where: () => baseWhere,
-      with: {
-        fees: true,
-        items: {
-          with: {
-            externalProduct: true,
-          },
-        },
-      },
-    });
-    const backfilledRows = await this.backfillMercadoLivreOperationIds(
-      authContext,
-      companyId,
-      rows as OrderRowShallow[],
-    );
-    const shippingBillingBackfilledRows =
-      await this.backfillMercadoLivreBillingShippingCosts(
-        authContext,
-        companyId,
-        backfilledRows,
-      );
-    const hydratedRows = await this.hydrateLinkedProducts(
-      authContext,
-      companyId,
-      shippingBillingBackfilledRows,
-    );
-    const selectedIds = new Set(normalizedFilters.ids ?? []);
-    const mapped = buildLogicalOrders(
-      hydratedRows,
-      company?.taxRateDefault,
-    ).filter(({ order: item }) => {
-      if (selectedIds.size > 0 && !selectedIds.has(item.id)) {
-        return false;
-      }
-
-      if (
-        normalizedFilters.search &&
-        !matchesOrderSearch(item, normalizedFilters.search)
-      ) {
-        return false;
-      }
-
-      if (
-        normalizedFilters.saleId &&
-        !matchesSaleIdFilter(item, normalizedFilters.saleId)
-      ) {
-        return false;
-      }
-
-      if (
-        normalizedFilters.sku &&
-        !matchesSkuFilter(item, normalizedFilters.sku)
-      ) {
-        return false;
-      }
-
-      if (
-        normalizedFilters.status &&
-        item.status !== normalizedFilters.status
-      ) {
-        return false;
-      }
-
-      if (
-        (normalizedFilters.orderedFrom || normalizedFilters.orderedTo) &&
-        !isOrderWithinRange(
-          item.orderDate,
-          normalizedFilters.orderedFrom,
-          normalizedFilters.orderedTo,
-        )
-      ) {
-        return false;
-      }
-
-      return true;
-    });
-    mapped.sort((left, right) =>
-      compareOrderListItems(left.order, right.order, sortBy, sortDirection),
-    );
+    const mapped = await this.readLogicalOrdersForExport(authContext, filters);
 
     const worksheet = utils.json_to_sheet(
       mapped.map(({ order: item }) => ({
@@ -2817,6 +2786,122 @@ export class OrdersService {
       });
 
     return this.getOrderDetails(authContext, orderRecordId);
+  }
+
+  private async readLogicalOrdersForExport(
+    authContext: TenantContext,
+    filters: OrderExportFilters,
+  ): Promise<LogicalOrder[]> {
+    const companyId = this.requireSelectedCompanyId(authContext);
+    const normalizedFilters = orderExportQuerySchema.parse(filters);
+    const saleIdNeedle = normalizedFilters.saleId?.trim();
+    const skuNeedle = normalizedFilters.sku?.trim();
+    const baseWhere = and(
+      eq(externalOrders.organizationId, authContext.organizationId),
+      eq(externalOrders.companyId, companyId),
+      ...(saleIdNeedle ? [buildSaleIdWhere(saleIdNeedle)] : []),
+      ...(skuNeedle ? [buildSkuWhere(skuNeedle)] : []),
+      ...(normalizedFilters.provider
+        ? [eq(externalOrders.provider, normalizedFilters.provider)]
+        : []),
+      ...(normalizedFilters.orderedFrom
+        ? [
+            sql`${externalOrders.orderedAt}::date >= ${normalizedFilters.orderedFrom}`,
+          ]
+        : []),
+      ...(normalizedFilters.orderedTo
+        ? [
+            sql`${externalOrders.orderedAt}::date <= ${normalizedFilters.orderedTo}`,
+          ]
+        : []),
+    );
+    const [company, rows] = await Promise.all([
+      this.db.query.companies.findFirst({
+        where: (table) =>
+          and(
+            eq(table.id, companyId),
+            eq(table.organizationId, authContext.organizationId),
+          ),
+      }),
+      this.db.query.externalOrders.findMany({
+        orderBy: (table) => [desc(table.orderedAt), desc(table.createdAt)],
+        where: () => baseWhere,
+        with: {
+          fees: true,
+          items: {
+            with: {
+              externalProduct: true,
+            },
+          },
+        },
+      }),
+    ]);
+    const backfilledRows = await this.backfillMercadoLivreOperationIds(
+      authContext,
+      companyId,
+      rows as OrderRowShallow[],
+    );
+    const shippingBillingBackfilledRows =
+      await this.backfillMercadoLivreBillingShippingCosts(
+        authContext,
+        companyId,
+        backfilledRows,
+      );
+    const hydratedRows = await this.hydrateLinkedProducts(
+      authContext,
+      companyId,
+      shippingBillingBackfilledRows,
+    );
+    const selectedIds = new Set(normalizedFilters.ids ?? []);
+    const logicalOrders = buildLogicalOrders(
+      hydratedRows,
+      company?.taxRateDefault,
+    ).filter(({ order: item }) => {
+      if (selectedIds.size > 0 && !selectedIds.has(item.id)) {
+        return false;
+      }
+
+      if (
+        normalizedFilters.search &&
+        !matchesOrderSearch(item, normalizedFilters.search)
+      ) {
+        return false;
+      }
+
+      if (
+        normalizedFilters.saleId &&
+        !matchesSaleIdFilter(item, normalizedFilters.saleId)
+      ) {
+        return false;
+      }
+
+      if (
+        normalizedFilters.sku &&
+        !matchesSkuFilter(item, normalizedFilters.sku)
+      ) {
+        return false;
+      }
+
+      if (
+        normalizedFilters.status &&
+        item.status !== normalizedFilters.status
+      ) {
+        return false;
+      }
+
+      return !(
+        (normalizedFilters.orderedFrom || normalizedFilters.orderedTo) &&
+        !isOrderWithinRange(
+          item.orderDate,
+          normalizedFilters.orderedFrom,
+          normalizedFilters.orderedTo,
+        )
+      );
+    });
+
+    return logicalOrders.sort((left, right) =>
+      compareOrderListItems(left.order, right.order, "orderedAt", "desc"),
+    );
   }
 
   private async buildOrdersSummaryWithMonthlyRollup(

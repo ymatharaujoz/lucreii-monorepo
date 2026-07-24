@@ -1,9 +1,8 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import {
-  type DatabaseClient,
-} from "@lucreii/database";
+import { type DatabaseClient } from "@lucreii/database";
 import {
   calculateFinancialIndicators,
+  calculateFinancialIndicatorsFromTotals,
   sumMoneyValues,
 } from "@lucreii/domain";
 import type {
@@ -13,6 +12,7 @@ import type {
 } from "@lucreii/types";
 import { and, eq } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
+import { OrdersService } from "@/modules/orders/orders.service";
 import { ProductsService } from "@/modules/products/products.service";
 
 @Injectable()
@@ -22,6 +22,8 @@ export class FinancialIndicatorsService {
     private readonly db: DatabaseClient,
     @Inject(ProductsService)
     private readonly productsService: ProductsService,
+    @Inject(OrdersService)
+    private readonly ordersService: OrdersService,
   ) {}
 
   private async readPerformanceRows(
@@ -98,7 +100,7 @@ export class FinancialIndicatorsService {
     const fixedCost = hasMonthlyFixedCosts
       ? sumMoneyValues(monthlyFixedCosts.map((row) => row.amount))
       : company.fixedCostDefault;
-    const result = calculateFinancialIndicators({
+    const performanceIndicators = calculateFinancialIndicators({
       fixedCost,
       lines: performanceRows.map((row) => ({
         advertisingCost: row.advertisingCost,
@@ -111,6 +113,26 @@ export class FinancialIndicatorsService {
         unitCost: row.unitCost,
       })),
       taxRate: company.taxRateDefault,
+    });
+    const ordersSummary = await this.ordersService.readExportedFinancialSummary(
+      {
+        organizationId,
+        selectedCompanyId: companyId,
+        userId,
+      },
+      { provider, referenceMonth },
+    );
+    const result = calculateFinancialIndicatorsFromTotals({
+      advertising: performanceIndicators.advertising,
+      fixedCost,
+      marketplaceCommission: ordersSummary.marketplaceCommission,
+      netSales: ordersSummary.netSales,
+      packagingCost: ordersSummary.packagingCost,
+      productCost: ordersSummary.productCost,
+      refundBonus: ordersSummary.refundBonus,
+      revenue: ordersSummary.revenue,
+      shippingCost: ordersSummary.shippingCost,
+      taxAmount: ordersSummary.taxAmount,
     });
 
     return {
