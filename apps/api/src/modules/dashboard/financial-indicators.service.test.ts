@@ -11,9 +11,18 @@ function buildDb() {
   };
 }
 
-function buildFinanceService(orders: unknown[] = []) {
+function buildProductsService(
+  items: unknown[] = [],
+  totalPages = 1,
+) {
   return {
-    buildFinanceSnapshot: vi.fn().mockResolvedValue({ orders }),
+    listPerformanceRows: vi.fn().mockResolvedValue({
+      items,
+      page: 1,
+      pageSize: 100,
+      totalItems: items.length,
+      totalPages,
+    }),
   };
 }
 
@@ -26,24 +35,23 @@ describe("FinancialIndicatorsService", () => {
   it("uses the company fixed-cost fallback when the month has no launches", async () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);
-    db.query.productMonthlyPerformance.findMany.mockResolvedValue([
+    db.query.fixedCosts.findMany.mockResolvedValue([]);
+    const productsService = buildProductsService([
       {
         advertisingCost: "3.00",
-        commissionRate: "0.10",
+        commissionPct: 10,
         packagingCost: "2.00",
-        returnsQuantity: 0,
-        salePrice: "100.00",
-        salesQuantity: 1,
-        shippingFee: "5.00",
+        returns: 0,
+        sellingPrice: 100,
+        sales: 1,
+        shipping: 5,
         unitCost: "20.00",
       },
     ]);
-    db.query.fixedCosts.findMany.mockResolvedValue([]);
-    const financeService = buildFinanceService();
 
     const result = await new FinancialIndicatorsService(
       db as never,
-      financeService as never,
+      productsService as never,
     ).read(
       "org-1",
       "user-1",
@@ -66,16 +74,15 @@ describe("FinancialIndicatorsService", () => {
   it("sums only the selected month's fixed costs and forwards the marketplace filter", async () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);
-    db.query.productMonthlyPerformance.findMany.mockResolvedValue([]);
     db.query.fixedCosts.findMany.mockResolvedValue([
       { amount: "10.00" },
       { amount: "5.50" },
     ]);
-    const financeService = buildFinanceService();
+    const productsService = buildProductsService();
 
     const result = await new FinancialIndicatorsService(
       db as never,
-      financeService as never,
+      productsService as never,
     ).read(
       "org-1",
       "user-1",
@@ -86,53 +93,101 @@ describe("FinancialIndicatorsService", () => {
 
     expect(result.fixedCost).toBe("15.50");
     expect(result.fixedCostSource).toBe("monthly");
-    expect(db.query.productMonthlyPerformance.findMany).toHaveBeenCalledOnce();
     expect(db.query.fixedCosts.findMany).toHaveBeenCalledOnce();
+    expect(productsService.listPerformanceRows).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        selectedCompanyId: "company-1",
+        userId: "user-1",
+      },
+      {
+        marketplaces: ["shopee"],
+        page: 1,
+        pageSize: 100,
+        referenceMonth: "2026-05-01",
+      },
+    );
   });
 
-  it("uses reconciled marketplace sales when they exist for a performance line", async () => {
+  it("uses the same visible performance sales as the products page", async () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue({
       fixedCostDefault: "0.00",
       taxRateDefault: "0.00",
     });
-    db.query.productMonthlyPerformance.findMany.mockResolvedValue([
+    db.query.fixedCosts.findMany.mockResolvedValue([]);
+    const productsService = buildProductsService([
       {
         advertisingCost: "0.00",
-        channel: "shopee",
-        commissionRate: "0.00",
+        commissionPct: 0,
         packagingCost: "0.00",
-        productId: "product-1",
-        returnsQuantity: 0,
-        salePrice: "10.00",
-        salesQuantity: 84,
-        shippingFee: "0.00",
-        sku: "SKU-1",
+        returns: 0,
+        sales: 28,
+        sellingPrice: 10,
+        shipping: 0,
         unitCost: "0.00",
-      },
-    ]);
-    db.query.fixedCosts.findMany.mockResolvedValue([]);
-    const financeService = buildFinanceService([
-      {
-        id: "order-1",
-        items: [{ productId: "product-1", quantity: 28, sku: "SKU-1" }],
-        orderedAt: "2026-04-15T12:00:00.000Z",
-        provider: "shopee",
       },
     ]);
 
     const result = await new FinancialIndicatorsService(
       db as never,
-      financeService as never,
+      productsService as never,
     ).read("org-1", "user-1", "company-1", "shopee", "2026-04-01");
 
     expect(result.netSales).toBe(28);
     expect(result.revenue).toBe("280.00");
-    expect(financeService.buildFinanceSnapshot).toHaveBeenCalledWith(
-      "org-1",
-      "company-1",
-      "shopee",
-      "2026-04-01",
+    expect(productsService.listPerformanceRows).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        selectedCompanyId: "company-1",
+        userId: "user-1",
+      },
+      {
+        marketplaces: ["shopee"],
+        page: 1,
+        pageSize: 100,
+        referenceMonth: "2026-04-01",
+      },
     );
+  });
+
+  it("accumulates all performance pages", async () => {
+    const db = buildDb();
+    db.query.companies.findFirst.mockResolvedValue({
+      fixedCostDefault: "0.00",
+      taxRateDefault: "0.00",
+    });
+    db.query.fixedCosts.findMany.mockResolvedValue([]);
+    const productsService = {
+      listPerformanceRows: vi.fn().mockImplementation(({},{ page }: { page: number }) =>
+        Promise.resolve({
+          items: [
+            {
+              advertisingCost: "0.00",
+              commissionPct: 0,
+              packagingCost: "0.00",
+              returns: 0,
+              sales: page === 1 ? 28 : 4,
+              sellingPrice: 10,
+              shipping: 0,
+              unitCost: "0.00",
+            },
+          ],
+          page,
+          pageSize: 100,
+          totalItems: 2,
+          totalPages: 2,
+        }),
+      ),
+    };
+
+    const result = await new FinancialIndicatorsService(
+      db as never,
+      productsService as never,
+    ).read("org-1", "user-1", "company-1", undefined, "2026-04-01");
+
+    expect(result.netSales).toBe(32);
+    expect(result.revenue).toBe("320.00");
+    expect(productsService.listPerformanceRows).toHaveBeenCalledTimes(2);
   });
 });
