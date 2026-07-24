@@ -1,5 +1,6 @@
 import type {
   DashboardChartsResponse,
+  DashboardFinancialIndicators,
   DashboardProfitabilityResponse,
   DashboardRecentSyncResponse,
   DashboardSummaryResponse,
@@ -23,6 +24,7 @@ export type DashboardQueryBundle = {
   charts: DashboardChartsResponse | undefined;
   recentSync: DashboardRecentSyncResponse | undefined;
   profitability: DashboardProfitabilityResponse | undefined;
+  financialIndicators: DashboardFinancialIndicators | undefined;
 };
 
 export type DashboardKpiTone = "default" | "accent" | "success" | "warning";

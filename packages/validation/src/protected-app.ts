@@ -299,6 +299,26 @@ export const dashboardProfitabilityResponseSchema = z.object({
   products: z.array(dashboardProductProfitabilityRowSchema),
 });
 
+export const dashboardFinancialIndicatorsResponseSchema = z.object({
+  advertising: decimalField("Advertising"),
+  averageMarginPercent: decimalField("Average margin percent"),
+  breakEvenRevenue: decimalField("Break-even revenue"),
+  fixedCost: decimalField("Fixed cost"),
+  fixedCostSource: z.enum(["monthly", "company_default"]),
+  marketplaceCommission: decimalField("Marketplace commission"),
+  netMarginPercent: decimalField("Net margin percent"),
+  netProfit: decimalField("Net profit"),
+  netSales: z.number().int().min(0),
+  packagingCost: decimalField("Packaging cost"),
+  productCost: decimalField("Product cost"),
+  realProfit: decimalField("Real profit"),
+  revenue: decimalField("Revenue"),
+  shippingCost: decimalField("Shipping cost"),
+  taxAmount: decimalField("Tax amount"),
+  totalProfit: decimalField("Total profit"),
+  variableCosts: decimalField("Variable costs"),
+});
+
 export const productCostRecordSchema = z.object({
   id: z.string().trim().min(1),
   companyId: z.string().trim().min(1),
@@ -590,6 +610,8 @@ export const dashboardRecentSyncApiResponseSchema =
   createApiSuccessResponseSchema(dashboardRecentSyncResponseSchema);
 export const dashboardProfitabilityApiResponseSchema =
   createApiSuccessResponseSchema(dashboardProfitabilityResponseSchema);
+export const dashboardFinancialIndicatorsApiResponseSchema =
+  createApiSuccessResponseSchema(dashboardFinancialIndicatorsResponseSchema);
 export const productAnalyticsSnapshotApiResponseSchema =
   createApiSuccessResponseSchema(productAnalyticsSnapshotSchema);
 export const completeOnboardingApiResponseSchema =
@@ -614,6 +636,9 @@ export type DashboardRecentSyncResponseInput = z.infer<
 >;
 export type DashboardProfitabilityResponseInput = z.infer<
   typeof dashboardProfitabilityResponseSchema
+>;
+export type DashboardFinancialIndicatorsResponseInput = z.infer<
+  typeof dashboardFinancialIndicatorsResponseSchema
 >;
 export type ProductAnalyticsSnapshotInput = z.infer<
   typeof productAnalyticsSnapshotSchema

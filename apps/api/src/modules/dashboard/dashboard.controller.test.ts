@@ -205,6 +205,75 @@ describe("dashboard controller", () => {
     );
   });
 
+  it("returns financial indicators from the performance source", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: {
+        id: "org_123",
+        name: "Org",
+        role: "owner",
+        slug: "org",
+      },
+      selectedCompanyId: "company_123",
+      session: {
+        expiresAt: new Date("2026-04-22T00:00:00.000Z"),
+        id: "session_123",
+      },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(entitlementsService, "requireActiveEntitlement").mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(dashboardService, "readFinancialIndicators").mockResolvedValueOnce({
+      advertising: "1481.33",
+      averageMarginPercent: "28.38",
+      breakEvenRevenue: "10528.27",
+      fixedCost: "2987.71",
+      fixedCostSource: "monthly",
+      marketplaceCommission: "5000.00",
+      netMarginPercent: "12.04",
+      netProfit: "3295.11",
+      netSales: 100,
+      packagingCost: "1000.00",
+      productCost: "9000.00",
+      realProfit: "4776.44",
+      revenue: "27359.77",
+      shippingCost: "1000.00",
+      taxAmount: "1595.62",
+      totalProfit: "7764.15",
+      variableCosts: "19595.62",
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/dashboard/financial-indicators?provider=shopee&referenceMonth=2026-04-01",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(dashboardService.readFinancialIndicators).toHaveBeenCalledWith(
+      "org_123",
+      "user_123",
+      "company_123",
+      "shopee",
+      "2026-04-01",
+    );
+    expect(response.json()).toEqual({
+      data: expect.objectContaining({
+        averageMarginPercent: "28.38",
+        revenue: "27359.77",
+      }),
+      error: null,
+    });
+  });
+
   it("rejects invalid referenceMonth query values", async () => {
     vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
       organization: {

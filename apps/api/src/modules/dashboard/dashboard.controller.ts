@@ -16,6 +16,16 @@ class DashboardProviderQueryDto {
   referenceMonth?: string;
 }
 
+class DashboardFinancialIndicatorsQueryDto {
+  static schema = z.object({
+    provider: z.enum(["mercadolivre", "shopee", "shein"]).optional(),
+    referenceMonth: z.string().trim().regex(/^\d{4}-\d{2}-01$/),
+  });
+
+  provider?: "mercadolivre" | "shopee" | "shein";
+  referenceMonth!: string;
+}
+
 @Controller("dashboard")
 @UseGuards(EntitlementGuard)
 export class DashboardController {
@@ -83,6 +93,24 @@ export class DashboardController {
     return {
       data: await this.dashboardService.readProfitability(
         authContext.organization!.id,
+        companyId,
+        query.provider,
+        query.referenceMonth,
+      ),
+      error: null,
+    };
+  }
+
+  @Get("financial-indicators")
+  async getFinancialIndicators(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Query() query: DashboardFinancialIndicatorsQueryDto,
+  ) {
+    const companyId = requireSelectedCompanyId(authContext);
+    return {
+      data: await this.dashboardService.readFinancialIndicators(
+        authContext.organization!.id,
+        authContext.user.id,
         companyId,
         query.provider,
         query.referenceMonth,

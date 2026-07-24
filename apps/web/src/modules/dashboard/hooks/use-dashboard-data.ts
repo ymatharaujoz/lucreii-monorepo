@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type {
   DashboardChartsResponse,
+  DashboardFinancialIndicators,
   DashboardProfitabilityResponse,
   DashboardRecentSyncResponse,
   DashboardSummaryResponse,
@@ -10,6 +11,7 @@ import type {
 } from "@lucreii/types";
 import {
   dashboardChartsApiResponseSchema,
+  dashboardFinancialIndicatorsApiResponseSchema,
   dashboardProfitabilityApiResponseSchema,
   dashboardRecentSyncApiResponseSchema,
   dashboardSummaryApiResponseSchema,
@@ -23,6 +25,7 @@ const dashboardSummaryQueryKey = ["dashboard-summary"] as const;
 const dashboardChartsQueryKey = ["dashboard-charts"] as const;
 const dashboardProfitabilityQueryKey = ["dashboard-profitability"] as const;
 const dashboardOrdersSummaryQueryKey = ["dashboard-orders-summary"] as const;
+const dashboardFinancialIndicatorsQueryKey = ["dashboard-financial-indicators"] as const;
 
 function readSelectedCompanyIdFromBrowserCookie() {
   if (typeof document === "undefined") {
@@ -94,6 +97,16 @@ export async function fetchDashboardProfitability(
   );
 }
 
+export async function fetchDashboardFinancialIndicators(
+  provider?: IntegrationProviderSlug | null,
+  referenceMonth?: string,
+): Promise<DashboardFinancialIndicators> {
+  return apiClient.getValidatedData(
+    dashboardUrl("/dashboard/financial-indicators", provider, referenceMonth),
+    dashboardFinancialIndicatorsApiResponseSchema,
+  );
+}
+
 export function useDashboardData(
   provider: IntegrationProviderSlug | null = null,
   referenceMonth?: string,
@@ -134,17 +147,29 @@ export function useDashboardData(
     queryKey: [...dashboardProfitabilityQueryKey, selectedCompanyId, provider, referenceMonth ?? ""],
     retry: 2,
   });
+  const financialIndicatorsQuery = useQuery({
+    queryFn: () => fetchDashboardFinancialIndicators(provider, referenceMonth),
+    queryKey: [
+      ...dashboardFinancialIndicatorsQueryKey,
+      selectedCompanyId,
+      provider,
+      referenceMonth ?? "",
+    ],
+    retry: 2,
+  });
 
   const isLoading =
     ordersSummaryQuery.isLoading ||
     summaryQuery.isLoading ||
     chartsQuery.isLoading ||
-    profitabilityQuery.isLoading;
+    profitabilityQuery.isLoading ||
+    financialIndicatorsQuery.isLoading;
   const error =
     ordersSummaryQuery.error ||
     summaryQuery.error ||
     chartsQuery.error ||
     profitabilityQuery.error ||
+    financialIndicatorsQuery.error ||
     null;
   const financialState = determineDashboardFinancialState(
     summaryQuery.data,
@@ -158,6 +183,7 @@ export function useDashboardData(
     summaryQuery,
     chartsQuery,
     profitabilityQuery,
+    financialIndicatorsQuery,
     isLoading,
     error: error as Error | ApiClientError | null,
     financialState,
@@ -167,6 +193,7 @@ export function useDashboardData(
       summaryQuery.refetch();
       chartsQuery.refetch();
       profitabilityQuery.refetch();
+      financialIndicatorsQuery.refetch();
     },
   };
 }

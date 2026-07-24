@@ -3,6 +3,7 @@ import type {
   DashboardChartsResponse,
   DashboardChannelChartRow,
   DashboardChartPoint,
+  DashboardFinancialIndicators,
   DashboardProfitabilityResponse,
   DashboardRecentSyncResponse,
   DashboardSummaryCard,
@@ -12,6 +13,7 @@ import type {
 } from "@lucreii/types";
 import { FinanceService } from "@/modules/finance/finance.service";
 import { SyncService } from "@/modules/sync/sync.service";
+import { FinancialIndicatorsService } from "./financial-indicators.service";
 
 function toNumber(value: string) {
   const parsed = Number(value);
@@ -59,6 +61,8 @@ export class DashboardService {
     private readonly financeService: FinanceService,
     @Inject(SyncService)
     private readonly syncService: SyncService,
+    @Inject(FinancialIndicatorsService)
+    private readonly financialIndicatorsService: FinancialIndicatorsService,
   ) {}
 
   async readSummary(
@@ -135,5 +139,21 @@ export class DashboardService {
       channels: readModel.channels,
       products: readModel.productProfitability,
     };
+  }
+
+  async readFinancialIndicators(
+    organizationId: string,
+    userId: string,
+    companyId: string,
+    provider: IntegrationProviderSlug | undefined,
+    referenceMonth: string,
+  ): Promise<DashboardFinancialIndicators> {
+    return this.financialIndicatorsService.read(
+      organizationId,
+      userId,
+      companyId,
+      provider,
+      referenceMonth,
+    );
   }
 }

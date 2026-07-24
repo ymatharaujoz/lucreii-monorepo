@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dashboardFinancialIndicatorsApiResponseSchema,
   dashboardProfitabilityApiResponseSchema,
   productAnalyticsSnapshotApiResponseSchema,
   productListItemSchema,
@@ -7,6 +8,33 @@ import {
 } from "./protected-app";
 
 describe("@lucreii/validation protected app schemas", () => {
+  it("accepts the financial indicator contract, including negative margins", () => {
+    const result = dashboardFinancialIndicatorsApiResponseSchema.safeParse({
+      data: {
+        advertising: "76.93",
+        averageMarginPercent: "28.63",
+        breakEvenRevenue: "10961.24",
+        fixedCost: "3138.54",
+        fixedCostSource: "monthly",
+        marketplaceCommission: "100.00",
+        netMarginPercent: "-26.29",
+        netProfit: "-1539.00",
+        netSales: 10,
+        packagingCost: "10.00",
+        productCost: "300.00",
+        realProfit: "-1462.07",
+        revenue: "5855.02",
+        shippingCost: "100.00",
+        taxAmount: "76.93",
+        totalProfit: "1676.47",
+        variableCosts: "4178.55",
+      },
+      error: null,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it("accepts product image galleries and cover image URLs", () => {
     const result = productListItemSchema.safeParse({
       catalogGroupKey: "meli:MLB123",

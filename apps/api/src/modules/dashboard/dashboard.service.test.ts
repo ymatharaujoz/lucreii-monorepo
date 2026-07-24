@@ -85,7 +85,14 @@ describe("DashboardService", () => {
         lastCompletedRun: null,
       }),
     };
-    const service = new DashboardService(financeService as never, syncService as never);
+    const financialIndicatorsService = {
+      read: vi.fn(),
+    };
+    const service = new DashboardService(
+      financeService as never,
+      syncService as never,
+      financialIndicatorsService as never,
+    );
 
     await expect(service.readSummary("org_123", "company_123", undefined, "2026-07-01")).resolves.toEqual({
       cards: expect.arrayContaining([

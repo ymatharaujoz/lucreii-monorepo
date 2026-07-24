@@ -114,3 +114,23 @@ export type DashboardProfitabilityResponse = {
   channels: DashboardChannelProfitabilityRow[];
   products: DashboardProductProfitabilityRow[];
 };
+
+export type DashboardFinancialIndicators = {
+  advertising: DecimalString;
+  averageMarginPercent: DecimalString;
+  breakEvenRevenue: DecimalString;
+  fixedCost: DecimalString;
+  fixedCostSource: "monthly" | "company_default";
+  marketplaceCommission: DecimalString;
+  netMarginPercent: DecimalString;
+  netProfit: DecimalString;
+  netSales: number;
+  packagingCost: DecimalString;
+  productCost: DecimalString;
+  realProfit: DecimalString;
+  revenue: DecimalString;
+  shippingCost: DecimalString;
+  taxAmount: DecimalString;
+  totalProfit: DecimalString;
+  variableCosts: DecimalString;
+};

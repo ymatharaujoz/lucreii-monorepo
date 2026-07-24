@@ -141,6 +141,7 @@ describe("DashboardHome", () => {
               },
       },
       error: null,
+      financialIndicatorsQuery: { data: {} },
       financialState: "ready",
       isLoading: false,
       ordersSummaryQuery: {
@@ -189,6 +190,7 @@ describe("DashboardHome", () => {
         businessStatus: "healthy",
         chartsQuery: { data: { channels: [], daily: [] } },
         error: null,
+        financialIndicatorsQuery: { data: {} },
         financialState: "ready",
         isLoading: false,
         ordersSummaryQuery: {

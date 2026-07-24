@@ -1,52 +1,44 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { OrdersMarginAudit } from "@lucreii/types";
+import type { DashboardFinancialIndicators } from "@lucreii/types";
 import { MarginAuditPanel } from "./margin-audit-panel";
 
-const audit: OrdersMarginAudit = {
-  aggregateRevenue: "894.48",
-  compositionCount: 2,
-  eligiblePerformanceRows: 2,
-  grossRevenue: "25362.82",
-  lineRevenue: "894.48",
-  marginRevenue: "894.48",
-  marketplaceCommissionTotal: "89.45",
-  netLiquidSalesTotal: 3,
-  packagingTotal: "94.91",
-  pdvTotal: "894.48",
-  productCostTotal: "298.16",
-  shippingOrFixedFeeTotal: "120.00",
-  taxTotal: "89.45",
-  totalPerformanceRows: 2,
-  totalProfit: "202.51",
-  unitPdvTotal: "298.16",
+const indicators: DashboardFinancialIndicators = {
+  advertising: "1481.33",
+  averageMarginPercent: "28.38",
+  breakEvenRevenue: "10528.27",
+  fixedCost: "2987.71",
+  fixedCostSource: "monthly",
+  marketplaceCommission: "7000.00",
+  netMarginPercent: "12.04",
+  netProfit: "3295.11",
+  netSales: 100,
+  packagingCost: "1000.00",
+  productCost: "9000.00",
+  realProfit: "4776.44",
+  revenue: "27359.77",
+  shippingCost: "1000.00",
+  taxAmount: "1595.62",
+  totalProfit: "7764.15",
+  variableCosts: "19595.62",
 };
 
 describe("MarginAuditPanel", () => {
-  it("exibe fórmula, valor e origem dos totais mensais", () => {
+  it("exibe fórmulas, subcustos e a origem do custo fixo", () => {
     const markup = renderToStaticMarkup(
       <MarginAuditPanel
-        audit={audit}
+        indicators={indicators}
         provider="mercadolivre"
         referenceMonth="2026-06-01"
       />,
     );
-    const normalizedMarkup = markup.replace(/\u00a0/g, " ");
 
-    expect(normalizedMarkup).toContain("Auditoria da margem média");
-    expect(normalizedMarkup).toContain("Vendas total");
-    expect(normalizedMarkup).toContain("Receita por linhas (PDV)");
-    expect(normalizedMarkup).toContain("Σ VENDAS na tabela de performance");
-    expect(normalizedMarkup).toContain("3 × Σ PDV (R$ 298,16)");
-    expect(normalizedMarkup).toContain("Σ (VENDAS × PDV) | VENDAS &gt; 0");
-    expect(normalizedMarkup).toContain(
-      "Σ (PDV da linha × venda líquida da linha)",
-    );
-    expect(normalizedMarkup).toContain("Σ EMBALAGEM nos cards COMPOSIÇÃO");
-    expect(normalizedMarkup).toContain("Σ CUSTO PRODUTO nos cards COMPOSIÇÃO");
-    expect(normalizedMarkup).toContain("R$ 202,51");
-    expect(normalizedMarkup).toContain(
-      "Faturamento mantido no card: R$ 25.362,82",
-    );
+    expect(markup).toContain("Auditoria dos indicadores financeiros");
+    expect(markup).toContain("Σ (VENDAS − DEVOLUÇÕES)");
+    expect(markup).toContain("Comissão marketplace");
+    expect(markup).toContain("Soma dos lançamentos de custo fixo");
+    const normalizedMarkup = markup.replace(/\u00a0/g, " ");
+    expect(normalizedMarkup).toContain("R$ 3.295,11");
+    expect(markup).toContain("Margem média: 28.38%");
   });
 });

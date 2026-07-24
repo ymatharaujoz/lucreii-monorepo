@@ -133,10 +133,10 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
     [referenceMonth],
   );
   const {
-    ordersSummaryQuery,
     summaryQuery,
     chartsQuery,
     profitabilityQuery,
+    financialIndicatorsQuery,
     isLoading,
     error,
     financialState,
@@ -206,21 +206,18 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
         </div>
       </div>
 
-      {profitabilityQuery.data && (
+      {financialIndicatorsQuery.data && (
         <section className="space-y-3">
           <DashboardFinancialIndicators
             activeCompany={activeCompany}
-            data={profitabilityQuery.data}
-            ordersSummary={ordersSummaryQuery.data?.summary}
-            summary={summaryQuery.data ?? undefined}
+            financialIndicators={financialIndicatorsQuery.data}
+            onDefaultsSaved={refetchAll}
           />
-          {ordersSummaryQuery.data?.summary.marginAudit && (
-            <MarginAuditPanel
-              audit={ordersSummaryQuery.data.summary.marginAudit}
-              provider={providerFilter}
-              referenceMonth={referenceMonth}
-            />
-          )}
+          <MarginAuditPanel
+            indicators={financialIndicatorsQuery.data}
+            provider={providerFilter}
+            referenceMonth={referenceMonth}
+          />
         </section>
       )}
 
