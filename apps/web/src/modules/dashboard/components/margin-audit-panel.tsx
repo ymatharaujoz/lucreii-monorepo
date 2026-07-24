@@ -176,7 +176,7 @@ export function MarginAuditPanel({
           </div>
           <div className="border-t border-border/70 bg-surface-strong/30 px-4 py-3 sm:px-5">
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Margem média: {indicators.averageMarginPercent}% · Margem líquida:{" "}
+              Margem média: {indicators.averageMarginPercent} · Margem líquida:{" "}
               {indicators.netMarginPercent}% · Ponto de equilíbrio:{" "}
               {formatMoney(indicators.breakEvenRevenue, {
                 maximumFractionDigits: 2,

@@ -67,6 +67,10 @@ function formatIndicatorPercent(value: string) {
   return `${normalizeNumber(value).toFixed(2)}%`;
 }
 
+function formatIndicatorValue(value: string) {
+  return normalizeNumber(value).toFixed(2);
+}
+
 function IndicatorCard({
   icon,
   label,
@@ -212,7 +216,6 @@ export function DashboardFinancialIndicators({
   const totalProfit = normalizeNumber(financialIndicators.totalProfit);
   const realProfit = normalizeNumber(financialIndicators.realProfit);
   const netProfit = normalizeNumber(financialIndicators.netProfit);
-  const averageMargin = normalizeNumber(financialIndicators.averageMarginPercent);
   const netMargin = normalizeNumber(financialIndicators.netMarginPercent);
   const revenue = normalizeNumber(financialIndicators.revenue);
   const breakEven = normalizeNumber(financialIndicators.breakEvenRevenue);
@@ -240,11 +243,11 @@ export function DashboardFinancialIndicators({
           label="Margem Média"
           subValue={`Lucro Total: ${formatMoney(financialIndicators.totalProfit, { maximumFractionDigits: 2 })}`}
           trend={{
-            direction: averageMargin > 30 ? "up" : averageMargin > 0 ? "neutral" : "down",
+            direction: totalProfit > 0 ? "up" : totalProfit < 0 ? "down" : "neutral",
             value: totalProfit >= 0 ? "Lucrativo" : "Prejuízo",
           }}
-          value={formatIndicatorPercent(financialIndicators.averageMarginPercent)}
-          variant={averageMargin >= 20 ? "success" : averageMargin > 0 ? "warning" : "error"}
+          value={formatIndicatorValue(financialIndicators.averageMarginPercent)}
+          variant={totalProfit > 0 ? "success" : totalProfit < 0 ? "error" : "warning"}
         />
         <IndicatorCard
           icon={<Percent className="h-4 w-4" />}

@@ -26,7 +26,7 @@ describe("calculateFinancialIndicators", () => {
       }),
     ).toEqual({
       advertising: "3.00",
-      averageMarginPercent: "53.00",
+      averageMarginPercent: "1.89",
       breakEvenRevenue: "188.68",
       fixedCost: "100.00",
       marketplaceCommission: "20.00",
@@ -96,7 +96,7 @@ describe("calculateFinancialIndicators", () => {
         taxAmount: "12.00",
       }),
     ).toMatchObject({
-      averageMarginPercent: "25.00",
+      averageMarginPercent: "4.00",
       breakEvenRevenue: "120.00",
       netMarginPercent: "-10.00",
       netProfit: "-12.00",
@@ -104,5 +104,22 @@ describe("calculateFinancialIndicators", () => {
       totalProfit: "30.00",
       variableCosts: "90.00",
     });
+  });
+
+  it("formats average margin as revenue divided by total profit", () => {
+    const result = calculateFinancialIndicatorsFromTotals({
+      advertising: "0.00",
+      fixedCost: "0.00",
+      marketplaceCommission: "100.00",
+      netSales: 29,
+      packagingCost: "50.00",
+      productCost: "294.42",
+      revenue: "894.48",
+      shippingCost: "50.00",
+      taxAmount: "100.00",
+    });
+
+    expect(result.totalProfit).toBe("300.06");
+    expect(result.averageMarginPercent).toBe("2.98");
   });
 });

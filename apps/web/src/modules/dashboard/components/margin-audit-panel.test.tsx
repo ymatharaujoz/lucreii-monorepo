@@ -40,6 +40,6 @@ describe("MarginAuditPanel", () => {
     expect(markup).toContain("Soma dos lançamentos de custo fixo");
     const normalizedMarkup = markup.replace(/\u00a0/g, " ");
     expect(normalizedMarkup).toContain("R$ 3.295,11");
-    expect(markup).toContain("Margem média: 28.38%");
+    expect(markup).toContain("Margem média: 28.38");
   });
 });

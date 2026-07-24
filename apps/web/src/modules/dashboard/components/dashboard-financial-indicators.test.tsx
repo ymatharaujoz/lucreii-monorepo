@@ -95,7 +95,7 @@ describe("DashboardFinancialIndicators", () => {
 
     expect(text).toContain("27.359,77");
     expect(text).toContain("28 vendas líquidas");
-    expect(text).toContain("28.38%");
+    expect(text).toContain("28.38");
     expect(text).toContain("12.04%");
     expect(text).toContain("19.595,62");
     expect(text).toContain("4.776,44");

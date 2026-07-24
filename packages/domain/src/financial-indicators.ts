@@ -153,6 +153,15 @@ function formatPercent(numerator: bigint, denominator: bigint): string {
   return formatCents(roundDivision(numerator * 10_000n, denominator));
 }
 
+function formatProfitRatio(revenue: bigint, totalProfit: bigint): string {
+  if (totalProfit === 0n) {
+    return ZERO_PERCENT;
+  }
+
+  // Keep two decimal places while returning revenue / profit as a ratio.
+  return formatCents(roundDivision(revenue * CENT_SCALE, totalProfit));
+}
+
 export function calculateFinancialIndicators(
   input: FinancialIndicatorCalculationInput,
 ): FinancialIndicatorCalculationResult {
@@ -230,7 +239,7 @@ export function calculateFinancialIndicatorsFromTotals(
 
   return {
     advertising: formatCents(advertising),
-    averageMarginPercent: formatPercent(totalProfit, revenue),
+    averageMarginPercent: formatProfitRatio(revenue, totalProfit),
     breakEvenRevenue: formatCents(breakEvenRevenue),
     fixedCost: formatCents(fixedCost),
     marketplaceCommission: formatCents(marketplaceCommission),
