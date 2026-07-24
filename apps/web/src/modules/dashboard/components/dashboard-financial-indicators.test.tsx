@@ -53,7 +53,7 @@ const indicators: DashboardFinancialIndicatorsData = {
   marketplaceCommission: "7000.00",
   netMarginPercent: "12.04",
   netProfit: "3295.11",
-  netSales: 100,
+  netSales: 28,
   packagingCost: "1000.00",
   productCost: "9000.00",
   realProfit: "4776.44",
@@ -94,6 +94,7 @@ describe("DashboardFinancialIndicators", () => {
     const text = document.body.textContent ?? "";
 
     expect(text).toContain("27.359,77");
+    expect(text).toContain("28 vendas líquidas");
     expect(text).toContain("28.38%");
     expect(text).toContain("12.04%");
     expect(text).toContain("19.595,62");
