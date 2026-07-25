@@ -72,7 +72,6 @@ function buildRow(index: number, overrides: Partial<ProductTableRow> = {}): Prod
     isSyntheticParent: overrides.isSyntheticParent ?? false,
   };
 }
-
 function mount(node: React.ReactNode) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -342,7 +341,7 @@ describe("ProductTable", () => {
     );
 
     expect(document.body.textContent).toContain("Vendas");
-    expect(document.body.textContent).toContain("PDV");
+    expect(document.body.textContent).toContain("FATURAMENTO");
     expect(document.body.textContent).toContain("Margem Contribuição");
     expect(document.body.textContent).toContain("Lucro Total");
     expect(document.body.textContent).toContain("18.45%");
@@ -350,6 +349,85 @@ describe("ProductTable", () => {
     expect(document.body.textContent).not.toContain("ROAS Real");
     expect(document.body.textContent).not.toContain("Lucro Unitário");
     expect(document.body.textContent).not.toContain("ROAS Mínimo");
+
+    view.unmount();
+  });
+
+
+  it("multiplies performance financial values by sales and derives contribution margin", () => {
+    const rows = [
+      buildRow(1, {
+        revenue: 18.96,
+        sales: 2,
+        sellingPrice: 18.96,
+        totalProfit: 7.05,
+      }),
+    ];
+
+    const view = renderWithClient(
+      <ProductTable
+        onPageChange={() => {}}
+        pagination={{ currentPage: 1, pageSize: 10, totalItems: rows.length, totalPages: 1 }}
+        rows={rows}
+        serverMode
+      />,
+    );
+
+    const cells = document.querySelectorAll("tbody tr td");
+    expect(document.body.textContent).toContain("FATURAMENTO");
+    expect(document.body.textContent).not.toContain("PDV");
+    expect(cells[4]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 37,92");
+    expect(cells[5]?.textContent).toContain("37.18%");
+    expect(cells[6]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 14,10");
+
+    view.unmount();
+  });
+
+  it("shows zero financial values and unavailable margin when sales are zero", () => {
+    const rows = [buildRow(1, { sales: 0 })];
+
+    const view = renderWithClient(
+      <ProductTable
+        onPageChange={() => {}}
+        pagination={{ currentPage: 1, pageSize: 10, totalItems: rows.length, totalPages: 1 }}
+        rows={rows}
+        serverMode
+      />,
+    );
+
+    const cells = document.querySelectorAll("tbody tr td");
+    expect(cells[4]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 0,00");
+    expect(cells[5]?.textContent).toContain("—");
+    expect(cells[5]?.textContent).not.toMatch(/NaN|Infinity/);
+    expect(cells[6]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 0,00");
+
+    view.unmount();
+  });
+
+  it("keeps original row values in the performance details modal", () => {
+    const rows = [
+      buildRow(1, {
+        revenue: 18.96,
+        sales: 2,
+        sellingPrice: 18.96,
+        totalProfit: 7.05,
+      }),
+    ];
+
+    const view = renderWithClient(
+      <ProductTable
+        onPageChange={() => {}}
+        pagination={{ currentPage: 1, pageSize: 10, totalItems: rows.length, totalPages: 1 }}
+        rows={rows}
+        serverMode
+      />,
+    );
+
+    click(document.querySelector("tbody tr")!);
+
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 18,96");
+    expect(dialog?.textContent?.replace(/\u00a0/g, " ")).not.toContain("R$ 37,92");
 
     view.unmount();
   });

@@ -283,6 +283,30 @@ function buildDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
   });
 }
 
+function buildServerDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
+  return rows.map((row) => {
+    const { parentName, variationName } = resolveProductLabels(row);
+    const displayedRevenue = row.sellingPrice * row.sales;
+    const displayedTotalProfit = row.totalProfit * row.sales;
+
+    return {
+      channelLabel: row.channelLabel,
+      contributionMarginRatio:
+        displayedRevenue > 0
+          ? (displayedTotalProfit / displayedRevenue) * 100
+          : null,
+      displayTitle: buildDisplayTitle(parentName, variationName),
+      hasCostsConfigured: row.unitCost > 0 && row.packagingCost > 0,
+      parentName,
+      row,
+      sales: row.sales,
+      sellingPrice: displayedRevenue,
+      totalProfit: displayedTotalProfit,
+      variationName,
+    };
+  });
+}
+
 export function ProductTable({
   rows,
   pagination,
@@ -317,22 +341,7 @@ export function ProductTable({
       return buildDisplayRows(rows);
     }
 
-    return rows.map((row) => {
-      const { parentName, variationName } = resolveProductLabels(row);
-
-      return {
-        channelLabel: row.channelLabel,
-        contributionMarginRatio: row.contributionMarginRatio,
-        displayTitle: buildDisplayTitle(parentName, variationName),
-        hasCostsConfigured: row.unitCost > 0 && row.packagingCost > 0,
-        parentName,
-        row,
-        sales: row.sales,
-        sellingPrice: row.sellingPrice,
-        totalProfit: row.totalProfit,
-        variationName,
-      };
-    });
+    return buildServerDisplayRows(rows);
   }, [rows, serverMode]);
 
   const setSearchFilter = (value: string) => {
@@ -609,7 +618,7 @@ export function ProductTable({
                   className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[160px]"
                 >
                   <div className="flex items-center justify-end gap-1">
-                    PDV
+                    FATURAMENTO
                     <SortIcon column="sellingPrice" />
                   </div>
                 </th>
@@ -647,7 +656,7 @@ export function ProductTable({
                     Nao foi possivel carregar os produtos.
                   </td>
                 </tr>
-              ) : visibleRows.map(({ displayTitle, hasCostsConfigured, parentName, row, totalProfit }, index) => (
+              ) : visibleRows.map(({ contributionMarginRatio, displayTitle, hasCostsConfigured, parentName, row, sellingPrice, totalProfit }, index) => (
                 <MotionTableRow
                   key={getPerformanceRowKey(row)}
                   initial={{ opacity: 0, y: 8 }}
@@ -697,10 +706,10 @@ export function ProductTable({
                     <span className="text-sm text-foreground">{formatNumber(row.sales)}</span>
                   </td>
                   <td className="px-3 py-3 text-right">
-                    <span className="text-sm text-foreground">{formatMoney(row.sellingPrice)}</span>
+                    <span className="text-sm text-foreground">{formatMoney(sellingPrice)}</span>
                   </td>
                   <td className="px-3 py-3 text-right">
-                    <span className="text-sm text-foreground">{formatPercent(row.contributionMarginRatio, { digits: 2 })}</span>
+                    <span className="text-sm text-foreground">{formatPercent(contributionMarginRatio, { digits: 2 })}</span>
                   </td>
                   <td className="px-3 py-3 text-right">
                     <span className="text-sm text-foreground">{formatMoney(totalProfit)}</span>
