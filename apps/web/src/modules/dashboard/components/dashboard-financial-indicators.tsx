@@ -212,6 +212,7 @@ export function DashboardFinancialIndicators({
   const revenue = normalizeNumber(financialIndicators.revenue);
   const breakEven = normalizeNumber(financialIndicators.breakEvenRevenue);
   const fixedCostResolved = normalizeNumber(financialIndicators.fixedCost);
+  const liquidProfit = totalProfit - fixedCostResolved;
   const revenueSub = `${financialIndicators.netSales} vendas líquidas`;
 
   return (
@@ -221,7 +222,7 @@ export function DashboardFinancialIndicators({
       animate="visible"
       className="space-y-4"
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <IndicatorCard
           icon={<DollarSign className="h-4 w-4" />}
           label="Faturamento"
@@ -254,6 +255,32 @@ export function DashboardFinancialIndicators({
             minimumFractionDigits: 2,
           })}
           variant={revenue >= breakEven && breakEven > 0 ? "success" : "warning"}
+        />
+        <IndicatorCard
+          icon={<DollarSign className="h-4 w-4" />}
+          label="Lucro Líquido"
+          subValue="Lucro Total - Custo Fixo"
+          trend={{
+            direction:
+              liquidProfit > 0 ? "up" : liquidProfit < 0 ? "down" : "neutral",
+            value:
+              liquidProfit > 0
+                ? "Resultado positivo"
+                : liquidProfit < 0
+                  ? "Resultado negativo"
+                  : "Resultado neutro",
+          }}
+          value={formatMoney(liquidProfit, {
+            maximumFractionDigits: 2,
+            minimumFractionDigits: 2,
+          })}
+          variant={
+            liquidProfit > 0
+              ? "success"
+              : liquidProfit < 0
+                ? "error"
+                : "warning"
+          }
         />
       </div>
 

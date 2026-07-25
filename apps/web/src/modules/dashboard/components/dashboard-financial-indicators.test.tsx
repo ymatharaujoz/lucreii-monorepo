@@ -84,7 +84,7 @@ afterEach(() => {
 });
 
 describe("DashboardFinancialIndicators", () => {
-  it("exibe somente faturamento, margem média e ponto de equilíbrio", () => {
+  it("exibe os quatro indicadores financeiros principais", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
@@ -97,13 +97,15 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("28 vendas líquidas");
     expect(text).toContain("33.55%");
     expect(text).toContain("R$\u00a0596,13");
+    expect(text).toContain("R$\u00a07.564,15");
     expect(text).toContain("Faturamento");
     expect(text).toContain("Margem Média");
     expect(text).toContain("Ponto de Equilíbrio");
+    expect(text).toContain("Lucro Líquido");
+    expect(text).toContain("Lucro Total - Custo Fixo");
     expect(text).not.toContain("Margem Líquida");
     expect(text).not.toContain("Total Variáveis");
     expect(text).not.toContain("Lucro Real");
-    expect(text).not.toContain("Lucro Líquido");
     expect(text).not.toContain("Publicidade");
 
     expect(document.querySelectorAll("[class*=grid]").length).toBeGreaterThan(0);
@@ -132,7 +134,27 @@ describe("DashboardFinancialIndicators", () => {
 
     expect(document.body.textContent ?? "").toContain("-2.98%");
     expect(document.body.textContent ?? "").toContain("Prejuízo");
+    expect(document.body.textContent ?? "").toContain("-R$ 4.815,01");
+    expect(document.body.textContent ?? "").toContain("Resultado negativo");
     expect(document.body.textContent ?? "").toContain("-R$ 1.676,47");
+    view.unmount();
+  });
+
+  it("exibe estado neutro quando lucro total cobre exatamente o custo fixo", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={{
+          ...indicators,
+          fixedCost: "7764.15",
+          totalProfit: "7764.15",
+        }}
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("R$\u00a00,00");
+    expect(text).toContain("Resultado neutro");
     view.unmount();
   });
 
