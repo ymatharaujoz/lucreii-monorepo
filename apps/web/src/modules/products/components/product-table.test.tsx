@@ -354,13 +354,13 @@ describe("ProductTable", () => {
   });
 
 
-  it("multiplies performance financial values by sales and derives contribution margin", () => {
+  it("uses aggregated profit and derives contribution margin from displayed values", () => {
     const rows = [
       buildRow(1, {
         revenue: 18.96,
         sales: 2,
         sellingPrice: 18.96,
-        totalProfit: 7.05,
+        totalProfit: 17.12,
       }),
     ];
 
@@ -377,8 +377,8 @@ describe("ProductTable", () => {
     expect(document.body.textContent).toContain("FATURAMENTO");
     expect(document.body.textContent).not.toContain("PDV");
     expect(cells[4]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 37,92");
-    expect(cells[5]?.textContent).toContain("37.18%");
-    expect(cells[6]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 14,10");
+    expect(cells[5]?.textContent).toContain("45.15%");
+    expect(cells[6]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 17,12");
 
     view.unmount();
   });

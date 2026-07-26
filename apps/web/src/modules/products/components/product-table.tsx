@@ -286,8 +286,12 @@ function buildDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
 function buildServerDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
   return rows.map((row) => {
     const { parentName, variationName } = resolveProductLabels(row);
-    const displayedRevenue = row.sellingPrice * row.sales;
-    const displayedTotalProfit = row.totalProfit * row.sales;
+    const displayedSales = Math.max(0, row.sales);
+    const displayedRevenue = row.sellingPrice * displayedSales;
+    const displayedTotalProfit =
+      displayedSales > 0 && Number.isFinite(row.totalProfit)
+        ? row.totalProfit
+        : 0;
 
     return {
       channelLabel: row.channelLabel,
@@ -299,7 +303,7 @@ function buildServerDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
       hasCostsConfigured: row.unitCost > 0 && row.packagingCost > 0,
       parentName,
       row,
-      sales: row.sales,
+      sales: displayedSales,
       sellingPrice: displayedRevenue,
       totalProfit: displayedTotalProfit,
       variationName,

@@ -26,7 +26,10 @@ import type {
   AdCost,
   Company,
   DatabaseClient,
+  ExternalFee,
   ExternalOrder,
+  ExternalOrderItem,
+  ExternalProduct,
   ManualExpense,
   Product,
   ProductImage,
@@ -71,6 +74,11 @@ import type {
 import { DATABASE_CLIENT } from "@/common/tokens";
 import { FinanceService } from "@/modules/finance/finance.service";
 import { listSyncedProductsReadModel } from "@/modules/integrations/synced-products.read-model";
+import {
+  allocateCentsByWeights,
+  buildOrderFinancialMetrics,
+  type OrderFinancialRow,
+} from "@/modules/orders/orders.service";
 import { SyncService } from "@/modules/sync/sync.service";
 
 type ProductUpdateInput = Partial<ProductFormValues>;
@@ -185,6 +193,11 @@ type DuplicatePerformanceRowGroup = {
 type PerformanceSalesLookup = {
   byProductId: Map<string, number>;
   bySku: Map<string, number>;
+};
+
+type PerformanceProfitLookup = {
+  byProductId: Map<string, bigint>;
+  bySku: Map<string, bigint>;
 };
 
 export type MonthlyPerformanceMarginLine = {
@@ -304,12 +317,15 @@ function toCatalogChannelLabel(provider: string | null) {
   return "Manual";
 }
 
-function toReferenceMonthFromIso(value: string | null | undefined) {
-  if (!value || value.length < 7) {
+function toReferenceMonthFromIso(
+  value: string | Date | null | undefined,
+) {
+  const iso = value instanceof Date ? value.toISOString() : value;
+  if (!iso || iso.length < 7) {
     return null;
   }
 
-  const yearMonth = value.slice(0, 7);
+  const yearMonth = iso.slice(0, 7);
   return /^\d{4}-\d{2}$/.test(yearMonth) ? `${yearMonth}-01` : null;
 }
 
@@ -360,6 +376,131 @@ function buildPerformanceSalesLookup(input: {
   }
 
   return { byProductId, bySku };
+}
+
+function addPerformanceProfit(
+  target: Map<string, bigint>,
+  key: string,
+  value: bigint,
+) {
+  target.set(key, (target.get(key) ?? 0n) + value);
+}
+
+export function buildPerformanceOrderProfitLookup(input: {
+  eligibleOrderIds: ReadonlySet<string>;
+  orders: OrderFinancialRow[];
+  taxRateDefault: string | number | null | undefined;
+}): PerformanceProfitLookup {
+  const byProductId = new Map<string, bigint>();
+  const bySku = new Map<string, bigint>();
+
+  for (const order of input.orders) {
+    if (!input.eligibleOrderIds.has(order.id)) {
+      continue;
+    }
+
+    const referenceMonth = toReferenceMonthFromIso(order.orderedAt);
+    if (!referenceMonth) {
+      continue;
+    }
+
+    const totalProfitAmount = buildOrderFinancialMetrics(
+      order,
+      input.taxRateDefault,
+    ).totalProfitAmount;
+    if (totalProfitAmount === null) {
+      continue;
+    }
+
+    const itemWeights = order.items.map((item) =>
+      absoluteCents(parseMoneyToCents(item.totalPrice)),
+    );
+    const itemProfitAllocations = allocateCentsByWeights(
+      parseMoneyToCents(totalProfitAmount),
+      itemWeights,
+    );
+
+    order.items.forEach((item, index) => {
+      const itemProfit = itemProfitAllocations[index] ?? 0n;
+      const productId = item.externalProduct?.linkedProductId;
+      if (productId) {
+        addPerformanceProfit(
+          byProductId,
+          `${referenceMonth}::${order.provider}::${productId}`,
+          itemProfit,
+        );
+      }
+
+      const normalizedSku = normalizeComparableSku(
+        item.externalProduct?.linkedProduct?.sku ?? item.externalProduct?.sku,
+      );
+      if (normalizedSku) {
+        addPerformanceProfit(
+          bySku,
+          `${referenceMonth}::${order.provider}::${normalizedSku}`,
+          itemProfit,
+        );
+      }
+    });
+  }
+
+  return { byProductId, bySku };
+}
+
+type PerformanceExternalOrderRow = Pick<
+  ExternalOrder,
+  | "id"
+  | "metadata"
+  | "orderedAt"
+  | "provider"
+  | "refundBonusAmount"
+  | "status"
+  | "totalAmount"
+> & {
+  fees?: ExternalFee[];
+  items: Array<
+    Pick<ExternalOrderItem, "quantity" | "totalPrice"> & {
+      externalProduct: ExternalProduct | null;
+    }
+  >;
+};
+
+function toPerformanceOrderFinancialRows(
+  orders: PerformanceExternalOrderRow[],
+  catalogLookup: PerformanceCatalogLookup,
+): OrderFinancialRow[] {
+  return orders.map((order) => ({
+    ...order,
+    fees: order.fees ?? [],
+    items: order.items.map((item) => ({
+      quantity: item.quantity,
+      totalPrice: item.totalPrice,
+      externalProduct: item.externalProduct
+        ? {
+            linkedProduct: item.externalProduct.linkedProductId
+              ? (() => {
+                  const product = catalogLookup.byId.get(
+                    item.externalProduct!.linkedProductId!,
+                  );
+                  return product
+                    ? {
+                        financeDefaults: product.financeDefaults
+                          ? { packagingCost: product.financeDefaults.packagingCost }
+                          : null,
+                        latestCost: product.latestCost
+                          ? { amount: product.latestCost.amount }
+                          : null,
+                        sku: product.sku,
+                      }
+                    : null;
+                })()
+              : null,
+            linkedProductId: item.externalProduct.linkedProductId,
+            sku: item.externalProduct.sku,
+          }
+        : null,
+    })),
+  }));
 }
 
 const SPREADSHEET_FIELD_LABELS: Record<string, string> = {
@@ -2495,7 +2636,12 @@ export class ProductsService {
                 eq(table.companyId, scopedContext.companyId),
               ),
             with: {
-              items: true,
+              fees: true,
+              items: {
+                with: {
+                  externalProduct: true,
+                },
+              },
             },
           })
         : Promise.resolve([]),
@@ -2532,11 +2678,20 @@ export class ProductsService {
       eligibleOrderIds,
       orders: financeSnapshot.orders,
     });
+    const profitLookup = buildPerformanceOrderProfitLookup({
+      eligibleOrderIds,
+      orders: toPerformanceOrderFinancialRows(
+        externalOrderRows as PerformanceExternalOrderRow[],
+        performanceCatalogLookup,
+      ),
+      taxRateDefault: scope.taxRateDefault,
+    });
     const visibleRows = this.buildVisiblePerformanceRows(
       catalogProducts,
       performanceRows,
       scope.taxRateDefault,
       salesLookup,
+      profitLookup,
     );
     const marketplaces = new Set(query.marketplaces ?? []);
     const searchNeedle = normalizePerformanceSortText(query.search);
@@ -2669,6 +2824,7 @@ export class ProductsService {
     performanceRows: ProductPerformanceRow[],
     taxRateDefault: string,
     salesLookup: PerformanceSalesLookup,
+    profitLookup: PerformanceProfitLookup,
   ): ProductPerformanceListItem[] {
     const { byId, bySku } = buildPerformanceCatalogLookup(catalogProducts);
     const taxPct = toNumber(taxRateDefault) * 100;
@@ -2711,6 +2867,38 @@ export class ProductsService {
             `${row.referenceMonth}::${row.channel}::${normalizedSku}`,
           ) ?? 0)
         : 0;
+      const productProfitKey = row.productId
+        ? `${row.referenceMonth}::${row.channel}::${row.productId}`
+        : null;
+      const skuProfitKey = normalizedSku
+        ? `${row.referenceMonth}::${row.channel}::${normalizedSku}`
+        : null;
+      const hasProductProfit = productProfitKey
+        ? profitLookup.byProductId.has(productProfitKey)
+        : false;
+      const hasSkuProfit = skuProfitKey
+        ? profitLookup.bySku.has(skuProfitKey)
+        : false;
+      const authoritativeProfitCents = hasProductProfit
+        ? profitLookup.byProductId.get(productProfitKey!)!
+        : hasSkuProfit
+          ? profitLookup.bySku.get(skuProfitKey!)!
+          : null;
+      const sales = salesCountByProductId ?? salesCountBySku;
+      const fallbackTotalProfit =
+        sales > 0 && financials.unitProfit !== null
+          ? financials.unitProfit * sales
+          : financials.totalProfit;
+      const totalProfit =
+        authoritativeProfitCents === null
+          ? fallbackTotalProfit
+          : Number(authoritativeProfitCents) / 100;
+      const displayedRevenue = toNumber(row.salePrice) * Math.max(0, sales);
+      const contributionMarginRatio =
+        sales > 0 && displayedRevenue > 0
+          ? (totalProfit / displayedRevenue) * 100
+          : financials.contributionMarginRatio;
+      const unitProfit = sales > 0 ? totalProfit / sales : financials.unitProfit;
 
       return {
         ...financials,
@@ -2743,7 +2931,7 @@ export class ProductsService {
         productId: row.productId ?? product?.id ?? null,
         referenceMonth: row.referenceMonth,
         returns: row.returnsQuantity,
-        sales: salesCountByProductId ?? salesCountBySku,
+        sales,
         sellingPrice: toNumber(row.salePrice),
         shipping: toNumber(row.shippingFee),
         shippingOrFixedFeeSource: row.shippingOrFixedFeeSource,
@@ -2753,6 +2941,9 @@ export class ProductsService {
         shippingUnit: row.shippingUnit ? toNumber(row.shippingUnit) : undefined,
         sku: row.sku,
         taxPct,
+        totalProfit,
+        unitProfit,
+        contributionMarginRatio,
         unitCost: toNumber(row.unitCost),
         variationLabel,
       };

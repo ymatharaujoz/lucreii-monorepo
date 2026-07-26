@@ -6,7 +6,11 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { read, utils, write } from "xlsx";
 import type { ProductPerformanceListItem } from "@lucreii/types";
-import { ProductsService } from "./products.service";
+import type { OrderFinancialRow } from "@/modules/orders/orders.service";
+import {
+  buildPerformanceOrderProfitLookup,
+  ProductsService,
+} from "./products.service";
 import { listSyncedProductsReadModel } from "@/modules/integrations/synced-products.read-model";
 
 vi.mock("@/modules/integrations/synced-products.read-model", () => ({
@@ -6616,5 +6620,111 @@ describe("ProductsService", () => {
       pdvTotal: "849.58",
       unitPdvTotal: "749.58",
     });
+  });
+
+  it("sums authoritative order profit for the same SKU across orders", () => {
+    const linkedProduct = {
+      financeDefaults: { packagingCost: "1.00" },
+      latestCost: { amount: "5.00" },
+      sku: "SUPORTE-02-PRETO",
+    };
+    const buildOrder = (id: string): OrderFinancialRow => ({
+      fees: [
+        {
+          amount: "1.90",
+          feeType: "marketplace_commission",
+          id: `${id}-commission`,
+          metadata: null,
+          orderId: id,
+        },
+        {
+          amount: "2.50",
+          feeType: "fixed_fee",
+          id: `${id}-fixed`,
+          metadata: null,
+          orderId: id,
+        },
+      ],
+      id,
+      items: [
+        {
+          externalProduct: {
+            linkedProduct,
+            linkedProductId: "product_support",
+            sku: "SUPORTE-02-PRETO",
+          },
+          quantity: 1,
+          totalPrice: "18.96",
+        },
+      ],
+      metadata: null,
+      orderedAt: "2026-06-15T12:00:00.000Z",
+      provider: "mercadolivre",
+      refundBonusAmount: null,
+      status: "paid",
+      totalAmount: "18.96",
+    });
+    const lookup = buildPerformanceOrderProfitLookup({
+      eligibleOrderIds: new Set([
+        "2000013688452641",
+        "2000013687692005",
+      ]),
+      orders: [
+        buildOrder("2000013688452641"),
+        buildOrder("2000013687692005"),
+      ],
+      taxRateDefault: "0.000000",
+    });
+
+    expect(
+      lookup.byProductId.get(
+        "2026-06-01::mercadolivre::product_support",
+      ),
+    ).toBe(1712n);
+    expect(
+      lookup.bySku.get("2026-06-01::mercadolivre::SUPORTE-02-PRETO"),
+    ).toBe(1712n);
+  });
+
+  it("allocates multi-SKU order profit by item revenue", () => {
+    const buildItem = (productId: string, sku: string, totalPrice: string) => ({
+      externalProduct: {
+        linkedProduct: {
+          financeDefaults: { packagingCost: "0.00" },
+          latestCost: { amount: "0.00" },
+          sku,
+        },
+        linkedProductId: productId,
+        sku,
+      },
+      quantity: 1,
+      totalPrice,
+    });
+    const order: OrderFinancialRow = {
+      fees: [],
+      id: "multi-sku-order",
+      items: [
+        buildItem("product-a", "SKU-A", "100.00"),
+        buildItem("product-b", "SKU-B", "50.00"),
+      ],
+      metadata: null,
+      orderedAt: "2026-06-15T12:00:00.000Z",
+      provider: "mercadolivre",
+      refundBonusAmount: null,
+      status: "paid",
+      totalAmount: "150.00",
+    };
+    const lookup = buildPerformanceOrderProfitLookup({
+      eligibleOrderIds: new Set([order.id]),
+      orders: [order],
+      taxRateDefault: "0.000000",
+    });
+
+    expect(
+      lookup.byProductId.get("2026-06-01::mercadolivre::product-a"),
+    ).toBe(10000n);
+    expect(
+      lookup.byProductId.get("2026-06-01::mercadolivre::product-b"),
+    ).toBe(5000n);
   });
 });

@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
   Optional,
+  forwardRef,
 } from "@nestjs/common";
 import type { DatabaseClient } from "@lucreii/database";
 import type {
@@ -71,6 +72,37 @@ type LinkedProductRecord = Product & {
   images: ProductImage[];
   latestCost?: ProductCost | null;
   productCosts?: ProductCost[];
+};
+
+export type OrderFinancialLinkedProduct = {
+  financeDefaults?: Pick<ProductFinanceDefaults, "packagingCost"> | null;
+  latestCost?: Pick<ProductCost, "amount"> | null;
+  productCosts?: Array<
+    Pick<ProductCost, "amount" | "createdAt" | "effectiveFrom">
+  >;
+  sku?: string | null;
+};
+
+export type OrderFinancialRow = Pick<
+  ExternalOrder,
+  | "id"
+  | "metadata"
+  | "orderedAt"
+  | "provider"
+  | "refundBonusAmount"
+  | "status"
+  | "totalAmount"
+> & {
+  fees: ExternalFee[];
+  items: Array<
+    Pick<ExternalOrderItem, "quantity" | "totalPrice"> & {
+      externalProduct:
+        | (Pick<ExternalProduct, "linkedProductId" | "sku"> & {
+            linkedProduct?: OrderFinancialLinkedProduct | null;
+          })
+        | null;
+    }
+  >;
 };
 
 type OrderRow = ExternalOrder & {
@@ -276,7 +308,7 @@ function summarizeExportedOrderFinancials(
   };
 }
 
-function allocateCentsByWeights(totalCents: bigint, weights: bigint[]) {
+export function allocateCentsByWeights(totalCents: bigint, weights: bigint[]) {
   if (totalCents === 0n || weights.length === 0) {
     return weights.map(() => 0n);
   }
@@ -588,7 +620,9 @@ function readMetadataMoneyString(
   return Number.isFinite(parsed) ? parsed.toFixed(2) : null;
 }
 
-function isSpreadsheetImportedOrder(order: Pick<OrderRowShallow, "metadata">) {
+function isSpreadsheetImportedOrder(
+  order: Pick<OrderFinancialRow, "metadata">,
+) {
   const metadata =
     order.metadata && typeof order.metadata === "object"
       ? (order.metadata as Record<string, unknown>)
@@ -600,7 +634,7 @@ function isSpreadsheetImportedOrder(order: Pick<OrderRowShallow, "metadata">) {
 }
 
 function readSpreadsheetProductRevenueAmount(
-  order: Pick<OrderRowShallow, "metadata" | "provider">,
+  order: Pick<OrderFinancialRow, "metadata" | "provider">,
 ) {
   if (order.provider !== "mercadolivre" || !isSpreadsheetImportedOrder(order)) {
     return null;
@@ -633,7 +667,7 @@ function readOrderImportTags(
 }
 
 function readOrderPendingFinancialFields(
-  order: Pick<OrderRow, "metadata">,
+  order: Pick<OrderFinancialRow, "metadata">,
 ): OrderImportPendingFinancialField[] {
   const metadata =
     order.metadata && typeof order.metadata === "object"
@@ -739,7 +773,7 @@ function readMercadoLivreSyncMetadata(
 }
 
 function resolveLatestCostAmount(
-  product: LinkedProductRecord | null | undefined,
+  product: OrderFinancialLinkedProduct | null | undefined,
 ) {
   if (!product) {
     return null;
@@ -760,7 +794,7 @@ function resolveLatestCostAmount(
   return latestCost ? toNumber(latestCost.amount) : null;
 }
 
-function buildOrderBaseMetrics(order: OrderRow) {
+function buildOrderBaseMetrics(order: OrderFinancialRow) {
   const metadata = (order.metadata ?? {}) as Record<string, unknown>;
   const totalWithFees = toNumber(order.totalAmount);
   const shippingAmount =
@@ -825,8 +859,8 @@ function buildOrderBaseMetrics(order: OrderRow) {
   };
 }
 
-function buildOrderFinancialMetrics(
-  order: OrderRow,
+export function buildOrderFinancialMetrics(
+  order: OrderFinancialRow,
   taxRateDefault: string | number | null | undefined,
 ) {
   const baseMetrics = buildOrderBaseMetrics(order);
@@ -2309,7 +2343,7 @@ export class OrdersService {
     @Inject(API_RUNTIME_ENV)
     private readonly env?: ApiRuntimeEnv,
     @Optional()
-    @Inject(ProductsService)
+    @Inject(forwardRef(() => ProductsService))
     private readonly productsService?: ProductsService,
   ) {}
 
