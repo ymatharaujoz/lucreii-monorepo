@@ -454,6 +454,7 @@ type PerformanceExternalOrderRow = Pick<
   | "orderedAt"
   | "provider"
   | "refundBonusAmount"
+  | "refundBonusStatus"
   | "status"
   | "totalAmount"
 > & {

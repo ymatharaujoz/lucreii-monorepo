@@ -90,6 +90,7 @@ export type OrderFinancialRow = Pick<
   | "orderedAt"
   | "provider"
   | "refundBonusAmount"
+  | "refundBonusStatus"
   | "status"
   | "totalAmount"
 > & {
