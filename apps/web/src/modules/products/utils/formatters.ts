@@ -19,11 +19,11 @@ export function formatMoney(value: number | string | null): string {
 export function formatPercent(value: number | null, options?: { digits?: number }): string {
   if (value === null || value === undefined) return EMPTY;
 
-  if (value === 0 || Object.is(value, -0)) {
-    return "0.0%";
-  }
-
   const digits = options?.digits ?? 1;
+
+  if (value === 0 || Object.is(value, -0)) {
+    return `${(0).toFixed(digits)}%`;
+  }
 
   return `${value.toFixed(digits)}%`;
 }

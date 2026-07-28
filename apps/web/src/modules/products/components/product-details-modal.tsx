@@ -393,7 +393,7 @@ export function ProductDetailsModal({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <MetricCard
                       label="ROI"
-                      value={formatPercent(roiRatio)}
+                      value={formatPercent(roiRatio, { digits: 2 })}
                       icon={<Percent className="h-3 w-3" />}
                       variant={
                         roiRatio === null

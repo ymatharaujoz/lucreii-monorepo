@@ -150,9 +150,29 @@ describe("ProductDetailsModal", () => {
     expect(text).not.toContain("Lucro Unitário");
     expect(text).toContain("ROI");
     expect(text).toContain("ROAS Mínimo");
-    expect(text).toContain("29.4%");
+    expect(text).toContain("29.39%");
     expect(text).toContain("21.0%");
     expect(text).not.toContain("4,77x");
+
+    view.unmount();
+  });
+
+  it("formats zero ROI with two decimal places", () => {
+    const view = renderWithClient(
+      <ProductDetailsModal
+        onClose={() => {}}
+        open
+        row={buildRow({ totalProfit: 0 })}
+      />,
+    );
+
+    const profitabilityTab = Array.from(
+      document.querySelectorAll("button"),
+    ).find((button) => button.textContent?.trim() === "Lucratividade");
+
+    click(profitabilityTab!);
+
+    expect(normalizedTextContent()).toContain("0.00%");
 
     view.unmount();
   });
