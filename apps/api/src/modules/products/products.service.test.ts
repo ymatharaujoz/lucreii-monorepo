@@ -5646,6 +5646,7 @@ describe("ProductsService", () => {
         contributionMarginRatio: expect.any(Number),
         marketplaceCommissionUnit: 27,
         minimumRoas: expect.any(Number),
+        roiRatio: null,
         shippingOrFixedFeeSource: "fixed_fee",
         shippingOrFixedFeeUnit: 24.65,
         totalProfit: 76.85,
@@ -5907,6 +5908,15 @@ describe("ProductsService", () => {
       response.items.find((item) => item.channelLabel === "mercadolivre")
         ?.advertisingCost,
     ).toBe(12);
+    const mercadolivreRow = response.items.find(
+      (item) => item.channelLabel === "mercadolivre",
+    )!;
+    expect(mercadolivreRow.roiRatio).toBeCloseTo(
+      (mercadolivreRow.totalProfit /
+        (mercadolivreRow.unitCost * mercadolivreRow.sales)) *
+        100,
+      6,
+    );
   });
 
   it("counts one sale per order even when order item quantity is greater than one", async () => {

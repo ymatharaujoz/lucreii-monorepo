@@ -127,7 +127,7 @@ describe("ProductDetailsModal", () => {
     view.unmount();
   });
 
-  it("renders profitability tab with ROI and minimum ROAS", () => {
+  it("calculates ROI from displayed profit, cost and sales", () => {
     const row = buildRow({
       minimumRoas: 4.77,
       roiRatio: 0.41,
@@ -150,7 +150,7 @@ describe("ProductDetailsModal", () => {
     expect(text).not.toContain("Lucro Unitário");
     expect(text).toContain("ROI");
     expect(text).toContain("ROAS Mínimo");
-    expect(text).toContain("0.4%");
+    expect(text).toContain("29.4%");
     expect(text).toContain("21.0%");
     expect(text).not.toContain("4,77x");
 
@@ -161,6 +161,7 @@ describe("ProductDetailsModal", () => {
     const row = buildRow({
       minimumRoas: null,
       roiRatio: null,
+      sales: 0,
       unitProfit: null,
     });
     const view = renderWithClient(

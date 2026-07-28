@@ -37,6 +37,19 @@ describe("deriveRowFinancials", () => {
     expect(result.minimumRoas).toBeCloseTo(2.602472, 6);
   });
 
+  it("calculates ROI from total profit and gross sales", () => {
+    const result = deriveRowFinancials(
+      buildRow({
+        returnsQuantity: 1,
+        salesQuantity: 2,
+      }),
+      0.1,
+    );
+
+    expect(result.totalProfit).toBeCloseTo(76.85, 6);
+    expect(result.roiRatio).toBeCloseTo(76.85, 6);
+  });
+
   it("returns no contribution margin when sales or price are missing", () => {
     const zeroSales = deriveRowFinancials(
       buildRow({
@@ -52,6 +65,7 @@ describe("deriveRowFinancials", () => {
     );
 
     expect(zeroSales.contributionMarginRatio).toBeNull();
+    expect(zeroSales.roiRatio).toBeNull();
     expect(zeroPrice.contributionMarginRatio).toBeNull();
   });
 });

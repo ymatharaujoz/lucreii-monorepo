@@ -388,7 +388,7 @@ describe("products foundation helpers", () => {
         performanceId: "perf_1",
         revenue: 100,
         returns: 1,
-        roiRatio: 1.6,
+        roiRatio: 80,
         sales: 2,
         shipping: 12,
         taxPct: 9,

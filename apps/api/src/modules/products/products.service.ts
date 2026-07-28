@@ -795,6 +795,16 @@ function resolveNetLiquidSalesFromPerformanceRow(
   return Math.max(0, sales - Math.min(Math.max(0, row.returnsQuantity), sales));
 }
 
+function computeProductRoi(
+  totalProfit: number,
+  unitCost: number,
+  sales: number,
+): number | null {
+  const totalProductCost = Math.max(0, unitCost) * Math.max(0, sales);
+
+  return totalProductCost > 0 ? (totalProfit / totalProductCost) * 100 : null;
+}
+
 function derivePerformanceFinancials(
   row: ProductMonthlyPerformanceDisplayRow,
   taxRateDefault: number,
@@ -833,8 +843,7 @@ function derivePerformanceFinancials(
     netLiquidSales > 0 && sellingPrice > 0
       ? (totalProfit / netLiquidSales / sellingPrice) * 100
       : null;
-  const roiRatio =
-    unitProfit !== null && unitCost > 0 ? unitProfit / unitCost : null;
+  const roiRatio = computeProductRoi(totalProfit, unitCost, row.salesQuantity);
   const minimumRoas =
     contributionMarginRatio !== null && contributionMarginRatio > 0
       ? 100 / contributionMarginRatio
@@ -2900,6 +2909,7 @@ export class ProductsService {
           ? (totalProfit / displayedRevenue) * 100
           : financials.contributionMarginRatio;
       const unitProfit = sales > 0 ? totalProfit / sales : financials.unitProfit;
+      const roiRatio = computeProductRoi(totalProfit, toNumber(row.unitCost), sales);
 
       return {
         ...financials,
@@ -2945,6 +2955,7 @@ export class ProductsService {
         totalProfit,
         unitProfit,
         contributionMarginRatio,
+        roiRatio,
         unitCost: toNumber(row.unitCost),
         variationLabel,
       };

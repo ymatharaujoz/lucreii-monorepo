@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Badge, Modal, cn } from "@lucreii/ui";
 import { formatReferenceMonthPtBr } from "../hooks/use-product-data";
-import { computeRowNetRevenue } from "../calculations/product-insights";
+import { computeProductRoi, computeRowNetRevenue } from "../calculations/product-insights";
 import type { ProductTableRow } from "../types/products";
 import { formatMoney, formatNumber, formatPercent } from "../utils/formatters";
 
@@ -281,6 +281,7 @@ export function ProductDetailsModal({
   }
 
   const netRevenue = computeRowNetRevenue(row);
+  const roiRatio = computeProductRoi(row.totalProfit, row.unitCost, row.sales);
 
   return (
     <Modal
@@ -392,12 +393,12 @@ export function ProductDetailsModal({
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <MetricCard
                       label="ROI"
-                      value={formatPercent(row.roiRatio)}
+                      value={formatPercent(roiRatio)}
                       icon={<Percent className="h-3 w-3" />}
                       variant={
-                        row.roiRatio === null
+                        roiRatio === null
                           ? "default"
-                          : row.roiRatio < 0
+                          : roiRatio < 0
                             ? "negative"
                             : "highlight"
                       }

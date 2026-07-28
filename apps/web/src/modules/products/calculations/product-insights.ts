@@ -18,6 +18,16 @@ function toNumber(value: string | null | undefined) {
   return parseProtectedNumber(value, { allowInfinity: true }) ?? 0;
 }
 
+export function computeProductRoi(
+  totalProfit: number,
+  unitCost: number,
+  sales: number,
+): number | null {
+  const totalProductCost = Math.max(0, unitCost) * Math.max(0, sales);
+
+  return totalProductCost > 0 ? (totalProfit / totalProductCost) * 100 : null;
+}
+
 function toDecimalString(value: number, fractionDigits = 2) {
   return value.toFixed(fractionDigits);
 }
@@ -78,7 +88,7 @@ export function deriveRowFinancials(
     netLiquidSales > 0 && sellingPrice > 0
       ? (totalProfit / netLiquidSales / sellingPrice) * 100
       : null;
-  const roiRatio = unitProfit !== null && unitCost > 0 ? unitProfit / unitCost : null;
+  const roiRatio = computeProductRoi(totalProfit, unitCost, row.salesQuantity);
   const minimumRoas =
     contributionMarginRatio !== null && contributionMarginRatio > 0
       ? 100 / contributionMarginRatio
@@ -470,8 +480,8 @@ function buildSyntheticParentRow(
     totals.netLiquidSales > 0 && sellingPriceAvg > 0
       ? (netContribution / totals.netLiquidSales / sellingPriceAvg) * 100
       : null;
-  const roiRatio =
-    totals.totalProductCost > 0 ? totals.totalProfit / totals.totalProductCost : null;
+  const unitCost = weightedUnitMetric((row) => row.unitCost);
+  const roiRatio = computeProductRoi(totals.totalProfit, unitCost, totals.sales);
 
   return {
     actualRoas: totals.adSpend > 0 ? totals.revenue / totals.adSpend : null,
@@ -518,7 +528,7 @@ function buildSyntheticParentRow(
     totalPackagingCost: totals.totalPackagingCost,
     totalProductCost: totals.totalProductCost,
     totalProfit: totals.totalProfit,
-    unitCost: weightedUnitMetric((row) => row.unitCost),
+    unitCost,
     unitProfit:
       totals.netLiquidSales > 0 ? totals.totalProfit / totals.netLiquidSales : null,
     variationLabel: null,
