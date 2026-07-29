@@ -6400,7 +6400,7 @@ describe("OrdersService", () => {
     expect(rows[0]?.["SKUs"]).toBe("SUPORTE-02-PRETO\nSUPORTE-02-BRANCO");
   });
 
-  it("matches exported Lucro Total sum and ignores orders without calculable profit", async () => {
+  it("filters financial summary while keeping cancelled orders in export", async () => {
     const service = new OrdersService({} as never);
     const exportOrderFields = {
       contributionMarginPercent: null,
@@ -6427,6 +6427,13 @@ describe("OrdersService", () => {
           totalProfitAmount: "30.00",
           totalWithFees: "100.00",
         },
+        rows: [
+          {
+            metadata: {},
+            provider: "mercadolivre",
+            status: "paid",
+          },
+        ],
       },
       {
         composition: {
@@ -6441,9 +6448,16 @@ describe("OrdersService", () => {
         order: {
           ...exportOrderFields,
           itemsSold: 1,
-          totalProfitAmount: null,
+          totalProfitAmount: "50.00",
           totalWithFees: "50.00",
         },
+        rows: [
+          {
+            metadata: {},
+            provider: "mercadolivre",
+            status: "cancelled",
+          },
+        ],
       },
       {
         composition: {
@@ -6461,6 +6475,13 @@ describe("OrdersService", () => {
           totalProfitAmount: "-5.00",
           totalWithFees: "20.00",
         },
+        rows: [
+          {
+            metadata: {},
+            provider: "mercadolivre",
+            status: "partially_refunded",
+          },
+        ],
       },
     ] as never[];
     const readLogicalOrdersForExport = vi
@@ -6507,7 +6528,7 @@ describe("OrdersService", () => {
       totalProfit: "25.00",
       variableCosts: "95.00",
     });
-    expect(exportedProfit).toBe(25);
+    expect(exportedProfit).toBe(75);
     expect(readLogicalOrdersForExport).toHaveBeenNthCalledWith(1, context, {
       orderedFrom: "2026-06-01",
       orderedTo: "2026-06-30",

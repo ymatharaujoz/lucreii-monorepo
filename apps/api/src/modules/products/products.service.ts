@@ -79,6 +79,7 @@ import {
   buildOrderFinancialMetrics,
   type OrderFinancialRow,
 } from "@/modules/orders/orders.service";
+import { isFinanciallyEligibleOrder } from "@/modules/orders/order-financial-eligibility";
 import { SyncService } from "@/modules/sync/sync.service";
 
 type ProductUpdateInput = Partial<ProductFormValues>;
@@ -327,21 +328,6 @@ function toReferenceMonthFromIso(
 
   const yearMonth = iso.slice(0, 7);
   return /^\d{4}-\d{2}$/.test(yearMonth) ? `${yearMonth}-01` : null;
-}
-
-function isExplicitlyUnpaidPerformanceOrder(
-  order: Pick<ExternalOrder, "status" | "metadata">,
-) {
-  if (
-    order.metadata &&
-    typeof order.metadata === "object" &&
-    "paid" in order.metadata &&
-    order.metadata.paid === false
-  ) {
-    return true;
-  }
-
-  return order.status.trim().toLowerCase() === "unpaid";
 }
 
 function buildPerformanceSalesLookup(input: {
@@ -2680,7 +2666,7 @@ export class ProductsService {
           (order) =>
             Boolean(order.orderedAt) &&
             order.items.length > 0 &&
-            !isExplicitlyUnpaidPerformanceOrder(order),
+            isFinanciallyEligibleOrder(order),
         )
         .map((order) => order.id),
     );

@@ -222,6 +222,7 @@ describe("FinanceService", () => {
         ],
         orderedAt: new Date("2026-04-28T10:00:00.000Z"),
         provider: "mercadolivre",
+        status: "paid",
         totalAmount: "300.00",
       },
       {
@@ -239,6 +240,7 @@ describe("FinanceService", () => {
         ],
         orderedAt: new Date("2026-04-29T10:00:00.000Z"),
         provider: "shopee",
+        status: "paid",
         totalAmount: "50.00",
       },
     ]);
@@ -458,6 +460,7 @@ describe("FinanceService", () => {
         ],
         orderedAt: new Date("2026-04-28T10:00:00.000Z"),
         provider: "mercadolivre",
+        status: "paid",
         totalAmount: "100.00",
       },
     ]);
@@ -469,6 +472,129 @@ describe("FinanceService", () => {
     expect(readModel.summary.grossRevenue).toBe("100.00");
     expect(db.select).toHaveBeenCalledTimes(4);
     expect(legacyExternalProductsWhere).toHaveBeenCalledTimes(2);
+  });
+
+  it("excludes cancelled orders while keeping paid and partial-refund orders in dashboard metrics", async () => {
+    const { db, service } = createFinanceServiceFixture();
+    const product = {
+      createdAt: new Date("2026-04-28T10:00:00.000Z"),
+      id: "product_1",
+      images: [],
+      isActive: true,
+      name: "Product One",
+      organizationId: "org_123",
+      productCosts: [],
+      sellingPrice: "100.00",
+      sku: "SKU-1",
+    };
+    const externalProductsSelectWhere = vi.fn().mockResolvedValue([
+      {
+        externalProductId: "MLB-001",
+        id: "external_product_1",
+        linkedProductId: "product_1",
+        metadata: {},
+        provider: "mercadolivre",
+        sku: "SKU-1",
+        title: "Product One",
+      },
+    ]);
+
+    db.select.mockReturnValue({
+      from: vi.fn(() => ({ where: externalProductsSelectWhere })),
+    });
+    db.query.products.findMany.mockResolvedValue([product]);
+    db.query.externalOrders.findMany.mockResolvedValue([
+      {
+        createdAt: new Date("2026-04-28T10:00:00.000Z"),
+        fees: [{ amount: "10.00", feeType: "marketplace" }],
+        id: "paid_order",
+        items: [
+          {
+            externalProductId: "external_product_1",
+            id: "paid_item",
+            quantity: 1,
+            totalPrice: "100.00",
+            unitPrice: "100.00",
+          },
+        ],
+        metadata: {},
+        orderedAt: new Date("2026-04-28T10:00:00.000Z"),
+        provider: "mercadolivre",
+        status: "paid",
+        totalAmount: "100.00",
+      },
+      {
+        createdAt: new Date("2026-04-29T10:00:00.000Z"),
+        fees: [{ amount: "20.00", feeType: "marketplace" }],
+        id: "cancelled_order",
+        items: [
+          {
+            externalProductId: "external_product_1",
+            id: "cancelled_item",
+            quantity: 1,
+            totalPrice: "200.00",
+            unitPrice: "200.00",
+          },
+        ],
+        metadata: {},
+        orderedAt: new Date("2026-04-29T10:00:00.000Z"),
+        provider: "mercadolivre",
+        status: "cancelled",
+        totalAmount: "200.00",
+      },
+      {
+        createdAt: new Date("2026-04-30T10:00:00.000Z"),
+        fees: [{ amount: "5.00", feeType: "marketplace" }],
+        id: "partial_refund_order",
+        items: [
+          {
+            externalProductId: "external_product_1",
+            id: "partial_refund_item",
+            quantity: 1,
+            totalPrice: "50.00",
+            unitPrice: "50.00",
+          },
+        ],
+        metadata: {},
+        orderedAt: new Date("2026-04-30T10:00:00.000Z"),
+        provider: "mercadolivre",
+        status: "partially_refunded",
+        totalAmount: "50.00",
+      },
+    ]);
+    db.query.adCosts.findMany.mockResolvedValue([]);
+    db.query.manualExpenses.findMany.mockResolvedValue([]);
+
+    const readModel = await service.buildDashboardReadModel("org_123", "company_123");
+
+    expect(readModel.summary).toEqual(
+      expect.objectContaining({
+        grossRevenue: "150.00",
+        ordersCount: 2,
+        totalFees: "15.00",
+        unitsSold: 2,
+      }),
+    );
+    expect(readModel.daily.map((point) => point.metricDate)).toEqual([
+      "2026-04-28",
+      "2026-04-30",
+    ]);
+    expect(readModel.channels).toEqual([
+      expect.objectContaining({
+        channel: "mercadolivre",
+        summary: expect.objectContaining({
+          grossRevenue: "150.00",
+          ordersCount: 2,
+        }),
+      }),
+    ]);
+    expect(readModel.productProfitability).toEqual([
+      expect.objectContaining({
+        productId: "product_1",
+        revenue: "150.00",
+        sales: 2,
+      }),
+    ]);
   });
 
   it("resolves Mercado Livre variation profitability names as parent plus variation", async () => {
@@ -539,6 +665,7 @@ describe("FinanceService", () => {
         ],
         orderedAt: new Date("2026-04-28T10:00:00.000Z"),
         provider: "mercadolivre",
+        status: "paid",
         totalAmount: "30.00",
       },
     ]);
@@ -611,6 +738,7 @@ describe("FinanceService", () => {
         ],
         orderedAt: new Date("2026-04-28T10:00:00.000Z"),
         provider: "mercadolivre",
+        status: "paid",
         totalAmount: "45.00",
       },
     ]);
@@ -699,6 +827,7 @@ describe("FinanceService", () => {
         ],
         orderedAt: new Date("2026-04-28T10:00:00.000Z"),
         provider: "mercadolivre",
+        status: "paid",
         totalAmount: "30.00",
       },
     ]);
@@ -877,6 +1006,7 @@ describe("FinanceService", () => {
         ],
         orderedAt: new Date("2026-07-10T10:00:00.000Z"),
         provider: "mercadolivre",
+        status: "paid",
         totalAmount: "100.00",
       },
     ]);

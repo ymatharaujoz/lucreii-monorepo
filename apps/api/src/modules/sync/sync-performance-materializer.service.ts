@@ -15,6 +15,10 @@ import {
 import { and, eq } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 import { normalizeSku, selectLatestProductCost } from "@/modules/finance/finance.service";
+import {
+  hasOrderReturnMarker,
+  isFinanciallyEligibleOrder,
+} from "@/modules/orders/order-financial-eligibility";
 
 type ProductRowWithFinance = Product & {
   financeDefaults: ProductFinanceDefaults | null;
@@ -99,53 +103,6 @@ function divideMoneyAcrossCount(totalCents: bigint, count: number) {
   const rounded = remainder * 2n >= divisor ? quotient + 1n : quotient;
 
   return `${rounded / 100n}.${(rounded % 100n).toString().padStart(2, "0")}`;
-}
-
-function isExplicitReturnMarker(order: Pick<ExternalOrder, "status" | "metadata">) {
-  const status = order.status.trim().toLowerCase();
-
-  if (
-    status.includes("cancel") ||
-    status.includes("refund") ||
-    status.includes("return")
-  ) {
-    return true;
-  }
-
-  const tags =
-    order.metadata &&
-    typeof order.metadata === "object" &&
-    "tags" in order.metadata &&
-    Array.isArray(order.metadata.tags)
-      ? order.metadata.tags
-      : [];
-
-  return tags.some((tag) => {
-    if (typeof tag !== "string") {
-      return false;
-    }
-
-    const normalized = tag.trim().toLowerCase();
-
-    return (
-      normalized.includes("cancel") ||
-      normalized.includes("refund") ||
-      normalized.includes("return")
-    );
-  });
-}
-
-function isExplicitlyUnpaid(order: Pick<ExternalOrder, "status" | "metadata">) {
-  if (
-    order.metadata &&
-    typeof order.metadata === "object" &&
-    "paid" in order.metadata &&
-    order.metadata.paid === false
-  ) {
-    return true;
-  }
-
-  return order.status.trim().toLowerCase() === "unpaid";
 }
 
 function sumFeeAmounts(fees: ExternalFee[], feeType: string) {
@@ -361,7 +318,11 @@ export class SyncPerformanceMaterializerService {
     for (const order of orders) {
       const referenceMonth = firstDayOfMonth(order.orderedAt);
 
-      if (!referenceMonth || order.items.length === 0 || isExplicitlyUnpaid(order)) {
+      if (
+        !referenceMonth ||
+        order.items.length === 0 ||
+        !isFinanciallyEligibleOrder(order)
+      ) {
         continue;
       }
 
@@ -374,7 +335,7 @@ export class SyncPerformanceMaterializerService {
         sumFeeAmounts(order.fees, "shipping_cost"),
         itemWeights,
       );
-      const isReturnLike = isExplicitReturnMarker(order);
+      const isReturnLike = hasOrderReturnMarker(order);
 
       for (let index = 0; index < order.items.length; index += 1) {
         const item = order.items[index];

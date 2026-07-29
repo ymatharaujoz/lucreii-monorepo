@@ -265,7 +265,7 @@ describe("SyncPerformanceMaterializerService", () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it("increments returns only when the imported payload has an explicit return marker", async () => {
+  it("excludes orders with an explicit physical-return marker", async () => {
     const { db, service } = createService();
     const insertedRows: Array<Record<string, unknown>> = [];
 
@@ -337,15 +337,15 @@ describe("SyncPerformanceMaterializerService", () => {
     expect(insertedRows[0]).toEqual(
       expect.objectContaining({
         commissionRate: "0.045000",
-        returnsQuantity: 1,
+        returnsQuantity: 0,
         salePrice: "100.00",
-        salesQuantity: 3,
+        salesQuantity: 2,
         shippingFee: "0.00",
       }),
     );
   });
 
-  it("applies return markers per item variation before falling back to order-level markers", async () => {
+  it("excludes an order when an item carries a physical-return marker", async () => {
     const { db, service } = createService();
     const insertedRows: Array<Record<string, unknown>> = [];
 
@@ -414,21 +414,7 @@ describe("SyncPerformanceMaterializerService", () => {
       userId: "user_1",
     });
 
-    expect(insertedRows).toHaveLength(2);
-    expect(insertedRows).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          returnsQuantity: 1,
-          salesQuantity: 1,
-          sku: "SKU-RED",
-        }),
-        expect.objectContaining({
-          returnsQuantity: 0,
-          salesQuantity: 1,
-          sku: "SKU-BLUE",
-        }),
-      ]),
-    );
+    expect(insertedRows).toHaveLength(0);
   });
 
   it("materializes by linked product when order item sku is missing", async () => {

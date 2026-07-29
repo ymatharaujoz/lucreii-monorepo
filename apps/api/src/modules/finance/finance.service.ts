@@ -32,6 +32,7 @@ import type {
 import type { IntegrationProviderSlug } from "@lucreii/types";
 import { and, desc, eq, gte, lt } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
+import { isFinanciallyEligibleOrder } from "@/modules/orders/order-financial-eligibility";
 
 type ProductCostRow = Pick<ProductCost, "amount" | "createdAt" | "effectiveFrom">;
 type SnapshotProductRow = Product & {
@@ -410,9 +411,11 @@ export class FinanceService {
     const externalProductsById = new Map(
       externalProductRows.map((product) => [product.id, product]),
     );
-    const orders = orderRows.map((row) =>
-      this.toFinancialOrder(row, productIdsBySku, externalProductsById, productsById),
-    );
+    const orders = orderRows
+      .filter(isFinanciallyEligibleOrder)
+      .map((row) =>
+        this.toFinancialOrder(row, productIdsBySku, externalProductsById, productsById),
+      );
     const adCosts = adCostRows.map<FinancialAdCostInput>((row) => ({
       amount: String(row.amount),
       channel: row.channel.trim().toLowerCase(),

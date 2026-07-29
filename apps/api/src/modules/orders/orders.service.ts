@@ -56,6 +56,11 @@ import {
   type MercadoLivreBillingOrderDetailsResponse,
 } from "@/modules/integrations/providers/mercadolivre.provider";
 import {
+  areOrderRowsFinanciallyEligible,
+  isFinanciallyEligibleOrder,
+  normalizeOrderStatus,
+} from "./order-financial-eligibility";
+import {
   ProductsService,
   type MonthlyPerformanceMarginLine,
   type MonthlyPerformanceMarginRollup,
@@ -198,9 +203,6 @@ const ORDER_STATUS_OPTIONS: OrderStatusOption[] = [
   { value: "cancelled", label: "Cancelado" },
 ];
 
-const MELI_STATUS_SET = new Set<OrderCanonicalStatus>(
-  ORDER_STATUS_OPTIONS.map((option) => option.value),
-);
 const MERCADOLIVRE_GROUP_ID_PREFIX = "group__mercadolivre__";
 
 function toIsoString(value: Date | string | null | undefined) {
@@ -466,80 +468,6 @@ function getOrderStatusLabel(status: OrderCanonicalStatus): OrderStatusLabel {
     ORDER_STATUS_OPTIONS.find((option) => option.value === status)?.label ??
     status
   );
-}
-
-function normalizeOrderStatus(
-  provider: string,
-  status: string,
-  metadata: Record<string, unknown>,
-): OrderCanonicalStatus {
-  const normalized = status.trim().toLowerCase();
-  const detail = String(metadata.status_detail ?? "")
-    .trim()
-    .toLowerCase();
-  const returned =
-    metadata.returned === true ||
-    metadata.refunded === true ||
-    includesIgnoreCase(detail, "refund") ||
-    includesIgnoreCase(detail, "return");
-
-  if (returned || normalized.includes("refund")) {
-    return "partially_refunded";
-  }
-
-  if (MELI_STATUS_SET.has(normalized as OrderCanonicalStatus)) {
-    return normalized as OrderCanonicalStatus;
-  }
-
-  if (
-    [
-      "completed",
-      "delivered",
-      "ready_to_ship",
-      "shipped",
-      "processing",
-      "invoice_pending",
-      "to_be_agreed",
-      "to_be_arranged",
-      "packed",
-      "pickup_ready",
-    ].includes(normalized) ||
-    normalized.includes("deliver") ||
-    normalized.includes("ship")
-  ) {
-    return "paid";
-  }
-
-  if (["payment_required", "unpaid", "pending"].includes(normalized)) {
-    return "payment_required";
-  }
-
-  if (["payment_in_process", "processing_payment"].includes(normalized)) {
-    return "payment_in_process";
-  }
-
-  if (["partially_paid"].includes(normalized)) {
-    return "partially_paid";
-  }
-
-  if (
-    ["cancelled", "canceled", "cancel"].includes(normalized) ||
-    normalized.includes("cancel")
-  ) {
-    return provider === "mercadolivre" && normalized === "pending_cancel"
-      ? "pending_cancel"
-      : "cancelled";
-  }
-
-  if (["confirmed", "created"].includes(normalized)) {
-    return "confirmed";
-  }
-
-  if (normalized.includes("paid") || normalized.includes("approved")) {
-    return "paid";
-  }
-
-  return "confirmed";
 }
 
 function sumFeesByPredicate(
@@ -2629,7 +2557,19 @@ export class OrdersService {
       ...(input.provider ? { provider: input.provider } : {}),
     });
 
-    return summarizeExportedOrderFinancials(logicalOrders);
+    return summarizeExportedOrderFinancials(
+      logicalOrders.filter((logicalOrder) => {
+        if (Array.isArray(logicalOrder.rows)) {
+          return areOrderRowsFinanciallyEligible(logicalOrder.rows);
+        }
+
+        return isFinanciallyEligibleOrder({
+          metadata: { sourceStatus: logicalOrder.order.sourceStatus },
+          provider: logicalOrder.order.provider,
+          status: logicalOrder.order.status ?? logicalOrder.order.statusLabel,
+        });
+      }),
+    );
   }
 
   async exportOrdersSpreadsheet(
