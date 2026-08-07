@@ -419,7 +419,7 @@ describe("OrdersHome", () => {
     expect(modalContent).not.toContain("Data do Pedido");
     expect(modalContent).not.toContain("Canal");
     expect(modalContent).not.toContain("Faturamento");
-    expect(modalContent).not.toContain("Margem de Contribuição");
+    expect(modalContent).not.toContain("Margem Contribuição");
     expect(modalContent).not.toContain("Lucro Total");
     expect(text()).not.toContain("status origem");
 
@@ -581,7 +581,7 @@ describe("OrdersHome", () => {
 
     expect(mainContent).toContain("ID da Venda");
     expect(mainContent).toContain("Faturamento");
-    expect(mainContent).toContain("Margem de Contribuição");
+    expect(mainContent).toContain("Margem Contribuição");
     expect(mainContent).toContain("Lucro Total");
     expect(mainContent).toContain("R$ 200,00");
     expect(mainContent).toContain("46,00%");

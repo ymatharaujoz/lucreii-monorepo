@@ -1461,7 +1461,7 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                     onSort={handleSort}
                     sortConfig={sortConfig}
                   >
-                    Margem de Contribuição
+                    Margem Contribuição
                   </OrderSortableHeader>
                   <OrderSortableHeader
                     column="totalProfitAmount"
