@@ -119,10 +119,40 @@ function formatTaxRate(value: string | null | undefined) {
   if (!Number.isFinite(parsed) || parsed === 0) {
     return null;
   }
+  return formatPercentage(parsed);
+}
+
+function formatPercentage(value: number) {
   return `${new Intl.NumberFormat("pt-BR", {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
-  }).format(parsed)}%`;
+  }).format(value)}%`;
+}
+
+function formatCommissionRate(
+  commissionAmount: string | null | undefined,
+  revenueAmount: string | null | undefined,
+) {
+  if (
+    commissionAmount === null ||
+    commissionAmount === undefined ||
+    commissionAmount === "" ||
+    revenueAmount === null ||
+    revenueAmount === undefined ||
+    revenueAmount === ""
+  ) {
+    return null;
+  }
+
+  const commission = Number(commissionAmount);
+  const revenue = Number(revenueAmount);
+  const rate = (commission / revenue) * 100;
+
+  if (!Number.isFinite(rate)) {
+    return null;
+  }
+
+  return formatPercentage(rate);
 }
 
 function formatDateTime(value: string | null) {
@@ -595,6 +625,10 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
     "shippingOrFixedFeeAmount",
   );
   const taxPending = composition.pendingFinancialFields?.includes("taxAmount");
+  const commissionRateLabel = formatCommissionRate(
+    composition.marketplaceCommissionAmount,
+    composition.revenueAmount,
+  );
 
   return (
     <div className="space-y-4">
@@ -624,7 +658,16 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
         <CompositionMetric
           icon={<Percent className="h-4 w-4" />}
           label="Comissão"
-          value={formatMoney(composition.marketplaceCommissionAmount)}
+          value={
+            <span>
+              {formatMoney(composition.marketplaceCommissionAmount)}
+              {commissionRateLabel ? (
+                <span className="text-sm font-medium text-muted-foreground">
+                  ({commissionRateLabel})
+                </span>
+              ) : null}
+            </span>
+          }
           negative
         />
         <CompositionMetric

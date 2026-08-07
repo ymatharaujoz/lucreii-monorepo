@@ -79,6 +79,14 @@ function text() {
   return document.body.textContent?.replace(/\u00a0/g, " ") ?? "";
 }
 
+function metricText(label: string) {
+  const labelElement = Array.from(document.querySelectorAll("span")).find(
+    (element) => element.textContent === label,
+  );
+
+  return labelElement?.parentElement?.parentElement?.textContent ?? "";
+}
+
 describe("OrdersHome", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -240,6 +248,7 @@ describe("OrdersHome", () => {
     expect(content).not.toContain("Composição do pedido");
     expect(content).not.toContain("Totais agregados do pedido");
     expect(content).toContain("R$ 200,00");
+    expect(content).toContain("5,00%");
     expect(content).toContain("R$ 24,00");
     expect(content).toContain("Imposto");
     expect(content).toContain("12,00%");
@@ -255,6 +264,53 @@ describe("OrdersHome", () => {
 
     view.unmount();
   });
+
+  it.each(["0.00", "inválido"])(
+    "omits commission rate when revenue is %s",
+    (revenueAmount) => {
+      useOrderDetailsMock.mockReturnValue({
+        data: {
+          composition: {
+            hasIncompleteCostData: false,
+            marketplaceCommissionAmount: "10.00",
+            missingCostItemsCount: 0,
+            missingLinkedItemsCount: 0,
+            netRevenueAmount: revenueAmount,
+            packagingCostAmount: "0.00",
+            productCostAmount: "0.00",
+            refundBonusAmount: "0.00",
+            revenueAmount,
+            shippingOrFixedFeeAmount: "0.00",
+            taxAmount: "0.00",
+            taxRateDefault: null,
+          },
+          items: [],
+          order: {
+            displayOrderId: "MLB-SALE-9001",
+            provider: "mercadolivre",
+            sourceStatus: "paid",
+            status: "paid",
+            statusLabel: "Pagamento aprovado",
+          },
+        },
+        error: null,
+        isLoading: false,
+      });
+
+      const view = mount(<OrdersHome />);
+
+      click(document.querySelector('tr[role="button"]')!);
+      click(
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Compos"),
+        )!,
+      );
+
+      expect(metricText("Comissão")).not.toContain("%");
+
+      view.unmount();
+    },
+  );
 
   it("shows Mercado Livre shipping payment breakdown in composition tab", () => {
     useOrderDetailsMock.mockReturnValue({
