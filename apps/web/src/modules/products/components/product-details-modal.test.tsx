@@ -159,6 +159,37 @@ describe("ProductDetailsModal", () => {
     view.unmount();
   });
 
+  it("shows CMV explanation when ROI help receives focus", () => {
+    const view = renderWithClient(
+      <ProductDetailsModal onClose={() => {}} open row={buildRow()} />,
+    );
+
+    const profitabilityTab = Array.from(
+      document.querySelectorAll("button"),
+    ).find((button) => button.textContent?.trim() === "Lucratividade");
+
+    click(profitabilityTab!);
+
+    const helpButton = document.querySelector(
+      'button[aria-label="Explicação sobre CMV"]',
+    ) as HTMLButtonElement;
+
+    expect(helpButton).toBeTruthy();
+    expect(normalizedTextContent()).not.toContain(
+      "CMV (Custo da Mercadoria Vendida): Valor investido na compra das unidades vendidas.",
+    );
+
+    act(() => {
+      helpButton.focus();
+    });
+
+    expect(normalizedTextContent()).toContain(
+      "CMV (Custo da Mercadoria Vendida): Valor investido na compra das unidades vendidas.",
+    );
+
+    view.unmount();
+  });
+
   it("formats zero ROI with two decimal places", () => {
     const view = renderWithClient(
       <ProductDetailsModal

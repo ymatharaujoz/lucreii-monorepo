@@ -12,7 +12,7 @@ import {
   Undo2,
   Wallet,
 } from "lucide-react";
-import { Badge, Modal, cn } from "@lucreii/ui";
+import { Badge, Modal, Tooltip, cn } from "@lucreii/ui";
 import { formatReferenceMonthPtBr } from "../hooks/use-product-data";
 import { computeProductRoi, computeRowNetRevenue } from "../calculations/product-insights";
 import type { ProductTableRow } from "../types/products";
@@ -65,7 +65,7 @@ function SectionCard({ title, icon, children, className }: SectionCardProps) {
 type MetricVariant = "default" | "negative" | "highlight";
 
 type MetricCardProps = {
-  label: string;
+  label: React.ReactNode;
   value: string;
   icon?: React.ReactNode;
   variant?: MetricVariant;
@@ -397,7 +397,23 @@ export function ProductDetailsModal({
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <MetricCard
-                      label="ROI"
+                      label={
+                        <>
+                          ROI
+                          <Tooltip
+                            className="max-w-64 whitespace-normal text-center"
+                            content="CMV (Custo da Mercadoria Vendida): Valor investido na compra das unidades vendidas."
+                          >
+                            <button
+                              aria-label="Explicação sobre CMV"
+                              className="-my-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-[13px] leading-none text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                              type="button"
+                            >
+                              <span aria-hidden="true">ⓘ</span>
+                            </button>
+                          </Tooltip>
+                        </>
+                      }
                       value={formatPercent(roiRatio, { digits: 2 })}
                       icon={<Percent className="h-3 w-3" />}
                       variant={
