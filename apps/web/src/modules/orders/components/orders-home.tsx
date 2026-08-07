@@ -36,6 +36,8 @@ import { StatusBadge } from "@/components/ui-premium/status-badge";
 import { MultiSelectDropdown } from "@/components/ui-premium/multi-select-dropdown";
 import { DateRangePicker } from "@/components/ui-premium/date-range-picker";
 import { slideInUpVariants } from "@/lib/animations";
+import { buildReferenceMonthDateRange } from "@/lib/reference-month";
+import { useReferenceMonth } from "@/lib/reference-month-context";
 import type {
   IntegrationProviderSlug,
   OrderCanonicalStatus,
@@ -692,13 +694,28 @@ function buildStatusDropdownItems(
 }
 
 export function OrdersHome() {
+  const { referenceMonth } = useReferenceMonth();
+
+  return <OrdersHomeContent key={referenceMonth} referenceMonth={referenceMonth} />;
+}
+
+function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
+  const referenceMonthRange = useMemo(() => {
+    const range = buildReferenceMonthDateRange(referenceMonth);
+
+    if (!range) {
+      throw new Error("Invalid global reference month.");
+    }
+
+    return range;
+  }, [referenceMonth]);
   const [page, setPage] = useState(1);
   const [saleId, setSaleId] = useState("");
   const [saleIdDraft, setSaleIdDraft] = useState("");
   const [sku, setSku] = useState("");
   const [skuDraft, setSkuDraft] = useState("");
-  const [orderedFrom, setOrderedFrom] = useState("");
-  const [orderedTo, setOrderedTo] = useState("");
+  const [orderedFrom, setOrderedFrom] = useState(referenceMonthRange.orderedFrom);
+  const [orderedTo, setOrderedTo] = useState(referenceMonthRange.orderedTo);
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>(
     [],
   );
@@ -718,6 +735,10 @@ export function OrdersHome() {
   } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+
+  const hasCustomDateRange =
+    orderedFrom !== referenceMonthRange.orderedFrom ||
+    orderedTo !== referenceMonthRange.orderedTo;
 
   const dateRangeLabelForPill = useMemo(() => {
     if (!orderedFrom && !orderedTo) return "";
@@ -821,24 +842,22 @@ export function OrdersHome() {
     sku.trim().length > 0 ||
     selectedMarketplaces.length > 0 ||
     selectedStatus !== null ||
-    orderedFrom.length > 0 ||
-    orderedTo.length > 0;
+    hasCustomDateRange;
 
   const activeFilterCount =
     (saleId.trim() ? 1 : 0) +
     (sku.trim() ? 1 : 0) +
     selectedMarketplaces.length +
     (selectedStatus ? 1 : 0) +
-    (orderedFrom ? 1 : 0) +
-    (orderedTo ? 1 : 0);
+    (hasCustomDateRange ? 1 : 0);
 
   const clearAllFilters = () => {
     setSaleId("");
     setSaleIdDraft("");
     setSku("");
     setSkuDraft("");
-    setOrderedFrom("");
-    setOrderedTo("");
+    setOrderedFrom(referenceMonthRange.orderedFrom);
+    setOrderedTo(referenceMonthRange.orderedTo);
     setSelectedMarketplaces([]);
     setSelectedStatus(null);
     setPage(1);
@@ -1069,13 +1088,39 @@ export function OrdersHome() {
                   />
 
                   <DateRangePicker
+                    key={referenceMonth}
                     from={orderedFrom}
                     to={orderedTo}
+                    minDate={referenceMonthRange.orderedFrom}
+                    maxDate={referenceMonthRange.orderedTo}
                     onChange={(fromStr, toStr) => {
-                      setOrderedFrom(fromStr);
-                      setOrderedTo(toStr);
+                      const nextFrom = fromStr || referenceMonthRange.orderedFrom;
+                      const nextTo = toStr || referenceMonthRange.orderedTo;
+
+                      setOrderedFrom(
+                        nextFrom < referenceMonthRange.orderedFrom
+                          ? referenceMonthRange.orderedFrom
+                          : nextFrom > referenceMonthRange.orderedTo
+                            ? referenceMonthRange.orderedTo
+                            : nextFrom,
+                      );
+                      setOrderedTo(
+                        nextTo > referenceMonthRange.orderedTo
+                          ? referenceMonthRange.orderedTo
+                          : nextTo < referenceMonthRange.orderedFrom
+                            ? referenceMonthRange.orderedFrom
+                            : nextTo,
+                      );
                       setPage(1);
                     }}
+                    presets={[
+                      {
+                        from: referenceMonthRange.orderedFrom,
+                        key: `reference-month-${referenceMonth}`,
+                        label: "Todo o mês",
+                        to: referenceMonthRange.orderedTo,
+                      },
+                    ]}
                   />
 
                   <Dropdown
@@ -1208,15 +1253,15 @@ export function OrdersHome() {
                   );
                 })}
 
-                {(orderedFrom || orderedTo) && (
+                {hasCustomDateRange && (
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
                     <span className="text-muted-foreground text-[10px] uppercase font-semibold">Período:</span>
                     <span>{dateRangeLabelForPill}</span>
                     <button
                       type="button"
                       onClick={() => {
-                        setOrderedFrom("");
-                        setOrderedTo("");
+                        setOrderedFrom(referenceMonthRange.orderedFrom);
+                        setOrderedTo(referenceMonthRange.orderedTo);
                         setPage(1);
                       }}
                       className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"

@@ -584,7 +584,7 @@ export function ProductTable({
         ) : null}
 
         <div className="flex-1 min-h-0 overflow-auto">
-          <table className="w-full min-w-[1120px] border-separate border-spacing-0">
+          <table className="w-full min-w-[1200px] border-separate border-spacing-0">
             <thead>
               <tr className="border-b border-border bg-surface-strong/95">
                 <th
@@ -616,6 +616,9 @@ export function ProductTable({
                     Vendas
                     <SortIcon column="sales" />
                   </div>
+                </th>
+                <th className="sticky top-0 z-10 px-2 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-surface-strong/95">
+                  DEVOLUÇÕES
                 </th>
                 <th
                   onClick={() => handleSort("sellingPrice")}
@@ -650,13 +653,13 @@ export function ProductTable({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
                     Carregando produtos...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
                     Nao foi possivel carregar os produtos.
                   </td>
                 </tr>
@@ -708,6 +711,9 @@ export function ProductTable({
                   </td>
                   <td className="px-2 py-3 text-right">
                     <span className="text-sm text-foreground">{formatNumber(row.sales)}</span>
+                  </td>
+                  <td className="px-2 py-3 text-right">
+                    <span className="text-sm text-foreground">{formatNumber(row.returns)}</span>
                   </td>
                   <td className="px-3 py-3 text-right">
                     <span className="text-sm text-foreground">{formatMoney(sellingPrice)}</span>

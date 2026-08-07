@@ -17,7 +17,7 @@ import { DATABASE_CLIENT } from "@/common/tokens";
 import { normalizeSku, selectLatestProductCost } from "@/modules/finance/finance.service";
 import {
   hasOrderReturnMarker,
-  isFinanciallyEligibleOrder,
+  isPerformanceEligibleOrder,
 } from "@/modules/orders/order-financial-eligibility";
 
 type ProductRowWithFinance = Product & {
@@ -103,6 +103,14 @@ function divideMoneyAcrossCount(totalCents: bigint, count: number) {
   const rounded = remainder * 2n >= divisor ? quotient + 1n : quotient;
 
   return `${rounded / 100n}.${(rounded % 100n).toString().padStart(2, "0")}`;
+}
+
+function prorateAmount(amount: bigint, numerator: number, denominator: number) {
+  if (amount === 0n || numerator <= 0 || denominator <= 0) {
+    return 0n;
+  }
+
+  return (amount * BigInt(numerator)) / BigInt(denominator);
 }
 
 function sumFeeAmounts(fees: ExternalFee[], feeType: string) {
@@ -321,7 +329,7 @@ export class SyncPerformanceMaterializerService {
       if (
         !referenceMonth ||
         order.items.length === 0 ||
-        !isFinanciallyEligibleOrder(order)
+        !isPerformanceEligibleOrder(order)
       ) {
         continue;
       }
@@ -336,6 +344,13 @@ export class SyncPerformanceMaterializerService {
         itemWeights,
       );
       const isReturnLike = hasOrderReturnMarker(order);
+      const itemReturnQuantities = order.items.map((item) =>
+        readItemReturnQuantity(order, item),
+      );
+      const hasExplicitReturnQuantity = itemReturnQuantities.some(
+        (quantity) => quantity > 0,
+      );
+      const isWholeOrderReturn = isReturnLike && !hasExplicitReturnQuantity;
 
       for (let index = 0; index < order.items.length; index += 1) {
         const item = order.items[index];
@@ -359,21 +374,33 @@ export class SyncPerformanceMaterializerService {
         aggregates.set(key, aggregate);
         aggregate.salesQuantity += item.quantity;
 
-        const itemReturnQuantity = readItemReturnQuantity(order, item);
+        const itemReturnQuantity = hasExplicitReturnQuantity
+          ? itemReturnQuantities[index] ?? 0
+          : isWholeOrderReturn
+            ? item.quantity
+            : 0;
+        aggregate.returnsQuantity += itemReturnQuantity;
 
-        if (itemReturnQuantity > 0) {
-          aggregate.returnsQuantity += itemReturnQuantity;
-        } else if (isReturnLike) {
-          aggregate.returnsQuantity += item.quantity;
-        }
-
-        if (itemReturnQuantity > 0 || isReturnLike) {
+        const netItemQuantity = Math.max(0, item.quantity - itemReturnQuantity);
+        if (netItemQuantity <= 0) {
           continue;
         }
 
-        aggregate.revenueTotal += parseMoney(String(item.totalPrice));
-        aggregate.commissionTotal += commissionAllocations[index] ?? 0n;
-        aggregate.shippingTotal += shippingAllocations[index] ?? 0n;
+        aggregate.revenueTotal += prorateAmount(
+          parseMoney(String(item.totalPrice)),
+          netItemQuantity,
+          item.quantity,
+        );
+        aggregate.commissionTotal += prorateAmount(
+          commissionAllocations[index] ?? 0n,
+          netItemQuantity,
+          item.quantity,
+        );
+        aggregate.shippingTotal += prorateAmount(
+          shippingAllocations[index] ?? 0n,
+          netItemQuantity,
+          item.quantity,
+        );
       }
     }
 

@@ -3,6 +3,7 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ReferenceMonthProvider } from "@/lib/reference-month-context";
 import { OrdersHome } from "./orders-home";
 
 (
@@ -42,7 +43,7 @@ function mount(node: React.ReactNode) {
   const root = createRoot(container);
 
   act(() => {
-    root.render(node);
+    root.render(<ReferenceMonthProvider companyId="company_1">{node}</ReferenceMonthProvider>);
   });
 
   return {
@@ -80,6 +81,8 @@ function text() {
 
 describe("OrdersHome", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-20T12:00:00.000Z"));
     useOrdersListMock.mockReturnValue({
       data: {
         summary: {
@@ -192,7 +195,9 @@ describe("OrdersHome", () => {
 
   afterEach(() => {
     document.body.innerHTML = "";
+    window.localStorage.clear();
     vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   beforeEach(() => {
@@ -738,6 +743,35 @@ describe("OrdersHome", () => {
     view.unmount();
   });
 
+  it("limits initial query and export to the global reference month", async () => {
+    const view = mount(<OrdersHome />);
+
+    expect(useOrdersListMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        orderedFrom: "2026-06-01",
+        orderedTo: "2026-06-30",
+      }),
+    );
+
+    await act(async () => {
+      click(
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Exportar"),
+        )!,
+      );
+      await Promise.resolve();
+    });
+
+    expect(downloadOrdersExportMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderedFrom: "2026-06-01",
+        orderedTo: "2026-06-30",
+      }),
+    );
+
+    view.unmount();
+  });
+
   it("passes ordered date range filters to list query and clears them", () => {
     const view = mount(<OrdersHome />);
 
@@ -752,13 +786,13 @@ describe("OrdersHome", () => {
     ) as HTMLInputElement[];
     const [orderedFromInput, orderedToInput] = dateInputs;
 
-    changeInputValue(orderedFromInput, "2026-06-01");
-    changeInputValue(orderedToInput, "2026-06-30");
+    changeInputValue(orderedFromInput, "2026-06-05");
+    changeInputValue(orderedToInput, "2026-06-20");
 
     expect(useOrdersListMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        orderedFrom: "2026-06-01",
-        orderedTo: "2026-06-30",
+        orderedFrom: "2026-06-05",
+        orderedTo: "2026-06-20",
       }),
     );
 
@@ -770,6 +804,8 @@ describe("OrdersHome", () => {
 
     expect(useOrdersListMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        orderedFrom: "2026-06-01",
+        orderedTo: "2026-06-30",
         page: 1,
         pageSize: 20,
       }),

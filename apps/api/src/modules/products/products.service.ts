@@ -79,7 +79,11 @@ import {
   buildOrderFinancialMetrics,
   type OrderFinancialRow,
 } from "@/modules/orders/orders.service";
-import { isFinanciallyEligibleOrder } from "@/modules/orders/order-financial-eligibility";
+import {
+  hasOrderReturnMarker,
+  isFinanciallyEligibleOrder,
+  isPerformanceEligibleOrder,
+} from "@/modules/orders/order-financial-eligibility";
 import { SyncService } from "@/modules/sync/sync.service";
 
 type ProductUpdateInput = Partial<ProductFormValues>;
@@ -194,6 +198,10 @@ type DuplicatePerformanceRowGroup = {
 type PerformanceSalesLookup = {
   byProductId: Map<string, number>;
   bySku: Map<string, number>;
+  returnedSalesByProductId: Map<string, number>;
+  returnedSalesBySku: Map<string, number>;
+  returnsByProductId: Map<string, number>;
+  returnsBySku: Map<string, number>;
 };
 
 type PerformanceProfitLookup = {
@@ -330,12 +338,71 @@ function toReferenceMonthFromIso(
   return /^\d{4}-\d{2}$/.test(yearMonth) ? `${yearMonth}-01` : null;
 }
 
+type PerformanceSalesOrderItem = Pick<ExternalOrderItem, "quantity"> & {
+  externalProduct: Pick<ExternalProduct, "linkedProductId" | "sku"> | null;
+};
+
+type PerformanceSalesOrder = Pick<
+  ExternalOrder,
+  "metadata" | "orderedAt" | "provider" | "status"
+> & {
+  items: PerformanceSalesOrderItem[];
+};
+
+function readPerformanceReturnQuantity(
+  order: Pick<ExternalOrder, "metadata">,
+  item: PerformanceSalesOrderItem,
+) {
+  const metadata =
+    order.metadata && typeof order.metadata === "object"
+      ? order.metadata
+      : {};
+  const normalizedSku = normalizeComparableSku(item.externalProduct?.sku);
+
+  if (!normalizedSku) {
+    return 0;
+  }
+
+  const rawMap =
+    "returnQuantityBySku" in metadata &&
+    metadata.returnQuantityBySku &&
+    typeof metadata.returnQuantityBySku === "object"
+      ? metadata.returnQuantityBySku
+      : null;
+
+  if (!rawMap) {
+    return 0;
+  }
+
+  const matchedEntry = Object.entries(rawMap).find(
+    ([sku]) => normalizeComparableSku(sku) === normalizedSku,
+  );
+  const rawQuantity = matchedEntry?.[1];
+
+  return typeof rawQuantity === "number" && Number.isFinite(rawQuantity)
+    ? Math.max(0, Math.min(item.quantity, Math.trunc(rawQuantity)))
+    : 0;
+}
+
+function addPerformanceQuantity(
+  target: Map<string, number>,
+  key: string,
+  quantity: number,
+) {
+  target.set(key, (target.get(key) ?? 0) + quantity);
+}
+
 function buildPerformanceSalesLookup(input: {
   eligibleOrderIds: ReadonlySet<string>;
   orders: Awaited<ReturnType<FinanceService["buildFinanceSnapshot"]>>["orders"];
+  returnedOrders: PerformanceSalesOrder[];
 }): PerformanceSalesLookup {
   const byProductId = new Map<string, number>();
   const bySku = new Map<string, number>();
+  const returnedSalesByProductId = new Map<string, number>();
+  const returnedSalesBySku = new Map<string, number>();
+  const returnsByProductId = new Map<string, number>();
+  const returnsBySku = new Map<string, number>();
 
   for (const order of input.orders) {
     if (!input.eligibleOrderIds.has(order.id)) {
@@ -350,18 +417,70 @@ function buildPerformanceSalesLookup(input: {
     for (const item of order.items) {
       if (item.productId) {
         const key = `${referenceMonth}::${order.provider}::${item.productId}`;
-        byProductId.set(key, (byProductId.get(key) ?? 0) + item.quantity);
+        addPerformanceQuantity(byProductId, key, item.quantity);
       }
 
       const normalizedSku = normalizeComparableSku(item.sku);
       if (normalizedSku) {
         const key = `${referenceMonth}::${order.provider}::${normalizedSku}`;
-        bySku.set(key, (bySku.get(key) ?? 0) + item.quantity);
+        addPerformanceQuantity(bySku, key, item.quantity);
       }
     }
   }
 
-  return { byProductId, bySku };
+  for (const order of input.returnedOrders) {
+    if (
+      !isPerformanceEligibleOrder(order) ||
+      !hasOrderReturnMarker(order) ||
+      order.items.length === 0
+    ) {
+      continue;
+    }
+
+    const referenceMonth = toReferenceMonthFromIso(order.orderedAt);
+    if (!referenceMonth) {
+      continue;
+    }
+
+    const itemReturnQuantities = order.items.map((item) =>
+      readPerformanceReturnQuantity(order, item),
+    );
+    const isWholeOrderReturn = !itemReturnQuantities.some(
+      (quantity) => quantity > 0,
+    );
+
+    order.items.forEach((item, index) => {
+      const returnQuantity = isWholeOrderReturn
+        ? item.quantity
+        : itemReturnQuantities[index] ?? 0;
+
+      if (item.externalProduct?.linkedProductId) {
+        const key = `${referenceMonth}::${order.provider}::${item.externalProduct.linkedProductId}`;
+        addPerformanceQuantity(returnedSalesByProductId, key, item.quantity);
+        if (returnQuantity > 0) {
+          addPerformanceQuantity(returnsByProductId, key, returnQuantity);
+        }
+      }
+
+      const normalizedSku = normalizeComparableSku(item.externalProduct?.sku);
+      if (normalizedSku) {
+        const key = `${referenceMonth}::${order.provider}::${normalizedSku}`;
+        addPerformanceQuantity(returnedSalesBySku, key, item.quantity);
+        if (returnQuantity > 0) {
+          addPerformanceQuantity(returnsBySku, key, returnQuantity);
+        }
+      }
+    });
+  }
+
+  return {
+    byProductId,
+    bySku,
+    returnedSalesByProductId,
+    returnedSalesBySku,
+    returnsByProductId,
+    returnsBySku,
+  };
 }
 
 function addPerformanceProfit(
@@ -2673,6 +2792,7 @@ export class ProductsService {
     const salesLookup = buildPerformanceSalesLookup({
       eligibleOrderIds,
       orders: financeSnapshot.orders,
+      returnedOrders: externalOrderRows as PerformanceSalesOrder[],
     });
     const profitLookup = buildPerformanceOrderProfitLookup({
       eligibleOrderIds,
@@ -2838,10 +2958,6 @@ export class ProductsService {
         (row.productId ? (byId.get(row.productId) ?? null) : null) ??
         bySku.get(normalizeComparableSku(row.sku) ?? "") ??
         null;
-      const financials = derivePerformanceFinancials(
-        row,
-        effectiveTaxRateDefault,
-      );
       const displayName =
         overrides?.displayName ??
         product?.name?.trim() ??
@@ -2854,15 +2970,35 @@ export class ProductsService {
         null;
       const normalizedSku = normalizeComparableSku(row.sku);
       const salesCountByProductId = row.productId
-        ? (salesLookup.byProductId.get(
+        ? salesLookup.byProductId.get(
             `${row.referenceMonth}::${row.channel}::${row.productId}`,
-          ) ?? null)
+          )
         : null;
       const salesCountBySku = normalizedSku
-        ? (salesLookup.bySku.get(
+        ? salesLookup.bySku.get(
             `${row.referenceMonth}::${row.channel}::${normalizedSku}`,
-          ) ?? 0)
-        : 0;
+          )
+        : null;
+      const returnsCountByProductId = row.productId
+        ? salesLookup.returnsByProductId.get(
+            `${row.referenceMonth}::${row.channel}::${row.productId}`,
+          )
+        : undefined;
+      const returnsCountBySku = normalizedSku
+        ? salesLookup.returnsBySku.get(
+            `${row.referenceMonth}::${row.channel}::${normalizedSku}`,
+          )
+        : undefined;
+      const returnedSalesCountByProductId = row.productId
+        ? salesLookup.returnedSalesByProductId.get(
+            `${row.referenceMonth}::${row.channel}::${row.productId}`,
+          )
+        : undefined;
+      const returnedSalesCountBySku = normalizedSku
+        ? salesLookup.returnedSalesBySku.get(
+            `${row.referenceMonth}::${row.channel}::${normalizedSku}`,
+          )
+        : undefined;
       const productProfitKey = row.productId
         ? `${row.referenceMonth}::${row.channel}::${row.productId}`
         : null;
@@ -2880,22 +3016,51 @@ export class ProductsService {
         : hasSkuProfit
           ? profitLookup.bySku.get(skuProfitKey!)!
           : null;
-      const sales = salesCountByProductId ?? salesCountBySku;
-      const fallbackTotalProfit =
-        sales > 0 && financials.unitProfit !== null
-          ? financials.unitProfit * sales
-          : financials.totalProfit;
+      const finalizedSales = salesCountByProductId ?? salesCountBySku;
+      const returnedSales =
+        returnedSalesCountByProductId ?? returnedSalesCountBySku;
+      const sales =
+        finalizedSales !== undefined || returnedSales !== undefined
+          ? Math.max(0, (finalizedSales ?? 0) + (returnedSales ?? 0))
+          : 0;
+      const hasSalesSignal =
+        finalizedSales !== undefined || returnedSales !== undefined;
+      const returns =
+        returnsCountByProductId ??
+        returnsCountBySku ??
+        Math.max(0, Math.min(row.returnsQuantity, sales));
+      const displayRow = {
+        ...row,
+        returnsQuantity: returns,
+        salesQuantity: sales,
+      };
+      const financials = derivePerformanceFinancials(
+        hasSalesSignal ? displayRow : row,
+        effectiveTaxRateDefault,
+      );
+      const financialSales = hasSalesSignal
+        ? financials.netLiquidSales
+        : Math.max(0, sales);
+      const fallbackTotalProfit = financials.totalProfit;
       const totalProfit =
         authoritativeProfitCents === null
           ? fallbackTotalProfit
           : Number(authoritativeProfitCents) / 100;
-      const displayedRevenue = toNumber(row.salePrice) * Math.max(0, sales);
+      const displayedRevenue =
+        toNumber(displayRow.salePrice) * financialSales;
       const contributionMarginRatio =
-        sales > 0 && displayedRevenue > 0
+        financialSales > 0 && displayedRevenue > 0
           ? (totalProfit / displayedRevenue) * 100
           : financials.contributionMarginRatio;
-      const unitProfit = sales > 0 ? totalProfit / sales : financials.unitProfit;
-      const roiRatio = computeProductRoi(totalProfit, toNumber(row.unitCost), sales);
+      const unitProfit =
+        financialSales > 0
+          ? totalProfit / financialSales
+          : financials.unitProfit;
+      const roiRatio = computeProductRoi(
+        totalProfit,
+        toNumber(row.unitCost),
+        financialSales,
+      );
 
       return {
         ...financials,
@@ -2927,7 +3092,7 @@ export class ProductsService {
         performanceId: row.id,
         productId: row.productId ?? product?.id ?? null,
         referenceMonth: row.referenceMonth,
-        returns: row.returnsQuantity,
+        returns,
         sales,
         sellingPrice: toNumber(row.salePrice),
         shipping: toNumber(row.shippingFee),

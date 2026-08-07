@@ -4,6 +4,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DashboardRecentSyncResponse } from "@lucreii/types";
+import { ReferenceMonthProvider } from "@/lib/reference-month-context";
 import { DashboardHome } from "./dashboard-home";
 
 declare global {
@@ -76,7 +77,7 @@ function mount(node: React.ReactNode) {
   const root = createRoot(container);
 
   act(() => {
-    root.render(node);
+    root.render(<ReferenceMonthProvider companyId="company_1">{node}</ReferenceMonthProvider>);
   });
 
   return {
@@ -118,6 +119,7 @@ function buildRecentSync(
 
 afterEach(() => {
   document.body.innerHTML = "";
+  window.localStorage.clear();
   vi.useRealTimers();
   useDashboardDataMock.mockReset();
   useDashboardConnectionStatusesMock.mockReset();

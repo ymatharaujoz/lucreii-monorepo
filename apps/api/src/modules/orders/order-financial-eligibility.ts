@@ -227,6 +227,28 @@ export function isFinanciallyEligibleOrder(order: FinancialEligibilityOrder) {
   return canonicalStatus === "paid" || canonicalStatus === "partially_refunded";
 }
 
+/**
+ * Performance keeps physical returns in gross sales so the UI can expose
+ * both gross units and returned units. Financial snapshots intentionally keep
+ * using isFinanciallyEligibleOrder, which excludes those returned orders from
+ * financial totals.
+ */
+export function isPerformanceEligibleOrder(order: FinancialEligibilityOrder) {
+  const metadata = readMetadata(order);
+
+  if (metadata.paid === false || hasOrderCancellationMarker(order)) {
+    return false;
+  }
+
+  const canonicalStatus = normalizeOrderStatus(
+    order.provider,
+    order.status,
+    metadata,
+  );
+
+  return canonicalStatus === "paid" || canonicalStatus === "partially_refunded";
+}
+
 export function areOrderRowsFinanciallyEligible(
   rows: readonly FinancialEligibilityOrder[],
 ) {

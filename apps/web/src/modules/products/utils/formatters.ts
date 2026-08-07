@@ -28,6 +28,17 @@ export function formatPercent(value: number | null, options?: { digits?: number 
   return `${value.toFixed(digits)}%`;
 }
 
+export function formatPercentPtBr(value: number | null, options?: { digits?: number }): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return EMPTY;
+
+  const digits = options?.digits ?? 1;
+
+  return `${value.toLocaleString("pt-BR", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
+  })}%`;
+}
+
 export function formatNumber(value: number | null): string {
   if (value === null || value === undefined) return EMPTY;
 

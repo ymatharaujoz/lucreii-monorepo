@@ -5913,7 +5913,7 @@ describe("ProductsService", () => {
     )!;
     expect(mercadolivreRow.roiRatio).toBeCloseTo(
       (mercadolivreRow.totalProfit /
-        (mercadolivreRow.unitCost * mercadolivreRow.sales)) *
+        (mercadolivreRow.unitCost * mercadolivreRow.netLiquidSales)) *
         100,
       6,
     );
@@ -6177,6 +6177,26 @@ describe("ProductsService", () => {
         orderedAt: new Date("2026-05-15T12:00:00.000Z"),
         status: "paid",
       },
+      {
+        id: "return_order_1",
+        items: [
+          {
+            externalProduct: {
+              linkedProductId: "product_1",
+              sku: "SKU-1",
+            },
+            quantity: 1,
+            totalPrice: "100.00",
+          },
+        ],
+        metadata: {
+          returnQuantityBySku: { "SKU-1": 1 },
+          sourceStatus: "Devolução finalizada",
+        },
+        orderedAt: new Date("2026-05-16T12:00:00.000Z"),
+        provider: "mercadolivre",
+        status: "partially_refunded",
+      },
     ]);
     financeService.buildFinanceSnapshot.mockResolvedValue({
       adCosts: [],
@@ -6244,9 +6264,9 @@ describe("ProductsService", () => {
     expect(response.items).toEqual([
       expect.objectContaining({
         channelLabel: "mercadolivre",
-        netLiquidSales: 1,
+        netLiquidSales: 2,
         returns: 1,
-        sales: 2,
+        sales: 3,
       }),
     ]);
   });

@@ -34,7 +34,6 @@ import {
   Button,
   Badge,
   EmptyState,
-  Dropdown,
   Modal,
   cn,
 } from "@lucreii/ui";
@@ -47,10 +46,7 @@ import { Pagination } from "@/components/ui-premium/pagination";
 import { ProductHeader } from "./product-header";
 
 import { ProductTable } from "./product-table";
-import {
-  formatReferenceMonthPtBr,
-  useProductData,
-} from "../hooks/use-product-data";
+import { useProductData } from "../hooks/use-product-data";
 import { useProductPerformancePage } from "../hooks/use-product-performance-data";
 import { buildMarketplaceSyncNotice } from "../calculations/product-insights";
 import { formatMoney } from "../utils/formatters";
@@ -277,40 +273,6 @@ function MarketplaceNoticeCard({
         ) : null}
       </div>
     </Card>
-  );
-}
-
-function ReferenceMonthToolbar({
-  options,
-  referenceMonth,
-  onReferenceMonthChange,
-}: {
-  options: readonly string[];
-  referenceMonth: string;
-  onReferenceMonthChange: (isoDay: string) => void;
-}) {
-  const items = options.map((iso) => ({
-    id: iso,
-    label: formatReferenceMonthPtBr(iso),
-  }));
-
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-strong px-3 py-2 shadow-sm">
-      <span className="text-xs font-semibold uppercase tracking-wider text-accent">
-        Mês
-      </span>
-      <Dropdown
-        align="left"
-        items={items}
-        onSelect={(id) => onReferenceMonthChange(id)}
-        trigger={
-          <div className="flex h-7 items-center gap-1.5 rounded-md bg-surface px-2 text-sm font-semibold text-foreground transition-colors hover:bg-accent/5">
-            {formatReferenceMonthPtBr(referenceMonth)}
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </div>
-        }
-      />
-    </div>
   );
 }
 
@@ -1752,13 +1714,11 @@ export function ProductsHome({
   const {
     data,
     referenceMonth,
-    referenceMonthSelectOptions,
     stats,
     financialState,
     isLoading,
     error,
     isUnauthorized,
-    setReferenceMonth,
     refresh,
     refetch,
   } = useProductData();
@@ -1796,13 +1756,6 @@ export function ProductsHome({
     return <ErrorState error={error} onRetry={refetch} />;
   }
 
-  const monthToolbar = (
-    <ReferenceMonthToolbar
-      onReferenceMonthChange={setReferenceMonth}
-      options={referenceMonthSelectOptions}
-      referenceMonth={referenceMonth}
-    />
-  );
   const addProductButton = (
     <Button
       size="md"
@@ -1826,7 +1779,6 @@ export function ProductsHome({
   );
   const topActions = (
     <div className="flex items-center gap-3">
-      {view === "performance" ? monthToolbar : null}
       {view !== "performance" ? importButton : null}
       {view !== "performance" ? addProductButton : null}
     </div>

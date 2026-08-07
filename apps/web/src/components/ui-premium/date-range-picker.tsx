@@ -15,14 +15,14 @@ export interface DateRangePickerProps {
   maxDate?: string;
   hasRangeError?: boolean;
   rangeErrorId?: string;
+  presets?: readonly DateRangePickerPreset[];
 }
 
-type PresetKey = "today" | "yesterday" | "last7d" | "last30d" | "thisMonth" | "lastMonth" | "allTime" | "custom";
-
-interface PresetOption {
-  key: PresetKey;
+export interface DateRangePickerPreset {
+  key: string;
   label: string;
-  getValue: () => { from: string; to: string };
+  from: string;
+  to: string;
 }
 
 // Date helpers
@@ -60,15 +60,17 @@ function getLastDayOfLastMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const presets: PresetOption[] = [
-  { key: "today", label: "Hoje", getValue: () => ({ from: getTodayString(), to: getTodayString() }) },
-  { key: "yesterday", label: "Ontem", getValue: () => ({ from: getYesterdayString(), to: getYesterdayString() }) },
-  { key: "last7d", label: "Últimos 7 dias", getValue: () => ({ from: getDaysAgoString(6), to: getTodayString() }) },
-  { key: "last30d", label: "Últimos 30 dias", getValue: () => ({ from: getDaysAgoString(29), to: getTodayString() }) },
-  { key: "thisMonth", label: "Este mês", getValue: () => ({ from: getFirstDayOfThisMonth(), to: getTodayString() }) },
-  { key: "lastMonth", label: "Mês passado", getValue: () => ({ from: getFirstDayOfLastMonth(), to: getLastDayOfLastMonth() }) },
-  { key: "allTime", label: "Todo o período", getValue: () => ({ from: "", to: "" }) },
-];
+function getDefaultPresets(): DateRangePickerPreset[] {
+  return [
+    { key: "today", label: "Hoje", from: getTodayString(), to: getTodayString() },
+    { key: "yesterday", label: "Ontem", from: getYesterdayString(), to: getYesterdayString() },
+    { key: "last7d", label: "Últimos 7 dias", from: getDaysAgoString(6), to: getTodayString() },
+    { key: "last30d", label: "Últimos 30 dias", from: getDaysAgoString(29), to: getTodayString() },
+    { key: "thisMonth", label: "Este mês", from: getFirstDayOfThisMonth(), to: getTodayString() },
+    { key: "lastMonth", label: "Mês passado", from: getFirstDayOfLastMonth(), to: getLastDayOfLastMonth() },
+    { key: "allTime", label: "Todo o período", from: "", to: "" },
+  ];
+}
 
 function formatDateForDisplay(dateStr: string): string {
   if (!dateStr) return "";
@@ -96,7 +98,11 @@ export function DateRangePicker({
   onChange,
   align = "left",
   className,
+  minDate,
+  maxDate,
+  presets: suppliedPresets,
 }: DateRangePickerProps) {
+  const presets = suppliedPresets ?? getDefaultPresets();
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ left: number; top: number; width: number } | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -202,17 +208,37 @@ export function DateRangePicker({
 
   // Determine active preset (if any)
   const activePreset = presets.find((p) => {
-    const val = p.getValue();
-    return val.from === tempFrom && val.to === tempTo;
+    return p.from === tempFrom && p.to === tempTo;
   })?.key ?? (tempFrom || tempTo ? "custom" : "allTime");
 
-  const handlePresetSelect = (preset: PresetOption) => {
-    const val = preset.getValue();
-    setTempFrom(val.from);
-    setTempTo(val.to);
+  const constrainRangeToBounds = (nextFrom: string, nextTo: string) => {
+    const constrainedFrom =
+      minDate && nextFrom && nextFrom < minDate
+        ? minDate
+        : maxDate && nextFrom && nextFrom > maxDate
+          ? maxDate
+          : nextFrom;
+    const constrainedTo =
+      minDate && nextTo && nextTo < minDate
+        ? minDate
+        : maxDate && nextTo && nextTo > maxDate
+          ? maxDate
+          : nextTo;
+
+    if (constrainedFrom && constrainedTo && constrainedFrom > constrainedTo) {
+      return { from: constrainedTo, to: constrainedFrom };
+    }
+
+    return { from: constrainedFrom, to: constrainedTo };
+  };
+
+  const handlePresetSelect = (preset: DateRangePickerPreset) => {
+    const value = constrainRangeToBounds(preset.from, preset.to);
+    setTempFrom(value.from);
+    setTempTo(value.to);
     
     // Autoapply for non-custom presets
-    onChange(val.from, val.to);
+    onChange(value.from, value.to);
     setOpen(false);
   };
 
@@ -229,10 +255,17 @@ export function DateRangePicker({
   const month = viewDate.getMonth();
 
   const handlePrevMonth = () => {
+    const previousMonth = new Date(year, month - 1, 1);
+    const previousMonthEnd = new Date(previousMonth.getFullYear(), previousMonth.getMonth() + 1, 0);
+    const previousMonthEndIso = `${previousMonthEnd.getFullYear()}-${String(previousMonthEnd.getMonth() + 1).padStart(2, "0")}-${String(previousMonthEnd.getDate()).padStart(2, "0")}`;
+    if (minDate && previousMonthEndIso < minDate) return;
     setViewDate(new Date(year, month - 1, 1));
   };
 
   const handleNextMonth = () => {
+    const nextMonth = new Date(year, month + 1, 1);
+    const nextMonthStartIso = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
+    if (maxDate && nextMonthStartIso > maxDate) return;
     setViewDate(new Date(year, month + 1, 1));
   };
 
@@ -268,6 +301,10 @@ export function DateRangePicker({
   }
 
   const handleDayClick = (dateStr: string) => {
+    if ((minDate && dateStr < minDate) || (maxDate && dateStr > maxDate)) {
+      return;
+    }
+
     // If no start date exists, or both are set, select starting date
     if (!tempFrom || (tempFrom && tempTo)) {
       setTempFrom(dateStr);
@@ -285,7 +322,8 @@ export function DateRangePicker({
   };
 
   const handleApply = () => {
-    onChange(tempFrom, tempTo);
+    const value = constrainRangeToBounds(tempFrom, tempTo);
+    onChange(value.from, value.to);
     setOpen(false);
   };
 
@@ -311,8 +349,7 @@ export function DateRangePicker({
 
   // Summary label
   const presetLabel = presets.find((p) => {
-    const val = p.getValue();
-    return val.from === from && val.to === to;
+    return p.from === from && p.to === to;
   })?.label;
 
   const triggerLabel = presetLabel 
@@ -403,17 +440,22 @@ export function DateRangePicker({
             const inRange = isInRange(dateStr);
             const isStart = dateStr === tempFrom;
             const isEnd = dateStr === tempTo;
+            const disabled =
+              (minDate !== undefined && dateStr < minDate) ||
+              (maxDate !== undefined && dateStr > maxDate);
 
             return (
               <button
                 key={dateStr}
                 type="button"
                 onClick={() => handleDayClick(dateStr)}
-                onMouseEnter={() => tempFrom && !tempTo && setHoverDate(dateStr)}
+                onMouseEnter={() => !disabled && tempFrom && !tempTo && setHoverDate(dateStr)}
                 onMouseLeave={() => setHoverDate(null)}
+                disabled={disabled}
                 className={cn(
                   "relative flex h-7 items-center justify-center text-[11px] transition-all duration-[var(--transition-fast)] outline-none",
                   !isCurrentMonth && "opacity-35",
+                  disabled && "cursor-not-allowed opacity-25 hover:bg-transparent",
                   // In range highlighting
                   inRange && "bg-accent/10 text-accent font-medium",
                   inRange && isCurrentMonth && "hover:bg-accent/20",

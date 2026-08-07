@@ -241,6 +241,7 @@ type MercadoLivreOrderItemResponse = {
     title?: string;
   };
   listing_type_id?: string;
+  return_quantity?: number;
   quantity_cancelled?: number;
   quantity_refunded?: number;
   quantity?: number;
@@ -1512,7 +1513,11 @@ function extractMercadoLivreOrderIdFromNotification(
 function resolveMercadoLivreReturnQuantity(
   item: MercadoLivreOrderItemResponse,
 ) {
-  const candidates = [item.quantity_refunded, item.quantity_cancelled];
+  const candidates = [
+    item.return_quantity,
+    item.quantity_refunded,
+    item.quantity_cancelled,
+  ];
 
   for (const candidate of candidates) {
     if (

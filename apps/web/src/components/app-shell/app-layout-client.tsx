@@ -2,6 +2,7 @@
 
 import { type ReactNode, useState } from "react";
 import type { Company } from "@lucreii/types";
+import { ReferenceMonthProvider } from "@/lib/reference-month-context";
 import { AppSidebar } from "./app-sidebar";
 import { AppTopBar } from "./app-top-bar";
 import { MinimalHeader } from "./minimal-header";
@@ -35,6 +36,15 @@ export function AppLayoutClient({
 }: AppLayoutClientProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const selectedCompanyId =
+    companies.find((company) => company.isSelected)?.id ??
+    companies.find((company) => company.isActive)?.id ??
+    null;
+  const protectedChildren = (
+    <ReferenceMonthProvider companyId={selectedCompanyId}>
+      {children}
+    </ReferenceMonthProvider>
+  );
 
   // Sem assinatura ou sem onboarding completo: mostra layout simples sem sidebar
   if (!hasSubscription || !hasOnboarded) {
@@ -42,7 +52,7 @@ export function AppLayoutClient({
       <div className="flex min-h-screen flex-col bg-background">
         <MinimalHeader user={user} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto">
-          {children}
+          {protectedChildren}
         </main>
       </div>
     );
@@ -92,7 +102,7 @@ export function AppLayoutClient({
         <AppTopBar onMenuToggle={() => setMobileOpen(true)} />
         <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto py-6 md:py-8">
           <div className="mx-auto w-full max-w-[min(100%,1440px)] px-6 sm:px-8 md:px-10 lg:px-12 xl:px-14">
-            {children}
+            {protectedChildren}
           </div>
         </main>
       </div>

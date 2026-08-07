@@ -765,6 +765,18 @@ describe("ProductsHome catalog modal", () => {
 });
 
 describe("ProductsHome performance pagination", () => {
+  it("uses the global month and does not render a performance month selector", () => {
+    const view = renderProductsHome("performance");
+
+    expect(document.body.textContent).not.toContain("Mês");
+    expect(performanceQueryMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ referenceMonth: "2026-06-01" }),
+      true,
+    );
+
+    view.unmount();
+  });
+
   it("renders the rows returned for page 2 and preserves the requested page", () => {
     const pageOneRow = buildPerformanceRow("page-1");
     const pageTwoRow = buildPerformanceRow("page-2");

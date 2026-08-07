@@ -341,6 +341,7 @@ describe("ProductTable", () => {
     );
 
     expect(document.body.textContent).toContain("Vendas");
+    expect(document.body.textContent).toContain("DEVOLUÇÕES");
     expect(document.body.textContent).toContain("FATURAMENTO");
     expect(document.body.textContent).toContain("Margem Contribuição");
     expect(document.body.textContent).toContain("Lucro Total");
@@ -376,9 +377,9 @@ describe("ProductTable", () => {
     const cells = document.querySelectorAll("tbody tr td");
     expect(document.body.textContent).toContain("FATURAMENTO");
     expect(document.body.textContent).not.toContain("PDV");
-    expect(cells[4]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 37,92");
-    expect(cells[5]?.textContent).toContain("45.15%");
-    expect(cells[6]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 17,12");
+    expect(cells[5]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 37,92");
+    expect(cells[6]?.textContent).toContain("45.15%");
+    expect(cells[7]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 17,12");
 
     view.unmount();
   });
@@ -396,10 +397,10 @@ describe("ProductTable", () => {
     );
 
     const cells = document.querySelectorAll("tbody tr td");
-    expect(cells[4]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 0,00");
-    expect(cells[5]?.textContent).toContain("—");
-    expect(cells[5]?.textContent).not.toMatch(/NaN|Infinity/);
-    expect(cells[6]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 0,00");
+    expect(cells[5]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 0,00");
+    expect(cells[6]?.textContent).toContain("—");
+    expect(cells[6]?.textContent).not.toMatch(/NaN|Infinity/);
+    expect(cells[7]?.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 0,00");
 
     view.unmount();
   });

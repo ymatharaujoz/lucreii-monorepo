@@ -14,6 +14,7 @@ import type {
 } from "@lucreii/types";
 import { apiClient } from "@/lib/api/client";
 import { ordersQueryKey } from "@/modules/orders";
+import { productPerformanceQueryKey } from "@/modules/products/hooks/use-product-performance-data";
 
 const integrationsQueryKey = ["integrations"] as const;
 async function fetchIntegrations(): Promise<IntegrationConnectionRecord[]> {
@@ -274,6 +275,7 @@ export function useIntegrationsData(
       setSpreadsheetImportResult(data);
       setSpreadsheetImportStage("success");
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
+      await queryClient.invalidateQueries({ queryKey: productPerformanceQueryKey });
       router.refresh();
     },
   });

@@ -57,11 +57,21 @@ function makeWorkbookBuffer(rows: unknown[][]) {
   return Buffer.from(write(workbook, { bookType: "xlsx", type: "buffer" }));
 }
 
+function createSyncServiceMock() {
+  return {
+    rematerializeProviderMetrics: vi.fn().mockResolvedValue(undefined),
+  } as never;
+}
+
 function createPersistenceDb(connection: unknown) {
+  const orderValues: Record<string, unknown>[] = [];
   const orderInsert = {
     onConflictDoUpdate: vi.fn().mockReturnThis(),
     returning: vi.fn().mockResolvedValue([{ id: "order-db-id" }]),
-    values: vi.fn().mockReturnThis(),
+    values: vi.fn((input: Record<string, unknown>) => {
+      orderValues.push(input);
+      return orderInsert;
+    }),
   };
   const productInsert = {
     onConflictDoUpdate: vi.fn().mockReturnThis(),
@@ -96,6 +106,7 @@ function createPersistenceDb(connection: unknown) {
         callback(tx),
       ),
     },
+    orderValues,
   };
 }
 
@@ -149,6 +160,102 @@ describe("Mercado Livre spreadsheet order import", () => {
     expect(result.orders).toHaveLength(607);
     expect(new Set(result.orders.map((order) => order.status))).toEqual(
       new Set(statuses),
+    );
+  });
+
+  it("classifies physical returns without classifying refund-only statuses", () => {
+    const result = parseMercadoLivreSpreadsheet(
+      makeWorkbookBuffer([
+        [
+          "return-1",
+          "Devolução finalizada",
+          "18 de julho de 2026 13:24",
+          "R$ 100,00",
+          "Produto devolvido",
+          "SKU-RETURN",
+          "R$ 50,00",
+          2,
+          "R$ -10,00",
+          "",
+          "",
+          "",
+        ],
+        [
+          "refund-1",
+          "Mediação finalizada com reembolso",
+          "18 de julho de 2026 13:24",
+          "R$ 100,00",
+          "Produto reembolsado",
+          "SKU-REFUND",
+          "R$ 50,00",
+          2,
+          "R$ -10,00",
+          "",
+          "",
+          "",
+        ],
+        [
+          "package-return",
+          "Pacote de 2 produtos",
+          "18 de julho de 2026 13:24",
+          "R$ 100,00",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "package-return-child-1",
+          "Devolução finalizada",
+          "18 de julho de 2026 13:24",
+          "",
+          "Produto azul",
+          "SKU-PACKAGE-1",
+          "R$ 50,00",
+          1,
+          "",
+          "",
+          "",
+          "",
+        ],
+        [
+          "package-return-child-2",
+          "Entregue",
+          "18 de julho de 2026 13:24",
+          "",
+          "Produto verde",
+          "SKU-PACKAGE-2",
+          "R$ 50,00",
+          1,
+          "",
+          "",
+          "",
+          "",
+        ],
+      ]),
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.orders).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          isPhysicalReturn: true,
+          saleId: "return-1",
+        }),
+        expect.objectContaining({
+          isPhysicalReturn: false,
+          saleId: "refund-1",
+        }),
+        expect.objectContaining({
+          isPhysicalReturn: true,
+          packageInfo: expect.objectContaining({ declaredItemCount: 2 }),
+          saleId: "package-return",
+        }),
+      ]),
     );
   });
 
@@ -423,7 +530,11 @@ describe("Mercado Livre spreadsheet order import", () => {
         callback(tx),
       ),
     };
-    const service = new OrderSpreadsheetImportService(db as never, {} as never);
+    const service = new OrderSpreadsheetImportService(
+      db as never,
+      {} as never,
+      createSyncServiceMock(),
+    );
 
     const input = {
       buffer: makeWorkbookBuffer([
@@ -487,6 +598,52 @@ describe("Mercado Livre spreadsheet order import", () => {
       declaredItemCount: 2,
       kind: "mercadolivre_package",
       parentSaleId: "package-parent",
+    });
+  });
+
+  it("persists return quantities by SKU and rematerializes performance", async () => {
+    const { db, orderValues } = createPersistenceDb(null);
+    const syncService = createSyncServiceMock() as {
+      rematerializeProviderMetrics: ReturnType<typeof vi.fn>;
+    };
+    const service = new OrderSpreadsheetImportService(
+      db as never,
+      {} as never,
+      syncService as never,
+    );
+
+    const result = await service.importMercadoLivreOrders({
+      buffer: makeWorkbookBuffer([
+        [
+          "return-quantity-1",
+          "Devolução finalizada",
+          "18 de julho de 2026 13:24",
+          "R$ 100,00",
+          "Produto devolvido",
+          "SKU-RETURN",
+          "R$ 50,00",
+          2,
+          "",
+          "",
+          "",
+          "",
+        ],
+      ]),
+      companyId: "company-id",
+      organizationId: "organization-id",
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(orderValues[0]?.metadata).toEqual(
+      expect.objectContaining({
+        returnQuantityBySku: { "SKU-RETURN": 2 },
+      }),
+    );
+    expect(syncService.rematerializeProviderMetrics).toHaveBeenCalledWith({
+      companyId: "company-id",
+      organizationId: "organization-id",
+      providerSlug: "mercadolivre",
+      userId: null,
     });
   });
 
@@ -589,7 +746,11 @@ describe("Mercado Livre spreadsheet order import", () => {
         callback(tx),
       ),
     };
-    const service = new OrderSpreadsheetImportService(db as never, {} as never);
+    const service = new OrderSpreadsheetImportService(
+      db as never,
+      {} as never,
+      createSyncServiceMock(),
+    );
     const fetchMock = vi.fn().mockImplementation((request: unknown) => {
       const url = new URL(String(request));
 
@@ -738,6 +899,7 @@ describe("Mercado Livre spreadsheet order import", () => {
       const service = new OrderSpreadsheetImportService(
         db as never,
         {} as never,
+        createSyncServiceMock(),
       );
 
       const result = await service.importMercadoLivreOrders(
@@ -760,7 +922,11 @@ describe("Mercado Livre spreadsheet order import", () => {
       status: "connected",
       tokenExpiresAt: new Date("2020-01-01T00:00:00.000Z"),
     });
-    const service = new OrderSpreadsheetImportService(db as never, {} as never);
+    const service = new OrderSpreadsheetImportService(
+      db as never,
+      {} as never,
+      createSyncServiceMock(),
+    );
     vi.stubGlobal(
       "fetch",
       vi.fn().mockRejectedValue(new Error("refresh failed")),

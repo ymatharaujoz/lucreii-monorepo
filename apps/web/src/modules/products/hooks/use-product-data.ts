@@ -5,12 +5,7 @@ import { useMemo, useState, useCallback } from "react";
 import type { ProductAnalyticsSnapshot } from "@lucreii/types";
 import { productAnalyticsSnapshotApiResponseSchema } from "@lucreii/validation";
 import { ApiClientError, apiClient } from "@/lib/api/client";
-import {
-  clampReferenceMonth,
-  formatReferenceMonthPtBr,
-  getSaoPauloCurrentReferenceMonth,
-  mergeDescendingReferenceMonthChoices,
-} from "@/lib/reference-month";
+import { useReferenceMonth } from "@/lib/reference-month-context";
 import type { ProductCatalogData, PaginationState } from "../types/products";
 import {
   buildCatalogStats,
@@ -56,23 +51,12 @@ export async function fetchProductCatalog(input?: { referenceMonth?: string }): 
 }
 
 const DEFAULT_PAGE_SIZE = 10;
-const REFERENCE_MONTH_HISTORY = 6;
-
 export function useProductData() {
   const queryClient = useQueryClient();
   const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [referenceMonth, setReferenceMonthState] = useState(() => getSaoPauloCurrentReferenceMonth());
-
-  const setReferenceMonth = useCallback((next: string) => {
-    const effective = clampReferenceMonth(next);
-    if (!effective) {
-      return;
-    }
-    setReferenceMonthState(effective);
-    setCurrentPage(1);
-  }, []);
+  const { referenceMonth } = useReferenceMonth();
 
   const { data, isLoading, error, refetch } = useQuery({
     queryFn: () =>
@@ -146,15 +130,9 @@ export function useProductData() {
   const combinedError = error;
   const isUnauthorized = combinedError instanceof ApiClientError && combinedError.status === 401;
 
-  const referenceMonthSelectOptions = useMemo(() => {
-    const cap = getSaoPauloCurrentReferenceMonth();
-    return mergeDescendingReferenceMonthChoices(referenceMonth, cap, REFERENCE_MONTH_HISTORY);
-  }, [referenceMonth]);
-
   return {
     data,
     referenceMonth,
-    referenceMonthSelectOptions,
     stats,
     insights,
     rows: sortedRows,
@@ -167,7 +145,6 @@ export function useProductData() {
     isLoading,
     error: combinedError,
     isUnauthorized,
-    setReferenceMonth,
     refresh,
     refetch,
     goToPage,

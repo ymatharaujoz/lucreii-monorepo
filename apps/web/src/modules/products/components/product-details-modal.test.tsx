@@ -131,6 +131,8 @@ describe("ProductDetailsModal", () => {
     const row = buildRow({
       minimumRoas: 4.77,
       roiRatio: 0.41,
+      returns: 2,
+      sales: 10,
       unitProfit: 6.76,
     });
     const view = renderWithClient(
@@ -149,9 +151,9 @@ describe("ProductDetailsModal", () => {
     expect(text).toContain("Lucratividade");
     expect(text).not.toContain("Lucro Unitário");
     expect(text).toContain("ROI");
-    expect(text).toContain("ROAS Mínimo");
-    expect(text).toContain("29.39%");
-    expect(text).toContain("21.0%");
+    expect(text).toContain("Taxa de Devoluções");
+    expect(text).toContain("20,00%");
+    expect(text).not.toContain("ROAS Mínimo");
     expect(text).not.toContain("4,77x");
 
     view.unmount();
@@ -177,7 +179,7 @@ describe("ProductDetailsModal", () => {
     view.unmount();
   });
 
-  it("renders em dash placeholders for null profitability values", () => {
+  it("renders zero return rate when there are no sales", () => {
     const row = buildRow({
       minimumRoas: null,
       roiRatio: null,
@@ -197,7 +199,9 @@ describe("ProductDetailsModal", () => {
     const text = normalizedTextContent();
 
     expect(text).toContain("ROI");
-    expect(text).toContain("ROAS Mínimo");
+    expect(text).toContain("Taxa de Devoluções");
+    expect(text).toContain("0,00%");
+    expect(text).not.toContain("ROAS Mínimo");
     expect(text).toContain("—");
 
     view.unmount();

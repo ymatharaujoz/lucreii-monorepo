@@ -5,18 +5,23 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
-  BarChart3,
   Package,
   Percent,
   ShoppingCart,
   TrendingUp,
+  Undo2,
   Wallet,
 } from "lucide-react";
 import { Badge, Modal, cn } from "@lucreii/ui";
 import { formatReferenceMonthPtBr } from "../hooks/use-product-data";
 import { computeProductRoi, computeRowNetRevenue } from "../calculations/product-insights";
 import type { ProductTableRow } from "../types/products";
-import { formatMoney, formatNumber, formatPercent } from "../utils/formatters";
+import {
+  formatMoney,
+  formatNumber,
+  formatPercent,
+  formatPercentPtBr,
+} from "../utils/formatters";
 
 type ProductDetailsModalProps = {
   onClose: () => void;
@@ -404,14 +409,13 @@ export function ProductDetailsModal({
                       }
                     />
                     <MetricCard
-                      label="ROAS Mínimo"
-                      value={formatPercent(
-                        row.minimumRoas !== null && row.minimumRoas > 0
-                          ? 100 / row.minimumRoas
-                          : null,
+                      label="Taxa de Devoluções"
+                      value={formatPercentPtBr(
+                        row.sales > 0 ? (row.returns / row.sales) * 100 : 0,
+                        { digits: 2 },
                       )}
-                      icon={<BarChart3 className="h-3 w-3" />}
-                      variant="highlight"
+                      icon={<Undo2 className="h-3 w-3" />}
+                      variant={row.returns > 0 ? "negative" : "default"}
                     />
                   </div>
                 </SectionCard>

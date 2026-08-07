@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   areOrderRowsFinanciallyEligible,
+  hasOrderReturnMarker,
   isFinanciallyEligibleOrder,
+  isPerformanceEligibleOrder,
   normalizeOrderStatus,
 } from "./order-financial-eligibility";
 
@@ -76,6 +78,26 @@ describe("order financial eligibility", () => {
         buildOrder({ items: [{ metadata: { returnQuantity: 1 } }] }),
       ),
     ).toBe(false);
+  });
+
+  it("keeps physical returns in performance while excluding them from finance", () => {
+    const order = buildOrder({
+      metadata: { sourceStatus: "Devolução finalizada" },
+      status: "paid",
+    });
+
+    expect(isPerformanceEligibleOrder(order)).toBe(true);
+    expect(isFinanciallyEligibleOrder(order)).toBe(false);
+  });
+
+  it("does not classify an isolated refund as a physical return", () => {
+    const order = buildOrder({
+      metadata: { sourceStatus: "Mediação finalizada com reembolso" },
+      status: "partially_refunded",
+    });
+
+    expect(isPerformanceEligibleOrder(order)).toBe(true);
+    expect(hasOrderReturnMarker(order)).toBe(false);
   });
 
   it("requires every row in a grouped logical order to be eligible", () => {

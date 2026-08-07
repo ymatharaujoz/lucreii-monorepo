@@ -21,12 +21,14 @@ import { createHash } from "node:crypto";
 import * as XLSX from "xlsx";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
+import { SyncService } from "@/modules/sync/sync.service";
 import { MercadoLivreProvider } from "./providers/mercadolivre.provider";
 
 type SpreadsheetCell = string | number | boolean | Date | null | undefined;
 
 type ParsedItem = {
   externalProductId: string;
+  isPhysicalReturn: boolean;
   quantity: number;
   sku: string | null;
   title: string;
@@ -37,6 +39,7 @@ type ParsedOrder = {
   commissionAmount: number;
   discountAmount: number;
   flex: boolean;
+  isPhysicalReturn: boolean;
   items: ParsedItem[];
   orderedAt: Date;
   packageInfo?: {
@@ -264,6 +267,30 @@ function normalizeImportedStatus(status: string) {
   return "confirmed";
 }
 
+function isPhysicalReturnStatus(status: string) {
+  return status
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .includes("devol");
+}
+
+function buildReturnQuantityBySku(items: ParsedItem[]) {
+  return items.reduce<Record<string, number>>((quantities, item) => {
+    if (!item.isPhysicalReturn) {
+      return quantities;
+    }
+
+    const sku = item.sku?.trim();
+    if (!sku) {
+      return quantities;
+    }
+
+    quantities[sku] = (quantities[sku] ?? 0) + item.quantity;
+    return quantities;
+  }, {});
+}
+
 function findColumn(headers: string[], key: HeaderKey) {
   const aliases = HEADER_ALIASES[key].map(normalizeHeader);
   const exact = headers.findIndex((header) => aliases.includes(header));
@@ -319,6 +346,7 @@ function readPackageItemCount(status: string) {
 function parsePackageItem(
   record: SpreadsheetRecord,
   rowError: (message: string) => void,
+  isPhysicalReturn: boolean,
 ) {
   const saleId = String(record.saleId ?? "").trim();
   const title = String(record.title ?? "").trim();
@@ -340,6 +368,7 @@ function parsePackageItem(
   const sku = hasCellValue(record.sku) ? String(record.sku).trim() : null;
   return {
     externalProductId: externalProductId(sku, title),
+    isPhysicalReturn,
     quantity,
     sku,
     title,
@@ -408,6 +437,8 @@ function parseRows(buffer: Buffer) {
 
       const items: ParsedItem[] = [];
       const childSaleIds: string[] = [];
+      let physicalReturnStatus = isPhysicalReturnStatus(status) ? status : null;
+      const packageHasPhysicalReturn = physicalReturnStatus !== null;
       let childIndex = index + 1;
       let consumedChildren = 0;
 
@@ -428,13 +459,22 @@ function parseRows(buffer: Buffer) {
         totalRows += 1;
         const childSourceRow = childIndex + 1;
         const childSaleId = String(childRecord.saleId ?? "").trim();
+        const childStatus = String(childRecord.status ?? "").trim();
         const childRowError = (message: string) =>
           errors.push({
             message,
             row: childSourceRow,
             saleId: childSaleId || null,
           });
-        const item = parsePackageItem(childRecord, childRowError);
+        const item = parsePackageItem(
+          childRecord,
+          childRowError,
+          packageHasPhysicalReturn || isPhysicalReturnStatus(childStatus),
+        );
+
+        if (!physicalReturnStatus && isPhysicalReturnStatus(childStatus)) {
+          physicalReturnStatus = childStatus;
+        }
 
         if (childSaleId) {
           childSaleIds.push(childSaleId);
@@ -471,6 +511,7 @@ function parseRows(buffer: Buffer) {
         commissionAmount: Math.abs(parseMoney(record.commission) ?? 0),
         discountAmount,
         flex: discountFilled && !shippingFilled && !revenueShippingFilled,
+        isPhysicalReturn: physicalReturnStatus !== null,
         items,
         orderedAt,
         packageInfo: {
@@ -484,7 +525,7 @@ function parseRows(buffer: Buffer) {
             ? shippingTariff - revenueShipping
             : null,
         sourceRow,
-        status,
+        status: physicalReturnStatus ?? status,
         totalAmount,
       });
       continue;
@@ -526,8 +567,10 @@ function parseRows(buffer: Buffer) {
         : null;
     const flex = discountFilled && !shippingFilled && !revenueShippingFilled;
     const sku = hasCellValue(record.sku) ? String(record.sku).trim() : null;
+    const isPhysicalReturn = isPhysicalReturnStatus(status);
     const item: ParsedItem = {
       externalProductId: externalProductId(sku, title),
+      isPhysicalReturn,
       quantity,
       sku,
       title,
@@ -537,6 +580,10 @@ function parseRows(buffer: Buffer) {
 
     if (existing) {
       existing.items.push(item);
+      if (isPhysicalReturn) {
+        existing.isPhysicalReturn = true;
+        existing.status = status;
+      }
       continue;
     }
 
@@ -544,6 +591,7 @@ function parseRows(buffer: Buffer) {
       commissionAmount: Math.abs(parseMoney(record.commission) ?? 0),
       discountAmount,
       flex,
+      isPhysicalReturn,
       items: [item],
       orderedAt,
       productRevenueAmount,
@@ -570,6 +618,7 @@ export class OrderSpreadsheetImportService {
   constructor(
     @Inject(DATABASE_CLIENT) private readonly db: DatabaseClient,
     @Inject(API_RUNTIME_ENV) env: ApiRuntimeEnv,
+    @Inject(SyncService) private readonly syncService: SyncService,
   ) {
     this.mercadoLivreProvider = new MercadoLivreProvider(env);
   }
@@ -660,6 +709,15 @@ export class OrderSpreadsheetImportService {
       });
       if (result === "created") created += 1;
       else updated += 1;
+    }
+
+    if (parsed.orders.length > 0) {
+      await this.syncService.rematerializeProviderMetrics({
+        companyId: input.companyId,
+        organizationId: input.organizationId,
+        providerSlug: "mercadolivre",
+        userId: null,
+      });
     }
 
     return {
@@ -778,6 +836,11 @@ export class OrderSpreadsheetImportService {
         spreadsheetImport: true,
         tags: input.order.flex ? ["ENVIO FLEX"] : [],
         pendingFinancialFields,
+        ...(input.order.isPhysicalReturn
+          ? {
+              returnQuantityBySku: buildReturnQuantityBySku(input.order.items),
+            }
+          : {}),
         ...(input.mercadoLivreOrderIds && input.mercadoLivreOrderIds.length > 0
           ? { mercadoLivreOrderIds: input.mercadoLivreOrderIds }
           : {}),

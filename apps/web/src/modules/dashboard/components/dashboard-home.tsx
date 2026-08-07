@@ -1,18 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { RefreshCw, AlertCircle, ChevronDown, Calendar } from "lucide-react";
 import type { Company, IntegrationProviderSlug } from "@lucreii/types";
 import { Card, EmptyState, Skeleton, Button, Dropdown } from "@lucreii/ui";
 import { ApiClientError } from "@/lib/api/client";
-import {
-  clampReferenceMonth,
-  formatReferenceMonthPtBr,
-  getSaoPauloCurrentReferenceMonth,
-  mergeDescendingReferenceMonthChoices,
-} from "@/lib/reference-month";
+import { formatReferenceMonthPtBr } from "@/lib/reference-month";
+import { useReferenceMonth } from "@/lib/reference-month-context";
 import { containerVariants, fadeInVariants } from "@/lib/animations";
 import { SkeletonChart, SkeletonGrid } from "@/components/ui-premium/skeleton-grid";
 import { DashboardHeader } from "./dashboard-header";
@@ -28,8 +24,6 @@ interface DashboardHomeProps {
   activeCompany: Company | null;
   companyName: string;
 }
-
-const REFERENCE_MONTH_HISTORY = 6;
 
 function ReferenceMonthToolbar({
   onReferenceMonthChange,
@@ -121,16 +115,7 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
 
 export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps) {
   const [providerFilter, setProviderFilter] = useState<IntegrationProviderSlug | null>(null);
-  const [referenceMonth, setReferenceMonthState] = useState(() => getSaoPauloCurrentReferenceMonth());
-  const referenceMonthOptions = useMemo(
-    () =>
-      mergeDescendingReferenceMonthChoices(
-        referenceMonth,
-        getSaoPauloCurrentReferenceMonth(),
-        REFERENCE_MONTH_HISTORY,
-      ),
-    [referenceMonth],
-  );
+  const { referenceMonth, referenceMonthOptions, setReferenceMonth } = useReferenceMonth();
   const {
     summaryQuery,
     chartsQuery,
@@ -143,15 +128,6 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
     refetchAll,
   } = useDashboardData(providerFilter, referenceMonth);
   const { syncStatusByProvider } = useDashboardConnectionStatuses();
-
-  const setReferenceMonth = (next: string) => {
-    const effective = clampReferenceMonth(next);
-    if (!effective) {
-      return;
-    }
-
-    setReferenceMonthState(effective);
-  };
 
   if (isLoading) {
     return <LoadingDashboard />;
