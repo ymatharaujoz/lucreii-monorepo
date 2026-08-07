@@ -401,8 +401,9 @@ export function ProductDetailsModal({
                         <>
                           ROI
                           <Tooltip
-                            className="max-w-64 whitespace-normal text-center"
+                            align="start"
                             content="CMV (Custo da Mercadoria Vendida): Valor investido na compra das unidades vendidas."
+                            position="top"
                           >
                             <button
                               aria-label="Explicação sobre CMV"

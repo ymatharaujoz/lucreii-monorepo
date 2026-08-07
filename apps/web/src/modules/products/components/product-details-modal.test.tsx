@@ -183,7 +183,10 @@ describe("ProductDetailsModal", () => {
       helpButton.focus();
     });
 
-    expect(normalizedTextContent()).toContain(
+    const tooltip = document.querySelector('[role="tooltip"]');
+
+    expect(tooltip?.className).toContain("whitespace-normal");
+    expect(tooltip?.textContent).toBe(
       "CMV (Custo da Mercadoria Vendida): Valor investido na compra das unidades vendidas.",
     );
 
