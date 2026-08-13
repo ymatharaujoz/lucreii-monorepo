@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
+  Info,
   Package,
   Percent,
   ShoppingCart,
@@ -403,14 +404,14 @@ export function ProductDetailsModal({
                           <Tooltip
                             align="start"
                             content="CMV (Custo da Mercadoria Vendida): Valor investido na compra das unidades vendidas."
-                            position="top"
+                            position="bottom"
                           >
                             <button
                               aria-label="Explicação sobre CMV"
-                              className="-my-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-[13px] leading-none text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                              className="-my-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
                               type="button"
                             >
-                              <span aria-hidden="true">ⓘ</span>
+                              <Info aria-hidden="true" className="h-3.5 w-3.5 stroke-[1.75]" />
                             </button>
                           </Tooltip>
                         </>
