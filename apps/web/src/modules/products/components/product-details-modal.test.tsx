@@ -187,6 +187,8 @@ describe("ProductDetailsModal", () => {
 
     expect(tooltip?.className).toContain("whitespace-normal");
     expect(tooltip?.className).toContain("top-full");
+    expect(tooltip?.getAttribute("style")).toContain("--tooltip-background");
+    expect(tooltip?.getAttribute("style")).toContain("opacity: 1");
     expect(tooltip?.textContent).toBe(
       "CMV (Custo da Mercadoria Vendida): Valor investido na compra das unidades vendidas.",
     );

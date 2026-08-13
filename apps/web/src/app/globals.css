@@ -15,6 +15,12 @@
   --surface-strong: #eef0ee;
   --surface-elevated: rgba(252, 252, 251, 0.97);
 
+  /* ─── Tooltip - Opaque contrast surface ─── */
+  --tooltip-background: #2f3733;
+  --tooltip-foreground: #f8faf9;
+  --tooltip-border: rgba(255, 255, 255, 0.1);
+  --tooltip-shadow: 0 12px 28px rgba(15, 25, 22, 0.24);
+
   /* ─── Borders ─── */
   --border: rgba(15, 25, 22, 0.09);
   --border-strong: rgba(15, 25, 22, 0.14);
@@ -152,6 +158,12 @@ body {
   --surface: rgba(22, 26, 24, 0.94);
   --surface-strong: #1a1d1c;
   --surface-elevated: rgba(28, 31, 30, 0.97);
+
+  /* ─── Tooltip - Opaque contrast surface ─── */
+  --tooltip-background: #eaf0ed;
+  --tooltip-foreground: #121713;
+  --tooltip-border: rgba(18, 23, 19, 0.12);
+  --tooltip-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
 
   /* ─── Borders ─── */
   --border: rgba(255, 255, 255, 0.08);

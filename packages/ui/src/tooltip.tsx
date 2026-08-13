@@ -38,12 +38,19 @@ export function Tooltip({
       {visible && (
         <span
           className={cn(
-            "absolute z-50 w-72 max-w-[calc(100vw-2rem)] whitespace-normal break-words rounded-md bg-neutral-700 px-3 py-2 text-left text-sm font-medium normal-case leading-5 tracking-normal text-white shadow-sm animate-fade-in",
+            "absolute z-50 w-72 max-w-[calc(100vw-2rem)] whitespace-normal break-words rounded-md px-3 py-2 text-left text-sm font-medium normal-case leading-5 tracking-normal animate-fade-in",
             position === "top" ? "bottom-full mb-2" : "top-full mt-2",
             alignmentStyles[align],
             className,
           )}
           role="tooltip"
+          style={{
+            backgroundColor: "var(--tooltip-background, #2f3733)",
+            border: "1px solid var(--tooltip-border, rgba(255, 255, 255, 0.1))",
+            boxShadow: "var(--tooltip-shadow, 0 12px 28px rgba(15, 25, 22, 0.24))",
+            color: "var(--tooltip-foreground, #f8faf9)",
+            opacity: 1,
+          }}
         >
           {content}
         </span>
