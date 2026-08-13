@@ -162,6 +162,13 @@
       "when": 1783861200000,
       "tag": "0022_mercado_livre_refund_bonus_reconciliation",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1783947600000,
+      "tag": "0023_mercado_livre_token_refresh_lease",
+      "breakpoints": true
     }
   ]
 }

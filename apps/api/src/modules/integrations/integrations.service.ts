@@ -30,6 +30,7 @@ import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
 import { ProductsService } from "@/modules/products/products.service";
 import { SyncService } from "@/modules/sync/sync.service";
+import { MercadoLivreTokenRefreshService } from "@/modules/sync/mercadolivre-token-refresh.service";
 import {
   createSignedIntegrationState,
   readSignedIntegrationState,
@@ -234,6 +235,7 @@ export class IntegrationsService {
     private readonly syncService: SyncService,
     @Inject(API_RUNTIME_ENV)
     private readonly env: ApiRuntimeEnv,
+    private readonly mercadoLivreTokenRefreshService: MercadoLivreTokenRefreshService,
   ) {
     this.providers = createIntegrationProviders(env);
   }
@@ -384,6 +386,8 @@ export class IntegrationsService {
             refreshToken: connection.refreshToken,
             status: "connected",
             tokenExpiresAt: connection.tokenExpiresAt,
+            tokenRefreshLeaseExpiresAt: null,
+            tokenRefreshLeaseId: null,
             updatedAt: new Date(),
           },
           target: [
@@ -392,6 +396,19 @@ export class IntegrationsService {
             marketplaceConnections.provider,
           ],
         });
+
+      const storedConnection =
+        await this.db.query.marketplaceConnections.findFirst({
+          where: (table) =>
+            and(
+              eq(table.organizationId, state.organizationId),
+              eq(table.companyId, state.companyId),
+              eq(table.provider, "mercadolivre"),
+            ),
+        });
+      if (storedConnection) {
+        void this.recoverMercadoLivreConnection(storedConnection);
+      }
 
       return this.buildRedirectUrl(baseRedirect, {
         provider: "mercadolivre",
@@ -662,6 +679,8 @@ export class IntegrationsService {
           refreshToken: null,
           status: "disconnected",
           tokenExpiresAt: null,
+          tokenRefreshLeaseExpiresAt: null,
+          tokenRefreshLeaseId: null,
           updatedAt: new Date(),
         })
         .where(eq(marketplaceConnections.id, existing.id))
@@ -1015,7 +1034,7 @@ export class IntegrationsService {
   }): Promise<MarketplaceCatalogImportResult> {
     await this.productsService.assertCatalogImportAllowed(context);
 
-    const connection = await this.db.query.marketplaceConnections.findFirst({
+    let connection = await this.db.query.marketplaceConnections.findFirst({
       where: (table) =>
         and(
           eq(table.organizationId, context.organizationId),
@@ -1023,6 +1042,14 @@ export class IntegrationsService {
           eq(table.provider, "mercadolivre"),
         ),
     });
+
+    if (connection) {
+      const refreshResult =
+        await this.mercadoLivreTokenRefreshService.refreshIfNeeded(connection);
+      connection = refreshResult.needsReconnect
+        ? undefined
+        : refreshResult.connection;
+    }
 
     if (
       !connection ||
@@ -1639,6 +1666,7 @@ export class IntegrationsService {
         case "callback_invalid":
         case "callback_rejected":
         case "remote_request_failed":
+        case "token_refresh_invalid":
           throw new BadRequestException(error.message);
         default:
           throw new NotFoundException(error.message);
@@ -1646,6 +1674,19 @@ export class IntegrationsService {
     }
 
     throw error;
+  }
+
+  private async recoverMercadoLivreConnection(
+    connection: MarketplaceConnection,
+  ) {
+    try {
+      await this.syncService.recoverMercadoLivreConnection(connection);
+    } catch (error) {
+      this.logger.error(
+        `Mercado Livre recovery sync failed for connection ${connection.id}.`,
+        error instanceof Error ? error.stack : undefined,
+      );
+    }
   }
 
   private toConnectionRecord(
@@ -1697,8 +1738,11 @@ export class IntegrationsService {
 
     const expired = isExpired(row.tokenExpiresAt);
     const canRefresh = Boolean(provider.refreshAccessToken && row.refreshToken);
-    const connected = row.status === "connected" && (!expired || canRefresh);
-    const needsReconnect = row.status === "connected" && expired && !canRefresh;
+    const needsReconnect =
+      row.status === "needs_reconnect" ||
+      (row.status === "connected" && expired && !canRefresh);
+    const connected =
+      row.status === "connected" && !needsReconnect && (!expired || canRefresh);
 
     return {
       connectAvailable: provider.isConfigured(),

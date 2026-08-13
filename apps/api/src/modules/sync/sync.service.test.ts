@@ -51,6 +51,14 @@ function createService(envOverrides: Record<string, unknown> = {}) {
   const syncPerformanceMaterializer = {
     materializeForSync: vi.fn(),
   } satisfies Pick<SyncPerformanceMaterializerService, "materializeForSync">;
+  const mercadoLivreTokenRefreshService = {
+    refreshIfNeeded: vi.fn(async (connection) => ({
+      connection,
+      needsReconnect: false,
+      refreshed: false,
+      wasExpired: false,
+    })),
+  };
   const service = new SyncService(
     db as never,
     {
@@ -77,11 +85,13 @@ function createService(envOverrides: Record<string, unknown> = {}) {
     } as never,
     financeService as never,
     syncPerformanceMaterializer as never,
+    mercadoLivreTokenRefreshService as never,
   );
 
   return {
     db,
     financeService,
+    mercadoLivreTokenRefreshService,
     syncPerformanceMaterializer,
     service,
   };
@@ -805,6 +815,62 @@ describe("SyncService", () => {
       expect.objectContaining({
         reason: "missing_user_id",
         status: "ignored",
+      }),
+    );
+  });
+
+  it("refreshes an expired Mercado Livre connection before recovering missed orders", async () => {
+    const { db, mercadoLivreTokenRefreshService, service } = createService();
+    const expiredConnection = {
+      accessToken: "access-old",
+      companyId: "company_123",
+      createdAt: new Date("2026-06-01T10:00:00.000Z"),
+      externalAccountId: "seller_123",
+      id: "conn_123",
+      lastSyncedAt: null,
+      metadata: {},
+      organizationId: "org_123",
+      provider: "mercadolivre",
+      refreshToken: "refresh-old",
+      status: "connected",
+      tokenExpiresAt: new Date("2026-06-12T11:00:00.000Z"),
+      tokenRefreshLeaseExpiresAt: null,
+      tokenRefreshLeaseId: null,
+      updatedAt: new Date("2026-06-01T10:00:00.000Z"),
+    };
+    const refreshedConnection = {
+      ...expiredConnection,
+      accessToken: "access-new",
+      refreshToken: "refresh-new",
+      tokenExpiresAt: new Date("2026-06-12T18:00:00.000Z"),
+    };
+    db.query.marketplaceConnections.findFirst.mockResolvedValueOnce(
+      expiredConnection,
+    );
+    db.query.syncRuns.findFirst.mockResolvedValueOnce(null);
+    mercadoLivreTokenRefreshService.refreshIfNeeded.mockResolvedValue({
+      connection: refreshedConnection,
+      needsReconnect: false,
+      refreshed: true,
+      wasExpired: true,
+    });
+    const executeSync = vi.fn().mockResolvedValue(undefined);
+    (service as unknown as { executeSync: typeof executeSync }).executeSync =
+      executeSync;
+
+    await expect(
+      service.handleMercadoLivreNotification({
+        resource: "/orders/123",
+        topic: "orders_v2",
+        userId: "seller_123",
+      }),
+    ).resolves.toEqual(expect.objectContaining({ status: "started" }));
+
+    expect(executeSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connection: refreshedConnection,
+        notification: null,
+        triggerMetadata: expect.objectContaining({ recovery: "token_expired" }),
       }),
     );
   });

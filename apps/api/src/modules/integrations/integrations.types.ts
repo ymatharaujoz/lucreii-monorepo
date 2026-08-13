@@ -156,6 +156,7 @@ export class IntegrationProviderError extends Error {
       | "callback_rejected"
       | "provider_not_configured"
       | "remote_request_failed"
+      | "token_refresh_invalid"
       | "unsupported_provider",
   ) {
     super(message);

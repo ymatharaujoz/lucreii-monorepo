@@ -581,6 +581,10 @@ export const marketplaceConnections = pgTable(
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     tokenExpiresAt: timestamp("token_expires_at", { withTimezone: true }),
+    tokenRefreshLeaseId: varchar("token_refresh_lease_id", { length: 64 }),
+    tokenRefreshLeaseExpiresAt: timestamp("token_refresh_lease_expires_at", {
+      withTimezone: true,
+    }),
     metadata: jsonb("metadata")
       .$type<Record<string, unknown>>()
       .default(sql`'{}'::jsonb`)
@@ -598,6 +602,11 @@ export const marketplaceConnections = pgTable(
       table.organizationId,
       table.companyId,
       table.provider,
+    ),
+    index("marketplace_connections_provider_token_expiry_idx").on(
+      table.provider,
+      table.status,
+      table.tokenExpiresAt,
     ),
     uniqueIndex("marketplace_connections_org_provider_key").on(
       table.organizationId,

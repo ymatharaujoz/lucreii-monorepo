@@ -63,7 +63,16 @@ function createService() {
   };
   const syncService = {
     handleMercadoLivreNotification: vi.fn(),
+    recoverMercadoLivreConnection: vi.fn(),
     rematerializeProviderMetrics: vi.fn(),
+  };
+  const mercadoLivreTokenRefreshService = {
+    refreshIfNeeded: vi.fn(async (connection) => ({
+      connection,
+      needsReconnect: false,
+      refreshed: false,
+      wasExpired: false,
+    })),
   };
 
   return {
@@ -76,6 +85,7 @@ function createService() {
       productsService as never,
       syncService as never,
       env as never,
+      mercadoLivreTokenRefreshService as never,
     ),
   };
 }
@@ -561,6 +571,65 @@ describe("IntegrationsService", () => {
         ),
         provider: "mercadolivre",
       }),
+    );
+  });
+
+  it("recovers pending Mercado Livre sales after a successful OAuth callback", async () => {
+    const { db, env, service, syncService } = createService();
+    const storedConnection = {
+      accessToken: "access-token",
+      companyId: "company_1",
+      createdAt: new Date("2026-08-13T10:00:00.000Z"),
+      externalAccountId: "seller-1",
+      id: "connection-1",
+      lastSyncedAt: null,
+      metadata: {},
+      organizationId: "org_1",
+      provider: "mercadolivre",
+      refreshToken: "refresh-token",
+      status: "connected",
+      tokenExpiresAt: new Date("2026-08-13T16:00:00.000Z"),
+      tokenRefreshLeaseExpiresAt: null,
+      tokenRefreshLeaseId: null,
+      updatedAt: new Date("2026-08-13T10:00:00.000Z"),
+    };
+    db.insert.mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+    db.query.marketplaceConnections.findFirst.mockResolvedValue(
+      storedConnection,
+    );
+    (service as unknown as { providers: unknown[] }).providers = [
+      {
+        exchangeCode: vi.fn().mockResolvedValue({
+          accessToken: "access-token",
+          connectedAccountId: "seller-1",
+          connectedAccountLabel: "SELLER",
+          metadata: {},
+          refreshToken: "refresh-token",
+          tokenExpiresAt: new Date("2026-08-13T16:00:00.000Z"),
+        }),
+        provider: "mercadolivre",
+      },
+    ];
+    const state = createSignedIntegrationState(
+      {
+        companyId: "company_1",
+        organizationId: "org_1",
+        provider: "mercadolivre",
+      },
+      env.BETTER_AUTH_SECRET,
+    );
+
+    await service.handleMercadoLivreCallback({
+      code: "auth-code",
+      state,
+    });
+
+    expect(syncService.recoverMercadoLivreConnection).toHaveBeenCalledWith(
+      storedConnection,
     );
   });
 

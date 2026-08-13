@@ -46,6 +46,7 @@ import {
   resolveSyncWindowStateAtNextOpenHour,
 } from "./sync-window";
 import { SyncPerformanceMaterializerService } from "./sync-performance-materializer.service";
+import { MercadoLivreTokenRefreshService } from "./mercadolivre-token-refresh.service";
 
 function toIsoString(value: Date | string | null | undefined) {
   if (!value) {
@@ -362,7 +363,7 @@ type MercadoLivreNotificationResult = {
     | "provider_unavailable"
     | "provider_unsupported"
     | "started"
-    | "token_expired";
+    | "needs_reconnect";
   status: "ignored" | "rerun_marked" | "started";
   summary: SyncTriggerSummary;
 };
@@ -395,6 +396,7 @@ export class SyncService {
     private readonly financeService: FinanceService,
     @Inject(SyncPerformanceMaterializerService)
     private readonly syncPerformanceMaterializer: SyncPerformanceMaterializerService,
+    private readonly mercadoLivreTokenRefreshService: MercadoLivreTokenRefreshService,
   ) {
     this.providers = createIntegrationProviders(this.env);
   }
@@ -449,6 +451,38 @@ export class SyncService {
       input.organizationId,
       input.companyId,
     );
+  }
+
+  async recoverMercadoLivreConnection(connection: MarketplaceConnection) {
+    if (
+      connection.provider !== "mercadolivre" ||
+      connection.status !== "connected" ||
+      !connection.accessToken
+    ) {
+      return;
+    }
+
+    const activeRun = await this.findLatestRun(
+      connection.organizationId,
+      connection.companyId,
+      "mercadolivre",
+      "processing",
+    );
+    if (activeRun) {
+      return;
+    }
+
+    await this.executeSync({
+      connection,
+      companyId: connection.companyId,
+      manualRange: null,
+      notification: null,
+      organizationId: connection.organizationId,
+      providerSlug: "mercadolivre",
+      triggerMetadata: { recovery: "token_refresh" },
+      triggerOrigin: "automatic",
+      userId: null,
+    });
   }
 
   async runSync(
@@ -552,6 +586,15 @@ export class SyncService {
       summary.userId,
     );
 
+    if (connection?.status === "needs_reconnect") {
+      return {
+        accepted: true,
+        reason: "needs_reconnect",
+        status: "ignored",
+        summary,
+      };
+    }
+
     if (
       !connection ||
       connection.status !== "connected" ||
@@ -565,24 +608,27 @@ export class SyncService {
       };
     }
 
-    if (isExpired(connection.tokenExpiresAt)) {
+    const refreshResult =
+      await this.mercadoLivreTokenRefreshService.refreshIfNeeded(connection);
+    if (refreshResult.needsReconnect || !refreshResult.connection.accessToken) {
       return {
         accepted: true,
-        reason: "token_expired",
+        reason: "needs_reconnect",
         status: "ignored",
         summary,
       };
     }
+    const refreshedConnection = refreshResult.connection;
 
     const activeRun = await this.findLatestRun(
-      connection.organizationId,
-      connection.companyId,
+      refreshedConnection.organizationId,
+      refreshedConnection.companyId,
       "mercadolivre",
       "processing",
     );
 
     if (activeRun) {
-      await this.markAutomaticRerunPending(connection.id, summary);
+      await this.markAutomaticRerunPending(refreshedConnection.id, summary);
 
       return {
         accepted: true,
@@ -593,14 +639,17 @@ export class SyncService {
     }
 
     await this.executeSync({
-      connection,
-      companyId: connection.companyId,
+      connection: refreshedConnection,
+      companyId: refreshedConnection.companyId,
       manualRange: null,
-      notification: this.toIntegrationNotification(summary),
-      organizationId: connection.organizationId,
+      notification: refreshResult.wasExpired
+        ? null
+        : this.toIntegrationNotification(summary),
+      organizationId: refreshedConnection.organizationId,
       providerSlug: "mercadolivre",
       triggerMetadata: {
         notification: summary,
+        recovery: refreshResult.wasExpired ? "token_expired" : null,
       },
       triggerOrigin: "automatic",
       userId: null,
@@ -1271,6 +1320,29 @@ export class SyncService {
       toIsoString(lastCompletedRun?.finishedAt) ??
       toIsoString(connection?.lastSyncedAt);
 
+    if (connection?.status === "needs_reconnect") {
+      return {
+        canRun: false,
+        currentWindowKey: isRealtimeProvider
+          ? null
+          : windowState.currentWindowKey,
+        currentWindowLabel: isRealtimeProvider
+          ? null
+          : windowState.currentWindowLabel,
+        currentWindowSlot: isRealtimeProvider
+          ? null
+          : windowState.currentWindowSlot,
+        lastSuccessfulSyncAt,
+        message:
+          "Marketplace authorization needs to be renewed before syncing again.",
+        nextAvailableAt: isRealtimeProvider
+          ? null
+          : windowState.nextAvailableAt,
+        provider: provider.provider,
+        reason: "provider_needs_reconnect",
+      };
+    }
+
     if (!provider.isConfigured()) {
       return {
         canRun: false,
@@ -1825,6 +1897,22 @@ export class SyncService {
     provider: IntegrationProvider,
     connection: MarketplaceConnection,
   ) {
+    if (provider.provider === "mercadolivre") {
+      const refreshResult =
+        await this.mercadoLivreTokenRefreshService.refreshIfNeeded(connection);
+      if (
+        refreshResult.needsReconnect ||
+        !refreshResult.connection.accessToken
+      ) {
+        throw new IntegrationProviderError(
+          "Mercado Livre authorization must be renewed before syncing.",
+          "token_refresh_invalid",
+        );
+      }
+
+      return refreshResult.connection;
+    }
+
     const expiresAt = connection.tokenExpiresAt
       ? new Date(connection.tokenExpiresAt).getTime()
       : Number.POSITIVE_INFINITY;
@@ -1996,6 +2084,7 @@ export class SyncService {
         case "callback_invalid":
         case "callback_rejected":
         case "remote_request_failed":
+        case "token_refresh_invalid":
           throw new BadRequestException(error.message);
         default:
           throw new InternalServerErrorException(error.message);

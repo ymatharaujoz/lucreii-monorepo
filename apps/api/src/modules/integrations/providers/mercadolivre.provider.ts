@@ -106,6 +106,7 @@ type MercadoLivreMultiGetResponse = Array<{
 
 type MercadoLivreTokenResponse = {
   access_token?: string;
+  error?: string;
   expires_in?: number;
   refresh_token?: string;
   scope?: string;
@@ -1666,7 +1667,9 @@ export class MercadoLivreProvider implements IntegrationProvider {
     if (
       !tokenResponse.ok ||
       typeof tokenPayload === "string" ||
-      !tokenPayload.access_token
+      tokenPayload === null ||
+      !tokenPayload.access_token ||
+      !tokenPayload.refresh_token
     ) {
       throw new IntegrationProviderError(
         `Mercado Livre token exchange failed.${
@@ -1727,7 +1730,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
         siteId: profilePayload.site_id ?? null,
         tokenType: tokenPayload.token_type ?? null,
       },
-      refreshToken: tokenPayload.refresh_token ?? null,
+      refreshToken: tokenPayload.refresh_token,
       tokenExpiresAt:
         typeof tokenPayload.expires_in === "number"
           ? new Date(Date.now() + tokenPayload.expires_in * 1000)
@@ -1745,7 +1748,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
     if (!connection.refreshToken) {
       throw new IntegrationProviderError(
         "Mercado Livre connection is missing refresh_token.",
-        "callback_invalid",
+        "token_refresh_invalid",
       );
     }
 
@@ -1775,21 +1778,27 @@ export class MercadoLivreProvider implements IntegrationProvider {
     if (
       !tokenResponse.ok ||
       typeof tokenPayload === "string" ||
-      !tokenPayload.access_token
+      tokenPayload === null ||
+      !tokenPayload.access_token ||
+      !tokenPayload.refresh_token
     ) {
+      const invalidRefreshToken =
+        typeof tokenPayload !== "string" &&
+        tokenPayload !== null &&
+        tokenPayload.error === "invalid_grant";
       throw new IntegrationProviderError(
         `Mercado Livre token refresh failed.${
           typeof tokenPayload === "string"
             ? ` status=${tokenResponse.status} payload=${tokenPayload}`
             : ` status=${tokenResponse.status} payload=${JSON.stringify(sanitizeProviderPayload(tokenPayload))}`
         }`,
-        "remote_request_failed",
+        invalidRefreshToken ? "token_refresh_invalid" : "remote_request_failed",
       );
     }
 
     return {
       accessToken: tokenPayload.access_token,
-      refreshToken: tokenPayload.refresh_token ?? connection.refreshToken,
+      refreshToken: tokenPayload.refresh_token,
       tokenExpiresAt:
         typeof tokenPayload.expires_in === "number"
           ? new Date(Date.now() + tokenPayload.expires_in * 1000)
