@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -11,7 +11,16 @@ import { CompanySwitcher } from "./company-switcher";
 import type { Company } from "@lucreii/types";
 
 const DashboardIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="3" y="3" width="7" height="7" rx="1.5" />
     <rect x="14" y="3" width="7" height="7" rx="1.5" />
     <rect x="14" y="14" width="7" height="7" rx="1.5" />
@@ -20,7 +29,16 @@ const DashboardIcon = () => (
 );
 
 const ProductsIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
     <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
     <line x1="12" y1="22.08" x2="12" y2="12" />
@@ -28,22 +46,70 @@ const ProductsIcon = () => (
 );
 
 const IntegrationsIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
     <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
   </svg>
 );
 
 const OrdersIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M3 6h18" />
     <path d="M7 12h10" />
     <path d="M9 18h6" />
   </svg>
 );
 
+const PricingIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M8 7h8" />
+    <path d="M8 11h2" />
+    <path d="M14 11h2" />
+    <path d="M8 15h2" />
+    <path d="M14 15h2" />
+    <path d="M8 18h8" />
+  </svg>
+);
+
 const BillingIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="2" y="5" width="20" height="14" rx="3" />
     <line x1="2" y1="10" x2="22" y2="10" />
   </svg>
@@ -89,6 +155,19 @@ const navLinks: NavItem[] = [
     icon: OrdersIcon,
   },
   {
+    href: "/app/pricing/contribution-margin",
+    label: "Precificação",
+    icon: PricingIcon,
+    children: [
+      {
+        href: "/app/pricing/contribution-margin",
+        label: "Margem de Contribuição",
+      },
+      { href: "/app/pricing/desired-profit", label: "Lucro Desejado" },
+      { href: "/app/pricing/sale-price", label: "Preço de Venda" },
+    ],
+  },
+  {
     href: "/app/integrations",
     label: "Integrações",
     icon: IntegrationsIcon,
@@ -132,12 +211,6 @@ export function AppSidebar({
   const pathname = usePathname();
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (collapsed) {
-      setExpandedMenu(null);
-    }
-  }, [collapsed]);
-
   function isActive(href: string) {
     if (href === "/app") return pathname === "/app";
     return pathname.startsWith(href);
@@ -157,14 +230,14 @@ export function AppSidebar({
       className={cn(
         "relative flex h-full flex-col border-r border-border bg-surface-strong/95 backdrop-blur-xl",
         "transition-all duration-[var(--transition-normal)] ease-out",
-        collapsed ? "w-[68px]" : "w-[240px]"
+        collapsed ? "w-[68px]" : "w-[240px]",
       )}
     >
       {/* Logo / Brand */}
       <div
         className={cn(
           "flex h-16 items-center border-b border-border",
-          collapsed ? "justify-center px-2" : "justify-between px-4"
+          collapsed ? "justify-center px-2" : "justify-between px-4",
         )}
       >
         <button
@@ -172,7 +245,7 @@ export function AppSidebar({
           type="button"
           className={cn(
             "group flex items-center gap-3 text-foreground transition-colors",
-            collapsed && "justify-center"
+            collapsed && "justify-center",
           )}
           aria-label="Alternar menu lateral"
         >
@@ -236,10 +309,11 @@ export function AppSidebar({
                       : "text-muted-foreground hover:text-foreground",
                     collapsed && "justify-center px-2",
                     !collapsed && parentActive && "bg-accent-soft/50",
-                    !collapsed && !parentActive && "hover:bg-foreground/[0.03]"
+                    !collapsed && !parentActive && "hover:bg-foreground/[0.03]",
                   )}
                   onClick={(e) => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
+                      return;
                     if (e.button !== 0) return;
                     if (hasChildren) {
                       e.preventDefault();
@@ -252,7 +326,11 @@ export function AppSidebar({
                     <motion.div
                       layoutId="activeNavIndicator"
                       className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-accent"
-                      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 500,
+                        damping: 30,
+                      }}
                     />
                   )}
 
@@ -261,7 +339,7 @@ export function AppSidebar({
                       "flex h-5 w-5 shrink-0 items-center justify-center transition-colors",
                       parentActive
                         ? "text-accent"
-                        : "text-muted-foreground group-hover:text-foreground"
+                        : "text-muted-foreground group-hover:text-foreground",
                     )}
                   >
                     <Icon />
@@ -323,7 +401,7 @@ export function AppSidebar({
                                 "text-[12px] font-medium transition-all duration-[var(--transition-fast)]",
                                 childActive
                                   ? "text-accent-strong bg-accent-soft/30"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]",
                               )}
                             >
                               <span
@@ -331,7 +409,7 @@ export function AppSidebar({
                                   "h-1.5 w-1.5 rounded-full transition-colors",
                                   childActive
                                     ? "bg-accent"
-                                    : "bg-muted-foreground/40 group-hover:bg-muted-foreground"
+                                    : "bg-muted-foreground/40 group-hover:bg-muted-foreground",
                                 )}
                               />
                               <span className="truncate">{child.label}</span>
@@ -368,10 +446,16 @@ export function AppSidebar({
                               "text-[12px] font-medium transition-all duration-[var(--transition-fast)]",
                               childActive
                                 ? "text-accent-strong bg-accent-soft/30"
-                                : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]"
+                                : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]",
                             )}
                             onClick={(e) => {
-                              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                              if (
+                                e.metaKey ||
+                                e.ctrlKey ||
+                                e.shiftKey ||
+                                e.altKey
+                              )
+                                return;
                               if (e.button !== 0) return;
                               setExpandedMenu(null);
                             }}
@@ -381,7 +465,7 @@ export function AppSidebar({
                                 "h-1.5 w-1.5 rounded-full transition-colors",
                                 childActive
                                   ? "bg-accent"
-                                  : "bg-muted-foreground/40"
+                                  : "bg-muted-foreground/40",
                               )}
                             />
                             <span className="truncate">{child.label}</span>
@@ -422,7 +506,7 @@ export function AppSidebar({
             "transition-all duration-[var(--transition-normal)]",
             "hover:border-border-strong hover:bg-surface-elevated hover:text-foreground",
             "hover:shadow-[var(--shadow-md)] hover:scale-110",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30",
           )}
           aria-label={collapsed ? "Expandir menu" : "Minimizar menu"}
         >
