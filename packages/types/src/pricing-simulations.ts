@@ -3,6 +3,16 @@ export type PricingSimulationMode =
   | "desired-profit"
   | "sale-price";
 
+export type PricingSimulationSortKey =
+  | "productIdentifier"
+  | "mode"
+  | "recommendedSalePrice"
+  | "contributionMargin"
+  | "grossProfit"
+  | "updatedAt";
+
+export type PricingSimulationSortDirection = "asc" | "desc";
+
 export type PricingSimulationDraft = {
   mode: PricingSimulationMode;
   productIdentifier: string | null;

@@ -57,6 +57,17 @@ function createRow() {
 function createDatabaseMock() {
   const row = createRow();
   const returning = vi.fn().mockResolvedValue([row]);
+  const countWhere = vi.fn().mockResolvedValue([{ totalItems: 1 }]);
+  const listOffset = vi.fn().mockResolvedValue([row]);
+  const listLimit = vi.fn().mockReturnValue({ offset: listOffset });
+  const listOrderBy = vi.fn().mockReturnValue({ limit: listLimit });
+  const listWhere = vi.fn().mockReturnValue({ orderBy: listOrderBy });
+  const countQuery = {
+    from: vi.fn().mockReturnValue({ where: countWhere }),
+  };
+  const listQuery = {
+    from: vi.fn().mockReturnValue({ where: listWhere }),
+  };
   const db = {
     delete: vi.fn().mockReturnValue({
       returning,
@@ -74,11 +85,7 @@ function createDatabaseMock() {
         findMany: vi.fn().mockResolvedValue([row]),
       },
     },
-    select: vi.fn().mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue([{ totalItems: 1 }]),
-      }),
-    }),
+    select: vi.fn().mockReturnValueOnce(countQuery).mockReturnValue(listQuery),
     update: vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({ returning }),
     }),
@@ -122,5 +129,42 @@ describe("PricingSimulationsService", () => {
         marketplaceCommissionRate: "1.000000",
       }),
     ).rejects.toThrow("A soma da margem e dos custos percentuais");
+  });
+
+  it("lists a scoped page using the requested server-side ordering", async () => {
+    const db = createDatabaseMock();
+    const service = new PricingSimulationsService(db);
+
+    const result = await service.list(context, {
+      page: 2,
+      pageSize: 10,
+      sortBy: "grossProfit",
+      sortDirection: "asc",
+    });
+
+    expect(result).toMatchObject({
+      page: 2,
+      pageSize: 10,
+      totalItems: 1,
+      totalPages: 1,
+    });
+
+    const selectMock = (db as unknown as { select: ReturnType<typeof vi.fn> })
+      .select;
+    const listQuery = selectMock.mock.results[1]?.value;
+    const listWhere = listQuery.from.mock.results[0]?.value.where;
+    const listOrderBy = listWhere.mock.results[0]?.value.orderBy;
+
+    expect(listOrderBy).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns an individual simulation through the same tenant scope", async () => {
+    const db = createDatabaseMock();
+    const service = new PricingSimulationsService(db);
+
+    await expect(service.get(context, createRow().id)).resolves.toMatchObject({
+      id: createRow().id,
+      productIdentifier: "SKU-1",
+    });
   });
 });

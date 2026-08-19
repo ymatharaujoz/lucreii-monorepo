@@ -21,7 +21,7 @@ import type {
   PricingSimulationListQueryInput,
   PricingSimulationUpdateInput,
 } from "@lucreii/validation";
-import { and, count, desc, eq, ilike } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 
 type TenantContext = {
@@ -31,7 +31,7 @@ type TenantContext = {
 };
 
 const DEFAULT_PAGE = 1;
-const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
 
 function toNumber(value: string) {
@@ -86,12 +86,16 @@ export class PricingSimulationsService {
       .select({ totalItems: count() })
       .from(pricingSimulations)
       .where(where);
-    const rows = await this.db.query.pricingSimulations.findMany({
-      limit: pageSize,
-      offset: (page - 1) * pageSize,
-      orderBy: (table) => [desc(table.createdAt), desc(table.id)],
-      where: () => where,
-    });
+    const sortColumn = this.getSortColumn(query.sortBy);
+    const sortOrder =
+      query.sortDirection === "asc" ? asc(sortColumn) : desc(sortColumn);
+    const rows = await this.db
+      .select()
+      .from(pricingSimulations)
+      .where(where)
+      .orderBy(sortOrder, desc(pricingSimulations.id))
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
 
     const total = Number(totalItems);
 
@@ -102,6 +106,21 @@ export class PricingSimulationsService {
       totalItems: total,
       totalPages: Math.max(1, Math.ceil(total / pageSize)),
     };
+  }
+
+  async get(
+    context: TenantContext,
+    simulationId: string,
+  ): Promise<PricingSimulation> {
+    const companyId = this.requireSelectedCompany(context);
+    await this.ensureCompanyAccess(context, companyId);
+    const simulation = await this.ensureSimulationAccess(
+      context,
+      simulationId,
+      companyId,
+    );
+
+    return this.toRecord(simulation);
   }
 
   async create(
@@ -265,6 +284,25 @@ export class PricingSimulationsService {
       eq(pricingSimulations.userId, context.userId),
       eq(pricingSimulations.companyId, companyId),
     ];
+  }
+
+  private getSortColumn(sortBy: PricingSimulationListQueryInput["sortBy"]) {
+    switch (sortBy) {
+      case "productIdentifier":
+        return pricingSimulations.productIdentifier;
+      case "mode":
+        return pricingSimulations.mode;
+      case "recommendedSalePrice":
+        return pricingSimulations.recommendedSalePrice;
+      case "contributionMargin":
+        return pricingSimulations.contributionMargin;
+      case "grossProfit":
+        return pricingSimulations.grossProfit;
+      case "updatedAt":
+        return pricingSimulations.updatedAt;
+      default:
+        return pricingSimulations.updatedAt;
+    }
   }
 
   private async ensureCompanyAccess(context: TenantContext, companyId: string) {

@@ -1,13 +1,16 @@
-import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { resolveProtectedAppRedirect } from "@/lib/protected-app-route";
 import { readServerAuthState } from "@/lib/server-auth";
 import { readServerBillingState } from "@/lib/server-billing";
 import { hasActiveCompany, readServerCompanies } from "@/lib/server-companies";
 import { getActiveCompany } from "@/modules/dashboard/components/company-finance-defaults";
-import { PricingSimulationsPage } from "@/modules/pricing/components/pricing-simulations-page";
+import { PricingSimulationDetailPage } from "@/modules/pricing/components/pricing-simulation-detail-page";
 
-export default async function SimulationsPage() {
+export default async function PricingSimulationDetailRoute({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const [authState, billingState] = await Promise.all([
     readServerAuthState(),
     readServerBillingState(),
@@ -25,9 +28,6 @@ export default async function SimulationsPage() {
     redirect(`/auth/auto-select-company?companyId=${activeCompany.id}`);
   }
 
-  return (
-    <Suspense fallback={null}>
-      <PricingSimulationsPage />
-    </Suspense>
-  );
+  const { id } = await params;
+  return <PricingSimulationDetailPage simulationId={id} />;
 }

@@ -57,6 +57,17 @@ export const pricingSimulationListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).max(100000).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
   search: z.string().trim().max(120).optional(),
+  sortBy: z
+    .enum([
+      "productIdentifier",
+      "mode",
+      "recommendedSalePrice",
+      "contributionMargin",
+      "grossProfit",
+      "updatedAt",
+    ])
+    .optional(),
+  sortDirection: z.enum(["asc", "desc"]).optional(),
 });
 
 export const pricingSimulationSchema = z.object({
@@ -87,7 +98,7 @@ export const pricingSimulationListSchema = z.object({
 const EMPTY_SIMULATION_LIST = {
   items: [],
   page: 1,
-  pageSize: 50,
+  pageSize: 10,
   totalItems: 0,
   totalPages: 1,
 };
@@ -147,7 +158,7 @@ function normalizeEmptyPricingSimulationResponse(input: unknown) {
       const pageSize =
         typeof list.pageSize === "number" && list.pageSize >= 1
           ? list.pageSize
-          : 50;
+          : 10;
       const totalItems =
         typeof list.totalItems === "number" && list.totalItems >= 0
           ? list.totalItems

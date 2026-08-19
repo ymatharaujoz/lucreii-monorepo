@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   pricingSimulationFormSchema,
   pricingSimulationListApiResponseSchema,
+  pricingSimulationListQuerySchema,
 } from "./pricing-simulations";
 
 const validInput = {
@@ -52,6 +53,27 @@ describe("pricing simulation validation", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("accepts the supported server-side sorting fields", () => {
+    expect(
+      pricingSimulationListQuerySchema.parse({
+        page: "2",
+        pageSize: "10",
+        sortBy: "grossProfit",
+        sortDirection: "desc",
+      }),
+    ).toEqual({
+      page: 2,
+      pageSize: 10,
+      sortBy: "grossProfit",
+      sortDirection: "desc",
+    });
+
+    expect(
+      pricingSimulationListQuerySchema.safeParse({ sortBy: "companyId" })
+        .success,
+    ).toBe(false);
   });
 
   it("normalizes an empty 200 response into an empty list", () => {

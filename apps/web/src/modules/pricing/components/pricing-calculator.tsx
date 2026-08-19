@@ -952,7 +952,7 @@ export function PricingCalculator({
                   Custos em reais
                 </p>
                 <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-                  Composição fixa da venda
+                  Composição Fixa da Venda
                 </h2>
               </div>
               <CircleHelp className="ml-auto mt-1 h-4 w-4 text-muted-foreground/60" />
@@ -987,7 +987,7 @@ export function PricingCalculator({
                   Percentuais sobre venda
                 </p>
                 <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-                  Taxas e descontos
+                  Taxas e Descontos
                 </h2>
               </div>
             </div>

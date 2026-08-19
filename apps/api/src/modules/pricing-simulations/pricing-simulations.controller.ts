@@ -57,6 +57,20 @@ export class PricingSimulationsController {
     };
   }
 
+  @Get(":id")
+  async get(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Param("id") simulationId: string,
+  ) {
+    return {
+      data: await this.simulationsService.get(
+        this.context(authContext),
+        simulationId,
+      ),
+      error: null,
+    };
+  }
+
   @Patch(":id")
   async update(
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,

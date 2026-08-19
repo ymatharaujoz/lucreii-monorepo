@@ -49,4 +49,6 @@ export class ListPricingSimulationsQueryDto implements PricingSimulationListQuer
   page?: number;
   pageSize?: number;
   search?: string;
+  sortBy?: PricingSimulationListQueryInput["sortBy"];
+  sortDirection?: PricingSimulationListQueryInput["sortDirection"];
 }
