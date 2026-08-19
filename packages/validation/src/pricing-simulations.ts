@@ -26,8 +26,7 @@ function optionalIdentifier(max: number) {
 
 const pricingSimulationFields = {
   mode: z.enum(["contribution-margin", "desired-profit", "sale-price"]),
-  productSku: optionalIdentifier(128),
-  productName: optionalIdentifier(255),
+  productIdentifier: optionalIdentifier(255),
   target: decimalString,
   productCost: decimalString,
   packagingCost: decimalString,
@@ -43,11 +42,11 @@ const pricingSimulationFields = {
 export const pricingSimulationFormSchema = z
   .object(pricingSimulationFields)
   .superRefine((value, context) => {
-    if (!value.productSku && !value.productName) {
+    if (!value.productIdentifier) {
       context.addIssue({
         code: "custom",
-        message: "Informe o SKU ou o nome do produto para salvar.",
-        path: ["productSku"],
+        message: "Informe o nome do produto ou SKU para salvar.",
+        path: ["productIdentifier"],
       });
     }
   });
@@ -85,8 +84,96 @@ export const pricingSimulationListSchema = z.object({
   totalPages: z.number().int().min(1),
 });
 
-export const pricingSimulationListApiResponseSchema =
-  createApiSuccessResponseSchema(pricingSimulationListSchema);
+const EMPTY_SIMULATION_LIST = {
+  items: [],
+  page: 1,
+  pageSize: 50,
+  totalItems: 0,
+  totalPages: 1,
+};
+
+function normalizeEmptyPricingSimulationResponse(input: unknown) {
+  if (input === null || input === undefined || input === "") {
+    return { data: EMPTY_SIMULATION_LIST, error: null };
+  }
+
+  if (Array.isArray(input)) {
+    return {
+      data: {
+        ...EMPTY_SIMULATION_LIST,
+        items: input,
+        totalItems: input.length,
+      },
+      error: null,
+    };
+  }
+
+  if (typeof input === "object" && input !== null) {
+    const payload = input as Record<string, unknown>;
+    const data = payload.data;
+
+    if (
+      (data === null || data === undefined || data === "") &&
+      (payload.error === null || payload.error === undefined)
+    ) {
+      return { ...payload, data: EMPTY_SIMULATION_LIST, error: null };
+    }
+
+    if (
+      Array.isArray(data) &&
+      (payload.error === null || payload.error === undefined)
+    ) {
+      return {
+        ...payload,
+        data: {
+          ...EMPTY_SIMULATION_LIST,
+          items: data,
+          totalItems: data.length,
+        },
+        error: null,
+      };
+    }
+
+    if (
+      typeof data === "object" &&
+      data !== null &&
+      Array.isArray((data as Record<string, unknown>).items) &&
+      (payload.error === null || payload.error === undefined)
+    ) {
+      const list = data as Record<string, unknown>;
+      const items = list.items as unknown[];
+      const page =
+        typeof list.page === "number" && list.page >= 1 ? list.page : 1;
+      const pageSize =
+        typeof list.pageSize === "number" && list.pageSize >= 1
+          ? list.pageSize
+          : 50;
+      const totalItems =
+        typeof list.totalItems === "number" && list.totalItems >= 0
+          ? list.totalItems
+          : items.length;
+
+      return {
+        ...payload,
+        data: {
+          ...list,
+          page,
+          pageSize,
+          totalItems,
+          totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+        },
+        error: null,
+      };
+    }
+  }
+
+  return input;
+}
+
+export const pricingSimulationListApiResponseSchema = z.preprocess(
+  normalizeEmptyPricingSimulationResponse,
+  createApiSuccessResponseSchema(pricingSimulationListSchema),
+);
 
 export type PricingSimulationFormInput = z.infer<
   typeof pricingSimulationFormSchema

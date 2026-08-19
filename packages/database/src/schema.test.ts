@@ -470,12 +470,20 @@ describe("@lucreii/database schema", () => {
       path.resolve(__dirname, "../drizzle/0024_pricing_simulations.sql"),
       "utf8",
     );
+    const pricingIdentifierMigration = readFileSync(
+      path.resolve(
+        __dirname,
+        "../drizzle/0025_pricing_simulations_product_identifier.sql",
+      ),
+      "utf8",
+    );
     const migrationJournal = readFileSync(
       path.resolve(__dirname, "../drizzle/meta/_journal.json"),
       "utf8",
     );
 
     expect(pricingSimulations.companyId).toBeDefined();
+    expect(pricingSimulations.productIdentifier).toBeDefined();
     expect(pricingSimulations.calculationVersion).toBeDefined();
     expect(pricingMigration).toContain(
       'CREATE TABLE IF NOT EXISTS "pricing_simulations"',
@@ -489,6 +497,15 @@ describe("@lucreii/database schema", () => {
     expect(pricingMigration).toContain(
       'CREATE POLICY "Members can view own pricing simulations"',
     );
+    expect(pricingIdentifierMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS "product_identifier" varchar(255)',
+    );
+    expect(pricingIdentifierMigration).toContain(
+      'CREATE INDEX IF NOT EXISTS "pricing_simulations_company_identifier_idx"',
+    );
     expect(migrationJournal).toContain('"tag": "0024_pricing_simulations"');
+    expect(migrationJournal).toContain(
+      '"tag": "0025_pricing_simulations_product_identifier"',
+    );
   });
 });

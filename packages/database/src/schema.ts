@@ -431,8 +431,7 @@ export const pricingSimulations = pgTable(
       onDelete: "cascade",
     }),
     mode: varchar("mode", { length: 32 }).notNull(),
-    productSku: varchar("product_sku", { length: 128 }),
-    productName: varchar("product_name", { length: 255 }),
+    productIdentifier: varchar("product_identifier", { length: 255 }).notNull(),
     target: numeric("target", { precision: 14, scale: 6 }).notNull(),
     productCost: numeric("product_cost", { precision: 14, scale: 6 })
       .default("0")
@@ -506,7 +505,7 @@ export const pricingSimulations = pgTable(
     ),
     check(
       "pricing_simulations_identifier_present",
-      sql`nullif(trim(${table.productSku}), '') is not null or nullif(trim(${table.productName}), '') is not null`,
+      sql`nullif(trim(${table.productIdentifier}), '') is not null`,
     ),
     check("pricing_simulations_target_non_negative", sql`${table.target} >= 0`),
     check(
@@ -555,13 +554,9 @@ export const pricingSimulations = pgTable(
       table.companyId,
       table.createdAt,
     ),
-    index("pricing_simulations_company_sku_idx").on(
+    index("pricing_simulations_company_identifier_idx").on(
       table.companyId,
-      table.productSku,
-    ),
-    index("pricing_simulations_company_name_idx").on(
-      table.companyId,
-      table.productName,
+      table.productIdentifier,
     ),
   ],
 );

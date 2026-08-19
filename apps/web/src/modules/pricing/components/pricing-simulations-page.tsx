@@ -63,9 +63,9 @@ function formatDate(value: string) {
 
 function modeLabel(mode: PricingSimulation["mode"]) {
   return {
-    "contribution-margin": "Margem de contribuição",
-    "desired-profit": "Lucro desejado",
-    "sale-price": "Preço de venda",
+    "contribution-margin": "Margem de Contribuição",
+    "desired-profit": "Lucro Desejado",
+    "sale-price": "Preço de Venda",
   }[mode];
 }
 
@@ -97,12 +97,12 @@ function SimulationTable({
       <table className="w-full min-w-[760px] border-collapse text-left">
         <thead>
           <tr className="border-b border-border/60 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-            <th className="px-5 py-4 font-semibold">Produto</th>
+            <th className="px-5 py-4 font-semibold">Produto ou SKU</th>
             <th className="px-5 py-4 font-semibold">Calculadora</th>
-            <th className="px-5 py-4 font-semibold">Preço recomendado</th>
+            <th className="px-5 py-4 font-semibold">Preço Recomendado</th>
             <th className="px-5 py-4 font-semibold">Margem</th>
-            <th className="px-5 py-4 font-semibold">Lucro bruto</th>
-            <th className="px-5 py-4 font-semibold">Atualizado</th>
+            <th className="px-5 py-4 font-semibold">Lucro Bruto</th>
+            <th className="px-5 py-4 font-semibold">Atualizado Em</th>
             <th className="w-10 px-3 py-4" />
           </tr>
         </thead>
@@ -128,10 +128,7 @@ function SimulationTable({
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-foreground">
-                      {simulation.productName ?? "Produto sem nome"}
-                    </p>
-                    <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                      {simulation.productSku ?? "Sem SKU"}
+                      {simulation.productIdentifier}
                     </p>
                   </div>
                 </div>
@@ -217,12 +214,8 @@ export function PricingSimulationsPage() {
   const data = query.data;
 
   const selectedTitle = useMemo(() => {
-    if (!selectedSimulation) return "Detalhes da simulação";
-    return (
-      selectedSimulation.productName ??
-      selectedSimulation.productSku ??
-      "Simulação"
-    );
+    if (!selectedSimulation) return "Detalhes da Simulação";
+    return selectedSimulation.productIdentifier;
   }, [selectedSimulation]);
 
   function updateSimulation(updated: PricingSimulation) {
@@ -294,7 +287,7 @@ export function PricingSimulationsPage() {
         <Button asChild size="sm">
           <Link href="/app/pricing/contribution-margin">
             <Plus className="h-3.5 w-3.5" />
-            Nova simulação
+            Nova Simulação
           </Link>
         </Button>
       </motion.header>
@@ -318,7 +311,7 @@ export function PricingSimulationsPage() {
               aria-label="Buscar simulações"
               className="h-10 w-full rounded-[var(--radius-md)] border border-border bg-surface px-9 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground/60 hover:border-border-strong focus:border-border-focus focus:ring-4 focus:ring-accent/10"
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por SKU ou nome"
+              placeholder="Buscar por Nome do Produto ou SKU"
               value={search}
             />
           </label>
@@ -356,13 +349,13 @@ export function PricingSimulationsPage() {
             </h2>
             <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
               {search
-                ? "Tente outro SKU ou nome de produto."
+                ? "Tente outro Nome do Produto ou SKU."
                 : "Identifique o produto na calculadora e salve o primeiro cenário para acompanhar sua decisão de preço."}
             </p>
             {!search && (
               <Button asChild className="mt-5" size="sm" variant="secondary">
                 <Link href="/app/pricing/contribution-margin">
-                  Começar uma simulação
+                  Começar uma Simulação
                   <ChevronRight className="h-3.5 w-3.5" />
                 </Link>
               </Button>
@@ -385,7 +378,7 @@ export function PricingSimulationsPage() {
             title={
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent">
-                  Editar simulação
+                  Editar Simulação
                 </p>
                 <h2 className="mt-1 text-lg font-semibold text-foreground">
                   {selectedTitle}
@@ -410,7 +403,7 @@ export function PricingSimulationsPage() {
                 variant="ghost"
               >
                 <Trash2 className="h-3.5 w-3.5 text-error" />
-                <span className="text-error">Excluir simulação</span>
+                <span className="text-error">Excluir Simulação</span>
               </Button>
             </div>
           </Modal>
@@ -422,7 +415,7 @@ export function PricingSimulationsPage() {
           if (!isDeleting) setDeleteTarget(null);
         }}
         open={Boolean(deleteTarget)}
-        title="Excluir simulação?"
+        title="Excluir Simulação?"
       >
         <div className="space-y-5">
           <p className="text-sm leading-relaxed text-muted-foreground">

@@ -21,7 +21,7 @@ import type {
   PricingSimulationListQueryInput,
   PricingSimulationUpdateInput,
 } from "@lucreii/validation";
-import { and, count, desc, eq, ilike, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 
 type TenantContext = {
@@ -42,9 +42,15 @@ function toDecimal(value: number) {
   return value.toFixed(6);
 }
 
-function emptyToNull(value: string | null) {
+function requiredIdentifier(value: string | null) {
   const trimmed = value?.trim() ?? "";
-  return trimmed.length > 0 ? trimmed : null;
+  if (!trimmed) {
+    throw new BadRequestException(
+      "Informe o Nome do Produto ou SKU antes de salvar.",
+    );
+  }
+
+  return trimmed;
 }
 
 @Injectable()
@@ -71,10 +77,7 @@ export class PricingSimulationsService {
 
     if (search) {
       conditions.push(
-        or(
-          ilike(pricingSimulations.productSku, `%${search}%`),
-          ilike(pricingSimulations.productName, `%${search}%`),
-        )!,
+        ilike(pricingSimulations.productIdentifier, `%${search}%`),
       );
     }
 
@@ -131,8 +134,7 @@ export class PricingSimulationsService {
         ),
         packagingCost: toDecimal(calculation.inputs.packagingCost),
         productCost: toDecimal(calculation.inputs.productCost),
-        productName: emptyToNull(input.productName),
-        productSku: emptyToNull(input.productSku),
+        productIdentifier: requiredIdentifier(input.productIdentifier),
         recommendedSalePrice: toDecimal(
           calculation.result.recommendedSalePrice,
         ),
@@ -178,8 +180,7 @@ export class PricingSimulationsService {
         ),
         packagingCost: toDecimal(calculation.inputs.packagingCost),
         productCost: toDecimal(calculation.inputs.productCost),
-        productName: emptyToNull(input.productName),
-        productSku: emptyToNull(input.productSku),
+        productIdentifier: requiredIdentifier(input.productIdentifier),
         recommendedSalePrice: toDecimal(
           calculation.result.recommendedSalePrice,
         ),
@@ -323,8 +324,7 @@ export class PricingSimulationsService {
       otherVariableCostRate: row.otherVariableCostRate,
       packagingCost: row.packagingCost,
       productCost: row.productCost,
-      productName: row.productName,
-      productSku: row.productSku,
+      productIdentifier: row.productIdentifier,
       recommendedSalePrice: row.recommendedSalePrice,
       shippingFee: row.shippingFee,
       storeCouponRate: row.storeCouponRate,

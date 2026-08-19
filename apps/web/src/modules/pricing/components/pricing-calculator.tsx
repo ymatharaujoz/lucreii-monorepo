@@ -29,8 +29,7 @@ import {
 } from "../calculations/pricing-calculations";
 
 type FormValues = Record<PricingField, string> & {
-  productName: string;
-  productSku: string;
+  productIdentifier: string;
 };
 
 type FieldKind = "currency" | "percent";
@@ -61,8 +60,7 @@ type ComputationState =
     };
 
 const EMPTY_FORM: FormValues = {
-  productName: "",
-  productSku: "",
+  productIdentifier: "",
   target: "",
   productCost: "",
   packagingCost: "",
@@ -96,8 +94,7 @@ function createInitialForm(simulation?: PricingSimulation | null): FormValues {
     ),
     packagingCost: formatStoredValue(simulation.packagingCost, "currency"),
     productCost: formatStoredValue(simulation.productCost, "currency"),
-    productName: simulation.productName ?? "",
-    productSku: simulation.productSku ?? "",
+    productIdentifier: simulation.productIdentifier ?? "",
     shippingFee: formatStoredValue(simulation.shippingFee, "currency"),
     storeCouponRate: formatStoredValue(simulation.storeCouponRate, "percent"),
     target: formatStoredValue(
@@ -112,7 +109,7 @@ function createInitialForm(simulation?: PricingSimulation | null): FormValues {
 const COST_FIELDS: FieldConfig[] = [
   {
     field: "productCost",
-    label: "Custo produto",
+    label: "Custo do Produto",
     kind: "currency",
     placeholder: "0,00",
   },
@@ -124,13 +121,13 @@ const COST_FIELDS: FieldConfig[] = [
   },
   {
     field: "shippingFee",
-    label: "Taxa / frete",
+    label: "Taxa / Frete",
     kind: "currency",
     placeholder: "0,00",
   },
   {
     field: "otherFixedCosts",
-    label: "Outros custos R$",
+    label: "Outros Custos (R$)",
     kind: "currency",
     placeholder: "0,00",
   },
@@ -139,26 +136,26 @@ const COST_FIELDS: FieldConfig[] = [
 const RATE_FIELDS: FieldConfig[] = [
   {
     field: "marketplaceCommissionRate",
-    label: "Comissão marketplace",
+    label: "Comissão do Marketplace",
     kind: "percent",
     placeholder: "0,00",
   },
   { field: "taxRate", label: "Imposto", kind: "percent", placeholder: "0,00" },
   {
     field: "affiliateCommissionRate",
-    label: "Comissão afiliado",
+    label: "Comissão de Afiliado",
     kind: "percent",
     placeholder: "0,00",
   },
   {
     field: "storeCouponRate",
-    label: "Cupom loja",
+    label: "Cupom da Loja",
     kind: "percent",
     placeholder: "0,00",
   },
   {
     field: "otherVariableCostRate",
-    label: "Outros custos %",
+    label: "Outros Custos Variáveis (%)",
     kind: "percent",
     placeholder: "0,00",
   },
@@ -178,33 +175,33 @@ const MODE_CONFIG: Record<
   }
 > = {
   "contribution-margin": {
-    eyebrow: "Margem de contribuição",
+    eyebrow: "Margem de Contribuição",
     title: "Defina sua margem. Encontre seu preço.",
     description:
       "Informe a margem desejada e os custos da venda para calcular o preço recomendado.",
-    targetLabel: "Margem de contribuição alvo",
+    targetLabel: "Margem de Contribuição Alvo",
     targetKind: "percent",
     targetPlaceholder: "36,00",
     targetHelper: "Percentual que deve permanecer após custos fixos e taxas.",
     resultLabel: "Preço de Venda Recomendado",
   },
   "desired-profit": {
-    eyebrow: "Lucro desejado",
+    eyebrow: "Lucro Desejado",
     title: "Transforme seu objetivo em preço.",
     description:
       "Parta do lucro que deseja obter e simule o preço necessário para alcançá-lo.",
-    targetLabel: "Lucro desejado",
+    targetLabel: "Lucro Desejado",
     targetKind: "currency",
     targetPlaceholder: "9,91",
     targetHelper: "Valor líquido que você deseja preservar em cada venda.",
     resultLabel: "Preço de Venda Recomendado",
   },
   "sale-price": {
-    eyebrow: "Preço de venda",
+    eyebrow: "Preço de Venda",
     title: "Teste o preço que você pratica.",
     description:
       "Informe um preço de venda e veja instantaneamente sua margem e lucro bruto.",
-    targetLabel: "Preço de venda",
+    targetLabel: "Preço de Venda Informado",
     targetKind: "currency",
     targetPlaceholder: "27,54",
     targetHelper: "Preço informado para análise do cenário.",
@@ -703,8 +700,7 @@ export function PricingCalculator({
       ),
       packagingCost: toCanonicalValue(form.packagingCost, "currency"),
       productCost: toCanonicalValue(form.productCost, "currency"),
-      productName: form.productName.trim() || null,
-      productSku: form.productSku.trim() || null,
+      productIdentifier: form.productIdentifier.trim() || null,
       shippingFee: toCanonicalValue(form.shippingFee, "currency"),
       storeCouponRate: toCanonicalValue(form.storeCouponRate, "percent"),
       target: toCanonicalValue(form.target, config.targetKind),
@@ -718,8 +714,8 @@ export function PricingCalculator({
   async function handleSave() {
     const payload = toSimulationDraft();
 
-    if (!payload || (!payload.productSku && !payload.productName)) {
-      setSaveError("Informe o SKU ou o nome do produto antes de salvar.");
+    if (!payload || !payload.productIdentifier) {
+      setSaveError("Informe o Nome do Produto ou SKU antes de salvar.");
       return;
     }
 
@@ -755,9 +751,7 @@ export function PricingCalculator({
     }
   }
 
-  const hasIdentifier = Boolean(
-    form.productSku.trim() || form.productName.trim(),
-  );
+  const hasIdentifier = Boolean(form.productIdentifier.trim());
   const canSave = hasIdentifier && computation.status === "ready" && !isSaving;
 
   function clearForm() {
@@ -886,35 +880,28 @@ export function PricingCalculator({
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent">
-                  Identificação opcional
+                  Identificação Opcional
                 </p>
                 <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-                  Dê um nome ao seu cenário
+                  Identifique o Seu Cenário
                 </h2>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Preencha o SKU ou o nome do produto para salvar esta
-                  simulação.
+                  Informe o Nome do Produto ou SKU para salvar esta simulação.
                 </p>
               </div>
             </div>
-            <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            <div className="mt-5">
               <TextField
-                id={`${mode}-product-sku`}
-                label="SKU"
+                id={`${mode}-product-identifier`}
+                label="Nome do Produto ou SKU"
                 onChange={(value) =>
-                  setForm((current) => ({ ...current, productSku: value }))
+                  setForm((current) => ({
+                    ...current,
+                    productIdentifier: value,
+                  }))
                 }
-                placeholder="Ex.: CAM-URB-042"
-                value={form.productSku}
-              />
-              <TextField
-                id={`${mode}-product-name`}
-                label="Nome do produto"
-                onChange={(value) =>
-                  setForm((current) => ({ ...current, productName: value }))
-                }
-                placeholder="Ex.: Camiseta urbana"
-                value={form.productName}
+                placeholder="Ex.: Camiseta Urbana ou CAM-URB-042"
+                value={form.productIdentifier}
               />
             </div>
           </section>

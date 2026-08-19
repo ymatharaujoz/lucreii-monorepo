@@ -47,7 +47,8 @@ async function parseResponse(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
-    return response.json();
+    const text = await response.text();
+    return text.trim() ? JSON.parse(text) : null;
   }
 
   if (contentType.includes("text/")) {
@@ -68,7 +69,8 @@ function extractApiErrorMessage(payload: unknown, fallback: string): string {
     if (typeof base.error === "object" && base.error !== null) {
       const nested = base.error as Record<string, unknown>;
       if (typeof nested.message === "string") return nested.message;
-      if (Array.isArray(nested.message)) return nested.message.map((part) => String(part)).join(", ");
+      if (Array.isArray(nested.message))
+        return nested.message.map((part) => String(part)).join(", ");
     }
   }
 
@@ -76,7 +78,14 @@ function extractApiErrorMessage(payload: unknown, fallback: string): string {
 }
 
 function normalizeBody(body: ApiRequestOptions["body"]) {
-  if (!body || body instanceof FormData || body instanceof URLSearchParams || typeof body === "string" || body instanceof Blob || body instanceof ArrayBuffer) {
+  if (
+    !body ||
+    body instanceof FormData ||
+    body instanceof URLSearchParams ||
+    typeof body === "string" ||
+    body instanceof Blob ||
+    body instanceof ArrayBuffer
+  ) {
     return { body, contentType: undefined };
   }
 
@@ -105,7 +114,9 @@ export function createApiClient({
     const headers = new Headers(defaultHeaders);
 
     if (options.headers) {
-      new Headers(options.headers).forEach((value, key) => headers.set(key, value));
+      new Headers(options.headers).forEach((value, key) =>
+        headers.set(key, value),
+      );
     }
 
     if (contentType && !headers.has("content-type")) {
@@ -138,10 +149,16 @@ export function createApiClient({
     const payload = await parseResponse(response);
 
     if (!response.ok) {
-      throw new ApiClientError(extractApiErrorMessage(payload, `API request failed with status ${response.status}`), {
-        status: response.status,
-        payload,
-      });
+      throw new ApiClientError(
+        extractApiErrorMessage(
+          payload,
+          `API request failed with status ${response.status}`,
+        ),
+        {
+          status: response.status,
+          payload,
+        },
+      );
     }
 
     return payload as T;
@@ -179,7 +196,10 @@ export function createApiClient({
 
         xhr.upload.onprogress = (event) => {
           if (event.lengthComputable) {
-            const progress = Math.min(50, Math.round((event.loaded / event.total) * 50));
+            const progress = Math.min(
+              50,
+              Math.round((event.loaded / event.total) * 50),
+            );
             onProgress?.(progress);
             if (event.loaded >= event.total) {
               notifyUploadComplete();
@@ -187,7 +207,13 @@ export function createApiClient({
           }
         };
         xhr.upload.onload = notifyUploadComplete;
-        xhr.onerror = () => reject(new ApiClientError("Falha de conexão com a API.", { status: 0, payload: null }));
+        xhr.onerror = () =>
+          reject(
+            new ApiClientError("Falha de conexão com a API.", {
+              status: 0,
+              payload: null,
+            }),
+          );
         xhr.onload = async () => {
           const contentType = xhr.getResponseHeader("content-type") ?? "";
           let payload: unknown = null;
@@ -201,7 +227,10 @@ export function createApiClient({
           if (xhr.status < 200 || xhr.status >= 300) {
             reject(
               new ApiClientError(
-                extractApiErrorMessage(payload, `API request failed with status ${xhr.status}`),
+                extractApiErrorMessage(
+                  payload,
+                  `API request failed with status ${xhr.status}`,
+                ),
                 { status: xhr.status, payload },
               ),
             );

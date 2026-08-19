@@ -88,8 +88,8 @@ describe("PricingCalculator", () => {
 
     expect(text()).toContain("Pronto para simular");
     expect(text()).toContain("Não salvo");
-    expect(text()).toContain("Margem de contribuição alvo");
-    expect(text()).toContain("Comissão marketplace");
+    expect(text()).toContain("Margem de Contribuição Alvo");
+    expect(text()).toContain("Comissão do Marketplace");
     expect(text()).not.toContain("R$ 27,54");
 
     view.unmount();
@@ -112,7 +112,7 @@ describe("PricingCalculator", () => {
     const view = mount(<PricingCalculator mode="sale-price" />);
 
     expect(text()).toContain("Preço de Venda Informado");
-    expect(text()).toContain("Preço de venda");
+    expect(text()).toContain("Preço de Venda");
 
     view.unmount();
   });
@@ -189,8 +189,7 @@ describe("PricingCalculator", () => {
         otherVariableCostRate: "0.000000",
         packagingCost: "0.500000",
         productCost: "2.140000",
-        productName: null,
-        productSku: "SKU-1",
+        productIdentifier: "SKU-1",
         recommendedSalePrice: "27.540000",
         shippingFee: "6.550000",
         storeCouponRate: "0.030000",
@@ -213,7 +212,7 @@ describe("PricingCalculator", () => {
     expect(getSaveButton().disabled).toBe(true);
     setInputValue(
       document.getElementById(
-        "contribution-margin-product-sku",
+        "contribution-margin-product-identifier",
       ) as HTMLInputElement,
       "SKU-1",
     );
@@ -227,7 +226,7 @@ describe("PricingCalculator", () => {
       "/pricing/simulations",
       expect.objectContaining({
         body: expect.objectContaining({
-          productSku: "SKU-1",
+          productIdentifier: "SKU-1",
           target: "0.360000",
         }),
       }),

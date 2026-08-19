@@ -19,8 +19,7 @@ export class CreatePricingSimulationRequestDto implements PricingSimulationFormI
   otherVariableCostRate!: string;
   packagingCost!: string;
   productCost!: string;
-  productName!: string | null;
-  productSku!: string | null;
+  productIdentifier!: string | null;
   shippingFee!: string;
   storeCouponRate!: string;
   target!: string;
@@ -37,8 +36,7 @@ export class UpdatePricingSimulationRequestDto implements PricingSimulationUpdat
   otherVariableCostRate!: string;
   packagingCost!: string;
   productCost!: string;
-  productName!: string | null;
-  productSku!: string | null;
+  productIdentifier!: string | null;
   shippingFee!: string;
   storeCouponRate!: string;
   target!: string;

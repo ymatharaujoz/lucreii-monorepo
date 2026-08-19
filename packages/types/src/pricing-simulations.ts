@@ -5,8 +5,7 @@ export type PricingSimulationMode =
 
 export type PricingSimulationDraft = {
   mode: PricingSimulationMode;
-  productSku: string | null;
-  productName: string | null;
+  productIdentifier: string | null;
   target: string;
   productCost: string;
   packagingCost: string;

@@ -1,13 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import { dashboardSummaryApiResponseSchema } from "@lucreii/validation";
+import {
+  dashboardSummaryApiResponseSchema,
+  pricingSimulationListApiResponseSchema,
+} from "@lucreii/validation";
 import { createApiClient } from "@/lib/api/client";
 
 describe("createApiClient", () => {
   it("builds request URL from base url and path", async () => {
-    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }));
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
     const client = createApiClient({
       baseUrl: "http://localhost:4000",
       fetchFn,
@@ -29,10 +35,13 @@ describe("createApiClient", () => {
         cookie: "lucreii_selected_company_id=company_123",
       },
     });
-    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    }));
+    const fetchFn = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
     const client = createApiClient({
       baseUrl: "http://localhost:4000",
       fetchFn,
@@ -46,7 +55,10 @@ describe("createApiClient", () => {
         headers: expect.any(Headers),
       }),
     );
-    const [, init] = fetchFn.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit];
+    const [, init] = fetchFn.mock.calls[0] as unknown as [
+      RequestInfo | URL,
+      RequestInit,
+    ];
     const headers = new Headers(init.headers);
     expect(headers.get("x-lucreii-company-id")).toBe("company_123");
 
@@ -76,7 +88,9 @@ describe("createApiClient", () => {
         ),
     });
 
-    await expect(client.post("/billing/checkout", { body: { interval: "monthly" } })).rejects.toEqual(
+    await expect(
+      client.post("/billing/checkout", { body: { interval: "monthly" } }),
+    ).rejects.toEqual(
       expect.objectContaining({
         message: "No such customer: cus_xyz",
         status: 500,
@@ -123,7 +137,10 @@ describe("createApiClient", () => {
     });
 
     await expect(
-      client.getValidatedData("/dashboard/summary", dashboardSummaryApiResponseSchema),
+      client.getValidatedData(
+        "/dashboard/summary",
+        dashboardSummaryApiResponseSchema,
+      ),
     ).resolves.toEqual(
       expect.objectContaining({
         summary: expect.objectContaining({
@@ -186,7 +203,9 @@ describe("createApiClient", () => {
       FakeXMLHttpRequest as unknown as typeof XMLHttpRequest;
     const progress: number[] = [];
     const lifecycle: string[] = [];
-    const file = Object.assign(new Blob(["xlsx"]), { name: "vendas.xlsx" }) as File;
+    const file = Object.assign(new Blob(["xlsx"]), {
+      name: "vendas.xlsx",
+    }) as File;
 
     try {
       const client = createApiClient({ baseUrl: "http://localhost:4000" });
@@ -228,7 +247,10 @@ describe("createApiClient", () => {
     });
 
     await expect(
-      client.getValidatedData("/dashboard/summary", dashboardSummaryApiResponseSchema),
+      client.getValidatedData(
+        "/dashboard/summary",
+        dashboardSummaryApiResponseSchema,
+      ),
     ).rejects.toEqual(
       expect.objectContaining({
         name: "ApiContractError",
@@ -247,11 +269,37 @@ describe("createApiClient", () => {
     });
 
     await expect(
-      client.getValidatedData("/dashboard/summary", dashboardSummaryApiResponseSchema),
+      client.getValidatedData(
+        "/dashboard/summary",
+        dashboardSummaryApiResponseSchema,
+      ),
     ).rejects.toEqual(
       expect.objectContaining({
         name: "ApiContractError",
         path: "/dashboard/summary",
+      }),
+    );
+  });
+
+  it("normalizes an empty 200 JSON response for pricing simulations", async () => {
+    const client = createApiClient({
+      baseUrl: "http://localhost:4000",
+      fetchFn: async () =>
+        new Response("", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    });
+
+    await expect(
+      client.getValidatedData(
+        "/pricing/simulations",
+        pricingSimulationListApiResponseSchema,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        items: [],
+        totalItems: 0,
       }),
     );
   });
