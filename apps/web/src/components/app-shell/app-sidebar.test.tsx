@@ -87,7 +87,7 @@ describe("AppSidebar pricing navigation", () => {
     usePathnameMock.mockReturnValue("/app/orders");
   });
 
-  it("renders Precificação below Pedidos and expands its three calculators", () => {
+  it("renders Precificação below Pedidos and expands its pricing tools", () => {
     const view = mount(<AppSidebar {...sidebarProps()} />);
     const pricingLink = document.querySelector(
       'button[data-href="/app/pricing/contribution-margin"]',
@@ -107,6 +107,7 @@ describe("AppSidebar pricing navigation", () => {
     expect(document.body.textContent).toContain("Margem de Contribuição");
     expect(document.body.textContent).toContain("Lucro Desejado");
     expect(document.body.textContent).toContain("Preço de Venda");
+    expect(document.body.textContent).toContain("Simulações");
 
     view.unmount();
   });

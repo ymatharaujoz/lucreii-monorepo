@@ -2,8 +2,17 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { apiClient } from "@/lib/api/client";
 import { PricingCalculator } from "./pricing-calculator";
+
+vi.mock("@/lib/api/client", () => ({
+  ApiClientError: class ApiClientError extends Error {},
+  apiClient: {
+    patch: vi.fn(),
+    post: vi.fn(),
+  },
+}));
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -159,6 +168,71 @@ describe("PricingCalculator", () => {
       ).value,
     ).toBe("");
     expect(text()).toContain("Pronto para simular");
+
+    view.unmount();
+  });
+
+  it("requires an identifier and saves a canonical simulation payload", async () => {
+    const response = {
+      data: {
+        affiliateCommissionRate: "0.080000",
+        calculationVersion: "1",
+        companyId: "11111111-1111-4111-8111-111111111111",
+        contributionMargin: "0.360000",
+        createdAt: "2026-08-19T12:00:00.000Z",
+        fixedCosts: "10.190000",
+        grossProfit: "9.914400",
+        id: "22222222-2222-4222-8222-222222222222",
+        marketplaceCommissionRate: "0.120000",
+        mode: "contribution-margin",
+        otherFixedCosts: "1.000000",
+        otherVariableCostRate: "0.000000",
+        packagingCost: "0.500000",
+        productCost: "2.140000",
+        productName: null,
+        productSku: "SKU-1",
+        recommendedSalePrice: "27.540000",
+        shippingFee: "6.550000",
+        storeCouponRate: "0.030000",
+        target: "0.360000",
+        taxRate: "0.040000",
+        updatedAt: "2026-08-19T12:00:00.000Z",
+        variableRates: "0.270000",
+      },
+      error: null,
+    };
+    vi.mocked(apiClient.post).mockResolvedValueOnce(response);
+    const view = mount(<PricingCalculator mode="contribution-margin" />);
+
+    fillSpreadsheetContributionScenario();
+    const getSaveButton = () =>
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Salvar simulação"),
+      ) as HTMLButtonElement;
+
+    expect(getSaveButton().disabled).toBe(true);
+    setInputValue(
+      document.getElementById(
+        "contribution-margin-product-sku",
+      ) as HTMLInputElement,
+      "SKU-1",
+    );
+    expect(getSaveButton().disabled).toBe(false);
+
+    await act(async () => {
+      getSaveButton().dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      "/pricing/simulations",
+      expect.objectContaining({
+        body: expect.objectContaining({
+          productSku: "SKU-1",
+          target: "0.360000",
+        }),
+      }),
+    );
+    expect(text()).toContain("Simulação salva com sucesso.");
 
     view.unmount();
   });

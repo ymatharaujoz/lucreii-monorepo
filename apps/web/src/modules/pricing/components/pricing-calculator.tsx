@@ -6,13 +6,19 @@ import {
   AlertTriangle,
   Calculator,
   CircleHelp,
+  CheckCircle2,
+  LoaderCircle,
   Percent,
   RotateCcw,
+  Save,
   ShieldCheck,
   Sparkles,
   Wallet,
 } from "lucide-react";
+import type { PricingSimulation, PricingSimulationDraft } from "@lucreii/types";
+import { pricingSimulationFormSchema } from "@lucreii/validation";
 import { Badge, Button, cn } from "@lucreii/ui";
+import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, itemVariants } from "@/lib/animations";
 import {
   calculatePricing,
@@ -22,7 +28,10 @@ import {
   type PricingMode,
 } from "../calculations/pricing-calculations";
 
-type FormValues = Record<PricingField, string>;
+type FormValues = Record<PricingField, string> & {
+  productName: string;
+  productSku: string;
+};
 
 type FieldKind = "currency" | "percent";
 
@@ -34,7 +43,10 @@ type FieldConfig = {
 };
 
 type PricingCalculatorProps = {
+  embedded?: boolean;
+  initialSimulation?: PricingSimulation | null;
   mode: PricingMode;
+  onSaved?: (simulation: PricingSimulation) => void;
 };
 
 type ComputationState =
@@ -49,6 +61,8 @@ type ComputationState =
     };
 
 const EMPTY_FORM: FormValues = {
+  productName: "",
+  productSku: "",
   target: "",
   productCost: "",
   packagingCost: "",
@@ -60,6 +74,40 @@ const EMPTY_FORM: FormValues = {
   storeCouponRate: "",
   otherVariableCostRate: "",
 };
+
+function createInitialForm(simulation?: PricingSimulation | null): FormValues {
+  if (!simulation) {
+    return { ...EMPTY_FORM };
+  }
+
+  return {
+    affiliateCommissionRate: formatStoredValue(
+      simulation.affiliateCommissionRate,
+      "percent",
+    ),
+    marketplaceCommissionRate: formatStoredValue(
+      simulation.marketplaceCommissionRate,
+      "percent",
+    ),
+    otherFixedCosts: formatStoredValue(simulation.otherFixedCosts, "currency"),
+    otherVariableCostRate: formatStoredValue(
+      simulation.otherVariableCostRate,
+      "percent",
+    ),
+    packagingCost: formatStoredValue(simulation.packagingCost, "currency"),
+    productCost: formatStoredValue(simulation.productCost, "currency"),
+    productName: simulation.productName ?? "",
+    productSku: simulation.productSku ?? "",
+    shippingFee: formatStoredValue(simulation.shippingFee, "currency"),
+    storeCouponRate: formatStoredValue(simulation.storeCouponRate, "percent"),
+    target: formatStoredValue(
+      simulation.target,
+      MODE_CONFIG[simulation.mode].targetKind,
+      MODE_CONFIG[simulation.mode].targetKind === "percent",
+    ),
+    taxRate: formatStoredValue(simulation.taxRate, "percent"),
+  };
+}
 
 const COST_FIELDS: FieldConfig[] = [
   {
@@ -206,6 +254,23 @@ function formatEditableValue(value: string, kind: FieldKind) {
   });
 }
 
+function formatStoredValue(
+  value: string,
+  kind: FieldKind,
+  storedAsRate = kind === "percent",
+) {
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return "";
+  }
+
+  return formatEditableValue(
+    String(storedAsRate ? numericValue * 100 : numericValue),
+    kind,
+  );
+}
+
 function formatMoney(value: number | null) {
   if (value === null || !Number.isFinite(value)) {
     return "—";
@@ -311,6 +376,40 @@ function NumericField({
           {error || helper}
         </p>
       )}
+    </div>
+  );
+}
+
+function TextField({
+  id,
+  label,
+  onChange,
+  placeholder,
+  value,
+}: {
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <label
+        className="text-[12px] font-semibold tracking-tight text-foreground"
+        htmlFor={id}
+      >
+        {label}
+      </label>
+      <input
+        className="h-11 w-full rounded-[var(--radius-md)] border border-border bg-surface-strong px-3.5 text-sm font-medium text-foreground outline-none transition-all duration-[var(--transition-fast)] placeholder:text-muted hover:border-border-strong focus:border-border-focus focus:ring-4 focus:ring-accent/10"
+        id={id}
+        onChange={(event) => onChange(event.target.value)}
+        onInput={(event) => onChange(event.currentTarget.value)}
+        placeholder={placeholder}
+        type="text"
+        value={value}
+      />
     </div>
   );
 }
@@ -474,9 +573,48 @@ function PricingResultPanel({
   );
 }
 
-export function PricingCalculator({ mode }: PricingCalculatorProps) {
+type SaveSimulationButtonProps = {
+  canSave: boolean;
+  isSaving: boolean;
+  isEditing: boolean;
+  onSave: () => void;
+};
+
+function SaveSimulationButton({
+  canSave,
+  isEditing,
+  isSaving,
+  onSave,
+}: SaveSimulationButtonProps) {
+  return (
+    <Button disabled={!canSave} onClick={onSave} size="sm" type="button">
+      {isSaving ? (
+        <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Save className="h-3.5 w-3.5" />
+      )}
+      {isSaving
+        ? "Salvando..."
+        : isEditing
+          ? "Salvar alterações"
+          : "Salvar simulação"}
+    </Button>
+  );
+}
+
+export function PricingCalculator({
+  embedded = false,
+  initialSimulation,
+  mode,
+  onSaved,
+}: PricingCalculatorProps) {
   const config = MODE_CONFIG[mode];
-  const [form, setForm] = useState<FormValues>(EMPTY_FORM);
+  const [form, setForm] = useState<FormValues>(() =>
+    createInitialForm(initialSimulation),
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const reducedMotion = useReducedMotion();
 
   const computation = useMemo<ComputationState>(() => {
@@ -538,6 +676,96 @@ export function PricingCalculator({ mode }: PricingCalculatorProps) {
     }));
   }
 
+  function toCanonicalValue(value: string, kind: FieldKind) {
+    const parsed = parseLocalizedNumber(value) ?? 0;
+    return (kind === "percent" ? parsed / 100 : parsed).toFixed(6);
+  }
+
+  function toSimulationDraft(): PricingSimulationDraft | null {
+    if (computation.status !== "ready") {
+      return null;
+    }
+
+    const payload: PricingSimulationDraft = {
+      affiliateCommissionRate: toCanonicalValue(
+        form.affiliateCommissionRate,
+        "percent",
+      ),
+      mode,
+      marketplaceCommissionRate: toCanonicalValue(
+        form.marketplaceCommissionRate,
+        "percent",
+      ),
+      otherFixedCosts: toCanonicalValue(form.otherFixedCosts, "currency"),
+      otherVariableCostRate: toCanonicalValue(
+        form.otherVariableCostRate,
+        "percent",
+      ),
+      packagingCost: toCanonicalValue(form.packagingCost, "currency"),
+      productCost: toCanonicalValue(form.productCost, "currency"),
+      productName: form.productName.trim() || null,
+      productSku: form.productSku.trim() || null,
+      shippingFee: toCanonicalValue(form.shippingFee, "currency"),
+      storeCouponRate: toCanonicalValue(form.storeCouponRate, "percent"),
+      target: toCanonicalValue(form.target, config.targetKind),
+      taxRate: toCanonicalValue(form.taxRate, "percent"),
+    };
+    const parsed = pricingSimulationFormSchema.safeParse(payload);
+
+    return parsed.success ? parsed.data : null;
+  }
+
+  async function handleSave() {
+    const payload = toSimulationDraft();
+
+    if (!payload || (!payload.productSku && !payload.productName)) {
+      setSaveError("Informe o SKU ou o nome do produto antes de salvar.");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveMessage(null);
+
+    try {
+      const response = initialSimulation
+        ? await apiClient.patch<{ data: PricingSimulation; error: null }>(
+            `/pricing/simulations/${initialSimulation.id}`,
+            { body: payload },
+          )
+        : await apiClient.post<{ data: PricingSimulation; error: null }>(
+            "/pricing/simulations",
+            { body: payload },
+          );
+
+      setSaveMessage(
+        initialSimulation
+          ? "Simulação atualizada com sucesso."
+          : "Simulação salva com sucesso.",
+      );
+      onSaved?.(response.data);
+    } catch (error) {
+      setSaveError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Não foi possível salvar a simulação.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const hasIdentifier = Boolean(
+    form.productSku.trim() || form.productName.trim(),
+  );
+  const canSave = hasIdentifier && computation.status === "ready" && !isSaving;
+
+  function clearForm() {
+    setForm({ ...EMPTY_FORM });
+    setSaveError(null);
+    setSaveMessage(null);
+  }
+
   return (
     <motion.div
       className="space-y-8 pb-8"
@@ -547,7 +775,10 @@ export function PricingCalculator({ mode }: PricingCalculatorProps) {
     >
       <motion.header
         variants={itemVariants}
-        className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"
+        className={cn(
+          "flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between",
+          embedded && "hidden",
+        )}
       >
         <div className="max-w-3xl">
           <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-accent">
@@ -566,22 +797,128 @@ export function PricingCalculator({ mode }: PricingCalculatorProps) {
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <Badge className="border-accent/15 bg-accent-soft text-accent-strong">
             <ShieldCheck className="h-3 w-3" />
-            Não salvo
+            {initialSimulation
+              ? "Editando"
+              : saveMessage
+                ? "Salvo"
+                : "Não salvo"}
           </Badge>
           <Button
             aria-label="Limpar calculadora"
-            onClick={() => setForm(EMPTY_FORM)}
+            onClick={clearForm}
             size="sm"
             variant="secondary"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Limpar
           </Button>
+          <SaveSimulationButton
+            canSave={canSave}
+            isEditing={Boolean(initialSimulation)}
+            isSaving={isSaving}
+            onSave={() => void handleSave()}
+          />
         </div>
       </motion.header>
 
+      {embedded && (
+        <motion.div
+          variants={itemVariants}
+          className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-5"
+        >
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            {saveError ? (
+              <>
+                <AlertTriangle className="h-4 w-4 text-error" />
+                <span className="text-error">{saveError}</span>
+              </>
+            ) : saveMessage ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                <span>{saveMessage}</span>
+              </>
+            ) : (
+              <span>Edite os dados e salve o novo cenário.</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              aria-label="Limpar simulação"
+              onClick={clearForm}
+              size="sm"
+              variant="secondary"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Limpar
+            </Button>
+            <SaveSimulationButton
+              canSave={canSave}
+              isEditing={Boolean(initialSimulation)}
+              isSaving={isSaving}
+              onSave={() => void handleSave()}
+            />
+          </div>
+        </motion.div>
+      )}
+
+      {!embedded && (saveError || saveMessage) && (
+        <motion.div
+          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: -6 }}
+          className={cn(
+            "flex items-center gap-2 rounded-[var(--radius-lg)] border px-4 py-3 text-xs",
+            saveError
+              ? "border-error/20 bg-error-soft/40 text-error"
+              : "border-success/20 bg-success-soft/40 text-success",
+          )}
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>{saveError ?? saveMessage}</span>
+        </motion.div>
+      )}
+
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:gap-8">
         <motion.div variants={itemVariants} className="space-y-5">
+          <section className="rounded-[var(--radius-xl)] border border-accent/15 bg-accent-soft/20 p-5 shadow-[var(--shadow-xs)] sm:p-7">
+            <div className="flex items-start gap-3 border-b border-accent/15 pb-5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/15">
+                <Calculator className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent">
+                  Identificação opcional
+                </p>
+                <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+                  Dê um nome ao seu cenário
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Preencha o SKU ou o nome do produto para salvar esta
+                  simulação.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-5 sm:grid-cols-2">
+              <TextField
+                id={`${mode}-product-sku`}
+                label="SKU"
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, productSku: value }))
+                }
+                placeholder="Ex.: CAM-URB-042"
+                value={form.productSku}
+              />
+              <TextField
+                id={`${mode}-product-name`}
+                label="Nome do produto"
+                onChange={(value) =>
+                  setForm((current) => ({ ...current, productName: value }))
+                }
+                placeholder="Ex.: Camiseta urbana"
+                value={form.productName}
+              />
+            </div>
+          </section>
+
           <section className="rounded-[var(--radius-xl)] border border-border/70 bg-surface-strong/70 p-5 shadow-[var(--shadow-sm)] sm:p-7">
             <div className="flex items-start gap-3 border-b border-border/60 pb-5">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/15">
@@ -693,8 +1030,8 @@ export function PricingCalculator({ mode }: PricingCalculatorProps) {
           >
             <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
             <p>
-              Esta simulação acontece somente nesta tela. Seus valores não são
-              enviados nem gravados na base de dados.
+              Os valores ficam vinculados à sua empresa ativa e podem ser
+              editados depois na tela de Simulações.
             </p>
           </motion.div>
         </motion.div>

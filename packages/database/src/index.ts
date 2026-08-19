@@ -69,6 +69,9 @@ export type AdCost = typeof schema.adCosts.$inferSelect;
 export type NewAdCost = typeof schema.adCosts.$inferInsert;
 export type ManualExpense = typeof schema.manualExpenses.$inferSelect;
 export type NewManualExpense = typeof schema.manualExpenses.$inferInsert;
+export type PricingSimulation = typeof schema.pricingSimulations.$inferSelect;
+export type NewPricingSimulation =
+  typeof schema.pricingSimulations.$inferInsert;
 export type DailyMetric = typeof schema.dailyMetrics.$inferSelect;
 export type NewDailyMetric = typeof schema.dailyMetrics.$inferInsert;
 export type ProductMetric = typeof schema.productMetrics.$inferSelect;

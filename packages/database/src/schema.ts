@@ -417,6 +417,155 @@ export const fixedCosts = pgTable(
   ],
 );
 
+export const pricingSimulations = pgTable(
+  "pricing_simulations",
+  {
+    id: id(),
+    organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    companyId: companyId().references(() => companies.id, {
+      onDelete: "cascade",
+    }),
+    mode: varchar("mode", { length: 32 }).notNull(),
+    productSku: varchar("product_sku", { length: 128 }),
+    productName: varchar("product_name", { length: 255 }),
+    target: numeric("target", { precision: 14, scale: 6 }).notNull(),
+    productCost: numeric("product_cost", { precision: 14, scale: 6 })
+      .default("0")
+      .notNull(),
+    packagingCost: numeric("packaging_cost", { precision: 14, scale: 6 })
+      .default("0")
+      .notNull(),
+    shippingFee: numeric("shipping_fee", { precision: 14, scale: 6 })
+      .default("0")
+      .notNull(),
+    otherFixedCosts: numeric("other_fixed_costs", {
+      precision: 14,
+      scale: 6,
+    })
+      .default("0")
+      .notNull(),
+    marketplaceCommissionRate: numeric("marketplace_commission_rate", {
+      precision: 8,
+      scale: 6,
+    })
+      .default("0")
+      .notNull(),
+    taxRate: numeric("tax_rate", { precision: 8, scale: 6 })
+      .default("0")
+      .notNull(),
+    affiliateCommissionRate: numeric("affiliate_commission_rate", {
+      precision: 8,
+      scale: 6,
+    })
+      .default("0")
+      .notNull(),
+    storeCouponRate: numeric("store_coupon_rate", {
+      precision: 8,
+      scale: 6,
+    })
+      .default("0")
+      .notNull(),
+    otherVariableCostRate: numeric("other_variable_cost_rate", {
+      precision: 8,
+      scale: 6,
+    })
+      .default("0")
+      .notNull(),
+    recommendedSalePrice: numeric("recommended_sale_price", {
+      precision: 14,
+      scale: 6,
+    }).notNull(),
+    contributionMargin: numeric("contribution_margin", {
+      precision: 14,
+      scale: 6,
+    }).notNull(),
+    grossProfit: numeric("gross_profit", { precision: 14, scale: 6 }).notNull(),
+    fixedCostsTotal: numeric("fixed_costs_total", {
+      precision: 14,
+      scale: 6,
+    }).notNull(),
+    variableRatesTotal: numeric("variable_rates_total", {
+      precision: 8,
+      scale: 6,
+    }).notNull(),
+    calculationVersion: varchar("calculation_version", {
+      length: 32,
+    }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check(
+      "pricing_simulations_mode_valid",
+      sql`${table.mode} in ('contribution-margin', 'desired-profit', 'sale-price')`,
+    ),
+    check(
+      "pricing_simulations_identifier_present",
+      sql`nullif(trim(${table.productSku}), '') is not null or nullif(trim(${table.productName}), '') is not null`,
+    ),
+    check("pricing_simulations_target_non_negative", sql`${table.target} >= 0`),
+    check(
+      "pricing_simulations_product_cost_non_negative",
+      sql`${table.productCost} >= 0`,
+    ),
+    check(
+      "pricing_simulations_packaging_cost_non_negative",
+      sql`${table.packagingCost} >= 0`,
+    ),
+    check(
+      "pricing_simulations_shipping_fee_non_negative",
+      sql`${table.shippingFee} >= 0`,
+    ),
+    check(
+      "pricing_simulations_other_fixed_costs_non_negative",
+      sql`${table.otherFixedCosts} >= 0`,
+    ),
+    check(
+      "pricing_simulations_marketplace_rate_range",
+      sql`${table.marketplaceCommissionRate} between 0 and 1`,
+    ),
+    check(
+      "pricing_simulations_tax_rate_range",
+      sql`${table.taxRate} between 0 and 1`,
+    ),
+    check(
+      "pricing_simulations_affiliate_rate_range",
+      sql`${table.affiliateCommissionRate} between 0 and 1`,
+    ),
+    check(
+      "pricing_simulations_store_coupon_rate_range",
+      sql`${table.storeCouponRate} between 0 and 1`,
+    ),
+    check(
+      "pricing_simulations_other_variable_rate_range",
+      sql`${table.otherVariableCostRate} between 0 and 1`,
+    ),
+    check(
+      "pricing_simulations_recommended_price_positive",
+      sql`${table.recommendedSalePrice} > 0`,
+    ),
+    index("pricing_simulations_organization_id_idx").on(table.organizationId),
+    index("pricing_simulations_user_id_idx").on(table.userId),
+    index("pricing_simulations_company_created_idx").on(
+      table.companyId,
+      table.createdAt,
+    ),
+    index("pricing_simulations_company_sku_idx").on(
+      table.companyId,
+      table.productSku,
+    ),
+    index("pricing_simulations_company_name_idx").on(
+      table.companyId,
+      table.productName,
+    ),
+  ],
+);
+
 export const billingCustomers = pgTable(
   "billing_customers",
   {
@@ -1130,6 +1279,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   companies: many(companies),
   fixedCosts: many(fixedCosts),
   productMonthlyPerformance: many(productMonthlyPerformance),
+  pricingSimulations: many(pricingSimulations),
   sessions: many(sessions),
   accounts: many(accounts),
   billingTrials: many(billingTrials),
@@ -1187,6 +1337,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   productFinanceDefaults: many(productFinanceDefaults),
   productCosts: many(productCosts),
   productMonthlyPerformance: many(productMonthlyPerformance),
+  pricingSimulations: many(pricingSimulations),
   adCosts: many(adCosts),
   manualExpenses: many(manualExpenses),
   dailyMetrics: many(dailyMetrics),
@@ -1204,6 +1355,7 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
   }),
   fixedCosts: many(fixedCosts),
   performanceRows: many(productMonthlyPerformance),
+  pricingSimulations: many(pricingSimulations),
   marketplaceConnections: many(marketplaceConnections),
   syncRuns: many(syncRuns),
   externalProducts: many(externalProducts),
@@ -1533,6 +1685,24 @@ export const fixedCostsRelations = relations(fixedCosts, ({ one }) => ({
     references: [companies.id],
   }),
 }));
+
+export const pricingSimulationsRelations = relations(
+  pricingSimulations,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [pricingSimulations.organizationId],
+      references: [organizations.id],
+    }),
+    user: one(users, {
+      fields: [pricingSimulations.userId],
+      references: [users.id],
+    }),
+    company: one(companies, {
+      fields: [pricingSimulations.companyId],
+      references: [companies.id],
+    }),
+  }),
+);
 
 export const dailyMetricsRelations = relations(dailyMetrics, ({ one }) => ({
   organization: one(organizations, {

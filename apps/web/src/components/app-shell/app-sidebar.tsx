@@ -165,6 +165,7 @@ const navLinks: NavItem[] = [
       },
       { href: "/app/pricing/desired-profit", label: "Lucro Desejado" },
       { href: "/app/pricing/sale-price", label: "Preço de Venda" },
+      { href: "/app/pricing/simulations", label: "Simulações" },
     ],
   },
   {

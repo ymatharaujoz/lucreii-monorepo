@@ -13,6 +13,7 @@ import {
   productFinanceDefaults,
   productImages,
   productMonthlyPerformance,
+  pricingSimulations,
   products,
   marketplaceConnections,
   syncRuns,
@@ -30,6 +31,7 @@ describe("@lucreii/database schema", () => {
     expect(dbSchema.productFinanceDefaults).toBe(productFinanceDefaults);
     expect(dbSchema.productImages).toBe(productImages);
     expect(dbSchema.productMonthlyPerformance).toBe(productMonthlyPerformance);
+    expect(dbSchema.pricingSimulations).toBe(pricingSimulations);
     expect(dbSchema.products).toBe(products);
     expect(dbSchema.users).toBe(users);
     expect(dbSchema.accounts).toBe(accounts);
@@ -52,6 +54,7 @@ describe("@lucreii/database schema", () => {
     expect(db.query.productFinanceDefaults).toBeDefined();
     expect(db.query.productImages).toBeDefined();
     expect(db.query.productMonthlyPerformance).toBeDefined();
+    expect(db.query.pricingSimulations).toBeDefined();
   });
 
   it("scopes product catalog persistence by company", () => {
@@ -292,16 +295,20 @@ describe("@lucreii/database schema", () => {
     );
 
     expect(productMonthlyPerformance.productId).toBeDefined();
-    expect(performanceLinkMigration).toContain('ALTER TABLE "product_monthly_performance"');
-    expect(performanceLinkMigration).toContain('ADD COLUMN IF NOT EXISTS "product_id" uuid');
+    expect(performanceLinkMigration).toContain(
+      'ALTER TABLE "product_monthly_performance"',
+    );
+    expect(performanceLinkMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS "product_id" uuid',
+    );
     expect(performanceLinkMigration).toContain(
       'CREATE INDEX IF NOT EXISTS "product_monthly_performance_product_id_idx"',
     );
     expect(performanceLinkMigration).toContain(
-      'product_monthly_performance_org_company_month_channel_product_key',
+      "product_monthly_performance_org_company_month_channel_product_key",
     );
     expect(performanceLinkMigration).toContain(
-      'product_monthly_performance_org_company_month_channel_sku_legacy_key',
+      "product_monthly_performance_org_company_month_channel_sku_legacy_key",
     );
     expect(migrationJournal).toContain(
       '"tag": "0020_product_monthly_performance_product_link"',
@@ -390,7 +397,9 @@ describe("@lucreii/database schema", () => {
     expect(financeFoundationMigration).toContain(
       'CREATE UNIQUE INDEX "companies_org_code_key" ON "companies" USING btree ("organization_id","code")',
     );
-    expect(financeFoundationMigration).toContain('"name" varchar(255) NOT NULL');
+    expect(financeFoundationMigration).toContain(
+      '"name" varchar(255) NOT NULL',
+    );
     expect(analyticsScopeMigration).toContain("FROM public.companies c");
     expect(analyticsScopeMigration).toContain("WHERE c.id = company_id");
   });
@@ -401,7 +410,10 @@ describe("@lucreii/database schema", () => {
       "utf8",
     );
     const legalIdentityRepairMigration = readFileSync(
-      path.resolve(__dirname, "../drizzle/0015_company_legal_identity_repair.sql"),
+      path.resolve(
+        __dirname,
+        "../drizzle/0015_company_legal_identity_repair.sql",
+      ),
       "utf8",
     );
     const migrationJournal = readFileSync(
@@ -409,14 +421,26 @@ describe("@lucreii/database schema", () => {
       "utf8",
     );
 
-    expect(legalIdentityMigration).toContain('ALTER TABLE "companies" RENAME COLUMN "name" TO "razao_social";');
-    expect(legalIdentityMigration).toContain('ALTER TABLE "companies" ADD COLUMN "cnpj" varchar(14) NOT NULL;');
+    expect(legalIdentityMigration).toContain(
+      'ALTER TABLE "companies" RENAME COLUMN "name" TO "razao_social";',
+    );
+    expect(legalIdentityMigration).toContain(
+      'ALTER TABLE "companies" ADD COLUMN "cnpj" varchar(14) NOT NULL;',
+    );
     expect(legalIdentityMigration).toContain("companies_cnpj_length");
-    expect(legalIdentityMigration).toContain('CREATE UNIQUE INDEX "companies_org_cnpj_key" ON "companies" USING btree ("organization_id","cnpj")');
-    expect(legalIdentityRepairMigration).toContain('ALTER TABLE "companies" RENAME COLUMN "name" TO "razao_social";');
-    expect(legalIdentityRepairMigration).toContain('ADD COLUMN IF NOT EXISTS "cnpj" varchar(14)');
+    expect(legalIdentityMigration).toContain(
+      'CREATE UNIQUE INDEX "companies_org_cnpj_key" ON "companies" USING btree ("organization_id","cnpj")',
+    );
+    expect(legalIdentityRepairMigration).toContain(
+      'ALTER TABLE "companies" RENAME COLUMN "name" TO "razao_social";',
+    );
+    expect(legalIdentityRepairMigration).toContain(
+      'ADD COLUMN IF NOT EXISTS "cnpj" varchar(14)',
+    );
     expect(migrationJournal).toContain('"tag": "0014_company_legal_identity"');
-    expect(migrationJournal).toContain('"tag": "0015_company_legal_identity_repair"');
+    expect(migrationJournal).toContain(
+      '"tag": "0015_company_legal_identity_repair"',
+    );
   });
 
   it("keeps global company CNPJ uniqueness aligned with schema", () => {
@@ -430,8 +454,41 @@ describe("@lucreii/database schema", () => {
     );
 
     expect(companies.cnpj).toBeDefined();
-    expect(companyCnpjMigration).toContain('DROP INDEX IF EXISTS "companies_org_cnpj_key";');
-    expect(companyCnpjMigration).toContain('CREATE UNIQUE INDEX IF NOT EXISTS "companies_cnpj_key" ON "companies" USING btree ("cnpj");');
-    expect(migrationJournal).toContain('"tag": "0018_company_cnpj_global_unique"');
+    expect(companyCnpjMigration).toContain(
+      'DROP INDEX IF EXISTS "companies_org_cnpj_key";',
+    );
+    expect(companyCnpjMigration).toContain(
+      'CREATE UNIQUE INDEX IF NOT EXISTS "companies_cnpj_key" ON "companies" USING btree ("cnpj");',
+    );
+    expect(migrationJournal).toContain(
+      '"tag": "0018_company_cnpj_global_unique"',
+    );
+  });
+
+  it("keeps pricing simulations persistence aligned with migration assets", () => {
+    const pricingMigration = readFileSync(
+      path.resolve(__dirname, "../drizzle/0024_pricing_simulations.sql"),
+      "utf8",
+    );
+    const migrationJournal = readFileSync(
+      path.resolve(__dirname, "../drizzle/meta/_journal.json"),
+      "utf8",
+    );
+
+    expect(pricingSimulations.companyId).toBeDefined();
+    expect(pricingSimulations.calculationVersion).toBeDefined();
+    expect(pricingMigration).toContain(
+      'CREATE TABLE IF NOT EXISTS "pricing_simulations"',
+    );
+    expect(pricingMigration).toContain(
+      '"pricing_simulations_identifier_present"',
+    );
+    expect(pricingMigration).toContain(
+      'CREATE INDEX IF NOT EXISTS "pricing_simulations_company_created_idx"',
+    );
+    expect(pricingMigration).toContain(
+      'CREATE POLICY "Members can view own pricing simulations"',
+    );
+    expect(migrationJournal).toContain('"tag": "0024_pricing_simulations"');
   });
 });

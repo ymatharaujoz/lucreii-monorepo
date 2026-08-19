@@ -11,6 +11,7 @@ import { FinanceInputsModule } from "@/modules/finance-inputs/finance-inputs.mod
 import { IntegrationsModule } from "@/modules/integrations/integrations.module";
 import { OnboardingModule } from "@/modules/onboarding/onboarding.module";
 import { OrdersModule } from "@/modules/orders/orders.module";
+import { PricingSimulationsModule } from "@/modules/pricing-simulations/pricing-simulations.module";
 import { ProductsModule } from "@/modules/products/products.module";
 import { SyncModule } from "@/modules/sync/sync.module";
 
@@ -30,6 +31,7 @@ export class AppModule {
         IntegrationsModule,
         OnboardingModule,
         OrdersModule,
+        PricingSimulationsModule,
         ProductsModule,
         SyncModule,
         HealthModule,

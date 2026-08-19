@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@lucreii/types": "workspace:*"
+  },
   "devDependencies": {
     "eslint": "^9.39.0",
     "typescript": "^5.9.3",

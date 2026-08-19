@@ -12,6 +12,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
+    "@lucreii/domain": "workspace:*",
     "@lucreii/types": "workspace:*",
     "@lucreii/ui": "workspace:*",
     "@lucreii/validation": "workspace:*",

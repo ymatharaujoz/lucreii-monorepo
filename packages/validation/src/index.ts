@@ -5,3 +5,4 @@ export * from "./finance-inputs";
 export * from "./orders";
 export * from "./protected-app";
 export * from "./products";
+export * from "./pricing-simulations";

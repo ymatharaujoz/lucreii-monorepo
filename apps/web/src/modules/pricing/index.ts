@@ -1,4 +1,5 @@
 export { PricingCalculator } from "./components/pricing-calculator";
+export { PricingSimulationsPage } from "./components/pricing-simulations-page";
 export { PricingPage } from "./components/pricing-page";
 export {
   calculatePricing,
