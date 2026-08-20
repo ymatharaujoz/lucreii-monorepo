@@ -87,39 +87,83 @@ describe("AppSidebar pricing navigation", () => {
     usePathnameMock.mockReturnValue("/app/orders");
   });
 
-  it("renders Precificação below Pedidos and expands its pricing tools", () => {
+  it("renders Calculadora below Pedidos and expands its nested pricing tools", () => {
     const view = mount(<AppSidebar {...sidebarProps()} />);
-    const pricingLink = document.querySelector(
-      'button[data-href="/app/pricing/contribution-margin"]',
+    const calculatorLink = document.querySelector(
+      'button[data-href="/app/pricing"]',
     );
 
     expect(document.body.textContent).toContain("Pedidos");
-    expect(document.body.textContent).toContain("Precificação");
+    expect(document.body.textContent).toContain("Calculadora");
     expect(document.body.textContent?.indexOf("Pedidos")).toBeLessThan(
-      document.body.textContent?.indexOf("Precificação") ?? 0,
+      document.body.textContent?.indexOf("Calculadora") ?? 0,
     );
     expect(document.body.textContent).not.toContain("Lucro Desejado");
+
+    act(() => {
+      calculatorLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(document.body.textContent).toContain("Precificação");
+    expect(document.body.textContent).toContain("ROAS de Equilíbrio");
+    expect(document.body.textContent).not.toContain("Lucro Desejado");
+
+    const pricingLink = document.querySelector(
+      'button[data-href="/app/pricing/contribution-margin"]',
+    );
 
     act(() => {
       pricingLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    expect(document.body.textContent).toContain("Simulações");
     expect(document.body.textContent).toContain("Margem de Contribuição");
     expect(document.body.textContent).toContain("Lucro Desejado");
     expect(document.body.textContent).toContain("Preço de Venda");
-    expect(document.body.textContent).toContain("Simulações");
 
     view.unmount();
   });
 
-  it("marks Precificação active when a child route is open", () => {
+  it("marks Calculadora and Precificação active when a child route is open", () => {
     usePathnameMock.mockReturnValue("/app/pricing/desired-profit");
     const view = mount(<AppSidebar {...sidebarProps()} />);
-    const parentLink = document.querySelector(
+    const calculatorLink = document.querySelector(
+      'button[data-href="/app/pricing"]',
+    );
+
+    expect(calculatorLink?.className).toContain("text-accent-strong");
+
+    act(() => {
+      calculatorLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const pricingLink = document.querySelector(
       'button[data-href="/app/pricing/contribution-margin"]',
     );
 
-    expect(parentLink?.className).toContain("text-accent-strong");
+    expect(pricingLink?.className).toContain("text-accent-strong");
+
+    view.unmount();
+  });
+
+  it("marks ROAS de Equilíbrio active in the calculator hierarchy", () => {
+    usePathnameMock.mockReturnValue("/app/pricing/break-even-roas");
+    const view = mount(<AppSidebar {...sidebarProps()} />);
+    const calculatorLink = document.querySelector(
+      'button[data-href="/app/pricing"]',
+    );
+
+    expect(calculatorLink?.className).toContain("text-accent-strong");
+
+    act(() => {
+      calculatorLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const roasLink = document.querySelector(
+      'button[data-href="/app/pricing/break-even-roas"]',
+    );
+
+    expect(roasLink?.className).toContain("text-accent-strong");
 
     view.unmount();
   });

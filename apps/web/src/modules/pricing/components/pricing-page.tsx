@@ -4,10 +4,13 @@ import { readServerAuthState } from "@/lib/server-auth";
 import { readServerBillingState } from "@/lib/server-billing";
 import { hasActiveCompany, readServerCompanies } from "@/lib/server-companies";
 import { getActiveCompany } from "@/modules/dashboard/components/company-finance-defaults";
+import { BreakEvenRoasCalculator } from "./break-even-roas-calculator";
 import { PricingCalculator } from "./pricing-calculator";
 import type { PricingMode } from "../calculations/pricing-calculations";
 
-export async function PricingPage({ mode }: { mode: PricingMode }) {
+type PricingPageMode = PricingMode | "break-even-roas";
+
+export async function PricingPage({ mode }: { mode: PricingPageMode }) {
   const [authState, billingState] = await Promise.all([
     readServerAuthState(),
     readServerBillingState(),
@@ -35,5 +38,9 @@ export async function PricingPage({ mode }: { mode: PricingMode }) {
     redirect(`/auth/auto-select-company?companyId=${activeCompany.id}`);
   }
 
-  return <PricingCalculator mode={mode} />;
+  return mode === "break-even-roas" ? (
+    <BreakEvenRoasCalculator />
+  ) : (
+    <PricingCalculator mode={mode} />
+  );
 }

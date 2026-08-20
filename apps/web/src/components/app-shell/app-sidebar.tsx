@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { FC } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -115,24 +116,15 @@ const BillingIcon = () => (
   </svg>
 );
 
-type SubNavItem = {
+type NavNode = {
   href: string;
   label: string;
+  children?: NavNode[];
 };
 
-type NavItem =
-  | {
-      href: string;
-      label: string;
-      icon: React.FC;
-      children?: undefined;
-    }
-  | {
-      href: string;
-      label: string;
-      icon: React.FC;
-      children: SubNavItem[];
-    };
+type NavItem = NavNode & {
+  icon: FC;
+};
 
 const navLinks: NavItem[] = [
   {
@@ -155,17 +147,27 @@ const navLinks: NavItem[] = [
     icon: OrdersIcon,
   },
   {
-    href: "/app/pricing/contribution-margin",
-    label: "Precificação",
+    href: "/app/pricing",
+    label: "Calculadora",
     icon: PricingIcon,
     children: [
       {
         href: "/app/pricing/contribution-margin",
-        label: "Margem de Contribuição",
+        label: "Precificação",
+        children: [
+          { href: "/app/pricing/simulations", label: "Simulações" },
+          {
+            href: "/app/pricing/contribution-margin",
+            label: "Margem de Contribuição",
+          },
+          { href: "/app/pricing/desired-profit", label: "Lucro Desejado" },
+          { href: "/app/pricing/sale-price", label: "Preço de Venda" },
+        ],
       },
-      { href: "/app/pricing/desired-profit", label: "Lucro Desejado" },
-      { href: "/app/pricing/sale-price", label: "Preço de Venda" },
-      { href: "/app/pricing/simulations", label: "Simulações" },
+      {
+        href: "/app/pricing/break-even-roas",
+        label: "ROAS de Equilíbrio",
+      },
     ],
   },
   {
@@ -182,6 +184,188 @@ const navLinks: NavItem[] = [
 
 function cn(...parts: Array<string | undefined | null | false>) {
   return parts.filter(Boolean).join(" ");
+}
+
+function NavTree({
+  items,
+  level,
+  expandedMenus,
+  isActive,
+  isNodeActive,
+  toggleMenu,
+}: {
+  items: NavNode[];
+  level: number;
+  expandedMenus: string[];
+  isActive: (href: string) => boolean;
+  isNodeActive: (node: NavNode) => boolean;
+  toggleMenu: (href: string) => void;
+}) {
+  return (
+    <ul
+      className={cn(
+        "overflow-hidden",
+        level > 0 && "ml-5 border-l border-border/60 pl-1",
+      )}
+    >
+      {items.map((item) => {
+        const hasChildren = Boolean(item.children?.length);
+        const active = isNodeActive(item);
+        const expanded = expandedMenus.includes(item.href);
+
+        return (
+          <li key={item.href}>
+            <Link
+              aria-expanded={hasChildren ? expanded : undefined}
+              data-href={item.href}
+              href={item.href}
+              prefetch={!hasChildren}
+              className={cn(
+                "group relative flex w-full items-center gap-2 rounded-md py-2 pr-3",
+                level === 0 ? "pl-3" : "pl-4",
+                "text-[12px] font-medium transition-all duration-[var(--transition-fast)]",
+                active
+                  ? "bg-accent-soft/30 text-accent-strong"
+                  : "text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground",
+              )}
+              onClick={(event) => {
+                if (
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                ) {
+                  return;
+                }
+                if (event.button !== 0) return;
+                if (hasChildren) {
+                  event.preventDefault();
+                  toggleMenu(item.href);
+                }
+              }}
+            >
+              {hasChildren ? (
+                <motion.span
+                  animate={{ rotate: expanded ? 180 : 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="text-muted-foreground"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </motion.span>
+              ) : (
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full transition-colors",
+                    active
+                      ? "bg-accent"
+                      : "bg-muted-foreground/40 group-hover:bg-muted-foreground",
+                  )}
+                />
+              )}
+              <span className="truncate">{item.label}</span>
+            </Link>
+
+            <AnimatePresence initial={false}>
+              {hasChildren && expanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: "easeInOut" }}
+                >
+                  <NavTree
+                    expandedMenus={expandedMenus}
+                    isActive={isActive}
+                    isNodeActive={isNodeActive}
+                    items={item.children ?? []}
+                    level={level + 1}
+                    toggleMenu={toggleMenu}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function CollapsedNavTree({
+  items,
+  isActive,
+  isNodeActive,
+  setExpandedMenus,
+}: {
+  items: NavNode[];
+  isActive: (href: string) => boolean;
+  isNodeActive: (node: NavNode) => boolean;
+  setExpandedMenus: (menus: string[]) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      {items.map((item) => {
+        const active = isNodeActive(item);
+
+        if (item.children?.length) {
+          return (
+            <div key={item.href} className="space-y-1">
+              <div
+                className={cn(
+                  "px-2.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.14em]",
+                  active ? "text-accent" : "text-muted-foreground/70",
+                )}
+              >
+                {item.label}
+              </div>
+              <CollapsedNavTree
+                isActive={isActive}
+                isNodeActive={isNodeActive}
+                items={item.children}
+                setExpandedMenus={setExpandedMenus}
+              />
+            </div>
+          );
+        }
+
+        return (
+          <Link
+            key={item.href}
+            data-href={item.href}
+            href={item.href}
+            prefetch={false}
+            className={cn(
+              "flex w-full items-center gap-2 rounded-md px-2.5 py-2",
+              "text-[12px] font-medium transition-all duration-[var(--transition-fast)]",
+              isActive(item.href)
+                ? "bg-accent-soft/30 text-accent-strong"
+                : "text-muted-foreground hover:bg-foreground/[0.03] hover:text-foreground",
+            )}
+            onClick={(event) => {
+              if (
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              ) {
+                return;
+              }
+              if (event.button !== 0) return;
+              setExpandedMenus([]);
+            }}
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full transition-colors",
+                isActive(item.href) ? "bg-accent" : "bg-muted-foreground/40",
+              )}
+            />
+            <span className="truncate">{item.label}</span>
+          </Link>
+        );
+      })}
+    </div>
+  );
 }
 
 export function AppSidebar({
@@ -210,20 +394,23 @@ export function AppSidebar({
   isMobile?: boolean;
 }) {
   const pathname = usePathname();
-  const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
 
   function isActive(href: string) {
     if (href === "/app") return pathname === "/app";
     return pathname.startsWith(href);
   }
 
-  function isParentActive(item: NavItem) {
-    if (!item.children) return isActive(item.href);
-    return item.children.some((child) => isActive(child.href));
+  function isNodeActive(item: NavNode) {
+    return isActive(item.href) || Boolean(item.children?.some(isNodeActive));
   }
 
   function toggleMenu(href: string) {
-    setExpandedMenu((current) => (current === href ? null : href));
+    setExpandedMenus((current) =>
+      current.includes(href)
+        ? current.filter((item) => item !== href)
+        : [...current, href],
+    );
   }
 
   return (
@@ -285,10 +472,10 @@ export function AppSidebar({
       <nav className="flex-1 overflow-y-auto px-2 py-4">
         <ul className="flex flex-col gap-0.5">
           {navLinks.map((link, index) => {
-            const parentActive = isParentActive(link);
+            const parentActive = isNodeActive(link);
             const Icon = link.icon;
-            const hasChildren = !!link.children;
-            const isExpanded = expandedMenu === link.href;
+            const hasChildren = Boolean(link.children?.length);
+            const isExpanded = expandedMenus.includes(link.href);
 
             return (
               <motion.li
@@ -383,42 +570,22 @@ export function AppSidebar({
                 {/* Expanded sub-menu (non-collapsed) */}
                 <AnimatePresence>
                   {!collapsed && hasChildren && isExpanded && (
-                    <motion.ul
+                    <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.2, ease: "easeInOut" }}
                       className="overflow-hidden"
                     >
-                      {link.children!.map((child) => {
-                        const childActive = isActive(child.href);
-                        return (
-                          <li key={child.href}>
-                            <Link
-                              href={child.href}
-                              prefetch={false}
-                              className={cn(
-                                "group flex w-full items-center gap-2 rounded-md py-2 pr-3 pl-10",
-                                "text-[12px] font-medium transition-all duration-[var(--transition-fast)]",
-                                childActive
-                                  ? "text-accent-strong bg-accent-soft/30"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]",
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "h-1.5 w-1.5 rounded-full transition-colors",
-                                  childActive
-                                    ? "bg-accent"
-                                    : "bg-muted-foreground/40 group-hover:bg-muted-foreground",
-                                )}
-                              />
-                              <span className="truncate">{child.label}</span>
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </motion.ul>
+                      <NavTree
+                        expandedMenus={expandedMenus}
+                        isActive={isActive}
+                        isNodeActive={isNodeActive}
+                        items={link.children ?? []}
+                        level={0}
+                        toggleMenu={toggleMenu}
+                      />
+                    </motion.div>
                   )}
                 </AnimatePresence>
 
@@ -435,44 +602,12 @@ export function AppSidebar({
                       <div className="mb-1 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         {link.label}
                       </div>
-                      {link.children!.map((child) => {
-                        const childActive = isActive(child.href);
-                        return (
-                          <Link
-                            key={child.href}
-                            href={child.href}
-                            prefetch={false}
-                            className={cn(
-                              "flex w-full items-center gap-2 rounded-md px-2.5 py-2",
-                              "text-[12px] font-medium transition-all duration-[var(--transition-fast)]",
-                              childActive
-                                ? "text-accent-strong bg-accent-soft/30"
-                                : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]",
-                            )}
-                            onClick={(e) => {
-                              if (
-                                e.metaKey ||
-                                e.ctrlKey ||
-                                e.shiftKey ||
-                                e.altKey
-                              )
-                                return;
-                              if (e.button !== 0) return;
-                              setExpandedMenu(null);
-                            }}
-                          >
-                            <span
-                              className={cn(
-                                "h-1.5 w-1.5 rounded-full transition-colors",
-                                childActive
-                                  ? "bg-accent"
-                                  : "bg-muted-foreground/40",
-                              )}
-                            />
-                            <span className="truncate">{child.label}</span>
-                          </Link>
-                        );
-                      })}
+                      <CollapsedNavTree
+                        isActive={isActive}
+                        isNodeActive={isNodeActive}
+                        items={link.children ?? []}
+                        setExpandedMenus={setExpandedMenus}
+                      />
                       <div className="absolute left-0 top-4 -translate-x-1 border-4 border-transparent border-r-surface-strong" />
                     </motion.div>
                   )}
