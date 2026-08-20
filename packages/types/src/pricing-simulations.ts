@@ -52,3 +52,8 @@ export type PricingSimulationList = {
   totalItems: number;
   totalPages: number;
 };
+
+export type PricingSimulationBulkDeleteResult = {
+  ids: string[];
+  totalDeleted: number;
+};

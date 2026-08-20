@@ -16,6 +16,7 @@ import type { AuthenticatedRequestContext } from "@/modules/auth/auth.types";
 import { EntitlementGuard } from "@/modules/billing/entitlement.guard";
 import {
   CreatePricingSimulationRequestDto,
+  DeletePricingSimulationsBulkRequestDto,
   ListPricingSimulationsQueryDto,
   UpdatePricingSimulationRequestDto,
 } from "./pricing-simulations.dto";
@@ -82,6 +83,20 @@ export class PricingSimulationsController {
         this.context(authContext),
         simulationId,
         body,
+      ),
+      error: null,
+    };
+  }
+
+  @Delete("bulk-delete")
+  async removeMany(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Body() body: DeletePricingSimulationsBulkRequestDto,
+  ) {
+    return {
+      data: await this.simulationsService.removeMany(
+        this.context(authContext),
+        body.ids,
       ),
       error: null,
     };

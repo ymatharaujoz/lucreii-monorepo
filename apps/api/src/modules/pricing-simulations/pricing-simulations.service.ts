@@ -21,7 +21,7 @@ import type {
   PricingSimulationListQueryInput,
   PricingSimulationUpdateInput,
 } from "@lucreii/validation";
-import { and, asc, count, desc, eq, ilike } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 
 type TenantContext = {
@@ -242,6 +242,34 @@ export class PricingSimulationsService {
     }
 
     return deleted;
+  }
+
+  async removeMany(context: TenantContext, simulationIds: string[]) {
+    const companyId = this.requireSelectedCompany(context);
+    await this.ensureCompanyAccess(context, companyId);
+
+    const ids = [...new Set(simulationIds.map((id) => id.trim()))].filter(
+      Boolean,
+    );
+
+    if (ids.length === 0) {
+      throw new BadRequestException("Selecione ao menos uma simulação.");
+    }
+
+    const deleted = await this.db
+      .delete(pricingSimulations)
+      .where(
+        and(
+          inArray(pricingSimulations.id, ids),
+          ...this.buildScopeConditions(context, companyId),
+        ),
+      )
+      .returning({ id: pricingSimulations.id });
+
+    return {
+      ids: deleted.map((row) => row.id),
+      totalDeleted: deleted.length,
+    };
   }
 
   private calculate(

@@ -3,33 +3,47 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { motion, useReducedMotion } from "framer-motion";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   AlertTriangle,
   Archive,
   ArrowUpDown,
   Calculator,
+  CheckCheck,
   ChevronDown,
   ChevronRight,
   ChevronUp,
   LoaderCircle,
   Plus,
   Search,
+  Trash2,
+  X,
 } from "lucide-react";
 import type {
   PricingSimulation,
+  PricingSimulationBulkDeleteResult,
   PricingSimulationSortDirection,
   PricingSimulationSortKey,
 } from "@lucreii/types";
-import { Badge, Button, cn } from "@lucreii/ui";
+import { Badge, Button, cn, Modal } from "@lucreii/ui";
 import { Pagination } from "@/components/ui-premium/pagination";
-import { ApiClientError } from "@/lib/api/client";
+import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, itemVariants } from "@/lib/animations";
 import {
   fetchPricingSimulations,
   type PricingSimulationListFilters,
 } from "./pricing-simulations-data";
+import {
+  areAllVisibleSelected,
+  toggleSelectedId,
+  toggleVisibleSelection,
+} from "./pricing-simulations-selection";
 
 const QUERY_KEY = "pricing-simulations";
 
@@ -123,12 +137,20 @@ function SimulationTable({
   items,
   onSelect,
   onSortChange,
+  onToggleSelected,
+  onToggleVisibleSelection,
+  selectedIds,
+  allVisibleSelected,
   sortBy,
   sortDirection,
 }: {
+  allVisibleSelected: boolean;
   items: PricingSimulation[];
   onSelect: (simulation: PricingSimulation) => void;
   onSortChange: (sortBy: SortKey) => void;
+  onToggleSelected: (id: string) => void;
+  onToggleVisibleSelection: () => void;
+  selectedIds: string[];
   sortBy: SortKey | null;
   sortDirection: SortDirection | null;
 }) {
@@ -143,9 +165,19 @@ function SimulationTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[820px] border-collapse text-left">
+      <table className="w-full min-w-[900px] border-collapse text-left">
         <thead>
           <tr className="border-b border-border/60 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            <th className="w-12 px-5 py-4">
+              <input
+                aria-label="Selecionar todas as simulações visíveis"
+                checked={allVisibleSelected}
+                className="h-4 w-4 cursor-pointer rounded border-border text-accent accent-accent focus:ring-accent/20"
+                onChange={onToggleVisibleSelection}
+                onClick={(event) => event.stopPropagation()}
+                type="checkbox"
+              />
+            </th>
             {columns.map((column) => (
               <th
                 aria-sort={
@@ -192,6 +224,17 @@ function SimulationTable({
               tabIndex={0}
               transition={{ delay: index * 0.025, duration: 0.2 }}
             >
+              <td className="w-12 px-5 py-4">
+                <input
+                  aria-label={`Selecionar ${simulation.productIdentifier}`}
+                  checked={selectedIds.includes(simulation.id)}
+                  className="h-4 w-4 cursor-pointer rounded border-border text-accent accent-accent focus:ring-accent/20"
+                  onChange={() => onToggleSelected(simulation.id)}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  type="checkbox"
+                />
+              </td>
               <td className="px-5 py-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/15">
@@ -241,6 +284,76 @@ function SimulationTable({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function SimulationSelectionActionBar({
+  allVisibleSelected,
+  isDeleting,
+  onClear,
+  onDelete,
+  onSelectPage,
+  selectedCount,
+  visibleCount,
+}: {
+  allVisibleSelected: boolean;
+  isDeleting: boolean;
+  onClear: () => void;
+  onDelete: () => void;
+  onSelectPage: () => void;
+  selectedCount: number;
+  visibleCount: number;
+}) {
+  return (
+    <AnimatePresence initial={false} mode="wait">
+      {selectedCount > 0 ? (
+        <motion.div
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          className="relative mx-5 my-4 flex flex-col gap-3 overflow-hidden rounded-[var(--radius-lg)] border border-accent/25 bg-gradient-to-r from-accent/[0.08] via-accent/[0.035] to-transparent p-3 shadow-[var(--shadow-sm)] sm:mx-7 sm:flex-row sm:items-center sm:justify-between"
+          exit={{ opacity: 0, y: -8, scale: 0.985 }}
+          initial={{ opacity: 0, y: -8, scale: 0.985 }}
+          key="pricing-simulation-selection-bar"
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground shadow-[var(--shadow-sm)]">
+              <CheckCheck className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">
+                {selectedCount} simulaç{selectedCount === 1 ? "ão" : "ões"} selecionada{selectedCount === 1 ? "" : "s"}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                A seleção continua ativa ao trocar de página ou filtro.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            {visibleCount > 0 && !allVisibleSelected && (
+              <Button onClick={onSelectPage} size="sm" variant="ghost">
+                Selecionar página
+              </Button>
+            )}
+            <Button onClick={onClear} size="sm" variant="ghost">
+              <X className="h-3.5 w-3.5" />
+              Limpar
+            </Button>
+            <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
+            <Button
+              disabled={isDeleting}
+              loading={isDeleting}
+              onClick={onDelete}
+              size="sm"
+              variant="danger"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Excluir selecionados
+            </Button>
+          </div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
@@ -298,6 +411,7 @@ function SimulationSearchInput({
 export function PricingSimulationsPage() {
   const reducedMotion = useReducedMotion();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const selectedCompanyId = readSelectedCompanyId();
@@ -357,6 +471,36 @@ export function PricingSimulationsPage() {
     ],
   });
   const data = query.data;
+  const visibleIds = data?.items.map((simulation) => simulation.id) ?? [];
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const allVisibleSelected = areAllVisibleSelected(selectedIds, visibleIds);
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) =>
+      apiClient.delete<{
+        data: PricingSimulationBulkDeleteResult;
+        error: null;
+      }>("/pricing/simulations/bulk-delete", {
+        body: { ids },
+      }),
+    onError: (error) => {
+      setDeleteError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Não foi possível excluir as simulações selecionadas.",
+      );
+    },
+    onSuccess: async () => {
+      setDeleteError(null);
+      setSelectedIds([]);
+      setIsDeleteModalOpen(false);
+      await queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+    },
+  });
+
+  const isDeleting = bulkDeleteMutation.isPending;
 
   useEffect(() => {
     if (data && page > data.totalPages) {
@@ -436,6 +580,23 @@ export function PricingSimulationsPage() {
           />
         </div>
 
+        <SimulationSelectionActionBar
+          allVisibleSelected={allVisibleSelected}
+          isDeleting={isDeleting}
+          onClear={() => setSelectedIds([])}
+          onDelete={() => {
+            setDeleteError(null);
+            setIsDeleteModalOpen(true);
+          }}
+          onSelectPage={() =>
+            setSelectedIds((current) =>
+              toggleVisibleSelection(current, visibleIds),
+            )
+          }
+          selectedCount={selectedIds.length}
+          visibleCount={visibleIds.length}
+        />
+
         {query.isLoading ? (
           <LoadingState />
         ) : query.isError ? (
@@ -485,11 +646,21 @@ export function PricingSimulationsPage() {
         ) : (
           <>
             <SimulationTable
+              allVisibleSelected={allVisibleSelected}
               items={data.items}
               onSelect={(simulation) =>
                 router.push(`/app/pricing/simulations/${simulation.id}`)
               }
               onSortChange={handleSortChange}
+              onToggleSelected={(id) =>
+                setSelectedIds((current) => toggleSelectedId(current, id))
+              }
+              onToggleVisibleSelection={() =>
+                setSelectedIds((current) =>
+                  toggleVisibleSelection(current, visibleIds),
+                )
+              }
+              selectedIds={selectedIds}
               sortBy={sortBy}
               sortDirection={sortDirection}
             />
@@ -513,6 +684,51 @@ export function PricingSimulationsPage() {
           </>
         )}
       </motion.section>
+
+      <Modal
+        onClose={() => {
+          if (!isDeleting) setIsDeleteModalOpen(false);
+        }}
+        open={isDeleteModalOpen}
+        title="Excluir simulações?"
+      >
+        <div className="space-y-5">
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Você está prestes a excluir {selectedIds.length} simulaç
+            {selectedIds.length === 1 ? "ão" : "ões"} selecionada
+            {selectedIds.length === 1 ? "" : "s"}. Esta ação é definitiva e
+            não poderá ser desfeita.
+          </p>
+          {deleteError && (
+            <div className="flex items-start gap-2 rounded-[var(--radius-md)] border border-error/20 bg-error-soft px-3 py-2.5 text-xs text-error">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{deleteError}</span>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              disabled={isDeleting}
+              onClick={() => setIsDeleteModalOpen(false)}
+              size="sm"
+              variant="secondary"
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={isDeleting || selectedIds.length === 0}
+              loading={isDeleting}
+              onClick={() => {
+                setDeleteError(null);
+                bulkDeleteMutation.mutate(selectedIds);
+              }}
+              size="sm"
+              variant="danger"
+            >
+              {isDeleting ? "Excluindo..." : "Excluir"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </motion.div>
   );
 }

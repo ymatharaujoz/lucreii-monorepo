@@ -70,6 +70,10 @@ export const pricingSimulationListQuerySchema = z.object({
   sortDirection: z.enum(["asc", "desc"]).optional(),
 });
 
+export const pricingSimulationBulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1),
+});
+
 export const pricingSimulationSchema = z.object({
   id: z.string().uuid(),
   companyId: z.string().uuid(),
@@ -194,4 +198,7 @@ export type PricingSimulationUpdateInput = z.infer<
 >;
 export type PricingSimulationListQueryInput = z.infer<
   typeof pricingSimulationListQuerySchema
+>;
+export type PricingSimulationBulkDeleteInput = z.infer<
+  typeof pricingSimulationBulkDeleteSchema
 >;

@@ -1,9 +1,11 @@
 import {
+  pricingSimulationBulkDeleteSchema,
   pricingSimulationFormSchema,
   pricingSimulationListQuerySchema,
   pricingSimulationUpdateSchema,
 } from "@lucreii/validation";
 import type {
+  PricingSimulationBulkDeleteInput,
   PricingSimulationFormInput,
   PricingSimulationListQueryInput,
   PricingSimulationUpdateInput,
@@ -51,4 +53,12 @@ export class ListPricingSimulationsQueryDto implements PricingSimulationListQuer
   search?: string;
   sortBy?: PricingSimulationListQueryInput["sortBy"];
   sortDirection?: PricingSimulationListQueryInput["sortDirection"];
+}
+
+export class DeletePricingSimulationsBulkRequestDto
+  implements PricingSimulationBulkDeleteInput
+{
+  static schema = pricingSimulationBulkDeleteSchema;
+
+  ids!: string[];
 }

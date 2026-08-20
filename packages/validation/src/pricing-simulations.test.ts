@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   pricingSimulationFormSchema,
+  pricingSimulationBulkDeleteSchema,
   pricingSimulationListApiResponseSchema,
   pricingSimulationListQuerySchema,
 } from "./pricing-simulations";
@@ -53,6 +54,21 @@ describe("pricing simulation validation", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("requires one or more valid UUIDs for bulk deletion", () => {
+    expect(
+      pricingSimulationBulkDeleteSchema.safeParse({
+        ids: ["22222222-2222-4222-8222-222222222222"],
+      }).success,
+    ).toBe(true);
+    expect(pricingSimulationBulkDeleteSchema.safeParse({ ids: [] }).success).toBe(
+      false,
+    );
+    expect(
+      pricingSimulationBulkDeleteSchema.safeParse({ ids: ["not-a-uuid"] })
+        .success,
+    ).toBe(false);
   });
 
   it("accepts the supported server-side sorting fields", () => {

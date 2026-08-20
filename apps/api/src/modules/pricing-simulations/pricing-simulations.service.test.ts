@@ -167,4 +167,21 @@ describe("PricingSimulationsService", () => {
       productIdentifier: "SKU-1",
     });
   });
+
+  it("deletes deduplicated IDs in one scoped query", async () => {
+    const db = createDatabaseMock();
+    const service = new PricingSimulationsService(db);
+    const simulationId = createRow().id;
+
+    await expect(
+      service.removeMany(context, [simulationId, simulationId]),
+    ).resolves.toEqual({
+      ids: [simulationId],
+      totalDeleted: 1,
+    });
+
+    const deleteMock = (db as unknown as { delete: ReturnType<typeof vi.fn> })
+      .delete;
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+  });
 });
