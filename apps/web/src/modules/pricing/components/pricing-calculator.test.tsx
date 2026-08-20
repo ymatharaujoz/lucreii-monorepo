@@ -104,6 +104,7 @@ describe("PricingCalculator", () => {
     expect(text()).toContain("R$ 27,54");
     expect(text()).toContain("36,00%");
     expect(text()).toContain("R$ 9,91");
+    expect(text()).toContain("Custos Fixos");
 
     view.unmount();
   });

@@ -134,7 +134,7 @@ export function PricingSimulationDetailPage({
           Voltar para Simulações
         </Link>
         {query.data && (
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-5">
             <div>
               <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-accent">
                 <Calculator className="h-4 w-4" />
@@ -151,23 +151,6 @@ export function PricingSimulationDetailPage({
                 Revise as premissas e atualize o preço recomendado deste
                 cenário.
               </p>
-            </div>
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <Badge className="border-accent/15 bg-accent-soft text-accent-strong">
-                Editando
-              </Badge>
-              <Button
-                className="shadow-[var(--shadow-sm)]"
-                onClick={() => {
-                  setDeleteError(null);
-                  setIsDeleteOpen(true);
-                }}
-                size="sm"
-                variant="danger"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Excluir simulação
-              </Button>
             </div>
           </div>
         )}
@@ -195,6 +178,25 @@ export function PricingSimulationDetailPage({
       ) : (
         <PricingCalculator
           embedded
+          embeddedActions={
+            <>
+              <Badge className="border-accent/15 bg-accent-soft text-accent-strong">
+                Editando
+              </Badge>
+              <Button
+                className="shadow-[var(--shadow-sm)]"
+                onClick={() => {
+                  setDeleteError(null);
+                  setIsDeleteOpen(true);
+                }}
+                size="sm"
+                variant="danger"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Excluir simulação
+              </Button>
+            </>
+          }
           initialSimulation={query.data}
           key={`${query.data.id}-${query.data.updatedAt}`}
           mode={query.data.mode}

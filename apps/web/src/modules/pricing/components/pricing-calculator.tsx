@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -43,6 +44,7 @@ type FieldConfig = {
 
 type PricingCalculatorProps = {
   embedded?: boolean;
+  embeddedActions?: ReactNode;
   initialSimulation?: PricingSimulation | null;
   mode: PricingMode;
   onSaved?: (simulation: PricingSimulation) => void;
@@ -558,7 +560,7 @@ function PricingResultPanel({
 
           {result && (
             <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-4 text-xs">
-              <span className="text-muted-foreground">Custos fixos</span>
+              <span className="text-muted-foreground">Custos Fixos</span>
               <span className="font-semibold tabular-nums text-foreground">
                 {formatMoney(result.fixedCosts)}
               </span>
@@ -601,6 +603,7 @@ function SaveSimulationButton({
 
 export function PricingCalculator({
   embedded = false,
+  embeddedActions,
   initialSimulation,
   mode,
   onSaved,
@@ -835,7 +838,8 @@ export function PricingCalculator({
               <span>Edite os dados e salve o novo cenário.</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {embeddedActions}
             <Button
               aria-label="Limpar simulação"
               onClick={clearForm}
