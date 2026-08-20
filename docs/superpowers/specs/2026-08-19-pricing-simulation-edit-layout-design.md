@@ -40,3 +40,10 @@ A tela seguirá a opção B validada no companion visual:
 - Verificar visualmente que existe apenas um título principal e um subtítulo de contexto.
 - Verificar que `Excluir simulação` está alinhado ao grupo de ações e usa a variante visual de perigo.
 - Executar testes focados, typecheck e lint dos arquivos alterados.
+
+## Refinamento visual aprovado em 20/08/2026
+
+- O resultado financeiro exibirá o rótulo `Custos Fixos`, com capitalização consistente com os demais títulos da calculadora.
+- `Editando`, `Excluir simulação`, `Limpar` e `Salvar alterações` ocuparão o mesmo grupo horizontal de ações.
+- O grupo usará espaçamento, alinhamento, contraste e hierarquia compatíveis com um layout premium, sem excesso de elementos decorativos.
+- Em telas estreitas, as ações poderão quebrar de forma organizada, preservando áreas de toque e legibilidade.
