@@ -117,6 +117,18 @@ describe("PricingCalculator", () => {
     view.unmount();
   });
 
+  it("uses the compact edit toolbar when embedded", () => {
+    const view = mount(
+      <PricingCalculator embedded mode="contribution-margin" />,
+    );
+
+    expect(document.querySelector("header")?.className).toContain("hidden");
+    expect(text()).toContain("Edite os dados e salve o novo cenário.");
+    expect(text()).toContain("Salvar simulação");
+
+    view.unmount();
+  });
+
   it("blocks an invalid denominator inline", () => {
     const view = mount(<PricingCalculator mode="contribution-margin" />);
 

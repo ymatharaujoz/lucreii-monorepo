@@ -14,12 +14,20 @@ import {
 } from "lucide-react";
 import type { PricingSimulation } from "@lucreii/types";
 import { pricingSimulationApiResponseSchema } from "@lucreii/validation";
-import { Button, Modal } from "@lucreii/ui";
+import { Badge, Button, Modal } from "@lucreii/ui";
 import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, itemVariants } from "@/lib/animations";
 import { PricingCalculator } from "./pricing-calculator";
 
 const QUERY_KEY = "pricing-simulation";
+
+function modeLabel(mode: PricingSimulation["mode"]) {
+  return {
+    "contribution-margin": "Margem de Contribuição",
+    "desired-profit": "Lucro Desejado",
+    "sale-price": "Preço de Venda",
+  }[mode];
+}
 
 function readSelectedCompanyId() {
   if (typeof document === "undefined") return null;
@@ -117,7 +125,7 @@ export function PricingSimulationDetailPage({
       initial={reducedMotion ? false : "hidden"}
       variants={containerVariants}
     >
-      <motion.header variants={itemVariants}>
+      <motion.header className="space-y-6" variants={itemVariants}>
         <Link
           className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-accent"
           href="/app/pricing/simulations"
@@ -126,11 +134,15 @@ export function PricingSimulationDetailPage({
           Voltar para Simulações
         </Link>
         {query.data && (
-          <div className="mt-6 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-accent">
                 <Calculator className="h-4 w-4" />
                 <span>Editar Simulação</span>
+                <span className="text-muted-foreground/50">/</span>
+                <span className="text-muted-foreground">
+                  {modeLabel(query.data.mode)}
+                </span>
               </div>
               <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
                 {query.data.productIdentifier}
@@ -140,17 +152,23 @@ export function PricingSimulationDetailPage({
                 cenário.
               </p>
             </div>
-            <Button
-              onClick={() => {
-                setDeleteError(null);
-                setIsDeleteOpen(true);
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              <Trash2 className="h-3.5 w-3.5 text-error" />
-              <span className="text-error">Excluir Simulação</span>
-            </Button>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <Badge className="border-accent/15 bg-accent-soft text-accent-strong">
+                Editando
+              </Badge>
+              <Button
+                className="shadow-[var(--shadow-sm)]"
+                onClick={() => {
+                  setDeleteError(null);
+                  setIsDeleteOpen(true);
+                }}
+                size="sm"
+                variant="danger"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Excluir simulação
+              </Button>
+            </div>
           </div>
         )}
       </motion.header>
@@ -176,6 +194,7 @@ export function PricingSimulationDetailPage({
         </motion.section>
       ) : (
         <PricingCalculator
+          embedded
           initialSimulation={query.data}
           key={`${query.data.id}-${query.data.updatedAt}`}
           mode={query.data.mode}
