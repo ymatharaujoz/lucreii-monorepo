@@ -561,6 +561,64 @@ export const pricingSimulations = pgTable(
   ],
 );
 
+export const breakEvenRoasSimulations = pgTable(
+  "break_even_roas_simulations",
+  {
+    id: id(),
+    organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    companyId: companyId().references(() => companies.id, {
+      onDelete: "cascade",
+    }),
+    productIdentifier: varchar("product_identifier", {
+      length: 255,
+    }).notNull(),
+    contributionMarginRate: numeric("contribution_margin_rate", {
+      precision: 8,
+      scale: 6,
+    }).notNull(),
+    breakEvenRoas: numeric("break_even_roas", {
+      precision: 14,
+      scale: 6,
+    }).notNull(),
+    calculationVersion: varchar("calculation_version", {
+      length: 32,
+    }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check(
+      "break_even_roas_simulations_identifier_present",
+      sql`nullif(trim(${table.productIdentifier}), '') is not null`,
+    ),
+    check(
+      "break_even_roas_simulations_margin_range",
+      sql`${table.contributionMarginRate} > 0 and ${table.contributionMarginRate} <= 1`,
+    ),
+    check(
+      "break_even_roas_simulations_roas_positive",
+      sql`${table.breakEvenRoas} > 0`,
+    ),
+    index("break_even_roas_simulations_organization_id_idx").on(
+      table.organizationId,
+    ),
+    index("break_even_roas_simulations_user_id_idx").on(table.userId),
+    index("break_even_roas_simulations_company_created_idx").on(
+      table.companyId,
+      table.createdAt,
+    ),
+    index("break_even_roas_simulations_company_identifier_idx").on(
+      table.companyId,
+      table.productIdentifier,
+    ),
+  ],
+);
+
 export const billingCustomers = pgTable(
   "billing_customers",
   {
@@ -1275,6 +1333,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   fixedCosts: many(fixedCosts),
   productMonthlyPerformance: many(productMonthlyPerformance),
   pricingSimulations: many(pricingSimulations),
+  breakEvenRoasSimulations: many(breakEvenRoasSimulations),
   sessions: many(sessions),
   accounts: many(accounts),
   billingTrials: many(billingTrials),
@@ -1333,6 +1392,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   productCosts: many(productCosts),
   productMonthlyPerformance: many(productMonthlyPerformance),
   pricingSimulations: many(pricingSimulations),
+  breakEvenRoasSimulations: many(breakEvenRoasSimulations),
   adCosts: many(adCosts),
   manualExpenses: many(manualExpenses),
   dailyMetrics: many(dailyMetrics),
@@ -1351,6 +1411,7 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
   fixedCosts: many(fixedCosts),
   performanceRows: many(productMonthlyPerformance),
   pricingSimulations: many(pricingSimulations),
+  breakEvenRoasSimulations: many(breakEvenRoasSimulations),
   marketplaceConnections: many(marketplaceConnections),
   syncRuns: many(syncRuns),
   externalProducts: many(externalProducts),
@@ -1694,6 +1755,24 @@ export const pricingSimulationsRelations = relations(
     }),
     company: one(companies, {
       fields: [pricingSimulations.companyId],
+      references: [companies.id],
+    }),
+  }),
+);
+
+export const breakEvenRoasSimulationsRelations = relations(
+  breakEvenRoasSimulations,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [breakEvenRoasSimulations.organizationId],
+      references: [organizations.id],
+    }),
+    user: one(users, {
+      fields: [breakEvenRoasSimulations.userId],
+      references: [users.id],
+    }),
+    company: one(companies, {
+      fields: [breakEvenRoasSimulations.companyId],
       references: [companies.id],
     }),
   }),

@@ -183,6 +183,13 @@
       "when": 1787187600000,
       "tag": "0025_pricing_simulations_product_identifier",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787274000000,
+      "tag": "0026_break_even_roas_simulations",
+      "breakpoints": true
     }
   ]
 }

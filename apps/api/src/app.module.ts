@@ -5,6 +5,7 @@ import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { DatabaseModule } from "@/infra";
 import { AuthModule } from "@/modules/auth/auth.module";
 import { BillingModule } from "@/modules/billing/billing.module";
+import { BreakEvenRoasSimulationsModule } from "@/modules/break-even-roas-simulations/break-even-roas-simulations.module";
 import { DashboardModule } from "@/modules/dashboard/dashboard.module";
 import { FinanceModule } from "@/modules/finance/finance.module";
 import { FinanceInputsModule } from "@/modules/finance-inputs/finance-inputs.module";
@@ -25,6 +26,7 @@ export class AppModule {
         DatabaseModule.register(env),
         AuthModule.register(env),
         BillingModule.register(env),
+        BreakEvenRoasSimulationsModule,
         DashboardModule,
         FinanceModule,
         FinanceInputsModule,

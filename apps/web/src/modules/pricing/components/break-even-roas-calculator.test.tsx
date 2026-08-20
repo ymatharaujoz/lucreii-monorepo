@@ -2,8 +2,18 @@
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BreakEvenRoasCalculator } from "./break-even-roas-calculator";
+
+const postMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/api/client", () => ({
+  ApiClientError: class ApiClientError extends Error {},
+  apiClient: {
+    patch: vi.fn(),
+    post: postMock,
+  },
+}));
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -45,12 +55,13 @@ function text() {
 describe("BreakEvenRoasCalculator", () => {
   afterEach(() => {
     document.body.innerHTML = "";
+    vi.clearAllMocks();
   });
 
   it("starts with one empty margin field and shows the informational example", () => {
     const view = mount(<BreakEvenRoasCalculator />);
 
-    expect(document.querySelectorAll("input")).toHaveLength(1);
+    expect(document.querySelectorAll("input")).toHaveLength(2);
     expect(
       (
         document.getElementById(
@@ -63,11 +74,55 @@ describe("BreakEvenRoasCalculator", () => {
     expect(text()).toContain("O que é o ROAS de Equilíbrio?");
     expect(text()).toContain("Abaixo dele: Prejuízo com ADS.");
     expect(text()).toContain(
-      "Acima dele: O produto gera lucro após o investimento em ADS.",
+      "Acima dele: o produto gera lucro após o investimento em Ads.",
     );
     expect(text()).toContain("R$ 867,00");
     expect(text()).not.toContain("2,78x");
 
+    view.unmount();
+  });
+
+  it("requires an identifier to save and sends the normalized margin", async () => {
+    postMock.mockResolvedValueOnce({
+      data: {
+        breakEvenRoas: "6.666667",
+        calculationVersion: "1",
+        companyId: "00000000-0000-0000-0000-000000000001",
+        contributionMarginRate: "0.150000",
+        createdAt: "2026-08-20T12:00:00.000Z",
+        id: "00000000-0000-0000-0000-000000000002",
+        productIdentifier: "CAM-01",
+        updatedAt: "2026-08-20T12:00:00.000Z",
+      },
+    });
+    const view = mount(<BreakEvenRoasCalculator />);
+
+    setInputValue(
+      document.getElementById("break-even-roas-percentage") as HTMLInputElement,
+      "15",
+    );
+    const identifier = document.getElementById(
+      "break-even-roas-product-identifier",
+    ) as HTMLInputElement;
+    setInputValue(identifier, "CAM-01");
+
+    const saveButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Salvar simulação"),
+    );
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(postMock).toHaveBeenCalledWith(
+      "/pricing/break-even-roas/simulations",
+      {
+        body: {
+          contributionMarginRate: "0.150000",
+          productIdentifier: "CAM-01",
+        },
+      },
+    );
+    expect(text()).toContain("Simulação salva com sucesso.");
     view.unmount();
   });
 

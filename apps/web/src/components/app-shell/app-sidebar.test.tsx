@@ -147,7 +147,7 @@ describe("AppSidebar pricing navigation", () => {
   });
 
   it("marks ROAS de Equilíbrio active in the calculator hierarchy", () => {
-    usePathnameMock.mockReturnValue("/app/pricing/break-even-roas");
+    usePathnameMock.mockReturnValue("/app/pricing/break-even-roas/simulations");
     const view = mount(<AppSidebar {...sidebarProps()} />);
     const calculatorLink = document.querySelector(
       'button[data-href="/app/pricing"]',
@@ -164,6 +164,36 @@ describe("AppSidebar pricing navigation", () => {
     );
 
     expect(roasLink?.className).toContain("text-accent-strong");
+
+    act(() => {
+      roasLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const simulationsLink = document.querySelector(
+      'button[data-href="/app/pricing/break-even-roas/simulations"]',
+    );
+    const calculatorChildLink = document.querySelector(
+      'button[data-href="/app/pricing/break-even-roas"]',
+    );
+
+    expect(simulationsLink?.className).toContain("text-accent-strong");
+    expect(calculatorChildLink).toBeTruthy();
+
+    view.unmount();
+  });
+
+  it("uses the same indented tree treatment for Products", () => {
+    const view = mount(<AppSidebar {...sidebarProps()} />);
+    const productsLink = document.querySelector(
+      'button[data-href="/app/products"]',
+    );
+
+    act(() => {
+      productsLink?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(document.body.textContent).toContain("Catálogo");
+    expect(document.body.querySelector("ul.border-l")).toBeTruthy();
 
     view.unmount();
   });

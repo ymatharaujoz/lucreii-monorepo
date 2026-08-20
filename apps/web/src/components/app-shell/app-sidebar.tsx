@@ -167,6 +167,16 @@ const navLinks: NavItem[] = [
       {
         href: "/app/pricing/break-even-roas",
         label: "ROAS de Equilíbrio",
+        children: [
+          {
+            href: "/app/pricing/break-even-roas/simulations",
+            label: "Simulações",
+          },
+          {
+            href: "/app/pricing/break-even-roas",
+            label: "Calculadora",
+          },
+        ],
       },
     ],
   },
@@ -582,7 +592,7 @@ export function AppSidebar({
                         isActive={isActive}
                         isNodeActive={isNodeActive}
                         items={link.children ?? []}
-                        level={0}
+                        level={1}
                         toggleMenu={toggleMenu}
                       />
                     </motion.div>

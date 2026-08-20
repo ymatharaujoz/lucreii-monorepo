@@ -14,6 +14,7 @@ import {
   productImages,
   productMonthlyPerformance,
   pricingSimulations,
+  breakEvenRoasSimulations,
   products,
   marketplaceConnections,
   syncRuns,
@@ -32,6 +33,7 @@ describe("@lucreii/database schema", () => {
     expect(dbSchema.productImages).toBe(productImages);
     expect(dbSchema.productMonthlyPerformance).toBe(productMonthlyPerformance);
     expect(dbSchema.pricingSimulations).toBe(pricingSimulations);
+    expect(dbSchema.breakEvenRoasSimulations).toBe(breakEvenRoasSimulations);
     expect(dbSchema.products).toBe(products);
     expect(dbSchema.users).toBe(users);
     expect(dbSchema.accounts).toBe(accounts);
@@ -55,6 +57,7 @@ describe("@lucreii/database schema", () => {
     expect(db.query.productImages).toBeDefined();
     expect(db.query.productMonthlyPerformance).toBeDefined();
     expect(db.query.pricingSimulations).toBeDefined();
+    expect(db.query.breakEvenRoasSimulations).toBeDefined();
   });
 
   it("scopes product catalog persistence by company", () => {
@@ -506,6 +509,37 @@ describe("@lucreii/database schema", () => {
     expect(migrationJournal).toContain('"tag": "0024_pricing_simulations"');
     expect(migrationJournal).toContain(
       '"tag": "0025_pricing_simulations_product_identifier"',
+    );
+  });
+
+  it("keeps break-even ROAS persistence aligned with migration assets", () => {
+    const migration = readFileSync(
+      path.resolve(
+        __dirname,
+        "../drizzle/0026_break_even_roas_simulations.sql",
+      ),
+      "utf8",
+    );
+    const migrationJournal = readFileSync(
+      path.resolve(__dirname, "../drizzle/meta/_journal.json"),
+      "utf8",
+    );
+
+    expect(breakEvenRoasSimulations.productIdentifier).toBeDefined();
+    expect(breakEvenRoasSimulations.contributionMarginRate).toBeDefined();
+    expect(breakEvenRoasSimulations.breakEvenRoas).toBeDefined();
+    expect(migration).toContain(
+      'CREATE TABLE IF NOT EXISTS "break_even_roas_simulations"',
+    );
+    expect(migration).toContain('"break_even_roas_simulations_margin_range"');
+    expect(migration).toContain(
+      'CREATE INDEX IF NOT EXISTS "break_even_roas_simulations_company_created_idx"',
+    );
+    expect(migration).toContain(
+      'CREATE POLICY "Members can view own break-even ROAS simulations"',
+    );
+    expect(migrationJournal).toContain(
+      '"tag": "0026_break_even_roas_simulations"',
     );
   });
 });

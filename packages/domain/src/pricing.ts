@@ -1,6 +1,7 @@
 import type { PricingSimulationMode } from "@lucreii/types";
 
 export const PRICING_FORMULA_VERSION = "1";
+export const BREAK_EVEN_ROAS_FORMULA_VERSION = "1";
 
 export type PricingMode = PricingSimulationMode;
 
@@ -42,6 +43,20 @@ export type PricingResult = {
 export type PricingCalculation =
   | { ok: true; result: PricingResult }
   | { ok: false; errors: PricingError[] };
+
+export function calculateBreakEvenRoas(
+  contributionMarginRate: number,
+): number | null {
+  if (
+    !Number.isFinite(contributionMarginRate) ||
+    contributionMarginRate <= 0 ||
+    contributionMarginRate > 1
+  ) {
+    return null;
+  }
+
+  return 1 / contributionMarginRate;
+}
 
 const COST_FIELDS: PricingField[] = [
   "productCost",

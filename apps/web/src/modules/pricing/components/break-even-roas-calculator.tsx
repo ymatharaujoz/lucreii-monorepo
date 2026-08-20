@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
@@ -7,14 +8,21 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Calculator,
+  CheckCircle2,
   Megaphone,
   Percent,
+  RotateCcw,
+  Save,
   Sparkles,
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import { Badge, cn } from "@lucreii/ui";
+import type { BreakEvenRoasSimulation } from "@lucreii/types";
+import { breakEvenRoasSimulationFormSchema } from "@lucreii/validation";
+import { Badge, Button, cn } from "@lucreii/ui";
+import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, itemVariants } from "@/lib/animations";
+import { calculateBreakEvenRoas as calculateBreakEvenRoasDomain } from "@lucreii/domain";
 
 type CalculationState =
   | { status: "empty"; message: string }
@@ -30,6 +38,24 @@ type NumericFieldProps = {
   placeholder: string;
   suffix?: string;
   value: string;
+};
+
+type BreakEvenRoasCalculatorProps = {
+  embedded?: boolean;
+  embeddedActions?: ReactNode;
+  embeddedStatus?: ReactNode;
+  initialSimulation?: BreakEvenRoasSimulation | null;
+  onSaved?: (simulation: BreakEvenRoasSimulation) => void;
+};
+
+type FormValues = {
+  percentage: string;
+  productIdentifier: string;
+};
+
+const EMPTY_FORM: FormValues = {
+  percentage: "",
+  productIdentifier: "",
 };
 
 function parseLocalizedNumber(value: string): number | null {
@@ -72,7 +98,28 @@ export function calculateBreakEvenRoas(
     return null;
   }
 
-  return 1 / (marginPercentage / 100);
+  return calculateBreakEvenRoasDomain(marginPercentage / 100);
+}
+
+function formatStoredPercentage(value: string) {
+  const parsed = Number(value) * 100;
+  return Number.isFinite(parsed)
+    ? parsed.toLocaleString("pt-BR", {
+        maximumFractionDigits: 6,
+        useGrouping: false,
+      })
+    : "";
+}
+
+function createInitialForm(
+  simulation?: BreakEvenRoasSimulation | null,
+): FormValues {
+  if (!simulation) return { ...EMPTY_FORM };
+
+  return {
+    percentage: formatStoredPercentage(simulation.contributionMarginRate),
+    productIdentifier: simulation.productIdentifier ?? "",
+  };
 }
 
 function formatRoas(value: number) {
@@ -138,14 +185,67 @@ function NumericField({
   );
 }
 
-export function BreakEvenRoasCalculator() {
-  const [percentage, setPercentage] = useState("");
+function TextField({
+  helper,
+  id,
+  label,
+  onChange,
+  placeholder,
+  value,
+}: {
+  helper: string;
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <label
+        className="block text-xs font-semibold text-foreground"
+        htmlFor={id}
+      >
+        {label}
+      </label>
+      <input
+        aria-describedby={`${id}-helper`}
+        className="h-12 w-full rounded-xl border border-border bg-surface px-3 text-sm font-medium text-foreground outline-none transition-all placeholder:text-muted-foreground/55 hover:border-border-strong focus:border-accent focus:ring-4 focus:ring-accent/10"
+        id={id}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        type="text"
+        value={value}
+      />
+      <p
+        className="text-[11px] leading-relaxed text-muted-foreground"
+        id={`${id}-helper`}
+      >
+        {helper}
+      </p>
+    </div>
+  );
+}
+
+export function BreakEvenRoasCalculator({
+  embedded = false,
+  embeddedActions,
+  embeddedStatus,
+  initialSimulation,
+  onSaved,
+}: BreakEvenRoasCalculatorProps) {
+  const [form, setForm] = useState<FormValues>(() =>
+    createInitialForm(initialSimulation),
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const reducedMotion = useReducedMotion();
 
   const calculation = useMemo<CalculationState>(() => {
-    const parsedPercentage = parseLocalizedNumber(percentage);
+    const parsedPercentage = parseLocalizedNumber(form.percentage);
 
-    if (!percentage.trim()) {
+    if (!form.percentage.trim()) {
       return {
         message: "Informe a Margem de Contribuição (%) para calcular o ROAS.",
         status: "empty",
@@ -174,9 +274,80 @@ export function BreakEvenRoasCalculator() {
           status: "invalid",
         }
       : { result, status: "ready" };
-  }, [percentage]);
+  }, [form.percentage]);
 
-  const parsedPercentage = parseLocalizedNumber(percentage);
+  const parsedPercentage = parseLocalizedNumber(form.percentage);
+
+  function updateField(field: keyof FormValues, value: string) {
+    setForm((current) => ({ ...current, [field]: value }));
+    setSaveError(null);
+    setSaveMessage(null);
+  }
+
+  function clearForm() {
+    setForm({ ...EMPTY_FORM });
+    setSaveError(null);
+    setSaveMessage(null);
+  }
+
+  function getDraft() {
+    if (calculation.status !== "ready" || parsedPercentage === null) {
+      return null;
+    }
+
+    const parsed = breakEvenRoasSimulationFormSchema.safeParse({
+      contributionMarginRate: (parsedPercentage / 100).toFixed(6),
+      productIdentifier: form.productIdentifier.trim() || null,
+    });
+
+    return parsed.success ? parsed.data : null;
+  }
+
+  async function saveSimulation() {
+    const draft = getDraft();
+
+    if (!draft) {
+      setSaveError(
+        !form.productIdentifier.trim()
+          ? "Informe o Nome do Produto ou SKU para salvar a simulação."
+          : "Informe uma Margem de Contribuição válida antes de salvar.",
+      );
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveMessage(null);
+
+    try {
+      const response = initialSimulation
+        ? await apiClient.patch<{
+            data: BreakEvenRoasSimulation;
+            error: null;
+          }>(`/pricing/break-even-roas/simulations/${initialSimulation.id}`, {
+            body: draft,
+          })
+        : await apiClient.post<{
+            data: BreakEvenRoasSimulation;
+            error: null;
+          }>("/pricing/break-even-roas/simulations", { body: draft });
+
+      setSaveMessage(
+        initialSimulation
+          ? "Alterações salvas com sucesso."
+          : "Simulação salva com sucesso.",
+      );
+      onSaved?.(response.data);
+    } catch (error) {
+      setSaveError(
+        error instanceof ApiClientError
+          ? error.message
+          : "Não foi possível salvar a simulação.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <motion.div
@@ -185,33 +356,140 @@ export function BreakEvenRoasCalculator() {
       initial={reducedMotion ? false : "hidden"}
       variants={containerVariants}
     >
-      <motion.header
-        className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"
-        variants={itemVariants}
-      >
-        <div className="max-w-3xl">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-accent">
-            <Calculator className="h-4 w-4" />
-            <span>Calculadora</span>
-            <span className="text-muted-foreground/50">/</span>
-            <span className="text-muted-foreground">ROAS de Equilíbrio</span>
+      {!embedded && (
+        <motion.header
+          className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"
+          variants={itemVariants}
+        >
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-accent">
+              <Calculator className="h-4 w-4" />
+              <span>Calculadora</span>
+              <span className="text-muted-foreground/50">/</span>
+              <span className="text-muted-foreground">ROAS de Equilíbrio</span>
+            </div>
+            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
+              Encontre o ROAS que protege sua margem.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              Descubra o retorno mínimo que sua publicidade precisa gerar para
+              que o investimento em ADS não consuma toda a margem do produto.
+            </p>
           </div>
-          <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-foreground sm:text-4xl">
-            Encontre o ROAS que protege sua margem.
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Descubra o retorno mínimo que sua publicidade precisa gerar para que
-            o investimento em ADS não consuma toda a margem do produto.
-          </p>
-        </div>
-        <Badge className="self-start border-accent/15 bg-accent-soft text-accent-strong sm:self-auto">
-          <Sparkles className="h-3 w-3" />
-          Cálculo instantâneo
-        </Badge>
-      </motion.header>
+          <Badge className="self-start border-accent/15 bg-accent-soft text-accent-strong sm:self-auto">
+            <Sparkles className="h-3 w-3" />
+            Cálculo instantâneo
+          </Badge>
+        </motion.header>
+      )}
+
+      {embedded && (
+        <motion.div
+          className="flex flex-col gap-3 border-b border-border/60 pb-5 sm:flex-row sm:items-center sm:justify-end"
+          variants={itemVariants}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            {embeddedStatus}
+            <Button
+              disabled={isSaving}
+              onClick={clearForm}
+              size="sm"
+              variant="secondary"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Limpar
+            </Button>
+            {embeddedActions}
+            <Button
+              disabled={isSaving}
+              loading={isSaving}
+              onClick={() => void saveSimulation()}
+              size="sm"
+            >
+              {!isSaving && <Save className="h-3.5 w-3.5" />}
+              {initialSimulation ? "Salvar alterações" : "Salvar simulação"}
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {(saveError || saveMessage) && (
+        <motion.div
+          className={cn(
+            "flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs",
+            saveError
+              ? "border-error/20 bg-error-soft text-error"
+              : "border-success/20 bg-success-soft text-success",
+          )}
+          initial={reducedMotion ? false : { opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          {saveError ? (
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          )}
+          <span>{saveError ?? saveMessage}</span>
+        </motion.div>
+      )}
+
+      {!embedded && (
+        <motion.div
+          className="flex flex-wrap items-center justify-end gap-2"
+          variants={itemVariants}
+        >
+          <Button
+            disabled={isSaving}
+            onClick={clearForm}
+            size="sm"
+            variant="secondary"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Limpar
+          </Button>
+          <Button
+            disabled={isSaving}
+            loading={isSaving}
+            onClick={() => void saveSimulation()}
+            size="sm"
+          >
+            {!isSaving && <Save className="h-3.5 w-3.5" />}
+            Salvar simulação
+          </Button>
+        </motion.div>
+      )}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:gap-8">
         <motion.div className="space-y-5" variants={itemVariants}>
+          <section className="rounded-[var(--radius-xl)] border border-border/70 bg-surface-strong/70 p-5 shadow-[var(--shadow-sm)] sm:p-7">
+            <div className="flex items-start gap-3 border-b border-border/60 pb-5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/15">
+                <Calculator className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-accent">
+                  Identificação opcional
+                </p>
+                <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
+                  Dê um nome ao seu cenário
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Informe o Nome do Produto ou SKU para salvar esta simulação.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5">
+              <TextField
+                helper="A identificação é opcional durante o cálculo e obrigatória para salvar."
+                id="break-even-roas-product-identifier"
+                label="Nome do Produto ou SKU"
+                onChange={(value) => updateField("productIdentifier", value)}
+                placeholder="Ex.: CAM-URB-042 ou Camiseta urbana"
+                value={form.productIdentifier}
+              />
+            </div>
+          </section>
+
           <section className="rounded-[var(--radius-xl)] border border-accent/15 bg-accent-soft/20 p-5 shadow-[var(--shadow-xs)] sm:p-7">
             <div className="flex items-start gap-3 border-b border-accent/15 pb-5">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent ring-1 ring-accent/15">
@@ -244,10 +522,10 @@ export function BreakEvenRoasCalculator() {
                 helper="Margem percentual usada como base do cálculo do ROAS."
                 id="break-even-roas-percentage"
                 label="Margem de Contribuição (%)"
-                onChange={setPercentage}
+                onChange={(value) => updateField("percentage", value)}
                 placeholder="Ex.: 15"
                 suffix="%"
-                value={percentage}
+                value={form.percentage}
               />
             </div>
           </section>
