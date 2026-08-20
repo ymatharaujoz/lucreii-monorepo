@@ -62,20 +62,17 @@ function parseLocalizedNumber(value: string): number | null {
 }
 
 export function calculateBreakEvenRoas(
-  value: number,
-  percentage: number,
+  marginPercentage: number,
 ): number | null {
   if (
-    !Number.isFinite(value) ||
-    !Number.isFinite(percentage) ||
-    value <= 0 ||
-    percentage <= 0 ||
-    percentage > 100
+    !Number.isFinite(marginPercentage) ||
+    marginPercentage <= 0 ||
+    marginPercentage > 100
   ) {
     return null;
   }
 
-  return value / percentage;
+  return 1 / (marginPercentage / 100);
 }
 
 function formatRoas(value: number) {
@@ -143,42 +140,33 @@ function NumericField({
 
 export function BreakEvenRoasCalculator() {
   const [percentage, setPercentage] = useState("");
-  const [value, setValue] = useState("100");
   const reducedMotion = useReducedMotion();
 
   const calculation = useMemo<CalculationState>(() => {
     const parsedPercentage = parseLocalizedNumber(percentage);
-    const parsedValue = parseLocalizedNumber(value);
 
-    if (!percentage.trim() || !value.trim()) {
+    if (!percentage.trim()) {
       return {
-        message: "Informe a porcentagem e o valor para calcular.",
+        message: "Informe a Margem de Contribuição (%) para calcular o ROAS.",
         status: "empty",
       };
     }
 
-    if (parsedPercentage === null || parsedValue === null) {
+    if (parsedPercentage === null) {
       return {
-        message: "Informe números válidos para continuar.",
+        message: "Informe uma Margem de Contribuição válida.",
         status: "invalid",
       };
     }
 
     if (parsedPercentage <= 0 || parsedPercentage > 100) {
       return {
-        message: "A porcentagem deve estar entre 0,01% e 100%.",
+        message: "A Margem de Contribuição deve estar entre 0,01% e 100%.",
         status: "invalid",
       };
     }
 
-    if (parsedValue <= 0) {
-      return {
-        message: "O valor deve ser maior que zero.",
-        status: "invalid",
-      };
-    }
-
-    const result = calculateBreakEvenRoas(parsedValue, parsedPercentage);
+    const result = calculateBreakEvenRoas(parsedPercentage);
 
     return result === null
       ? {
@@ -186,9 +174,8 @@ export function BreakEvenRoasCalculator() {
           status: "invalid",
         }
       : { result, status: "ready" };
-  }, [percentage, value]);
+  }, [percentage]);
 
-  const parsedValue = parseLocalizedNumber(value);
   const parsedPercentage = parseLocalizedNumber(percentage);
 
   return (
@@ -235,16 +222,16 @@ export function BreakEvenRoasCalculator() {
                   Base do cálculo
                 </p>
                 <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-                  Configure os números da sua operação
+                  Configure sua margem de contribuição
                 </h2>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  Use a margem percentual como divisor e o valor como base da
-                  análise.
+                  Informe a margem que deseja preservar após custos e
+                  publicidade.
                 </p>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-5 sm:grid-cols-2">
+            <div className="mt-5 max-w-md">
               <NumericField
                 error={
                   calculation.status === "invalid" &&
@@ -254,27 +241,13 @@ export function BreakEvenRoasCalculator() {
                     ? calculation.message
                     : undefined
                 }
-                helper="Margem percentual usada como divisor do cálculo."
+                helper="Margem percentual usada como base do cálculo do ROAS."
                 id="break-even-roas-percentage"
-                label="Porcentagem (%)"
+                label="Margem de Contribuição (%)"
                 onChange={setPercentage}
-                placeholder="Ex.: 36"
+                placeholder="Ex.: 15"
                 suffix="%"
                 value={percentage}
-              />
-              <NumericField
-                error={
-                  calculation.status === "invalid" &&
-                  (parsedValue === null || parsedValue <= 0)
-                    ? calculation.message
-                    : undefined
-                }
-                helper="Número-base da operação. Ex.: 100."
-                id="break-even-roas-value"
-                label="Valor"
-                onChange={setValue}
-                placeholder="100"
-                value={value}
               />
             </div>
           </section>
@@ -404,15 +377,9 @@ export function BreakEvenRoasCalculator() {
             )}
           </AnimatePresence>
 
-          <div className="mt-7 grid grid-cols-2 gap-3">
+          <div className="mt-7">
             <ResultMetric
-              label="Valor considerado"
-              value={
-                parsedValue === null ? "—" : parsedValue.toLocaleString("pt-BR")
-              }
-            />
-            <ResultMetric
-              label="Porcentagem"
+              label="Margem de Contribuição"
               value={
                 parsedPercentage === null
                   ? "—"
@@ -424,7 +391,7 @@ export function BreakEvenRoasCalculator() {
           <div className="mt-6 flex items-center justify-between border-t border-accent/15 pt-4 text-xs">
             <span className="text-muted-foreground">Fórmula aplicada</span>
             <span className="font-semibold tabular-nums text-foreground">
-              Valor ÷ Porcentagem
+              1 ÷ Margem de Contribuição (%)
             </span>
           </div>
 

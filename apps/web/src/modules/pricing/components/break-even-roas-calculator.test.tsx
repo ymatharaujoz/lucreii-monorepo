@@ -47,13 +47,19 @@ describe("BreakEvenRoasCalculator", () => {
     document.body.innerHTML = "";
   });
 
-  it("starts with the base value and shows the informational example", () => {
+  it("starts with one empty margin field and shows the informational example", () => {
     const view = mount(<BreakEvenRoasCalculator />);
 
+    expect(document.querySelectorAll("input")).toHaveLength(1);
     expect(
-      (document.getElementById("break-even-roas-value") as HTMLInputElement)
-        .value,
-    ).toBe("100");
+      (
+        document.getElementById(
+          "break-even-roas-percentage",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("");
+    expect(text()).toContain("Margem de Contribuição (%)");
+    expect(text()).not.toContain("Valor considerado");
     expect(text()).toContain("O que é o ROAS de Equilíbrio?");
     expect(text()).toContain("Abaixo dele: prejuízo com Ads.");
     expect(text()).toContain(
@@ -65,39 +71,41 @@ describe("BreakEvenRoasCalculator", () => {
     view.unmount();
   });
 
-  it("calculates 100 divided by 36 immediately", () => {
+  it("calculates one divided by a 15 percent margin immediately", () => {
     const view = mount(<BreakEvenRoasCalculator />);
 
     setInputValue(
       document.getElementById("break-even-roas-percentage") as HTMLInputElement,
-      "36",
+      "15",
     );
 
-    expect(text()).toContain("2,78x");
-    expect(text()).toContain("Valor ÷ Porcentagem");
+    expect(text()).toContain("6,67x");
+    expect(text()).toContain("1 ÷ Margem de Contribuição (%)");
+    expect(text()).toContain("15%");
 
     view.unmount();
   });
 
-  it("blocks zero, negative and out-of-range inputs", () => {
+  it("blocks zero, negative and out-of-range margins", () => {
     const view = mount(<BreakEvenRoasCalculator />);
     const percentage = document.getElementById(
       "break-even-roas-percentage",
     ) as HTMLInputElement;
-    const value = document.getElementById(
-      "break-even-roas-value",
-    ) as HTMLInputElement;
-
     setInputValue(percentage, "0");
-    expect(text()).toContain("A porcentagem deve estar entre 0,01% e 100%.");
-    expect(text()).not.toContain("2,78x");
+    expect(text()).toContain(
+      "A Margem de Contribuição deve estar entre 0,01% e 100%.",
+    );
+    expect(text()).not.toContain("6,67x");
 
     setInputValue(percentage, "101");
-    expect(text()).toContain("A porcentagem deve estar entre 0,01% e 100%.");
+    expect(text()).toContain(
+      "A Margem de Contribuição deve estar entre 0,01% e 100%.",
+    );
 
-    setInputValue(percentage, "36");
-    setInputValue(value, "-10");
-    expect(text()).toContain("O valor deve ser maior que zero.");
+    setInputValue(percentage, "-10");
+    expect(text()).toContain(
+      "A Margem de Contribuição deve estar entre 0,01% e 100%.",
+    );
 
     view.unmount();
   });
