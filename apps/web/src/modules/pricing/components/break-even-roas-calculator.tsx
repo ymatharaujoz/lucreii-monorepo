@@ -201,7 +201,7 @@ export function BreakEvenRoasCalculator() {
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
             Descubra o retorno mínimo que sua publicidade precisa gerar para que
-            o investimento em Ads não consuma toda a margem do produto.
+            o investimento em ADS não consuma toda a margem do produto.
           </p>
         </div>
         <Badge className="self-start border-accent/15 bg-accent-soft text-accent-strong sm:self-auto">
@@ -277,7 +277,7 @@ export function BreakEvenRoasCalculator() {
                 <div className="rounded-2xl border border-error/15 bg-error-soft/30 p-4">
                   <ArrowDownRight className="h-4 w-4 text-error" />
                   <p className="mt-3 text-sm font-semibold text-foreground">
-                    Abaixo dele: prejuízo com Ads.
+                    Abaixo dele: Prejuízo com ADS.
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     O investimento em publicidade supera o retorno que sua
@@ -313,7 +313,7 @@ export function BreakEvenRoasCalculator() {
                   />
                 </div>
                 <p className="mt-4 border-t border-accent/15 pt-4 text-xs leading-relaxed text-muted-foreground">
-                  R$ 289,00 investidos em Ads com ROAS de 3x geram R$ 867,00 em
+                  R$ 289,00 investidos em ADS com ROAS de 3x geram R$ 867,00 em
                   faturamento atribuído à publicidade.
                 </p>
               </div>

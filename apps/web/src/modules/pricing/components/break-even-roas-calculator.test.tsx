@@ -61,9 +61,9 @@ describe("BreakEvenRoasCalculator", () => {
     expect(text()).toContain("Margem de Contribuição (%)");
     expect(text()).not.toContain("Valor considerado");
     expect(text()).toContain("O que é o ROAS de Equilíbrio?");
-    expect(text()).toContain("Abaixo dele: prejuízo com Ads.");
+    expect(text()).toContain("Abaixo dele: Prejuízo com ADS.");
     expect(text()).toContain(
-      "Acima dele: o produto gera lucro após o investimento em Ads.",
+      "Acima dele: O produto gera lucro após o investimento em ADS.",
     );
     expect(text()).toContain("R$ 867,00");
     expect(text()).not.toContain("2,78x");
