@@ -130,6 +130,26 @@ describe("PricingCalculator", () => {
     view.unmount();
   });
 
+  it("keeps the embedded actions in the requested order", () => {
+    const view = mount(
+      <PricingCalculator
+        embedded
+        embeddedActions={<button type="button">Excluir</button>}
+        embeddedStatus={<span>Editando</span>}
+        mode="contribution-margin"
+      />,
+    );
+
+    const actionLabels = Array.from(document.querySelectorAll("button"))
+      .map((button) => button.textContent?.trim())
+      .filter((label) => label && ["Limpar", "Excluir", "Salvar simulação"].includes(label))
+      .slice(-3);
+
+    expect(actionLabels).toEqual(["Limpar", "Excluir", "Salvar simulação"]);
+
+    view.unmount();
+  });
+
   it("blocks an invalid denominator inline", () => {
     const view = mount(<PricingCalculator mode="contribution-margin" />);
 

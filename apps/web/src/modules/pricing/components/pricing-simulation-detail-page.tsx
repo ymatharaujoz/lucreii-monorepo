@@ -179,23 +179,23 @@ export function PricingSimulationDetailPage({
         <PricingCalculator
           embedded
           embeddedActions={
-            <>
-              <Badge className="border-accent/15 bg-accent-soft text-accent-strong">
-                Editando
-              </Badge>
-              <Button
-                className="shadow-[var(--shadow-sm)]"
-                onClick={() => {
-                  setDeleteError(null);
-                  setIsDeleteOpen(true);
-                }}
-                size="sm"
-                variant="danger"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Excluir simulação
-              </Button>
-            </>
+            <Button
+              className="shadow-[var(--shadow-sm)]"
+              onClick={() => {
+                setDeleteError(null);
+                setIsDeleteOpen(true);
+              }}
+              size="sm"
+              variant="danger"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Excluir simulação
+            </Button>
+          }
+          embeddedStatus={
+            <Badge className="border-accent/15 bg-accent-soft text-accent-strong">
+              Editando
+            </Badge>
           }
           initialSimulation={query.data}
           key={`${query.data.id}-${query.data.updatedAt}`}

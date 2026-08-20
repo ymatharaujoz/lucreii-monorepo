@@ -45,6 +45,7 @@ type FieldConfig = {
 type PricingCalculatorProps = {
   embedded?: boolean;
   embeddedActions?: ReactNode;
+  embeddedStatus?: ReactNode;
   initialSimulation?: PricingSimulation | null;
   mode: PricingMode;
   onSaved?: (simulation: PricingSimulation) => void;
@@ -604,6 +605,7 @@ function SaveSimulationButton({
 export function PricingCalculator({
   embedded = false,
   embeddedActions,
+  embeddedStatus,
   initialSimulation,
   mode,
   onSaved,
@@ -839,7 +841,7 @@ export function PricingCalculator({
             )}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {embeddedActions}
+            {embeddedStatus}
             <Button
               aria-label="Limpar simulação"
               onClick={clearForm}
@@ -849,6 +851,7 @@ export function PricingCalculator({
               <RotateCcw className="h-3.5 w-3.5" />
               Limpar
             </Button>
+            {embeddedActions}
             <SaveSimulationButton
               canSave={canSave}
               isEditing={Boolean(initialSimulation)}
