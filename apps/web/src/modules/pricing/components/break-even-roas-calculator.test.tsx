@@ -61,7 +61,7 @@ describe("BreakEvenRoasCalculator", () => {
   it("starts with one empty margin field and shows the informational example", () => {
     const view = mount(<BreakEvenRoasCalculator />);
 
-    expect(document.querySelectorAll("input")).toHaveLength(2);
+    expect(document.querySelectorAll("input")).toHaveLength(4);
     expect(
       (
         document.getElementById(
@@ -78,6 +78,15 @@ describe("BreakEvenRoasCalculator", () => {
     );
     expect(text()).toContain("R$ 867,00");
     expect(text()).not.toContain("2,78x");
+    expect(text()).not.toContain("Fórmula aplicada");
+    expect(
+      (document.getElementById("break-even-roas-ads-investment") as HTMLInputElement)
+        .value,
+    ).toBe("289,00");
+    expect(
+      (document.getElementById("break-even-roas-ads-roas") as HTMLInputElement)
+        .value,
+    ).toBe("3");
 
     view.unmount();
   });
@@ -135,8 +144,28 @@ describe("BreakEvenRoasCalculator", () => {
     );
 
     expect(text()).toContain("6,67x");
-    expect(text()).toContain("1 ÷ Margem de Contribuição (%)");
+    expect(text()).not.toContain("Fórmula aplicada");
     expect(text()).toContain("15%");
+
+    view.unmount();
+  });
+
+  it("calculates attributed ad revenue from editable example values", () => {
+    const view = mount(<BreakEvenRoasCalculator />);
+
+    setInputValue(
+      document.getElementById("break-even-roas-ads-investment") as HTMLInputElement,
+      "350",
+    );
+    setInputValue(
+      document.getElementById("break-even-roas-ads-roas") as HTMLInputElement,
+      "2,5",
+    );
+
+    expect(text()).toContain("R$ 875,00");
+    expect(text()).toContain(
+      "R$ 350,00 investidos em Ads com ROAS de 2,5x geram R$ 875,00",
+    );
 
     view.unmount();
   });

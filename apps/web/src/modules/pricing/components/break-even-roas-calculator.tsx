@@ -49,11 +49,20 @@ type BreakEvenRoasCalculatorProps = {
 };
 
 type FormValues = {
+  adsInvestment: string;
+  adsRoas: string;
   percentage: string;
   productIdentifier: string;
 };
 
+const DEFAULT_ADS_EXAMPLE = {
+  investment: "289,00",
+  roas: "3",
+};
+
 const EMPTY_FORM: FormValues = {
+  adsInvestment: DEFAULT_ADS_EXAMPLE.investment,
+  adsRoas: DEFAULT_ADS_EXAMPLE.roas,
   percentage: "",
   productIdentifier: "",
 };
@@ -117,6 +126,8 @@ function createInitialForm(
   if (!simulation) return { ...EMPTY_FORM };
 
   return {
+    adsInvestment: DEFAULT_ADS_EXAMPLE.investment,
+    adsRoas: DEFAULT_ADS_EXAMPLE.roas,
     percentage: formatStoredPercentage(simulation.contributionMarginRate),
     productIdentifier: simulation.productIdentifier ?? "",
   };
@@ -126,6 +137,20 @@ function formatRoas(value: number) {
   return value.toLocaleString("pt-BR", {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
+  });
+}
+
+function formatExampleRoas(value: number) {
+  return value.toLocaleString("pt-BR", {
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  });
+}
+
+function formatCurrency(value: number) {
+  return value.toLocaleString("pt-BR", {
+    currency: "BRL",
+    style: "currency",
   });
 }
 
@@ -241,6 +266,22 @@ export function BreakEvenRoasCalculator({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const reducedMotion = useReducedMotion();
+
+  const adsExample = useMemo(() => {
+    const investment = parseLocalizedNumber(form.adsInvestment);
+    const roas = parseLocalizedNumber(form.adsRoas);
+    const isValid =
+      investment !== null &&
+      investment >= 0 &&
+      roas !== null &&
+      roas >= 0;
+
+    return {
+      investment,
+      revenue: isValid ? investment * (roas ?? 0) : null,
+      roas,
+    };
+  }, [form.adsInvestment, form.adsRoas]);
 
   const calculation = useMemo<CalculationState>(() => {
     const parsedPercentage = parseLocalizedNumber(form.percentage);
@@ -580,19 +621,35 @@ export function BreakEvenRoasCalculator({
                   Exemplo prático
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <ExampleMetric
+                  <ExampleInputMetric
+                    id="break-even-roas-ads-investment"
                     label="Investimento em Ads"
-                    value="R$ 289,00"
+                    onChange={(value) => updateField("adsInvestment", value)}
+                    prefix="R$"
+                    value={form.adsInvestment}
                   />
-                  <ExampleMetric label="ROAS" value="3x" />
+                  <ExampleInputMetric
+                    id="break-even-roas-ads-roas"
+                    label="ROAS"
+                    onChange={(value) => updateField("adsRoas", value)}
+                    suffix="x"
+                    value={form.adsRoas}
+                  />
                   <ExampleMetric
                     label="Faturamento atribuído aos Ads"
-                    value="R$ 867,00"
+                    value={
+                      adsExample.revenue === null
+                        ? "—"
+                        : formatCurrency(adsExample.revenue)
+                    }
                   />
                 </div>
                 <p className="mt-4 border-t border-accent/15 pt-4 text-xs leading-relaxed text-muted-foreground">
-                  R$ 289,00 investidos em ADS com ROAS de 3x geram R$ 867,00 em
-                  faturamento atribuído à publicidade.
+                  {adsExample.investment !== null &&
+                  adsExample.roas !== null &&
+                  adsExample.revenue !== null
+                    ? `${formatCurrency(adsExample.investment)} investidos em Ads com ROAS de ${formatExampleRoas(adsExample.roas)}x geram ${formatCurrency(adsExample.revenue)} em faturamento atribuído à publicidade.`
+                    : "Informe valores válidos de investimento e ROAS para visualizar o faturamento atribuído."}
                 </p>
               </div>
             </div>
@@ -666,13 +723,6 @@ export function BreakEvenRoasCalculator({
             />
           </div>
 
-          <div className="mt-6 flex items-center justify-between border-t border-accent/15 pt-4 text-xs">
-            <span className="text-muted-foreground">Fórmula aplicada</span>
-            <span className="font-semibold tabular-nums text-foreground">
-              1 ÷ Margem de Contribuição (%)
-            </span>
-          </div>
-
           {calculation.status === "invalid" && (
             <div className="mt-4 flex items-start gap-2 rounded-xl border border-error/15 bg-error-soft/30 px-3 py-2.5 text-xs text-error">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -682,6 +732,54 @@ export function BreakEvenRoasCalculator({
         </motion.section>
       </div>
     </motion.div>
+  );
+}
+
+function ExampleInputMetric({
+  id,
+  label,
+  onChange,
+  prefix,
+  suffix,
+  value,
+}: {
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  prefix?: string;
+  suffix?: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-surface/60 p-3 transition-colors focus-within:border-accent/50">
+      <label
+        className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+        htmlFor={id}
+      >
+        {label}
+      </label>
+      <div className="mt-2 flex items-center gap-2">
+        {prefix ? (
+          <span className="text-[10px] font-semibold text-muted-foreground">
+            {prefix}
+          </span>
+        ) : null}
+        <input
+          aria-label={label}
+          className="min-w-0 flex-1 bg-transparent text-sm font-semibold tabular-nums text-foreground outline-none placeholder:text-muted-foreground/50"
+          id={id}
+          inputMode="decimal"
+          onChange={(event) => onChange(event.target.value)}
+          type="text"
+          value={value}
+        />
+        {suffix ? (
+          <span className="text-sm font-semibold text-muted-foreground">
+            {suffix}
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

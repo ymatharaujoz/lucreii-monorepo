@@ -100,7 +100,9 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
         </p>
         {isUnauthorized ? (
           <Button asChild>
-            <Link href="/sign-in">Fazer login</Link>
+            <Link href="/auth/session-expired" prefetch={false}>
+              Fazer login
+            </Link>
           </Button>
         ) : (
           <Button onClick={onRetry}>

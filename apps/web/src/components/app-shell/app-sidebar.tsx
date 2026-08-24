@@ -174,7 +174,7 @@ const navLinks: NavItem[] = [
           },
           {
             href: "/app/pricing/break-even-roas",
-            label: "Calculadora",
+            label: "Cálculo",
           },
         ],
       },

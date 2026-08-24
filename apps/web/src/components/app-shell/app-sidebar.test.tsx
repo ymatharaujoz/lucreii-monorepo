@@ -178,6 +178,7 @@ describe("AppSidebar pricing navigation", () => {
 
     expect(simulationsLink?.className).toContain("text-accent-strong");
     expect(calculatorChildLink).toBeTruthy();
+    expect(document.body.textContent).toContain("Cálculo");
 
     view.unmount();
   });
