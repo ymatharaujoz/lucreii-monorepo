@@ -648,7 +648,7 @@ export function BreakEvenRoasCalculator({
                   {adsExample.investment !== null &&
                   adsExample.roas !== null &&
                   adsExample.revenue !== null
-                    ? `${formatCurrency(adsExample.investment)} investidos em Ads com ROAS de ${formatExampleRoas(adsExample.roas)}x geram ${formatCurrency(adsExample.revenue)} em faturamento atribuído à publicidade.`
+                    ? `${formatCurrency(adsExample.investment)} investidos em ADS com ROAS de ${formatExampleRoas(adsExample.roas)}x geram ${formatCurrency(adsExample.revenue)} em faturamento atribuído à publicidade.`
                     : "Informe valores válidos de investimento e ROAS para visualizar o faturamento atribuído."}
                 </p>
               </div>

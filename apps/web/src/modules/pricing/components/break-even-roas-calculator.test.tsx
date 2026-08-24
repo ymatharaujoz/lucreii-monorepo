@@ -164,7 +164,7 @@ describe("BreakEvenRoasCalculator", () => {
 
     expect(text()).toContain("R$ 875,00");
     expect(text()).toContain(
-      "R$ 350,00 investidos em Ads com ROAS de 2,5x geram R$ 875,00",
+      "R$ 350,00 investidos em ADS com ROAS de 2,5x geram R$ 875,00",
     );
 
     view.unmount();
