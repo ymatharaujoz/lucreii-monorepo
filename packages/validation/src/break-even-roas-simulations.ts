@@ -16,6 +16,15 @@ const contributionMarginRate = decimalString.refine(
   "A margem deve ficar entre 0% e 100%.",
 );
 
+const optionalNonNegativeDecimal = z.preprocess(
+  (value) =>
+    value === undefined ||
+    (typeof value === "string" && value.trim().length === 0)
+      ? null
+      : value,
+  decimalString.nullable(),
+);
+
 const productIdentifier = z.preprocess(
   (value) =>
     typeof value === "string" && value.trim().length === 0 ? null : value,
@@ -23,6 +32,8 @@ const productIdentifier = z.preprocess(
 );
 
 const breakEvenRoasSimulationFields = {
+  adsInvestment: optionalNonNegativeDecimal,
+  adsRoas: optionalNonNegativeDecimal,
   productIdentifier,
   contributionMarginRate,
 };
@@ -65,6 +76,7 @@ export const breakEvenRoasSimulationSchema = z.object({
   id: z.string().uuid(),
   companyId: z.string().uuid(),
   ...breakEvenRoasSimulationFields,
+  adsAttributedRevenue: optionalNonNegativeDecimal,
   breakEvenRoas: positiveResultString,
   calculationVersion: z.string().trim().min(1).max(32),
   createdAt: z.string().datetime(),

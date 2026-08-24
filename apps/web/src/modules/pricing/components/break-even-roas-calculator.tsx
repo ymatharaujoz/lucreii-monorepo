@@ -55,14 +55,9 @@ type FormValues = {
   productIdentifier: string;
 };
 
-const DEFAULT_ADS_EXAMPLE = {
-  investment: "289,00",
-  roas: "3",
-};
-
 const EMPTY_FORM: FormValues = {
-  adsInvestment: DEFAULT_ADS_EXAMPLE.investment,
-  adsRoas: DEFAULT_ADS_EXAMPLE.roas,
+  adsInvestment: "",
+  adsRoas: "",
   percentage: "",
   productIdentifier: "",
 };
@@ -120,14 +115,41 @@ function formatStoredPercentage(value: string) {
     : "";
 }
 
+function formatStoredDecimal(value: string | null, minimumFractionDigits = 0) {
+  const parsed = value === null ? Number.NaN : Number(value);
+  return Number.isFinite(parsed)
+    ? parsed.toLocaleString("pt-BR", {
+        maximumFractionDigits: 6,
+        minimumFractionDigits,
+        useGrouping: false,
+      })
+    : "";
+}
+
+function normalizeOptionalDecimal(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const parsed = parseLocalizedNumber(trimmed);
+  return parsed !== null && parsed >= 0 ? parsed.toFixed(6) : undefined;
+}
+
+function getOptionalDecimalError(value: string, label: string) {
+  if (!value.trim()) return undefined;
+  const parsed = parseLocalizedNumber(value);
+  return parsed === null || parsed < 0
+    ? `${label} deve ser um valor maior ou igual a zero.`
+    : undefined;
+}
+
 function createInitialForm(
   simulation?: BreakEvenRoasSimulation | null,
 ): FormValues {
   if (!simulation) return { ...EMPTY_FORM };
 
   return {
-    adsInvestment: DEFAULT_ADS_EXAMPLE.investment,
-    adsRoas: DEFAULT_ADS_EXAMPLE.roas,
+    adsInvestment: formatStoredDecimal(simulation.adsInvestment, 2),
+    adsRoas: formatStoredDecimal(simulation.adsRoas),
     percentage: formatStoredPercentage(simulation.contributionMarginRate),
     productIdentifier: simulation.productIdentifier ?? "",
   };
@@ -283,6 +305,12 @@ export function BreakEvenRoasCalculator({
     };
   }, [form.adsInvestment, form.adsRoas]);
 
+  const adsInvestmentError = getOptionalDecimalError(
+    form.adsInvestment,
+    "Investimento em Ads",
+  );
+  const adsRoasError = getOptionalDecimalError(form.adsRoas, "ROAS");
+
   const calculation = useMemo<CalculationState>(() => {
     const parsedPercentage = parseLocalizedNumber(form.percentage);
 
@@ -336,7 +364,16 @@ export function BreakEvenRoasCalculator({
       return null;
     }
 
+    const adsInvestment = normalizeOptionalDecimal(form.adsInvestment);
+    const adsRoas = normalizeOptionalDecimal(form.adsRoas);
+
+    if (adsInvestment === undefined || adsRoas === undefined) {
+      return null;
+    }
+
     const parsed = breakEvenRoasSimulationFormSchema.safeParse({
+      adsInvestment,
+      adsRoas,
       contributionMarginRate: (parsedPercentage / 100).toFixed(6),
       productIdentifier: form.productIdentifier.trim() || null,
     });
@@ -346,6 +383,11 @@ export function BreakEvenRoasCalculator({
 
   async function saveSimulation() {
     const draft = getDraft();
+
+    if (adsInvestmentError || adsRoasError) {
+      setSaveError("Revise os valores de Investimento em Ads e ROAS.");
+      return;
+    }
 
     if (!draft) {
       setSaveError(
@@ -622,6 +664,8 @@ export function BreakEvenRoasCalculator({
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   <ExampleInputMetric
+                    error={adsInvestmentError}
+                    helper="Opcional"
                     id="break-even-roas-ads-investment"
                     label="Investimento em Ads"
                     onChange={(value) => updateField("adsInvestment", value)}
@@ -629,6 +673,8 @@ export function BreakEvenRoasCalculator({
                     value={form.adsInvestment}
                   />
                   <ExampleInputMetric
+                    error={adsRoasError}
+                    helper="Opcional"
                     id="break-even-roas-ads-roas"
                     label="ROAS"
                     onChange={(value) => updateField("adsRoas", value)}
@@ -736,6 +782,8 @@ export function BreakEvenRoasCalculator({
 }
 
 function ExampleInputMetric({
+  error,
+  helper,
   id,
   label,
   onChange,
@@ -743,6 +791,8 @@ function ExampleInputMetric({
   suffix,
   value,
 }: {
+  error?: string;
+  helper: string;
   id: string;
   label: string;
   onChange: (value: string) => void;
@@ -779,6 +829,9 @@ function ExampleInputMetric({
           </span>
         ) : null}
       </div>
+      <p className={cn("mt-2 text-[10px]", error ? "text-error" : "text-muted-foreground")}>
+        {error ?? helper}
+      </p>
     </div>
   );
 }

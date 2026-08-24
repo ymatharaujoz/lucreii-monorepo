@@ -528,6 +528,9 @@ describe("@lucreii/database schema", () => {
     expect(breakEvenRoasSimulations.productIdentifier).toBeDefined();
     expect(breakEvenRoasSimulations.contributionMarginRate).toBeDefined();
     expect(breakEvenRoasSimulations.breakEvenRoas).toBeDefined();
+    expect(breakEvenRoasSimulations.adsInvestment).toBeDefined();
+    expect(breakEvenRoasSimulations.adsRoas).toBeDefined();
+    expect(breakEvenRoasSimulations.adsAttributedRevenue).toBeDefined();
     expect(migration).toContain(
       'CREATE TABLE IF NOT EXISTS "break_even_roas_simulations"',
     );
@@ -540,6 +543,23 @@ describe("@lucreii/database schema", () => {
     );
     expect(migrationJournal).toContain(
       '"tag": "0026_break_even_roas_simulations"',
+    );
+
+    const adsExampleMigration = readFileSync(
+      path.resolve(
+        __dirname,
+        "../drizzle/0027_break_even_roas_ads_example.sql",
+      ),
+      "utf8",
+    );
+    expect(adsExampleMigration).toContain('"ads_investment"');
+    expect(adsExampleMigration).toContain('"ads_roas"');
+    expect(adsExampleMigration).toContain('"ads_attributed_revenue"');
+    expect(adsExampleMigration).toContain(
+      '"break_even_roas_simulations_ads_investment_non_negative"',
+    );
+    expect(migrationJournal).toContain(
+      '"tag": "0027_break_even_roas_ads_example"',
     );
   });
 });

@@ -76,17 +76,17 @@ describe("BreakEvenRoasCalculator", () => {
     expect(text()).toContain(
       "Acima dele: o produto gera lucro após o investimento em Ads.",
     );
-    expect(text()).toContain("R$ 867,00");
+    expect(text()).not.toContain("R$ 867,00");
     expect(text()).not.toContain("2,78x");
     expect(text()).not.toContain("Fórmula aplicada");
     expect(
       (document.getElementById("break-even-roas-ads-investment") as HTMLInputElement)
         .value,
-    ).toBe("289,00");
+    ).toBe("");
     expect(
       (document.getElementById("break-even-roas-ads-roas") as HTMLInputElement)
         .value,
-    ).toBe("3");
+    ).toBe("");
 
     view.unmount();
   });
@@ -94,6 +94,9 @@ describe("BreakEvenRoasCalculator", () => {
   it("requires an identifier to save and sends the normalized margin", async () => {
     postMock.mockResolvedValueOnce({
       data: {
+        adsAttributedRevenue: null,
+        adsInvestment: null,
+        adsRoas: null,
         breakEvenRoas: "6.666667",
         calculationVersion: "1",
         companyId: "00000000-0000-0000-0000-000000000001",
@@ -126,6 +129,8 @@ describe("BreakEvenRoasCalculator", () => {
       "/pricing/break-even-roas/simulations",
       {
         body: {
+          adsInvestment: null,
+          adsRoas: null,
           contributionMarginRate: "0.150000",
           productIdentifier: "CAM-01",
         },
@@ -150,6 +155,51 @@ describe("BreakEvenRoasCalculator", () => {
     view.unmount();
   });
 
+  it("saves normalized Ads example inputs with the simulation", async () => {
+    postMock.mockResolvedValueOnce({ data: {} });
+    const view = mount(<BreakEvenRoasCalculator />);
+
+    setInputValue(
+      document.getElementById("break-even-roas-percentage") as HTMLInputElement,
+      "15",
+    );
+    setInputValue(
+      document.getElementById("break-even-roas-product-identifier") as HTMLInputElement,
+      "CAM-ADS-01",
+    );
+    setInputValue(
+      document.getElementById("break-even-roas-ads-investment") as HTMLInputElement,
+      "350",
+    );
+    setInputValue(
+      document.getElementById("break-even-roas-ads-roas") as HTMLInputElement,
+      "2,5",
+    );
+
+    const saveButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Salvar"),
+    );
+    expect(saveButton).toBeTruthy();
+    await act(async () => {
+      saveButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(postMock).toHaveBeenCalledWith(
+      "/pricing/break-even-roas/simulations",
+      {
+        body: {
+          adsInvestment: "350.000000",
+          adsRoas: "2.500000",
+          contributionMarginRate: "0.150000",
+          productIdentifier: "CAM-ADS-01",
+        },
+      },
+    );
+
+    view.unmount();
+  });
+
   it("calculates attributed ad revenue from editable example values", () => {
     const view = mount(<BreakEvenRoasCalculator />);
 
@@ -166,6 +216,38 @@ describe("BreakEvenRoasCalculator", () => {
     expect(text()).toContain(
       "R$ 350,00 investidos em ADS com ROAS de 2,5x geram R$ 875,00",
     );
+
+    view.unmount();
+  });
+
+  it("loads persisted ad example values when editing a simulation", () => {
+    const view = mount(
+      <BreakEvenRoasCalculator
+        initialSimulation={{
+          adsAttributedRevenue: "867.000000",
+          adsInvestment: "289.000000",
+          adsRoas: "3.000000",
+          breakEvenRoas: "6.666667",
+          calculationVersion: "1",
+          companyId: "00000000-0000-0000-0000-000000000001",
+          contributionMarginRate: "0.150000",
+          createdAt: "2026-08-20T12:00:00.000Z",
+          id: "00000000-0000-0000-0000-000000000002",
+          productIdentifier: "CAM-01",
+          updatedAt: "2026-08-20T12:00:00.000Z",
+        }}
+      />,
+    );
+
+    expect(
+      (document.getElementById("break-even-roas-ads-investment") as HTMLInputElement)
+        .value,
+    ).toBe("289,00");
+    expect(
+      (document.getElementById("break-even-roas-ads-roas") as HTMLInputElement)
+        .value,
+    ).toBe("3");
+    expect(text()).toContain("R$ 867,00");
 
     view.unmount();
   });

@@ -10,12 +10,17 @@ const context = {
   userId: "user_123",
 };
 const input = {
+  adsInvestment: "289.000000",
+  adsRoas: "3.000000",
   contributionMarginRate: "0.150000",
   productIdentifier: "CAM-01",
 };
 
 function createRow() {
   return {
+    adsAttributedRevenue: "867.000000",
+    adsInvestment: "289.000000",
+    adsRoas: "3.000000",
     breakEvenRoas: "6.666667",
     calculationVersion: "1",
     companyId,
@@ -60,9 +65,11 @@ function createDatabaseMock() {
       })
       .mockReturnValue({
         from: vi.fn().mockReturnValue({ where: listWhere }),
-      }),
+    }),
     update: vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({ returning }),
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({ returning }),
+      }),
     }),
   };
 
@@ -82,9 +89,60 @@ describe("BreakEvenRoasSimulationsService", () => {
     expect(result.breakEvenRoas).toBe("6.666667");
     expect(values).toEqual(
       expect.objectContaining({
+        adsAttributedRevenue: "867.000000",
+        adsInvestment: "289.000000",
+        adsRoas: "3.000000",
         breakEvenRoas: "6.666667",
         contributionMarginRate: "0.150000",
         productIdentifier: "CAM-01",
+      }),
+    );
+  });
+
+  it("allows a simulation without the optional Ads example", async () => {
+    const db = createDatabaseMock();
+    const service = new BreakEvenRoasSimulationsService(db);
+
+    await service.create(context, {
+      adsInvestment: null,
+      adsRoas: null,
+      contributionMarginRate: "0.150000",
+      productIdentifier: "CAM-EMPTY-ADS",
+    });
+
+    const insertMock = db as unknown as { insert: ReturnType<typeof vi.fn> };
+    const values =
+      insertMock.insert.mock.results[0]?.value.values.mock.calls[0]?.[0];
+
+    expect(values).toEqual(
+      expect.objectContaining({
+        adsAttributedRevenue: null,
+        adsInvestment: null,
+        adsRoas: null,
+      }),
+    );
+  });
+
+  it("recalculates the persisted Ads revenue when updating a simulation", async () => {
+    const db = createDatabaseMock();
+    const service = new BreakEvenRoasSimulationsService(db);
+
+    await service.update(context, simulationId, {
+      adsInvestment: "350.000000",
+      adsRoas: "2.500000",
+      contributionMarginRate: "0.200000",
+      productIdentifier: "CAM-UPDATED",
+    });
+
+    const updateMock = db as unknown as { update: ReturnType<typeof vi.fn> };
+    const values =
+      updateMock.update.mock.results[0]?.value.set.mock.calls[0]?.[0];
+
+    expect(values).toEqual(
+      expect.objectContaining({
+        adsAttributedRevenue: "875.000000",
+        adsInvestment: "350.000000",
+        adsRoas: "2.500000",
       }),
     );
   });

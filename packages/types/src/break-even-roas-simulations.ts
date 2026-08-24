@@ -7,11 +7,14 @@ export type BreakEvenRoasSimulationSortKey =
 export type BreakEvenRoasSimulationSortDirection = "asc" | "desc";
 
 export type BreakEvenRoasSimulationDraft = {
+  adsInvestment: string | null;
+  adsRoas: string | null;
   productIdentifier: string | null;
   contributionMarginRate: string;
 };
 
 export type BreakEvenRoasSimulationResult = {
+  adsAttributedRevenue: string | null;
   breakEvenRoas: string;
   calculationVersion: string;
 };

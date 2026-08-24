@@ -14,6 +14,8 @@ import type {
 export class CreateBreakEvenRoasSimulationRequestDto implements BreakEvenRoasSimulationFormInput {
   static schema = breakEvenRoasSimulationFormSchema;
 
+  adsInvestment!: string | null;
+  adsRoas!: string | null;
   contributionMarginRate!: string;
   productIdentifier!: string | null;
 }
@@ -21,6 +23,8 @@ export class CreateBreakEvenRoasSimulationRequestDto implements BreakEvenRoasSim
 export class UpdateBreakEvenRoasSimulationRequestDto implements BreakEvenRoasSimulationUpdateInput {
   static schema = breakEvenRoasSimulationUpdateSchema;
 
+  adsInvestment!: string | null;
+  adsRoas!: string | null;
   contributionMarginRate!: string;
   productIdentifier!: string | null;
 }

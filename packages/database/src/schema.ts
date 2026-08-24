@@ -585,6 +585,18 @@ export const breakEvenRoasSimulations = pgTable(
       precision: 14,
       scale: 6,
     }).notNull(),
+    adsInvestment: numeric("ads_investment", {
+      precision: 18,
+      scale: 6,
+    }),
+    adsRoas: numeric("ads_roas", {
+      precision: 18,
+      scale: 6,
+    }),
+    adsAttributedRevenue: numeric("ads_attributed_revenue", {
+      precision: 18,
+      scale: 6,
+    }),
     calculationVersion: varchar("calculation_version", {
       length: 32,
     }).notNull(),
@@ -603,6 +615,18 @@ export const breakEvenRoasSimulations = pgTable(
     check(
       "break_even_roas_simulations_roas_positive",
       sql`${table.breakEvenRoas} > 0`,
+    ),
+    check(
+      "break_even_roas_simulations_ads_investment_non_negative",
+      sql`${table.adsInvestment} is null or ${table.adsInvestment} >= 0`,
+    ),
+    check(
+      "break_even_roas_simulations_ads_roas_non_negative",
+      sql`${table.adsRoas} is null or ${table.adsRoas} >= 0`,
+    ),
+    check(
+      "break_even_roas_simulations_ads_revenue_non_negative",
+      sql`${table.adsAttributedRevenue} is null or ${table.adsAttributedRevenue} >= 0`,
     ),
     index("break_even_roas_simulations_organization_id_idx").on(
       table.organizationId,

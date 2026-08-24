@@ -135,6 +135,9 @@ export class BreakEvenRoasSimulationsService {
     const [created] = await this.db
       .insert(breakEvenRoasSimulations)
       .values({
+        adsAttributedRevenue: calculation.adsAttributedRevenue,
+        adsInvestment: calculation.adsInvestment,
+        adsRoas: calculation.adsRoas,
         breakEvenRoas: toDecimal(calculation.breakEvenRoas),
         calculationVersion: BREAK_EVEN_ROAS_FORMULA_VERSION,
         companyId,
@@ -161,6 +164,9 @@ export class BreakEvenRoasSimulationsService {
     const [updated] = await this.db
       .update(breakEvenRoasSimulations)
       .set({
+        adsAttributedRevenue: calculation.adsAttributedRevenue,
+        adsInvestment: calculation.adsInvestment,
+        adsRoas: calculation.adsRoas,
         breakEvenRoas: toDecimal(calculation.breakEvenRoas),
         calculationVersion: BREAK_EVEN_ROAS_FORMULA_VERSION,
         contributionMarginRate: toDecimal(calculation.contributionMarginRate),
@@ -243,7 +249,22 @@ export class BreakEvenRoasSimulationsService {
       );
     }
 
-    return { breakEvenRoas, contributionMarginRate };
+    const adsInvestment = input.adsInvestment
+      ? toDecimal(Number(input.adsInvestment))
+      : null;
+    const adsRoas = input.adsRoas ? toDecimal(Number(input.adsRoas)) : null;
+    const adsAttributedRevenue =
+      adsInvestment !== null && adsRoas !== null
+        ? toDecimal(Number(adsInvestment) * Number(adsRoas))
+        : null;
+
+    return {
+      adsAttributedRevenue,
+      adsInvestment,
+      adsRoas,
+      breakEvenRoas,
+      contributionMarginRate,
+    };
   }
 
   private requireSelectedCompany(context: TenantContext) {
@@ -322,6 +343,9 @@ export class BreakEvenRoasSimulationsService {
     row: typeof breakEvenRoasSimulations.$inferSelect,
   ): BreakEvenRoasSimulation {
     return {
+      adsAttributedRevenue: row.adsAttributedRevenue,
+      adsInvestment: row.adsInvestment,
+      adsRoas: row.adsRoas,
       breakEvenRoas: row.breakEvenRoas,
       calculationVersion: row.calculationVersion,
       companyId: row.companyId,

@@ -10,6 +10,8 @@ describe("break-even ROAS simulation validation", () => {
   it("requires an identifier and accepts a normalized margin", () => {
     expect(
       breakEvenRoasSimulationFormSchema.safeParse({
+        adsInvestment: null,
+        adsRoas: null,
         contributionMarginRate: "0.150000",
         productIdentifier: "CAM-01",
       }).success,
@@ -29,6 +31,22 @@ describe("break-even ROAS simulation validation", () => {
         productIdentifier: "CAM-01",
       }).success,
     ).toBe(false);
+    expect(
+      breakEvenRoasSimulationFormSchema.safeParse({
+        adsInvestment: "-1",
+        adsRoas: null,
+        contributionMarginRate: "0.150000",
+        productIdentifier: "CAM-01",
+      }).success,
+    ).toBe(false);
+    expect(
+      breakEvenRoasSimulationFormSchema.safeParse({
+        adsInvestment: "289.000000",
+        adsRoas: "3.000000",
+        contributionMarginRate: "0.150000",
+        productIdentifier: "CAM-01",
+      }).success,
+    ).toBe(true);
     expect(
       breakEvenRoasSimulationListQuerySchema.parse({
         page: "2",
