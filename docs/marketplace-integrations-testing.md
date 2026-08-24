@@ -80,7 +80,11 @@ Esses comandos ajudam a publicar o endpoint local da API com HTTPS e a descobrir
 2. Crie uma nova aplicacao.
 3. Habilite o fluxo OAuth.
 4. Copie o `Client ID` e o `Client Secret`.
-5. Se o app estiver com PKCE habilitado, mantenha `MERCADOLIVRE_USE_PKCE=true`.
+5. Habilite as permissoes `read`, `write` e `offline_access` no app.
+6. Se o app estiver com PKCE habilitado, mantenha `MERCADOLIVRE_USE_PKCE=true`.
+
+`offline_access` e obrigatoria para o Mercado Livre devolver `refresh_token`. Sem
+esse token, a conta nao pode ser renovada automaticamente depois das 6 horas.
 
 ### 2. Registrar os endpoints corretos
 
@@ -101,6 +105,12 @@ O projeto tambem aceita o alias de compatibilidade:
 4. Clique em `Conectar`.
 5. Autorize o acesso com a conta de vendedor correta.
 6. Confirme que o card ficou como `Conectado`.
+
+Se a conta ja tiver sido autorizada antes de `offline_access` ser habilitada,
+revogue a autorizacao antiga no painel do Mercado Livre e conecte a conta
+novamente. O callback precisa retornar `scope` com `offline_access` e um
+`refresh_token`; caso contrario, a API recusara a conexao com uma orientacao de
+configuracao.
 
 ### 4. Validar o estado basico
 

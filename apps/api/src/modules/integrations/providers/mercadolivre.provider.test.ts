@@ -756,10 +756,71 @@ describe("MercadoLivreProvider", () => {
         accessToken: "token_123",
         connectedAccountId: "123456",
         connectedAccountLabel: "SELLER123",
+        metadata: expect.objectContaining({
+          scope: "offline_access read write",
+        }),
         refreshToken: "refresh_123",
       }),
     );
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a successful token response without refresh_token", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        access_token: "token_123",
+        expires_in: 21600,
+        scope: "read write",
+        token_type: "bearer",
+        user_id: 123456,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provider.exchangeCode("auth-code")).rejects.toThrow(
+      "The Mercado Livre app must grant offline_access to return refresh_token. Reauthorize the account.",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a token response without offline_access", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      createJsonResponse({
+        access_token: "token_123",
+        expires_in: 21600,
+        refresh_token: "refresh_123",
+        scope: "read write",
+        token_type: "bearer",
+        user_id: 123456,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provider.exchangeCode("auth-code")).rejects.toThrow(
+      "The Mercado Livre app must grant offline_access to return refresh_token. Reauthorize the account.",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not expose non-JSON token responses in errors", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response("access_token=secret-token", {
+        status: 502,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const error = await provider.exchangeCode("auth-code").catch(
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("payload=[non-json response]");
+    expect((error as Error).message).not.toContain("secret-token");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("sends code_verifier during token exchange when PKCE mode is enabled", async () => {

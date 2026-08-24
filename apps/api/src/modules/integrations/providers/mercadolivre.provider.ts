@@ -114,6 +114,10 @@ type MercadoLivreTokenResponse = {
   user_id?: number;
 };
 
+function hasOfflineAccessScope(scope: string | undefined) {
+  return scope?.split(/\s+/).includes("offline_access") ?? false;
+}
+
 type MercadoLivreProfileResponse = {
   email?: string;
   first_name?: string;
@@ -526,6 +530,12 @@ function sanitizeProviderPayload(payload: unknown) {
   }
 
   return sanitized;
+}
+
+function formatProviderErrorPayload(payload: unknown) {
+  return typeof payload === "string"
+    ? "[non-json response]"
+    : JSON.stringify(sanitizeProviderPayload(payload));
 }
 
 function buildCodeChallenge(codeVerifier: string) {
@@ -1664,19 +1674,28 @@ export class MercadoLivreProvider implements IntegrationProvider {
       | MercadoLivreTokenResponse
       | string;
 
+    const tokenPayloadIsObject =
+      typeof tokenPayload !== "string" && tokenPayload !== null;
+    const requiresOfflineAccess =
+      tokenPayloadIsObject &&
+      Boolean(tokenPayload.access_token) &&
+      (!tokenPayload.refresh_token ||
+        !hasOfflineAccessScope(tokenPayload.scope));
+
     if (
       !tokenResponse.ok ||
       typeof tokenPayload === "string" ||
       tokenPayload === null ||
       !tokenPayload.access_token ||
-      !tokenPayload.refresh_token
+      !tokenPayload.refresh_token ||
+      (tokenPayloadIsObject && !hasOfflineAccessScope(tokenPayload.scope))
     ) {
       throw new IntegrationProviderError(
         `Mercado Livre token exchange failed.${
-          typeof tokenPayload === "string"
-            ? ` status=${tokenResponse.status} payload=${tokenPayload}`
-            : ` status=${tokenResponse.status} payload=${JSON.stringify(sanitizeProviderPayload(tokenPayload))}`
-        }`,
+          requiresOfflineAccess
+            ? " The Mercado Livre app must grant offline_access to return refresh_token. Reauthorize the account."
+            : ""
+        } status=${tokenResponse.status} payload=${formatProviderErrorPayload(tokenPayload)}`,
         "remote_request_failed",
       );
     }
@@ -1701,11 +1720,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
       !profilePayload.id
     ) {
       throw new IntegrationProviderError(
-        `Mercado Livre account lookup failed.${
-          typeof profilePayload === "string"
-            ? ` status=${profileResponse.status} payload=${profilePayload}`
-            : ` status=${profileResponse.status} payload=${JSON.stringify(sanitizeProviderPayload(profilePayload))}`
-        }`,
+        `Mercado Livre account lookup failed. status=${profileResponse.status} payload=${formatProviderErrorPayload(profilePayload)}`,
         "remote_request_failed",
       );
     }
@@ -1787,11 +1802,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
         tokenPayload !== null &&
         tokenPayload.error === "invalid_grant";
       throw new IntegrationProviderError(
-        `Mercado Livre token refresh failed.${
-          typeof tokenPayload === "string"
-            ? ` status=${tokenResponse.status} payload=${tokenPayload}`
-            : ` status=${tokenResponse.status} payload=${JSON.stringify(sanitizeProviderPayload(tokenPayload))}`
-        }`,
+        `Mercado Livre token refresh failed. status=${tokenResponse.status} payload=${formatProviderErrorPayload(tokenPayload)}`,
         invalidRefreshToken ? "token_refresh_invalid" : "remote_request_failed",
       );
     }

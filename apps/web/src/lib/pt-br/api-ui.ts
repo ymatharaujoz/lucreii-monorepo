@@ -47,6 +47,10 @@ const API_MESSAGES_BASE: Record<string, string> = {
 /** Prefixos (inglês) retornados pela API com sufixo variável — troca só o prefixo, mantém o restante. */
 const API_MESSAGE_PREFIX_PT: { en: string; pt: string }[] = [
   {
+    en: "Mercado Livre token exchange failed. The Mercado Livre app must grant offline_access to return refresh_token. Reauthorize the account.",
+    pt: "Falha na troca de token do Mercado Livre. O app do Mercado Livre precisa conceder offline_access para retornar refresh_token. Autorize a conta novamente.",
+  },
+  {
     en: "Mercado Livre token exchange failed.",
     pt: "Falha na troca de token do Mercado Livre.",
   },
