@@ -31,6 +31,7 @@ import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
 import { ProductsService } from "@/modules/products/products.service";
 import { SyncService } from "@/modules/sync/sync.service";
 import { MercadoLivreTokenRefreshService } from "@/modules/sync/mercadolivre-token-refresh.service";
+import { MercadoLivreWebhookQueueService } from "@/modules/sync/mercadolivre-webhook-queue.service";
 import {
   createSignedIntegrationState,
   readSignedIntegrationState,
@@ -236,6 +237,7 @@ export class IntegrationsService {
     @Inject(API_RUNTIME_ENV)
     private readonly env: ApiRuntimeEnv,
     private readonly mercadoLivreTokenRefreshService: MercadoLivreTokenRefreshService,
+    private readonly mercadoLivreWebhookQueueService: MercadoLivreWebhookQueueService,
   ) {
     this.providers = createIntegrationProviders(env);
   }
@@ -626,23 +628,15 @@ export class IntegrationsService {
     body: MercadoLivreNotification,
     route = "/integrations/mercadolivre/webhook",
   ) {
-    const result = await this.syncService.handleMercadoLivreNotification({
-      applicationId: body.application_id,
-      attempts: body.attempts,
-      notificationId: body._id,
-      resource: body.resource,
-      sent: body.sent,
-      topic: body.topic,
-      userId: body.user_id,
-    });
+    const result = await this.mercadoLivreWebhookQueueService.enqueue(body);
 
     this.logger.log(
       `Mercado Livre notification received: route=${route} topic=${body.topic ?? "unknown"} resource=${body.resource ?? "unknown"} userId=${body.user_id ?? "unknown"} status=${result.status} reason=${result.reason}`,
     );
 
-    if (result.status !== "started" && result.status !== "rerun_marked") {
+    if (result.status === "duplicate") {
       this.logger.log(
-        `Ignored Mercado Livre notification: route=${route} reason=${result.reason ?? "unknown"} topic=${result.summary.topic ?? "unknown"} resource=${result.summary.resource ?? "unknown"} userId=${result.summary.userId ?? "unknown"} summary=${JSON.stringify(result.summary)}`,
+        `Duplicate Mercado Livre notification: route=${route} topic=${result.summary.topic ?? "unknown"} resource=${result.summary.resource ?? "unknown"} userId=${result.summary.userId ?? "unknown"} summary=${JSON.stringify(result.summary)}`,
       );
     }
 

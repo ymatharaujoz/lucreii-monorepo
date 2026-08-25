@@ -883,6 +883,48 @@ export const syncRuns = pgTable(
   ],
 );
 
+export const marketplaceWebhookEvents = pgTable(
+  "marketplace_webhook_events",
+  {
+    id: id(),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    deduplicationKey: varchar("deduplication_key", { length: 512 }).notNull(),
+    notificationId: varchar("notification_id", { length: 255 }),
+    applicationId: varchar("application_id", { length: 255 }),
+    externalAccountId: varchar("external_account_id", { length: 255 }),
+    resource: text("resource"),
+    topic: varchar("topic", { length: 128 }),
+    sent: varchar("sent", { length: 64 }),
+    payload: jsonb("payload")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    status: varchar("status", { length: 32 }).default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    availableAt: timestamp("available_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastError: text("last_error"),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("marketplace_webhook_events_provider_dedup_key").on(
+      table.provider,
+      table.deduplicationKey,
+    ),
+    index("marketplace_webhook_events_pending_idx").on(
+      table.status,
+      table.availableAt,
+      table.createdAt,
+    ),
+    index("marketplace_webhook_events_external_account_idx").on(
+      table.provider,
+      table.externalAccountId,
+    ),
+  ],
+);
+
 export const externalProducts = pgTable(
   "external_products",
   {

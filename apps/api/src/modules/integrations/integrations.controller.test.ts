@@ -282,8 +282,8 @@ describe("integrations controller", () => {
       "handleMercadoLivreNotification",
     ).mockResolvedValueOnce({
       accepted: true,
-      reason: "started",
-      status: "started",
+      reason: "queued",
+      status: "queued",
       summary: {
         applicationId: "123",
         attempts: 1,
@@ -309,11 +309,11 @@ describe("integrations controller", () => {
       url: "/integrations/mercadolivre/webhook",
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       data: expect.objectContaining({
         accepted: true,
-        status: "started",
+        status: "queued",
       }),
       error: null,
     });
@@ -325,8 +325,8 @@ describe("integrations controller", () => {
       "handleMercadoLivreNotification",
     ).mockResolvedValueOnce({
       accepted: true,
-      reason: "started",
-      status: "started",
+      reason: "queued",
+      status: "queued",
       summary: {
         applicationId: "123",
         attempts: 1,
@@ -352,11 +352,11 @@ describe("integrations controller", () => {
       url: "/integrations/mercadolivre/notifications",
     });
 
-    expect(response.statusCode).toBe(201);
+    expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       data: expect.objectContaining({
         accepted: true,
-        status: "started",
+        status: "queued",
       }),
       error: null,
     });

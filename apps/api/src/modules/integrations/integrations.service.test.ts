@@ -66,6 +66,9 @@ function createService() {
     recoverMercadoLivreConnection: vi.fn(),
     rematerializeProviderMetrics: vi.fn(),
   };
+  const mercadoLivreWebhookQueueService = {
+    enqueue: vi.fn(),
+  };
   const mercadoLivreTokenRefreshService = {
     refreshIfNeeded: vi.fn(async (connection) => ({
       connection,
@@ -78,6 +81,7 @@ function createService() {
   return {
     db,
     env,
+    mercadoLivreWebhookQueueService,
     productsService,
     syncService,
     service: new IntegrationsService(
@@ -86,6 +90,7 @@ function createService() {
       syncService as never,
       env as never,
       mercadoLivreTokenRefreshService as never,
+      mercadoLivreWebhookQueueService as never,
     ),
   };
 }
@@ -2220,13 +2225,13 @@ describe("IntegrationsService", () => {
     );
   });
 
-  it("delegates Mercado Livre notifications to the sync service", async () => {
-    const { service, syncService } = createService();
+  it("queues Mercado Livre notifications without processing them inline", async () => {
+    const { mercadoLivreWebhookQueueService, service } = createService();
 
-    syncService.handleMercadoLivreNotification.mockResolvedValue({
+    mercadoLivreWebhookQueueService.enqueue.mockResolvedValue({
       accepted: true,
-      reason: "started",
-      status: "started",
+      reason: "queued",
+      status: "queued",
       summary: {
         applicationId: "123",
         attempts: 1,
@@ -2248,17 +2253,20 @@ describe("IntegrationsService", () => {
         topic: "orders_v2",
         user_id: 456,
       }),
-    ).resolves.toEqual(expect.objectContaining({ status: "started" }));
+    ).resolves.toEqual(expect.objectContaining({ status: "queued" }));
+    expect(mercadoLivreWebhookQueueService.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: "notif_1" }),
+    );
   });
 
-  it("logs route, notification summary, and ignore reason for ignored Mercado Livre notifications", async () => {
-    const { service, syncService } = createService();
+  it("logs duplicate Mercado Livre notifications", async () => {
+    const { mercadoLivreWebhookQueueService, service } = createService();
     const loggerSpy = vi.spyOn(service["logger"], "log");
 
-    syncService.handleMercadoLivreNotification.mockResolvedValue({
+    mercadoLivreWebhookQueueService.enqueue.mockResolvedValue({
       accepted: true,
-      reason: "connection_not_found",
-      status: "ignored",
+      reason: "duplicate",
+      status: "duplicate",
       summary: {
         applicationId: "123",
         attempts: 1,
@@ -2283,13 +2291,13 @@ describe("IntegrationsService", () => {
         },
         "/integrations/mercadolivre/notifications",
       ),
-    ).resolves.toEqual(expect.objectContaining({ status: "ignored" }));
+    ).resolves.toEqual(expect.objectContaining({ status: "duplicate" }));
 
     expect(loggerSpy).toHaveBeenCalledWith(
       expect.stringContaining("route=/integrations/mercadolivre/notifications"),
     );
     expect(loggerSpy).toHaveBeenCalledWith(
-      expect.stringContaining("reason=connection_not_found"),
+      expect.stringContaining("Duplicate Mercado Livre notification"),
     );
     expect(loggerSpy).toHaveBeenCalledWith(
       expect.stringContaining("topic=orders_v2"),

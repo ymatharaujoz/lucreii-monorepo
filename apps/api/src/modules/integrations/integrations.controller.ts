@@ -3,6 +3,8 @@ import {
   Headers,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Inject,
   Param,
   Post,
@@ -174,6 +176,7 @@ export class IntegrationsController {
   }
 
   @Post("mercadolivre/webhook")
+  @HttpCode(HttpStatus.OK)
   async handleMercadoLivreWebhook(@Body() body: MercadoLivreNotificationDto) {
     return {
       data: await this.integrationsService.handleMercadoLivreNotification(
@@ -185,6 +188,7 @@ export class IntegrationsController {
   }
 
   @Post("mercadolivre/notifications")
+  @HttpCode(HttpStatus.OK)
   async handleMercadoLivreNotificationAlias(
     @Body() body: MercadoLivreNotificationDto,
   ) {

@@ -17,6 +17,7 @@ import {
   breakEvenRoasSimulations,
   products,
   marketplaceConnections,
+  marketplaceWebhookEvents,
   syncRuns,
   externalProducts,
   externalOrders,
@@ -34,6 +35,7 @@ describe("@lucreii/database schema", () => {
     expect(dbSchema.productMonthlyPerformance).toBe(productMonthlyPerformance);
     expect(dbSchema.pricingSimulations).toBe(pricingSimulations);
     expect(dbSchema.breakEvenRoasSimulations).toBe(breakEvenRoasSimulations);
+    expect(dbSchema.marketplaceWebhookEvents).toBe(marketplaceWebhookEvents);
     expect(dbSchema.products).toBe(products);
     expect(dbSchema.users).toBe(users);
     expect(dbSchema.accounts).toBe(accounts);
@@ -50,6 +52,7 @@ describe("@lucreii/database schema", () => {
     expect(db.query.companies).toBeDefined();
     expect(db.query.products).toBeDefined();
     expect(db.query.marketplaceConnections).toBeDefined();
+    expect(db.query.marketplaceWebhookEvents).toBeDefined();
     expect(db.query.syncRuns).toBeDefined();
     expect(db.query.externalProducts).toBeDefined();
     expect(db.query.externalOrders).toBeDefined();

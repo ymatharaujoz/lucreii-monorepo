@@ -36,6 +36,10 @@ export type NewMarketplaceConnection =
   typeof schema.marketplaceConnections.$inferInsert;
 export type SyncRun = typeof schema.syncRuns.$inferSelect;
 export type NewSyncRun = typeof schema.syncRuns.$inferInsert;
+export type MarketplaceWebhookEvent =
+  typeof schema.marketplaceWebhookEvents.$inferSelect;
+export type NewMarketplaceWebhookEvent =
+  typeof schema.marketplaceWebhookEvents.$inferInsert;
 export type ExternalProduct = typeof schema.externalProducts.$inferSelect;
 export type NewExternalProduct = typeof schema.externalProducts.$inferInsert;
 export type ExternalOrder = typeof schema.externalOrders.$inferSelect;

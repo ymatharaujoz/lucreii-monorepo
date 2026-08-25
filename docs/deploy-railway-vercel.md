@@ -72,6 +72,17 @@ Opcional:
 - `SHOPEE_WEBHOOK_URL`
 - `SYNC_RELAX_GUARDS` (ignorado em producao)
 
+### Webhook Mercado Livre
+
+Cadastre no aplicativo do Mercado Livre o endpoint da API Railway, nunca o
+dominio da Vercel:
+
+`https://marginflow-production.up.railway.app/integrations/mercadolivre/webhook`
+
+O endpoint responde `HTTP 200` imediatamente e processa a notificacao de forma
+assíncrona pela inbox PostgreSQL. Depois de aplicar o deploy, rode as migracoes
+antes de testar uma nova venda.
+
 ### Vercel Web
 
 Configure no projeto `apps/web` da Vercel:
