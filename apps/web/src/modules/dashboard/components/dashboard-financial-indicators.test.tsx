@@ -98,6 +98,7 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("33.55%");
     expect(text).toContain("R$\u00a0596,13");
     expect(text).toContain("R$\u00a07.564,15");
+    expect(text).toContain("27,65%");
     expect(text).toContain("Faturamento");
     expect(text).toContain("Margem Média");
     expect(text).toContain("Ponto de Equilíbrio");
@@ -109,6 +110,25 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).not.toContain("Publicidade");
 
     expect(document.querySelectorAll("[class*=grid]").length).toBeGreaterThan(0);
+    view.unmount();
+  });
+
+  it("calcula margem líquida usando valores exibidos no dashboard", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={{
+          ...indicators,
+          fixedCost: "0.00",
+          revenue: "20762.92",
+          totalProfit: "6087.99",
+        }}
+      />,
+    );
+
+    expect(document.body.textContent ?? "").toContain(
+      "R$\u00a06.087,99 (29,32%)",
+    );
     view.unmount();
   });
 
@@ -135,6 +155,7 @@ describe("DashboardFinancialIndicators", () => {
     expect(document.body.textContent ?? "").toContain("-2.98%");
     expect(document.body.textContent ?? "").toContain("Prejuízo");
     expect(document.body.textContent ?? "").toContain("-R$ 4.815,01");
+    expect(document.body.textContent ?? "").toContain("-82,24%");
     expect(document.body.textContent ?? "").toContain("Resultado negativo");
     expect(document.body.textContent ?? "").toContain("-R$ 1.676,47");
     view.unmount();
@@ -154,7 +175,25 @@ describe("DashboardFinancialIndicators", () => {
 
     const text = document.body.textContent ?? "";
     expect(text).toContain("R$\u00a00,00");
+    expect(text).toContain("0,00%");
     expect(text).toContain("Resultado neutro");
+    view.unmount();
+  });
+
+  it("exibe margem zero quando faturamento é zero", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={{
+          ...indicators,
+          fixedCost: "0.00",
+          revenue: "0.00",
+          totalProfit: "100.00",
+        }}
+      />,
+    );
+
+    expect(document.body.textContent ?? "").toContain("R$\u00a0100,00 (0,00%)");
     view.unmount();
   });
 

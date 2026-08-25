@@ -66,6 +66,17 @@ function formatIndicatorPercent(value: string) {
   return `${normalizeNumber(value).toFixed(2)}%`;
 }
 
+function formatNetMarginPercent(value: number) {
+  return `${new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  }).format(value)}%`;
+}
+
+function roundToCents(value: number) {
+  return Number(value.toFixed(2));
+}
+
 function IndicatorCard({
   icon,
   label,
@@ -213,6 +224,12 @@ export function DashboardFinancialIndicators({
   const breakEven = normalizeNumber(financialIndicators.breakEvenRevenue);
   const fixedCostResolved = normalizeNumber(financialIndicators.fixedCost);
   const liquidProfit = totalProfit - fixedCostResolved;
+  const displayedLiquidProfit = roundToCents(liquidProfit);
+  const displayedRevenue = roundToCents(revenue);
+  const netMarginPercent =
+    displayedRevenue === 0
+      ? 0
+      : (displayedLiquidProfit / displayedRevenue) * 100;
   const revenueSub = `${financialIndicators.netSales} vendas líquidas`;
 
   return (
@@ -270,10 +287,10 @@ export function DashboardFinancialIndicators({
                   ? "Resultado negativo"
                   : "Resultado neutro",
           }}
-          value={formatMoney(liquidProfit, {
+          value={`${formatMoney(displayedLiquidProfit, {
             maximumFractionDigits: 2,
             minimumFractionDigits: 2,
-          })}
+          })} (${formatNetMarginPercent(netMarginPercent)})`}
           variant={
             liquidProfit > 0
               ? "success"
