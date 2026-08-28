@@ -174,14 +174,23 @@ describe("orders validation schemas", () => {
 
   it("accepts composition update payloads without tax fields", () => {
     const result = orderCompositionUpdateSchema.parse({
-      marketplaceCommissionAmount: "15.00",
-      packagingCostAmount: "12.00",
       productCostAmount: "80.00",
-      refundBonusAmount: "5.00",
-      shippingOrFixedFeeAmount: "30.00",
     });
 
-    expect(result.marketplaceCommissionAmount).toBe("15.00");
+    expect(result).toEqual({ productCostAmount: "80.00" });
+  });
+
+  it("requires a non-empty partial composition update", () => {
+    expect(() => orderCompositionUpdateSchema.parse({})).toThrow();
+    expect(() =>
+      orderCompositionUpdateSchema.parse({ productCostAmount: "-1.00" }),
+    ).toThrow();
+    expect(() =>
+      orderCompositionUpdateSchema.parse({ productCostAmount: "1.234" }),
+    ).toThrow();
+    expect(orderCompositionUpdateSchema.parse({ productCostAmount: "0" })).toEqual({
+      productCostAmount: "0",
+    });
   });
 
   it("accepts negative contribution margin percentages in order details", () => {

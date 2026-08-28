@@ -181,6 +181,7 @@ export function useOrderDetails(orderId: string | null, open: boolean) {
 
 export function useUpdateOrderComposition() {
   const queryClient = useQueryClient();
+  const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
 
   return useMutation({
     mutationFn: async (input: {
@@ -188,9 +189,18 @@ export function useUpdateOrderComposition() {
       values: OrderCompositionUpdateInput;
     }) => updateOrderComposition(input.orderId, input.values),
     onSuccess: async (_data, variables) => {
+      queryClient.setQueryData(
+        [...ordersQueryKey, selectedCompanyId, "detail", variables.orderId],
+        _data,
+      );
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
       await queryClient.invalidateQueries({
-        queryKey: [...ordersQueryKey, "detail", variables.orderId],
+        queryKey: [
+          ...ordersQueryKey,
+          selectedCompanyId,
+          "detail",
+          variables.orderId,
+        ],
       });
     },
   });

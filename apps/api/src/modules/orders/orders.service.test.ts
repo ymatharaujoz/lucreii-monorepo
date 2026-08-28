@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { read, utils } from "xlsx";
 import {
+  buildOrderFinancialMetrics,
   calculateMonthlyMarginFinancials,
   OrdersService,
 } from "./orders.service";
@@ -79,6 +80,51 @@ describe("OrdersService", () => {
       marginRevenue: "894.48",
       totalProfit: "202.51",
     });
+  });
+
+  it("uses a product cost override without hiding other financial pendencies", () => {
+    const result = buildOrderFinancialMetrics(
+      {
+        fees: [],
+        id: "order_1",
+        items: [
+          {
+            externalProduct: {
+              linkedProductId: "product_1",
+              sku: "SKU-1",
+              linkedProduct: {
+                financeDefaults: { packagingCost: "3.00" },
+                productCosts: [],
+              },
+            },
+            quantity: 1,
+            totalPrice: "100.00",
+          },
+          {
+            externalProduct: null,
+            quantity: 1,
+            totalPrice: "50.00",
+          },
+        ],
+        metadata: { compositionOverrides: { productCostAmount: "20.00" } },
+        orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+        provider: "shopee",
+        refundBonusAmount: null,
+        refundBonusStatus: null,
+        status: "paid",
+        totalAmount: "150.00",
+      } as never,
+      "0.10",
+    );
+
+    expect(result.composition).toEqual(
+      expect.objectContaining({
+        hasIncompleteCostData: true,
+        missingCostItemsCount: 0,
+        missingLinkedItemsCount: 1,
+        productCostAmount: "20.00",
+      }),
+    );
   });
 
   it("returns zero margin financials without monthly orders", () => {
@@ -2989,7 +3035,18 @@ describe("OrdersService", () => {
       }),
     };
 
-    const service = new OrdersService(db as never);
+    const service = new OrdersService(
+      {
+        ...db,
+        transaction: vi.fn(async (callback) =>
+          callback({
+            update: vi.fn().mockReturnValue({
+              set: updateSetMock,
+            }),
+          }),
+        ),
+      } as never,
+    );
     const result = await service.updateOrderComposition(
       {
         organizationId: "org_123",
@@ -3031,6 +3088,74 @@ describe("OrdersService", () => {
       expect.objectContaining({
         contributionMarginPercent: "24.50",
         totalProfitAmount: "49.00",
+      }),
+    );
+  });
+
+  it("allocates a grouped Mercado Livre product cost and preserves other overrides", async () => {
+    const setMock = vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    });
+    const updateMock = vi.fn().mockReturnValue({ set: setMock });
+    const rows = [
+      {
+        id: "order_row_1",
+        items: [{ quantity: 1 }],
+        metadata: {
+          compositionOverrides: { marketplaceCommissionAmount: "10.00" },
+        },
+        provider: "mercadolivre",
+      },
+      {
+        id: "order_row_2",
+        items: [{ quantity: 3 }],
+        metadata: {
+          compositionOverrides: { packagingCostAmount: "2.00" },
+        },
+        provider: "mercadolivre",
+      },
+    ];
+    const db = {
+      query: {
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue(rows),
+        },
+      },
+      transaction: vi.fn(async (callback) => callback({ update: updateMock })),
+    };
+    const service = new OrdersService(db as never);
+    vi.spyOn(service, "getOrderDetails").mockResolvedValue({} as never);
+
+    await service.updateOrderComposition(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      "group__mercadolivre__PACK-1",
+      { productCostAmount: "10.00" },
+    );
+
+    expect(setMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        metadata: {
+          compositionOverrides: {
+            marketplaceCommissionAmount: "10.00",
+            productCostAmount: "2.50",
+          },
+        },
+      }),
+    );
+    expect(setMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        metadata: {
+          compositionOverrides: {
+            packagingCostAmount: "2.00",
+            productCostAmount: "7.50",
+          },
+        },
       }),
     );
   });

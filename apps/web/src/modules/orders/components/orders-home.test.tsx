@@ -12,12 +12,14 @@ import { OrdersHome } from "./orders-home";
 
 const useOrdersListMock = vi.hoisted(() => vi.fn());
 const useOrderDetailsMock = vi.hoisted(() => vi.fn());
+const useUpdateOrderCompositionMock = vi.hoisted(() => vi.fn());
 const downloadOrdersExportMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../hooks/use-orders-data", () => ({
   downloadOrdersExport: downloadOrdersExportMock,
   useOrderDetails: useOrderDetailsMock,
   useOrdersList: useOrdersListMock,
+  useUpdateOrderComposition: useUpdateOrderCompositionMock,
 }));
 
 vi.mock("@/components/ui-premium/date-range-picker", () => ({
@@ -211,6 +213,11 @@ describe("OrdersHome", () => {
   beforeEach(() => {
     downloadOrdersExportMock.mockReset();
     downloadOrdersExportMock.mockResolvedValue(undefined);
+    useUpdateOrderCompositionMock.mockReset();
+    useUpdateOrderCompositionMock.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn().mockResolvedValue({}),
+    });
   });
 
   it("renders status dropdown options from API", () => {
@@ -261,6 +268,74 @@ describe("OrdersHome", () => {
     const impostoValueOrder = content.indexOf("Imposto");
     expect(impostoCardOrder).toBeGreaterThan(-1);
     expect(impostoValueOrder).toBeGreaterThan(impostoCardOrder);
+
+    view.unmount();
+  });
+
+  it("edits only the product cost override from the composition card", () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    useUpdateOrderCompositionMock.mockReturnValue({
+      isPending: false,
+      mutateAsync,
+    });
+
+    const view = mount(<OrdersHome />);
+
+    click(document.querySelector('tr[role="button"]')!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Compos"),
+      )!,
+    );
+    click(document.querySelector('button[aria-label="Editar custo do produto"]')!);
+
+    const input = document.querySelector<HTMLInputElement>(
+      "#product-cost-input",
+    );
+    expect(input?.value).toBe("43,00");
+    changeInputValue(input!, "80,00");
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent === "Salvar",
+      )!,
+    );
+
+    expect(mutateAsync).toHaveBeenCalledWith({
+      orderId: "order_row_1",
+      values: { productCostAmount: "80.00" },
+    });
+
+    view.unmount();
+  });
+
+  it("closes the product cost popover on cancel without a request", () => {
+    const mutateAsync = vi.fn();
+    useUpdateOrderCompositionMock.mockReturnValue({
+      isPending: false,
+      mutateAsync,
+    });
+
+    const view = mount(<OrdersHome />);
+
+    click(document.querySelector('tr[role="button"]')!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Compos"),
+      )!,
+    );
+    click(document.querySelector('button[aria-label="Editar custo do produto"]')!);
+    changeInputValue(
+      document.querySelector<HTMLInputElement>("#product-cost-input")!,
+      "80,00",
+    );
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent === "Cancelar",
+      )!,
+    );
+
+    expect(mutateAsync).not.toHaveBeenCalled();
+    expect(document.querySelector("#product-cost-input")).toBeNull();
 
     view.unmount();
   });

@@ -178,9 +178,9 @@ export type OrderDetails = {
 };
 
 export type OrderCompositionUpdateInput = {
-  refundBonusAmount: string;
-  productCostAmount: string;
-  marketplaceCommissionAmount: string;
-  shippingOrFixedFeeAmount: string;
-  packagingCostAmount: string;
+  refundBonusAmount?: string;
+  productCostAmount?: string;
+  marketplaceCommissionAmount?: string;
+  shippingOrFixedFeeAmount?: string;
+  packagingCostAmount?: string;
 };

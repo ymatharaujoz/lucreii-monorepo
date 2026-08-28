@@ -40,11 +40,11 @@ export class OrderListFiltersDto {
 export class UpdateOrderCompositionDto implements OrderCompositionUpdateInput {
   static schema = orderCompositionUpdateSchema;
 
-  refundBonusAmount!: string;
-  productCostAmount!: string;
-  marketplaceCommissionAmount!: string;
-  shippingOrFixedFeeAmount!: string;
-  packagingCostAmount!: string;
+  refundBonusAmount?: string;
+  productCostAmount?: string;
+  marketplaceCommissionAmount?: string;
+  shippingOrFixedFeeAmount?: string;
+  packagingCostAmount?: string;
 }
 
 export class OrderExportQueryDto implements OrderExportFilters {

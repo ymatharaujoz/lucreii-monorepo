@@ -338,6 +338,12 @@ export function allocateCentsByWeights(totalCents: bigint, weights: bigint[]) {
   return allocations;
 }
 
+function buildPositiveAllocationWeights(weights: bigint[]) {
+  return weights.some((weight) => weight > 0n)
+    ? weights
+    : weights.map(() => 1n);
+}
+
 function toPercentString(numeratorCents: bigint, denominatorCents: bigint) {
   if (denominatorCents <= 0n) {
     return null;
@@ -798,6 +804,10 @@ export function buildOrderFinancialMetrics(
   const compositionOverrides = readOrderCompositionOverrides(
     (order.metadata ?? {}) as Record<string, unknown>,
   );
+  const productCostOverride = compositionOverrides.productCostAmount;
+  const hasProductCostOverride = hasValidProductCostOverride(
+    productCostOverride,
+  );
   const hasAuthoritativeMercadoLivreComposition =
     order.provider === "mercadolivre";
   const shippingOrFixedFeeAmount = readOverrideMoney(
@@ -846,13 +856,17 @@ export function buildOrderFinancialMetrics(
     const linkedProduct = item.externalProduct?.linkedProduct;
     if (!linkedProduct || !item.externalProduct?.linkedProductId) {
       missingLinkedItemsCount += 1;
-      missingCostItemsCount += 1;
+      if (!hasProductCostOverride) {
+        missingCostItemsCount += 1;
+      }
       continue;
     }
 
     const latestCostAmount = resolveLatestCostAmount(linkedProduct);
     if (latestCostAmount === null) {
-      missingCostItemsCount += 1;
+      if (!hasProductCostOverride) {
+        missingCostItemsCount += 1;
+      }
     } else {
       productCostAmount += latestCostAmount * item.quantity;
     }
@@ -1098,15 +1112,7 @@ function isExpired(value: Date | string | null | undefined) {
 function readOrderCompositionOverrides(
   metadata: Record<string, unknown> | null | undefined,
 ): OrderCompositionOverrides {
-  if (!metadata || typeof metadata !== "object") {
-    return {};
-  }
-
-  const rawOverrides =
-    metadata.compositionOverrides &&
-    typeof metadata.compositionOverrides === "object"
-      ? (metadata.compositionOverrides as Record<string, unknown>)
-      : null;
+  const rawOverrides = readRawOrderCompositionOverrides(metadata);
 
   if (!rawOverrides) {
     return {};
@@ -1134,6 +1140,33 @@ function readOrderCompositionOverrides(
         ? rawOverrides.shippingOrFixedFeeAmount
         : undefined,
   };
+}
+
+function readRawOrderCompositionOverrides(
+  metadata: Record<string, unknown> | null | undefined,
+) {
+  if (!metadata || typeof metadata !== "object") {
+    return null;
+  }
+
+  const rawOverrides = metadata.compositionOverrides;
+  if (
+    !rawOverrides ||
+    typeof rawOverrides !== "object" ||
+    Array.isArray(rawOverrides)
+  ) {
+    return null;
+  }
+
+  return { ...(rawOverrides as Record<string, unknown>) };
+}
+
+function hasValidProductCostOverride(value: string | undefined) {
+  return (
+    typeof value === "string" &&
+    /^\d+(?:\.\d{1,2})?$/.test(value) &&
+    Number.isFinite(Number(value))
+  );
 }
 
 function buildOrderDisplayNameMaps(order: OrderRow) {
@@ -1285,6 +1318,22 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
   const itemTotalsCents = order.items.map((item) =>
     parseMoneyToCents(item.totalPrice),
   );
+  const quantityWeights = buildPositiveAllocationWeights(
+    order.items.map((item) => BigInt(Math.max(0, item.quantity))),
+  );
+  const productCostOverride = readOrderCompositionOverrides(
+    (order.metadata ?? {}) as Record<string, unknown>,
+  ).productCostAmount;
+  const hasProductCostOverride = hasValidProductCostOverride(
+    productCostOverride,
+  );
+  const productCostOverrideAllocations =
+    !hasProductCostOverride
+      ? []
+      : allocateCentsByWeights(
+          parseMoneyToCents(productCostOverride),
+          quantityWeights,
+        );
   const commissionTotalCents = parseMoneyToCents(orderRow.tariffAmount);
   const shippingOrFixedFeeTotalCents =
     parseMoneyToCents(orderRow.shippingAmount) +
@@ -1322,9 +1371,11 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
       : 0n;
     const latestCostAmount = resolveLatestCostAmount(linkedProduct);
     const productCostCents =
-      latestCostAmount === null
-        ? null
-        : parseMoneyToCents(latestCostAmount) * BigInt(item.quantity);
+      hasProductCostOverride
+        ? (productCostOverrideAllocations[index] ?? 0n)
+        : latestCostAmount === null
+          ? null
+          : parseMoneyToCents(latestCostAmount) * BigInt(item.quantity);
     const totalProfitCents =
       linkedProduct && productCostCents !== null
         ? netRevenueCents - productCostCents - packagingCostCents
@@ -2017,6 +2068,19 @@ function calculateLegacyOrderDetailMarginFinancials(
 
   for (const logicalOrder of logicalOrders) {
     for (const row of logicalOrder.rows) {
+      const productCostOverride = readOrderCompositionOverrides(
+        (row.metadata ?? {}) as Record<string, unknown>,
+      ).productCostAmount;
+      const hasProductCostOverride = hasValidProductCostOverride(
+        productCostOverride,
+      );
+
+      if (hasProductCostOverride) {
+        productCostCents += absoluteCents(
+          parseMoneyToCents(productCostOverride),
+        );
+      }
+
       for (const item of row.items) {
         const quantity = Math.max(0, item.quantity);
         if (quantity <= 0) {
@@ -2033,7 +2097,7 @@ function calculateLegacyOrderDetailMarginFinancials(
             parseMoneyToCents(linkedProduct?.financeDefaults?.packagingCost),
           ) * quantityBigInt;
         const latestCostAmount = resolveLatestCostAmount(linkedProduct);
-        if (latestCostAmount !== null) {
+        if (!hasProductCostOverride && latestCostAmount !== null) {
           productCostCents +=
             absoluteCents(parseMoneyToCents(latestCostAmount)) * quantityBigInt;
         }
@@ -2706,59 +2770,122 @@ export class OrdersService {
     input: OrderCompositionUpdateInput,
   ): Promise<OrderDetails> {
     const companyId = this.requireSelectedCompanyId(authContext);
-    const row = await this.db.query.externalOrders.findFirst({
-      where: (table) =>
-        and(
-          eq(table.id, orderRecordId),
-          eq(table.organizationId, authContext.organizationId),
-          eq(table.companyId, companyId),
-        ),
-      with: {
-        fees: true,
-        items: {
-          with: {
-            externalProduct: true,
-          },
-        },
-      },
-    });
+    const providedFields = Object.entries(input).filter(
+      ([, value]) => value !== undefined,
+    );
+    if (providedFields.length === 0) {
+      throw new BadRequestException("At least one composition field is required.");
+    }
 
-    if (!row) {
+    if (
+      input.productCostAmount !== undefined &&
+      !hasValidProductCostOverride(input.productCostAmount)
+    ) {
+      throw new BadRequestException(
+        "Product cost must be zero or a positive amount with up to two decimals.",
+      );
+    }
+
+    const groupedDisplayOrderId =
+      readMercadoLivreGroupedDisplayOrderId(orderRecordId);
+    const rows = groupedDisplayOrderId
+      ? await this.db.query.externalOrders.findMany({
+          orderBy: (table) => [desc(table.orderedAt), desc(table.createdAt)],
+          where: (table) =>
+            and(
+              eq(table.organizationId, authContext.organizationId),
+              eq(table.companyId, companyId),
+              eq(table.provider, "mercadolivre"),
+              buildExactMercadoLivreGroupedOrderWhere(groupedDisplayOrderId),
+            ),
+          with: {
+            fees: true,
+            items: {
+              with: {
+                externalProduct: true,
+              },
+            },
+          },
+        })
+      : await (async () => {
+          const row = await this.db.query.externalOrders.findFirst({
+            where: (table) =>
+              and(
+                eq(table.id, orderRecordId),
+                eq(table.organizationId, authContext.organizationId),
+                eq(table.companyId, companyId),
+              ),
+            with: {
+              fees: true,
+              items: {
+                with: {
+                  externalProduct: true,
+                },
+              },
+            },
+          });
+
+          return row ? [row] : [];
+        })();
+
+    if (rows.length === 0) {
       throw new NotFoundException("Order not found.");
     }
 
-    const metadata =
-      row.metadata && typeof row.metadata === "object"
-        ? { ...(row.metadata as Record<string, unknown>) }
-        : {};
-    const compositionOverrides: OrderCompositionOverrides = {
-      marketplaceCommissionAmount: input.marketplaceCommissionAmount,
-      packagingCostAmount: input.packagingCostAmount,
-      productCostAmount: input.productCostAmount,
-    };
-    if (row.provider !== "mercadolivre") {
-      compositionOverrides.refundBonusAmount = input.refundBonusAmount;
-      compositionOverrides.shippingOrFixedFeeAmount =
-        input.shippingOrFixedFeeAmount;
-    }
-    metadata.compositionOverrides = compositionOverrides;
+    const quantityWeights = rows.map((row) =>
+      row.items.reduce(
+        (total, item) => total + BigInt(Math.max(0, Math.trunc(item.quantity))),
+        0n,
+      ),
+    );
+    const groupedProductCostAllocations = groupedDisplayOrderId
+      ? allocateCentsByWeights(
+          parseMoneyToCents(input.productCostAmount),
+          buildPositiveAllocationWeights(quantityWeights),
+        )
+      : [];
 
-    await this.db
-      .update(externalOrders)
-      .set({
-        metadata,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(externalOrders.id, orderRecordId),
-          eq(externalOrders.organizationId, authContext.organizationId),
-          eq(externalOrders.companyId, companyId),
-        ),
-      )
-      .returning({
-        id: externalOrders.id,
-      });
+    await this.db.transaction(async (transaction) => {
+      for (const [index, row] of rows.entries()) {
+        const metadata =
+          row.metadata && typeof row.metadata === "object"
+            ? { ...(row.metadata as Record<string, unknown>) }
+            : {};
+        const compositionOverrides =
+          readRawOrderCompositionOverrides(metadata) ?? {};
+
+        for (const [field, value] of providedFields) {
+          if (
+            row.provider === "mercadolivre" &&
+            (field === "refundBonusAmount" ||
+              field === "shippingOrFixedFeeAmount")
+          ) {
+            continue;
+          }
+
+          compositionOverrides[field] =
+            field === "productCostAmount" && groupedDisplayOrderId
+              ? formatCents(groupedProductCostAllocations[index] ?? 0n)
+              : value;
+        }
+
+        metadata.compositionOverrides = compositionOverrides;
+
+        await transaction
+          .update(externalOrders)
+          .set({
+            metadata,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(externalOrders.id, row.id),
+              eq(externalOrders.organizationId, authContext.organizationId),
+              eq(externalOrders.companyId, companyId),
+            ),
+          );
+      }
+    });
 
     return this.getOrderDetails(authContext, orderRecordId);
   }

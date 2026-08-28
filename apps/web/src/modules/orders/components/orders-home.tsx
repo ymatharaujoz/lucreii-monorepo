@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -15,6 +15,7 @@ import {
   Loader2,
   Package,
   Percent,
+  Pencil,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -38,6 +39,7 @@ import { DateRangePicker } from "@/components/ui-premium/date-range-picker";
 import { slideInUpVariants } from "@/lib/animations";
 import { buildReferenceMonthDateRange } from "@/lib/reference-month";
 import { useReferenceMonth } from "@/lib/reference-month-context";
+import { parseCurrencyValue } from "@/modules/products/components/currency-input";
 import type {
   IntegrationProviderSlug,
   OrderCanonicalStatus,
@@ -50,6 +52,7 @@ import {
   downloadOrdersExport,
   useOrderDetails,
   useOrdersList,
+  useUpdateOrderComposition,
 } from "../hooks/use-orders-data";
 
 const PAGE_SIZE = 20;
@@ -109,6 +112,20 @@ function formatMoney(value: string | null | undefined) {
     currency: "BRL",
     style: "currency",
   }).format(parsed);
+}
+
+function formatEditableMoney(value: string | null | undefined) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed)
+    ? parsed.toLocaleString("pt-BR", {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      })
+    : "0,00";
+}
+
+function isValidProductCostInput(value: string) {
+  return /^\d+(?:\.\d{1,2})?$/.test(value) && Number.isFinite(Number(value));
 }
 
 function formatTaxRate(value: string | null | undefined) {
@@ -546,6 +563,8 @@ function CompositionMetric({
   label,
   value,
   details,
+  headerAction,
+  overlay,
   negative = false,
   variant = "default",
 }: {
@@ -557,23 +576,29 @@ function CompositionMetric({
     negative?: boolean;
     value: string;
   }>;
+  headerAction?: ReactNode;
+  overlay?: ReactNode;
   negative?: boolean;
   variant?: "default" | "highlight";
 }) {
   return (
     <div
       className={cn(
-        "rounded-[var(--radius-lg)] border p-4",
+        "relative rounded-[var(--radius-lg)] border p-4",
+        overlay ? "z-30" : undefined,
         variant === "highlight"
           ? "border-accent/20 bg-accent/5"
           : "border-border/30 bg-white",
       )}
     >
-      <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-        {icon}
-        <span className="text-[11px] font-bold uppercase tracking-[0.14em]">
-          {label}
-        </span>
+      <div className="mb-2 flex items-center justify-between gap-2 text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-2">
+          {icon}
+          <span className="text-[11px] font-bold uppercase tracking-[0.14em]">
+            {label}
+          </span>
+        </div>
+        {headerAction}
       </div>
       <div
         className={cn(
@@ -607,11 +632,68 @@ function CompositionMetric({
           ))}
         </div>
       ) : null}
+      {overlay}
     </div>
   );
 }
 
-function CompositionTab({ composition }: { composition: OrderComposition }) {
+function CompositionTab({
+  composition,
+  isEditingProductCost,
+  isSavingProductCost,
+  productCostDraft,
+  productCostError,
+  productCostSaved,
+  onCancelProductCost,
+  onChangeProductCostDraft,
+  onEditProductCost,
+  onSaveProductCost,
+}: {
+  composition: OrderComposition;
+  isEditingProductCost: boolean;
+  isSavingProductCost: boolean;
+  productCostDraft: string;
+  productCostError: string | null;
+  productCostSaved: boolean;
+  onCancelProductCost: () => void;
+  onChangeProductCostDraft: (value: string) => void;
+  onEditProductCost: () => void;
+  onSaveProductCost: () => void;
+}) {
+  const productCostPopoverRef = useRef<HTMLDivElement>(null);
+  const productCostInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isEditingProductCost) {
+      return;
+    }
+
+    productCostInputRef.current?.focus();
+    productCostInputRef.current?.select();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancelProductCost();
+      }
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !productCostPopoverRef.current?.contains(event.target)
+      ) {
+        onCancelProductCost();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [isEditingProductCost, onCancelProductCost]);
+
   const shippingDisplayAmount =
     composition.shippingBreakdown?.netShippingAmount ??
     composition.shippingOrFixedFeeAmount;
@@ -653,6 +735,101 @@ function CompositionTab({ composition }: { composition: OrderComposition }) {
           icon={<Package className="h-4 w-4" />}
           label="Custo Produto"
           value={formatMoney(composition.productCostAmount)}
+          headerAction={
+            <div className="flex items-center gap-1">
+              {productCostSaved ? (
+                <span className="text-[10px] font-semibold text-accent" role="status">
+                  Salvo
+                </span>
+              ) : null}
+              <button
+                aria-controls="product-cost-popover"
+                aria-expanded={isEditingProductCost}
+                aria-label="Editar custo do produto"
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/10 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                onClick={onEditProductCost}
+                title="Editar custo do produto"
+                type="button"
+              >
+                <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          }
+          overlay={
+            isEditingProductCost ? (
+              <div
+                aria-label="Editar custo do produto"
+                className="absolute left-0 right-0 top-full mt-2 rounded-xl border border-border bg-white p-4 shadow-[var(--shadow-lg)]"
+                id="product-cost-popover"
+                ref={productCostPopoverRef}
+                role="dialog"
+              >
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    onSaveProductCost();
+                  }}
+                >
+                  <label
+                    className="text-xs font-semibold text-foreground"
+                    htmlFor="product-cost-input"
+                  >
+                    Novo custo do pedido
+                  </label>
+                  <div className="relative mt-2">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      R$
+                    </span>
+                    <input
+                      aria-describedby="product-cost-help"
+                      aria-invalid={productCostError ? "true" : "false"}
+                      autoComplete="off"
+                      className="h-10 w-full rounded-[var(--radius-md)] border border-border bg-surface-strong pl-9 pr-3.5 text-sm text-foreground focus:border-border-focus focus:outline-2 focus:outline-accent/20"
+                      disabled={isSavingProductCost}
+                      id="product-cost-input"
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        onChangeProductCostDraft(event.target.value)
+                      }
+                      ref={productCostInputRef}
+                      type="text"
+                      value={productCostDraft}
+                    />
+                  </div>
+                  <p
+                    className="mt-2 text-[11px] leading-snug text-muted-foreground"
+                    id="product-cost-help"
+                  >
+                    Aplicado somente a este pedido; o catálogo não será alterado.
+                  </p>
+                  {productCostError ? (
+                    <p className="mt-2 text-xs text-red-600" role="alert">
+                      {productCostError}
+                    </p>
+                  ) : null}
+                  <div className="mt-4 flex justify-end gap-2">
+                    <Button
+                      disabled={isSavingProductCost}
+                      onClick={onCancelProductCost}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      disabled={isSavingProductCost}
+                      loading={isSavingProductCost}
+                      size="sm"
+                      type="submit"
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            ) : null
+          }
           negative
         />
         <CompositionMetric
@@ -778,6 +955,10 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
   } | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [isEditingProductCost, setIsEditingProductCost] = useState(false);
+  const [productCostDraft, setProductCostDraft] = useState("");
+  const [productCostError, setProductCostError] = useState<string | null>(null);
+  const [productCostSaved, setProductCostSaved] = useState(false);
 
   const hasCustomDateRange =
     orderedFrom !== referenceMonthRange.orderedFrom ||
@@ -858,6 +1039,65 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
   });
 
   const detailQuery = useOrderDetails(selectedOrderId, modalOpen);
+  const updateOrderCompositionMutation = useUpdateOrderComposition();
+
+  const handleEditProductCost = () => {
+    if (!detailQuery.data) {
+      return;
+    }
+
+    setProductCostDraft(
+      formatEditableMoney(detailQuery.data.composition.productCostAmount),
+    );
+    setProductCostError(null);
+    setProductCostSaved(false);
+    setIsEditingProductCost(true);
+  };
+
+  const handleCancelProductCost = () => {
+    setIsEditingProductCost(false);
+    setProductCostError(null);
+  };
+
+  const handleSaveProductCost = async () => {
+    if (!selectedOrderId) {
+      return;
+    }
+
+    const parsedValue = parseCurrencyValue(productCostDraft.trim());
+    if (!isValidProductCostInput(parsedValue)) {
+      setProductCostError(
+        "Informe um valor zero ou positivo com até duas casas decimais.",
+      );
+      return;
+    }
+
+    setProductCostError(null);
+    try {
+      await updateOrderCompositionMutation.mutateAsync({
+        orderId: selectedOrderId,
+        values: {
+          productCostAmount: Number(parsedValue).toFixed(2),
+        },
+      });
+      setProductCostDraft(formatEditableMoney(parsedValue));
+      setProductCostSaved(true);
+      setIsEditingProductCost(false);
+    } catch {
+      setProductCostError(
+        "Não foi possível salvar o custo. Tente novamente sem fechar o pedido.",
+      );
+    }
+  };
+
+  const handleCloseOrderModal = () => {
+    setModalOpen(false);
+    setSelectedOrderId(null);
+    setDetailTab("items");
+    setIsEditingProductCost(false);
+    setProductCostError(null);
+    setProductCostSaved(false);
+  };
 
   useEffect(() => {
     if (!modalOpen) {
@@ -1660,12 +1900,8 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
 
       <Modal
         className="!max-w-6xl"
+        onClose={handleCloseOrderModal}
         open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setSelectedOrderId(null);
-          setDetailTab("items");
-        }}
         title={
           detailQuery.data ? (
             <div className="flex flex-col gap-2">
@@ -1729,7 +1965,25 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
 
             {detailTab === "composition" ? (
               <div className="space-y-4">
-                <CompositionTab composition={detailQuery.data.composition} />
+                <CompositionTab
+                  composition={detailQuery.data.composition}
+                  isEditingProductCost={isEditingProductCost}
+                  isSavingProductCost={
+                    updateOrderCompositionMutation.isPending
+                  }
+                  onCancelProductCost={handleCancelProductCost}
+                  onChangeProductCostDraft={(value) => {
+                    setProductCostDraft(value);
+                    setProductCostError(null);
+                  }}
+                  onEditProductCost={handleEditProductCost}
+                  onSaveProductCost={() => {
+                    void handleSaveProductCost();
+                  }}
+                  productCostDraft={productCostDraft}
+                  productCostError={productCostError}
+                  productCostSaved={productCostSaved}
+                />
               </div>
             ) : (
               <div className="space-y-3">

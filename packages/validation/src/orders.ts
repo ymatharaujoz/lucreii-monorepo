@@ -3,6 +3,7 @@ import { taxRateField } from "./finance-inputs";
 import { createApiSuccessResponseSchema } from "./protected-app";
 
 const decimalPattern = /^-?\d+(?:\.\d{1,4})?$/;
+const nonNegativeMoneyPattern = /^\d+(?:\.\d{1,2})?$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function decimalField(label: string) {
@@ -231,12 +232,26 @@ export const orderDetailsSchema = z.object({
 });
 
 export const orderCompositionUpdateSchema = z.object({
-  refundBonusAmount: decimalField("Refund bonus amount"),
-  productCostAmount: decimalField("Product cost amount"),
-  marketplaceCommissionAmount: decimalField("Marketplace commission amount"),
-  shippingOrFixedFeeAmount: decimalField("Shipping or fixed fee amount"),
-  packagingCostAmount: decimalField("Packaging cost amount"),
-});
+  refundBonusAmount: decimalField("Refund bonus amount").optional(),
+  productCostAmount: z
+    .string()
+    .trim()
+    .regex(
+      nonNegativeMoneyPattern,
+      "Product cost amount must be zero or a positive amount with up to 2 places.",
+    )
+    .optional(),
+  marketplaceCommissionAmount: decimalField(
+    "Marketplace commission amount",
+  ).optional(),
+  shippingOrFixedFeeAmount: decimalField(
+    "Shipping or fixed fee amount",
+  ).optional(),
+  packagingCostAmount: decimalField("Packaging cost amount").optional(),
+}).refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  "At least one composition field is required.",
+);
 
 export const ordersListApiResponseSchema = createApiSuccessResponseSchema(
   ordersListResponseSchema,

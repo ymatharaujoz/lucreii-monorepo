@@ -8,12 +8,14 @@ const apiClientMock = vi.hoisted(() => ({
 const useQueryMock = vi.hoisted(() => vi.fn());
 const useMutationMock = vi.hoisted(() => vi.fn());
 const invalidateQueriesMock = vi.hoisted(() => vi.fn());
+const setQueryDataMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-query", () => ({
   useMutation: useMutationMock,
   useQuery: useQueryMock,
   useQueryClient: () => ({
     invalidateQueries: invalidateQueriesMock,
+    setQueryData: setQueryDataMock,
   }),
 }));
 vi.mock("@/lib/api/client", async () => {
@@ -43,6 +45,7 @@ describe("orders protected fetchers", () => {
     useQueryMock.mockReset();
     useMutationMock.mockReset();
     invalidateQueriesMock.mockReset();
+    setQueryDataMock.mockReset();
   });
 
   it("uses protected orders list endpoint as data source", async () => {
@@ -331,6 +334,33 @@ describe("orders protected fetchers", () => {
     useUpdateOrderComposition();
 
     expect(useMutationMock).toHaveBeenCalled();
+  });
+
+  it("updates the detail cache with the response before invalidating queries", async () => {
+    const updatedDetails = { composition: { productCostAmount: "80.00" } };
+    useMutationMock.mockImplementation(({ onSuccess }) => ({
+      mutateAsync: async () => {
+        await onSuccess(updatedDetails, {
+          orderId: "order_row_1",
+          values: { productCostAmount: "80.00" },
+        });
+        return updatedDetails;
+      },
+    }));
+
+    const mutation = useUpdateOrderComposition();
+    await mutation.mutateAsync({
+      orderId: "order_row_1",
+      values: { productCostAmount: "80.00" },
+    });
+
+    expect(setQueryDataMock).toHaveBeenCalledWith(
+      ["orders", null, "detail", "order_row_1"],
+      updatedDetails,
+    );
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: ["orders", null, "detail", "order_row_1"],
+    });
   });
 
   it("keys order detail queries by selected company", () => {
