@@ -239,7 +239,7 @@ export function DashboardFinancialIndicators({
       animate="visible"
       className="space-y-4"
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <IndicatorCard
           icon={<DollarSign className="h-4 w-4" />}
           label="Faturamento"
@@ -287,10 +287,33 @@ export function DashboardFinancialIndicators({
                   ? "Resultado negativo"
                   : "Resultado neutro",
           }}
-          value={`${formatMoney(displayedLiquidProfit, {
+          value={formatMoney(displayedLiquidProfit, {
             maximumFractionDigits: 2,
             minimumFractionDigits: 2,
-          })} (${formatNetMarginPercent(netMarginPercent)})`}
+          })}
+          variant={
+            liquidProfit > 0
+              ? "success"
+              : liquidProfit < 0
+                ? "error"
+              : "warning"
+          }
+        />
+        <IndicatorCard
+          icon={<Percent className="h-4 w-4" />}
+          label="Margem Líquida"
+          subValue="Lucro Líquido / Faturamento"
+          trend={{
+            direction:
+              liquidProfit > 0 ? "up" : liquidProfit < 0 ? "down" : "neutral",
+            value:
+              liquidProfit > 0
+                ? "Margem positiva"
+                : liquidProfit < 0
+                  ? "Margem negativa"
+                  : "Margem neutra",
+          }}
+          value={formatNetMarginPercent(netMarginPercent)}
           variant={
             liquidProfit > 0
               ? "success"

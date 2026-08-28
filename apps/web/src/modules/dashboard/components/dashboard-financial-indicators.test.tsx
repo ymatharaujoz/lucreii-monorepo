@@ -84,7 +84,7 @@ afterEach(() => {
 });
 
 describe("DashboardFinancialIndicators", () => {
-  it("exibe os quatro indicadores financeiros principais", () => {
+  it("exibe os cinco indicadores financeiros principais", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
@@ -99,17 +99,24 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("R$\u00a0596,13");
     expect(text).toContain("R$\u00a07.564,15");
     expect(text).toContain("27,65%");
+    expect(text).not.toContain("R$\u00a07.564,15 (27,65%)");
     expect(text).toContain("Faturamento");
     expect(text).toContain("Margem Média");
     expect(text).toContain("Ponto de Equilíbrio");
     expect(text).toContain("Lucro Líquido");
+    expect(text).toContain("Margem Líquida");
     expect(text).toContain("Lucro Total - Custo Fixo");
-    expect(text).not.toContain("Margem Líquida");
+    expect(text).toContain("Lucro Líquido / Faturamento");
     expect(text).not.toContain("Total Variáveis");
     expect(text).not.toContain("Lucro Real");
     expect(text).not.toContain("Publicidade");
 
     expect(document.querySelectorAll("[class*=grid]").length).toBeGreaterThan(0);
+    expect(
+      Array.from(document.querySelectorAll("[class]")).some((element) =>
+        element.className.toString().includes("lg:grid-cols-5"),
+      ),
+    ).toBe(true);
     view.unmount();
   });
 
@@ -126,9 +133,10 @@ describe("DashboardFinancialIndicators", () => {
       />,
     );
 
-    expect(document.body.textContent ?? "").toContain(
-      "R$\u00a06.087,99 (29,32%)",
-    );
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("R$\u00a06.087,99");
+    expect(text).toContain("29,32%");
+    expect(text).not.toContain("R$\u00a06.087,99 (29,32%)");
     view.unmount();
   });
 
@@ -193,7 +201,10 @@ describe("DashboardFinancialIndicators", () => {
       />,
     );
 
-    expect(document.body.textContent ?? "").toContain("R$\u00a0100,00 (0,00%)");
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("R$\u00a0100,00");
+    expect(text).toContain("0,00%");
+    expect(text).not.toContain("R$\u00a0100,00 (0,00%)");
     view.unmount();
   });
 
