@@ -293,7 +293,8 @@ describe("OrdersHome", () => {
       "#product-cost-input",
     );
     expect(input?.value).toBe("43,00");
-    changeInputValue(input!, "80,00");
+    changeInputValue(input!, "a2,50b");
+    expect(input?.value).toBe("2,50");
     click(
       Array.from(document.querySelectorAll("button")).find((button) =>
         button.textContent === "Salvar",
@@ -302,7 +303,7 @@ describe("OrdersHome", () => {
 
     expect(mutateAsync).toHaveBeenCalledWith({
       orderId: "order_row_1",
-      values: { productCostAmount: "80.00" },
+      values: { productCostAmount: "2.50" },
     });
 
     view.unmount();

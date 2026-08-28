@@ -128,6 +128,30 @@ function isValidProductCostInput(value: string) {
   return /^\d+(?:\.\d{1,2})?$/.test(value) && Number.isFinite(Number(value));
 }
 
+function sanitizeProductCostInput(raw: string) {
+  const cleaned = raw.replace(/[^\d.,]/g, "");
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  const separatorIndex = Math.max(lastComma, lastDot);
+
+  if (separatorIndex < 0) {
+    return cleaned;
+  }
+
+  const separator = cleaned[separatorIndex];
+  const digitsAfterSeparator = cleaned
+    .slice(separatorIndex + 1)
+    .replace(/[.,]/g, "");
+
+  if (separator === "." && lastComma < 0 && digitsAfterSeparator.length > 2) {
+    return cleaned.replace(/[.,]/g, "");
+  }
+
+  const integerPart = cleaned.slice(0, separatorIndex).replace(/[.,]/g, "");
+  const fractionPart = digitsAfterSeparator.slice(0, 2);
+  return `${integerPart || "0"},${fractionPart}`;
+}
+
 function formatTaxRate(value: string | null | undefined) {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -788,8 +812,20 @@ function CompositionTab({
                       disabled={isSavingProductCost}
                       id="product-cost-input"
                       inputMode="decimal"
+                      onKeyDown={(event) => {
+                        if (
+                          event.key.length === 1 &&
+                          !/[\d.,]/.test(event.key) &&
+                          !event.metaKey &&
+                          !event.ctrlKey
+                        ) {
+                          event.preventDefault();
+                        }
+                      }}
                       onChange={(event) =>
-                        onChangeProductCostDraft(event.target.value)
+                        onChangeProductCostDraft(
+                          sanitizeProductCostInput(event.target.value),
+                        )
                       }
                       ref={productCostInputRef}
                       type="text"
