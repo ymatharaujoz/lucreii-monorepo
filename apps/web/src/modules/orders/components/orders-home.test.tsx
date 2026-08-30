@@ -77,6 +77,31 @@ function changeInputValue(element: HTMLInputElement, value: string) {
   });
 }
 
+function typeInputCharacter(element: HTMLInputElement, character: string) {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  );
+  const start = element.selectionStart ?? element.value.length;
+  const end = element.selectionEnd ?? start;
+  const nextValue =
+    element.value.slice(0, start) +
+    character +
+    element.value.slice(end);
+
+  act(() => {
+    element.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, key: character }),
+    );
+    descriptor?.set?.call(element, nextValue);
+    element.setSelectionRange(
+      start + character.length,
+      start + character.length,
+    );
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 function text() {
   return document.body.textContent?.replace(/\u00a0/g, " ") ?? "";
 }
@@ -340,6 +365,32 @@ describe("OrdersHome", () => {
 
     view.unmount();
   });
+
+  it.each(["22,50", "22.50"])(
+    "allows typing multiple product cost digits: %s",
+    (value) => {
+      const view = mount(<OrdersHome />);
+
+      click(document.querySelector('tr[role="button"]')!);
+      click(
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Compos"),
+        )!,
+      );
+      click(document.querySelector('button[aria-label="Editar custo do produto"]')!);
+
+      const input = document.querySelector<HTMLInputElement>(
+        "#product-cost-input",
+      )!;
+      for (const character of value) {
+        typeInputCharacter(input, character);
+      }
+
+      expect(input.value).toBe(value);
+
+      view.unmount();
+    },
+  );
 
   it.each(["0.00", "inválido"])(
     "omits commission rate when revenue is %s",
