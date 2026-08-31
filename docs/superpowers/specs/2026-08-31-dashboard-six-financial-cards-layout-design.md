@@ -6,14 +6,16 @@ O dashboard `/app` passou a exibir um card separado para o faturamento inelegív
 
 ## Objetivo
 
-Exibir os seis indicadores financeiros lado a lado em telas desktop, com `Faturamento` e `Devoluções, cancelamentos e pendências` como cards independentes, mantendo a leitura dos demais indicadores e evitando overflow ou clipping.
+Exibir os seis indicadores financeiros lado a lado em telas desktop, com `Faturamento` e `Devoluções` como cards independentes, mantendo a leitura dos demais indicadores e evitando overflow ou clipping.
 
 ## Requisitos
 
-- Exibir seis cards em uma única linha a partir do breakpoint desktop (`lg`): `Faturamento`, `Devoluções, cancelamentos e pendências`, `Margem Média`, `Ponto de Equilíbrio`, `Lucro Líquido` e `Margem Líquida`.
+- Exibir seis cards em uma única linha a partir do breakpoint desktop (`lg`): `Faturamento`, `Devoluções`, `Margem Média`, `Ponto de Equilíbrio`, `Lucro Líquido` e `Margem Líquida`.
 - Manter o valor e a contagem de exclusões no card próprio vermelho, sem incorporá-los ao card de faturamento.
+- Exibir no faturamento o contador `netSales` como `Vendas Líquidas`.
+- Exibir no card vermelho o helper no formato `N Vendas Devolvidas, Cancelados ou Pendentes`.
 - Usar dimensões, padding e tipografia compactos o suficiente para que os seis cards caibam no container existente sem quebra horizontal.
-- Permitir que o rótulo longo do card de exclusões ocupe no máximo duas linhas, sem cortar o texto.
+- Manter o valor monetário do card de devoluções em uma única linha, com dimensionamento responsivo.
 - Preservar valores, tendências, variantes, animações, filtros e editor de custos existentes.
 - Em larguras menores, degradar de forma previsível para três colunas, duas colunas e uma coluna.
 - Não alterar API, contrato, regras financeiras, dependências ou dados.
@@ -39,7 +41,7 @@ Dá mais espaço ao faturamento e às exclusões, porém não atende ao requisit
 - Alterar somente a grade do componente `DashboardFinancialIndicators` e os estilos locais necessários no `IndicatorCard`.
 - Remover a altura mínima excessiva que amplifica o card de exclusões; usar uma altura mínima uniforme e compacta para todos os cards.
 - Aplicar `min-w-0` ao wrapper do card e aos blocos textuais para permitir compressão segura dentro da coluna.
-- Manter o card de exclusões com fundo e tipografia de erro, mas ajustar o rótulo para preservar duas linhas legíveis.
+- Manter o card de devoluções com fundo e tipografia de erro, com o valor monetário sem quebra de linha.
 - Manter o editor de custos fora da grade, na mesma posição abaixo dos indicadores.
 
 ### Responsividade

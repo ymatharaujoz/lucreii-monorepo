@@ -97,10 +97,18 @@ describe("DashboardFinancialIndicators", () => {
     const text = document.body.textContent ?? "";
 
     expect(text).toContain("27.359,77");
-    expect(text).toContain("40 Vendas Totais");
-    expect(text).toContain("12 Vendas");
-    expect(text).toContain("Devoluções, cancelamentos e pendências");
+    expect(text).toContain("28 Vendas Líquidas");
+    expect(text).not.toContain("40 Vendas Totais");
+    expect(text).toContain("12 Vendas Devolvidas, Cancelados ou Pendentes");
+    expect(text).toContain("Devoluções");
     expect(text).toContain("− R$ 3.200,88");
+    expect(
+      Array.from(document.querySelectorAll("p")).some(
+        (element) =>
+          element.textContent === "− R$ 3.200,88" &&
+          element.className.toString().includes("whitespace-nowrap"),
+      ),
+    ).toBe(true);
     expect(text).not.toContain("28 vendas líquidas");
     expect(text).toContain("33.55%");
     expect(text).toContain("R$\u00a0596,13");

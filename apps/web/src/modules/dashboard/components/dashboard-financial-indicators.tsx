@@ -115,7 +115,7 @@ function IndicatorCard({
               {label}
             </p>
           </div>
-          <p className="mt-3 text-[clamp(1.125rem,1.9vw,1.75rem)] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
+          <p className="mt-3 whitespace-nowrap text-[clamp(1rem,1.6vw,1.5rem)] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
             {value}
           </p>
           {subValue && (
@@ -232,7 +232,7 @@ export function DashboardFinancialIndicators({
     displayedRevenue === 0
       ? 0
       : (displayedLiquidProfit / displayedRevenue) * 100;
-  const grossSalesSub = `${financialIndicators.grossSales} Vendas Totais`;
+  const netSalesSub = `${financialIndicators.netSales} Vendas Líquidas`;
   const excludedRevenue = normalizeNumber(financialIndicators.excludedRevenue);
   const excludedRevenueValue =
     excludedRevenue > 0
@@ -256,7 +256,7 @@ export function DashboardFinancialIndicators({
         <IndicatorCard
           icon={<DollarSign className="h-4 w-4" />}
           label="Faturamento"
-          subValue={grossSalesSub}
+          subValue={netSalesSub}
           value={formatMoney(financialIndicators.revenue, {
             maximumFractionDigits: 2,
             minimumFractionDigits: 2,
@@ -264,8 +264,8 @@ export function DashboardFinancialIndicators({
         />
         <IndicatorCard
           icon={<TrendingDown className="h-4 w-4" />}
-          label="Devoluções, cancelamentos e pendências"
-          subValue={`${financialIndicators.excludedSales} Vendas`}
+          label="Devoluções"
+          subValue={`${financialIndicators.excludedSales} Vendas Devolvidas, Cancelados ou Pendentes`}
           value={excludedRevenueValue}
           variant="error"
         />
