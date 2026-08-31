@@ -363,14 +363,15 @@ describe("OrdersHome", () => {
       )!,
     );
 
-    expect(text()).toContain("O catálogo de produtos não será alterado.");
+    expect(text()).toContain("Alteração em lote");
+    expect(text()).toContain("Catálogo de produtos não será alterado.");
     changeInputValue(
       document.querySelector<HTMLInputElement>("#bulk-product-cost-input")!,
       "22,50",
     );
     click(
       Array.from(document.querySelectorAll("button")).find(
-        (button) => button.textContent === "Salvar",
+        (button) => button.textContent === "Salvar alterações",
       )!,
     );
     await act(async () => undefined);

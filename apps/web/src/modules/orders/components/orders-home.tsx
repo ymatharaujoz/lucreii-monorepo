@@ -2238,47 +2238,53 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
       </Modal>
 
       <Modal
+        className="!max-w-lg"
         onClose={handleCloseBulkProductCostModal}
         open={bulkProductCostModalOpen}
         title="Editar Custo do Produto"
       >
         <form
-          className="space-y-4"
+          className="space-y-0"
           onSubmit={(event) => {
             event.preventDefault();
             void handleSaveBulkProductCost();
           }}
         >
-          <div className="space-y-1">
-            <p className="text-sm text-foreground">
-              Aplicar mesmo custo total a {selectedOrderIds.length}{" "}
-              {selectedOrderIds.length === 1
-                ? "pedido selecionado"
-                : "pedidos selecionados"}
-              .
-            </p>
-            <p className="text-xs leading-snug text-muted-foreground">
-              Alteração vale somente para estes pedidos. O catálogo de produtos
-              não será alterado.
-            </p>
+          <div className="flex items-start justify-between gap-6 border-b border-border/70 pb-5">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
+                Alteração em lote
+              </p>
+              <p className="mt-2 text-sm font-medium leading-snug text-foreground">
+                Mesmo custo total será aplicado a cada pedido selecionado.
+              </p>
+            </div>
+            <div className="shrink-0 border-l border-border/70 pl-4 text-right">
+              <p className="font-mono text-xl font-semibold leading-none tabular-nums text-foreground">
+                {selectedOrderIds.length}
+              </p>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                {selectedOrderIds.length === 1 ? "pedido" : "pedidos"}
+              </p>
+            </div>
           </div>
 
-          <div>
+          <div className="py-6">
             <label
-              className="text-xs font-semibold text-foreground"
+              className="text-[11px] font-bold uppercase tracking-[0.1em] text-foreground"
               htmlFor="bulk-product-cost-input"
             >
-              Novo custo do pedido
+              Custo por pedido
             </label>
-            <div className="relative mt-2">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            <div className="mt-2 flex h-14 overflow-hidden rounded-[var(--radius-md)] border border-border-strong bg-surface-elevated shadow-[var(--shadow-xs)] transition-[border-color,box-shadow] duration-[var(--transition-fast)] focus-within:border-accent/60 focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
+              <span className="flex w-14 shrink-0 items-center justify-center border-r border-border/80 bg-foreground/[0.025] text-sm font-semibold text-muted-foreground">
                 R$
               </span>
               <input
                 aria-describedby="bulk-product-cost-help"
                 aria-invalid={bulkProductCostError ? "true" : "false"}
                 autoComplete="off"
-                className="h-10 w-full rounded-[var(--radius-md)] border border-border bg-surface-strong pl-9 pr-3.5 text-sm text-foreground focus:border-border-focus focus:outline-2 focus:outline-accent/20"
+                className="min-w-0 flex-1 bg-transparent px-4 text-xl font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground/50 disabled:cursor-not-allowed"
                 disabled={updateOrderProductCostBulkMutation.isPending}
                 id="bulk-product-cost-input"
                 inputMode="decimal"
@@ -2298,15 +2304,17 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                   );
                   setBulkProductCostError(null);
                 }}
+                placeholder="0,00"
                 type="text"
                 value={bulkProductCostDraft}
               />
             </div>
             <p
-              className="mt-2 text-[11px] leading-snug text-muted-foreground"
+              className="mt-2 text-[11px] leading-relaxed text-muted-foreground"
               id="bulk-product-cost-help"
             >
-              Informe valor total de cada pedido, não custo unitário.
+              Informe valor total por pedido. Lucro e margem serão recalculados
+              automaticamente.
             </p>
             {bulkProductCostError ? (
               <p className="mt-2 text-xs text-red-600" role="alert">
@@ -2315,24 +2323,35 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
             ) : null}
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button
-              disabled={updateOrderProductCostBulkMutation.isPending}
-              onClick={handleCloseBulkProductCostModal}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              Cancelar
-            </Button>
-            <Button
-              disabled={updateOrderProductCostBulkMutation.isPending}
-              loading={updateOrderProductCostBulkMutation.isPending}
-              size="sm"
-              type="submit"
-            >
-              Salvar
-            </Button>
+          <div className="flex flex-col-reverse gap-4 border-t border-border/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-accent">
+                Somente pedidos
+              </p>
+              <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                Catálogo de produtos não será alterado.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                disabled={updateOrderProductCostBulkMutation.isPending}
+                onClick={handleCloseBulkProductCostModal}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="shadow-[0_5px_14px_rgba(14,122,111,0.18)] active:translate-y-px"
+                disabled={updateOrderProductCostBulkMutation.isPending}
+                loading={updateOrderProductCostBulkMutation.isPending}
+                size="sm"
+                type="submit"
+              >
+                Salvar alterações
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>
