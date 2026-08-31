@@ -33,6 +33,7 @@ interface DashboardFinancialIndicatorsProps {
 interface IndicatorCardProps {
   icon: React.ReactNode;
   label: string;
+  secondarySubValue?: string;
   subValue?: string;
   trend?: {
     direction: "up" | "down" | "neutral";
@@ -80,6 +81,7 @@ function roundToCents(value: number) {
 function IndicatorCard({
   icon,
   label,
+  secondarySubValue,
   subValue,
   trend,
   value,
@@ -120,6 +122,11 @@ function IndicatorCard({
           </p>
           {subValue && (
             <p className="mt-1 text-xs text-muted-foreground">{subValue}</p>
+          )}
+          {secondarySubValue && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {secondarySubValue}
+            </p>
           )}
           {trend && (
             <div className="mt-2 flex items-center gap-1.5">
@@ -230,7 +237,8 @@ export function DashboardFinancialIndicators({
     displayedRevenue === 0
       ? 0
       : (displayedLiquidProfit / displayedRevenue) * 100;
-  const revenueSub = `${financialIndicators.netSales} vendas líquidas`;
+  const grossSalesSub = `${financialIndicators.grossSales} vendas brutas`;
+  const netSalesSub = `${financialIndicators.netSales} vendas líquidas`;
 
   return (
     <motion.div
@@ -243,7 +251,8 @@ export function DashboardFinancialIndicators({
         <IndicatorCard
           icon={<DollarSign className="h-4 w-4" />}
           label="Faturamento"
-          subValue={revenueSub}
+          secondarySubValue={netSalesSub}
+          subValue={grossSalesSub}
           value={formatMoney(financialIndicators.revenue, {
             maximumFractionDigits: 2,
           })}

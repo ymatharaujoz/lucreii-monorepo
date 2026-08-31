@@ -305,6 +305,7 @@ export const dashboardFinancialIndicatorsResponseSchema = z.object({
   breakEvenRevenue: decimalField("Break-even revenue"),
   fixedCost: decimalField("Fixed cost"),
   fixedCostSource: z.enum(["monthly", "company_default"]),
+  grossSales: z.number().int().min(0),
   marketplaceCommission: decimalField("Marketplace commission"),
   netMarginPercent: decimalField("Net margin percent"),
   netProfit: decimalField("Net profit"),

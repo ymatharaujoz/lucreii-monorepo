@@ -6525,7 +6525,7 @@ describe("OrdersService", () => {
     expect(rows[0]?.["SKUs"]).toBe("SUPORTE-02-PRETO\nSUPORTE-02-BRANCO");
   });
 
-  it("filters financial summary while keeping cancelled orders in export", async () => {
+  it("counts gross sales while excluding cancelled and returned orders from financial totals", async () => {
     const service = new OrdersService({} as never);
     const exportOrderFields = {
       contributionMarginPercent: null,
@@ -6608,6 +6608,30 @@ describe("OrdersService", () => {
           },
         ],
       },
+      {
+        composition: {
+          marketplaceCommissionAmount: "5.00",
+          packagingCostAmount: "2.00",
+          productCostAmount: "20.00",
+          refundBonusAmount: "0.00",
+          shippingOrFixedFeeAmount: "3.00",
+          taxAmount: "5.00",
+        },
+        items: [],
+        order: {
+          ...exportOrderFields,
+          itemsSold: 1,
+          totalProfitAmount: "20.00",
+          totalWithFees: "40.00",
+        },
+        rows: [
+          {
+            metadata: { sourceStatus: "Devolução finalizada" },
+            provider: "mercadolivre",
+            status: "partially_refunded",
+          },
+        ],
+      },
     ] as never[];
     const readLogicalOrdersForExport = vi
       .spyOn(
@@ -6642,6 +6666,7 @@ describe("OrdersService", () => {
     );
 
     expect(summary).toEqual({
+      grossSales: 4,
       marketplaceCommission: "15.00",
       netSales: 3,
       packagingCost: "8.00",
@@ -6653,7 +6678,7 @@ describe("OrdersService", () => {
       totalProfit: "25.00",
       variableCosts: "95.00",
     });
-    expect(exportedProfit).toBe(75);
+    expect(exportedProfit).toBe(95);
     expect(readLogicalOrdersForExport).toHaveBeenNthCalledWith(1, context, {
       orderedFrom: "2026-06-01",
       orderedTo: "2026-06-30",

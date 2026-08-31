@@ -238,6 +238,7 @@ describe("dashboard controller", () => {
       breakEvenRevenue: "10528.27",
       fixedCost: "2987.71",
       fixedCostSource: "monthly",
+      grossSales: 125,
       marketplaceCommission: "5000.00",
       netMarginPercent: "12.04",
       netProfit: "3295.11",

@@ -138,6 +138,7 @@ export class FinancialIndicatorsService {
     return {
       ...result,
       fixedCostSource: hasMonthlyFixedCosts ? "monthly" : "company_default",
+      grossSales: ordersSummary.grossSales,
     };
   }
 }

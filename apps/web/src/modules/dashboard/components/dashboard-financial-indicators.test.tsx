@@ -50,6 +50,7 @@ const indicators: DashboardFinancialIndicatorsData = {
   breakEvenRevenue: "596.13",
   fixedCost: "200.00",
   fixedCostSource: "monthly",
+  grossSales: 40,
   marketplaceCommission: "7000.00",
   netMarginPercent: "12.04",
   netProfit: "3295.11",
@@ -94,6 +95,7 @@ describe("DashboardFinancialIndicators", () => {
     const text = document.body.textContent ?? "";
 
     expect(text).toContain("27.359,77");
+    expect(text).toContain("40 vendas brutas");
     expect(text).toContain("28 vendas líquidas");
     expect(text).toContain("33.55%");
     expect(text).toContain("R$\u00a0596,13");

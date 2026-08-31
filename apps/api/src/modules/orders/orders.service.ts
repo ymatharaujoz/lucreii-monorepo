@@ -141,6 +141,7 @@ type LogicalOrder = {
 };
 
 export type ExportedOrderFinancialSummary = {
+  grossSales: number;
   marketplaceCommission: string;
   netSales: number;
   packagingCost: string;
@@ -267,7 +268,7 @@ function buildReferenceMonthOrderRange(referenceMonth: string) {
 
 function summarizeExportedOrderFinancials(
   logicalOrders: LogicalOrder[],
-): ExportedOrderFinancialSummary {
+): Omit<ExportedOrderFinancialSummary, "grossSales"> {
   let marketplaceCommission = 0n;
   let netSales = 0;
   let packagingCost = 0n;
@@ -2621,19 +2622,22 @@ export class OrdersService {
       ...(input.provider ? { provider: input.provider } : {}),
     });
 
-    return summarizeExportedOrderFinancials(
-      logicalOrders.filter((logicalOrder) => {
-        if (Array.isArray(logicalOrder.rows)) {
-          return areOrderRowsFinanciallyEligible(logicalOrder.rows);
-        }
+    return {
+      ...summarizeExportedOrderFinancials(
+        logicalOrders.filter((logicalOrder) => {
+          if (Array.isArray(logicalOrder.rows)) {
+            return areOrderRowsFinanciallyEligible(logicalOrder.rows);
+          }
 
-        return isFinanciallyEligibleOrder({
-          metadata: { sourceStatus: logicalOrder.order.sourceStatus },
-          provider: logicalOrder.order.provider,
-          status: logicalOrder.order.status ?? logicalOrder.order.statusLabel,
-        });
-      }),
-    );
+          return isFinanciallyEligibleOrder({
+            metadata: { sourceStatus: logicalOrder.order.sourceStatus },
+            provider: logicalOrder.order.provider,
+            status: logicalOrder.order.status ?? logicalOrder.order.statusLabel,
+          });
+        }),
+      ),
+      grossSales: logicalOrders.length,
+    };
   }
 
   async exportOrdersSpreadsheet(

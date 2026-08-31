@@ -9,6 +9,7 @@ const indicators: DashboardFinancialIndicators = {
   breakEvenRevenue: "10528.27",
   fixedCost: "2987.71",
   fixedCostSource: "monthly",
+  grossSales: 101,
   marketplaceCommission: "7000.00",
   netMarginPercent: "12.04",
   netProfit: "3295.11",

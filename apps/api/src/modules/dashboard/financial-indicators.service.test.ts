@@ -25,6 +25,7 @@ function buildProductsService(items: unknown[] = [], totalPages = 1) {
 
 function buildOrdersService(
   overrides: Partial<{
+    grossSales: number;
     marketplaceCommission: string;
     netSales: number;
     packagingCost: string;
@@ -37,6 +38,7 @@ function buildOrdersService(
 ) {
   return {
     readExportedFinancialSummary: vi.fn().mockResolvedValue({
+      grossSales: 1,
       marketplaceCommission: "10.00",
       netSales: 1,
       packagingCost: "2.00",
@@ -84,6 +86,7 @@ describe("FinancialIndicatorsService", () => {
       breakEvenRevenue: "185.19",
       fixedCost: "100.00",
       fixedCostSource: "company_default",
+      grossSales: 1,
       netProfit: "-49.00",
       revenue: "100.00",
       totalProfit: "54.00",
@@ -108,6 +111,7 @@ describe("FinancialIndicatorsService", () => {
     ]);
     const productsService = buildProductsService();
     const ordersService = buildOrdersService({
+      grossSales: 31,
       marketplaceCommission: "0.00",
       netSales: 0,
       packagingCost: "0.00",
@@ -125,6 +129,7 @@ describe("FinancialIndicatorsService", () => {
 
     expect(result.fixedCost).toBe("15.50");
     expect(result.fixedCostSource).toBe("monthly");
+    expect(result.grossSales).toBe(31);
     expect(db.query.fixedCosts.findMany).toHaveBeenCalledOnce();
     expect(productsService.listPerformanceRows).toHaveBeenCalledWith(
       {
@@ -177,6 +182,7 @@ describe("FinancialIndicatorsService", () => {
     ).read("org-1", "user-1", "company-1", "shopee", "2026-04-01");
 
     expect(result.netSales).toBe(28);
+    expect(result.grossSales).toBe(1);
     expect(result.revenue).toBe("280.00");
     expect(productsService.listPerformanceRows).toHaveBeenCalledWith(
       {
