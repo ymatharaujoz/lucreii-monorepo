@@ -7,6 +7,8 @@ const indicators: DashboardFinancialIndicators = {
   advertising: "1481.33",
   averageMarginPercent: "28.38",
   breakEvenRevenue: "10528.27",
+  excludedRevenue: "0.00",
+  excludedSales: 0,
   fixedCost: "2987.71",
   fixedCostSource: "monthly",
   grossSales: 101,

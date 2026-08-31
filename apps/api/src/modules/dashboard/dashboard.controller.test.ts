@@ -236,6 +236,8 @@ describe("dashboard controller", () => {
       advertising: "1481.33",
       averageMarginPercent: "28.38",
       breakEvenRevenue: "10528.27",
+      excludedRevenue: "3200.88",
+      excludedSales: 90,
       fixedCost: "2987.71",
       fixedCostSource: "monthly",
       grossSales: 125,

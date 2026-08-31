@@ -148,6 +148,8 @@ type CompositionUpdateTarget = {
 };
 
 export type ExportedOrderFinancialSummary = {
+  excludedRevenue: string;
+  excludedSales: number;
   grossSales: number;
   marketplaceCommission: string;
   netSales: number;
@@ -275,7 +277,10 @@ function buildReferenceMonthOrderRange(referenceMonth: string) {
 
 function summarizeExportedOrderFinancials(
   logicalOrders: LogicalOrder[],
-): Omit<ExportedOrderFinancialSummary, "grossSales"> {
+): Omit<
+  ExportedOrderFinancialSummary,
+  "excludedRevenue" | "excludedSales" | "grossSales"
+> {
   let marketplaceCommission = 0n;
   let netSales = 0;
   let packagingCost = 0n;
@@ -344,6 +349,28 @@ export function allocateCentsByWeights(totalCents: bigint, weights: bigint[]) {
   }
 
   return allocations;
+}
+
+function isLogicalOrderFinanciallyEligible(logicalOrder: LogicalOrder) {
+  if (Array.isArray(logicalOrder.rows)) {
+    return areOrderRowsFinanciallyEligible(logicalOrder.rows);
+  }
+
+  return isFinanciallyEligibleOrder({
+    metadata: { sourceStatus: logicalOrder.order.sourceStatus },
+    provider: logicalOrder.order.provider,
+    status: logicalOrder.order.status ?? logicalOrder.order.statusLabel,
+  });
+}
+
+function sumExcludedOrderRevenue(logicalOrders: LogicalOrder[]) {
+  return formatCents(
+    logicalOrders.reduce(
+      (total, logicalOrder) =>
+        total + parseMoneyToCents(logicalOrder.order.totalWithFees),
+      0n,
+    ),
+  );
 }
 
 function buildPositiveAllocationWeights(weights: bigint[]) {
@@ -2629,20 +2656,21 @@ export class OrdersService {
       ...(input.provider ? { provider: input.provider } : {}),
     });
 
-    return {
-      ...summarizeExportedOrderFinancials(
-        logicalOrders.filter((logicalOrder) => {
-          if (Array.isArray(logicalOrder.rows)) {
-            return areOrderRowsFinanciallyEligible(logicalOrder.rows);
-          }
+    const eligibleOrders: LogicalOrder[] = [];
+    const excludedOrders: LogicalOrder[] = [];
 
-          return isFinanciallyEligibleOrder({
-            metadata: { sourceStatus: logicalOrder.order.sourceStatus },
-            provider: logicalOrder.order.provider,
-            status: logicalOrder.order.status ?? logicalOrder.order.statusLabel,
-          });
-        }),
-      ),
+    for (const logicalOrder of logicalOrders) {
+      if (isLogicalOrderFinanciallyEligible(logicalOrder)) {
+        eligibleOrders.push(logicalOrder);
+      } else {
+        excludedOrders.push(logicalOrder);
+      }
+    }
+
+    return {
+      ...summarizeExportedOrderFinancials(eligibleOrders),
+      excludedRevenue: sumExcludedOrderRevenue(excludedOrders),
+      excludedSales: excludedOrders.length,
       grossSales: logicalOrders.length,
     };
   }

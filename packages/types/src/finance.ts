@@ -121,6 +121,8 @@ export type DashboardFinancialIndicators = {
   breakEvenRevenue: DecimalString;
   fixedCost: DecimalString;
   fixedCostSource: "monthly" | "company_default";
+  excludedRevenue: DecimalString;
+  excludedSales: number;
   grossSales: number;
   marketplaceCommission: DecimalString;
   netMarginPercent: DecimalString;

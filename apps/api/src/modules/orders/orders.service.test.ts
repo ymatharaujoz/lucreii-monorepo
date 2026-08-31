@@ -6773,6 +6773,8 @@ describe("OrdersService", () => {
     );
 
     expect(summary).toEqual({
+      excludedRevenue: "90.00",
+      excludedSales: 2,
       grossSales: 4,
       marketplaceCommission: "15.00",
       netSales: 3,

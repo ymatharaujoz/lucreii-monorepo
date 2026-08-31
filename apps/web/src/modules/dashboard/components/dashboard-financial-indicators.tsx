@@ -33,7 +33,11 @@ interface DashboardFinancialIndicatorsProps {
 interface IndicatorCardProps {
   icon: React.ReactNode;
   label: string;
-  secondarySubValue?: string;
+  negativeMetric?: {
+    label: string;
+    subValue: string;
+    value: string;
+  };
   subValue?: string;
   trend?: {
     direction: "up" | "down" | "neutral";
@@ -81,7 +85,7 @@ function roundToCents(value: number) {
 function IndicatorCard({
   icon,
   label,
-  secondarySubValue,
+  negativeMetric,
   subValue,
   trend,
   value,
@@ -117,16 +121,26 @@ function IndicatorCard({
               {label}
             </p>
           </div>
-          <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-[28px]">
+          <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground tabular-nums sm:text-[28px]">
             {value}
           </p>
           {subValue && (
-            <p className="mt-1 text-xs text-muted-foreground">{subValue}</p>
-          )}
-          {secondarySubValue && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {secondarySubValue}
+            <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+              {subValue}
             </p>
+          )}
+          {negativeMetric && (
+            <div className="mt-5 border-t border-error/20 pt-3">
+              <p className="text-[10px] font-semibold uppercase leading-4 tracking-[0.08em] text-error/75">
+                {negativeMetric.label}
+              </p>
+              <p className="mt-1 text-xl font-semibold tracking-tight text-error tabular-nums">
+                {negativeMetric.value}
+              </p>
+              <p className="mt-0.5 text-xs text-error/80 tabular-nums">
+                {negativeMetric.subValue}
+              </p>
+            </div>
           )}
           {trend && (
             <div className="mt-2 flex items-center gap-1.5">
@@ -237,8 +251,18 @@ export function DashboardFinancialIndicators({
     displayedRevenue === 0
       ? 0
       : (displayedLiquidProfit / displayedRevenue) * 100;
-  const grossSalesSub = `${financialIndicators.grossSales} vendas brutas`;
-  const netSalesSub = `${financialIndicators.netSales} vendas líquidas`;
+  const grossSalesSub = `${financialIndicators.grossSales} Vendas Totais`;
+  const excludedRevenue = normalizeNumber(financialIndicators.excludedRevenue);
+  const excludedRevenueValue =
+    excludedRevenue > 0
+      ? `− ${formatMoney(excludedRevenue, {
+          maximumFractionDigits: 2,
+          minimumFractionDigits: 2,
+        })}`
+      : formatMoney(excludedRevenue, {
+          maximumFractionDigits: 2,
+          minimumFractionDigits: 2,
+        });
 
   return (
     <motion.div
@@ -251,10 +275,15 @@ export function DashboardFinancialIndicators({
         <IndicatorCard
           icon={<DollarSign className="h-4 w-4" />}
           label="Faturamento"
-          secondarySubValue={netSalesSub}
           subValue={grossSalesSub}
+          negativeMetric={{
+            label: "Devoluções, cancelamentos e pendências",
+            subValue: `${financialIndicators.excludedSales} Vendas`,
+            value: excludedRevenueValue,
+          }}
           value={formatMoney(financialIndicators.revenue, {
             maximumFractionDigits: 2,
+            minimumFractionDigits: 2,
           })}
         />
         <IndicatorCard

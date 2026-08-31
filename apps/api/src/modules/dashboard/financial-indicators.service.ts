@@ -137,6 +137,8 @@ export class FinancialIndicatorsService {
 
     return {
       ...result,
+      excludedRevenue: ordersSummary.excludedRevenue,
+      excludedSales: ordersSummary.excludedSales,
       fixedCostSource: hasMonthlyFixedCosts ? "monthly" : "company_default",
       grossSales: ordersSummary.grossSales,
     };

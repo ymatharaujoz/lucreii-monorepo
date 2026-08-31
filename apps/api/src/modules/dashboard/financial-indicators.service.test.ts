@@ -25,6 +25,8 @@ function buildProductsService(items: unknown[] = [], totalPages = 1) {
 
 function buildOrdersService(
   overrides: Partial<{
+    excludedRevenue: string;
+    excludedSales: number;
     grossSales: number;
     marketplaceCommission: string;
     netSales: number;
@@ -38,6 +40,8 @@ function buildOrdersService(
 ) {
   return {
     readExportedFinancialSummary: vi.fn().mockResolvedValue({
+      excludedRevenue: "0.00",
+      excludedSales: 0,
       grossSales: 1,
       marketplaceCommission: "10.00",
       netSales: 1,
@@ -84,6 +88,8 @@ describe("FinancialIndicatorsService", () => {
 
     expect(result).toMatchObject({
       breakEvenRevenue: "185.19",
+      excludedRevenue: "0.00",
+      excludedSales: 0,
       fixedCost: "100.00",
       fixedCostSource: "company_default",
       grossSales: 1,
@@ -130,6 +136,8 @@ describe("FinancialIndicatorsService", () => {
     expect(result.fixedCost).toBe("15.50");
     expect(result.fixedCostSource).toBe("monthly");
     expect(result.grossSales).toBe(31);
+    expect(result.excludedRevenue).toBe("0.00");
+    expect(result.excludedSales).toBe(0);
     expect(db.query.fixedCosts.findMany).toHaveBeenCalledOnce();
     expect(productsService.listPerformanceRows).toHaveBeenCalledWith(
       {

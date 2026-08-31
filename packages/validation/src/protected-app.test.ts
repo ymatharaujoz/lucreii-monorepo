@@ -11,6 +11,8 @@ const financialIndicatorsData = {
   advertising: "76.93",
   averageMarginPercent: "28.63",
   breakEvenRevenue: "10961.24",
+  excludedRevenue: "3200.88",
+  excludedSales: 90,
   fixedCost: "3138.54",
   fixedCostSource: "monthly",
   grossSales: 12,

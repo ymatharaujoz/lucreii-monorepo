@@ -48,6 +48,8 @@ const indicators: DashboardFinancialIndicatorsData = {
   advertising: "1481.33",
   averageMarginPercent: "33.55",
   breakEvenRevenue: "596.13",
+  excludedRevenue: "3200.88",
+  excludedSales: 12,
   fixedCost: "200.00",
   fixedCostSource: "monthly",
   grossSales: 40,
@@ -95,8 +97,11 @@ describe("DashboardFinancialIndicators", () => {
     const text = document.body.textContent ?? "";
 
     expect(text).toContain("27.359,77");
-    expect(text).toContain("40 vendas brutas");
-    expect(text).toContain("28 vendas líquidas");
+    expect(text).toContain("40 Vendas Totais");
+    expect(text).toContain("12 Vendas");
+    expect(text).toContain("Devoluções, cancelamentos e pendências");
+    expect(text).toContain("− R$ 3.200,88");
+    expect(text).not.toContain("28 vendas líquidas");
     expect(text).toContain("33.55%");
     expect(text).toContain("R$\u00a0596,13");
     expect(text).toContain("R$\u00a07.564,15");
