@@ -33,11 +33,6 @@ interface DashboardFinancialIndicatorsProps {
 interface IndicatorCardProps {
   icon: React.ReactNode;
   label: string;
-  negativeMetric?: {
-    label: string;
-    subValue: string;
-    value: string;
-  };
   subValue?: string;
   trend?: {
     direction: "up" | "down" | "neutral";
@@ -85,7 +80,6 @@ function roundToCents(value: number) {
 function IndicatorCard({
   icon,
   label,
-  negativeMetric,
   subValue,
   trend,
   value,
@@ -107,43 +101,30 @@ function IndicatorCard({
   return (
     <motion.div
       variants={itemVariants}
-      className={`relative overflow-hidden rounded-[var(--radius-lg)] border p-5 shadow-[var(--shadow-xs)] transition-all duration-[var(--transition-fast)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-sm)] ${variantStyles[variant]}`}
+      className={`relative flex min-h-[148px] min-w-0 flex-col overflow-hidden rounded-[var(--radius-lg)] border p-4 shadow-[var(--shadow-xs)] transition-all duration-[var(--transition-fast)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-sm)] ${variantStyles[variant]}`}
     >
-      <div className="flex items-start justify-between">
-        <div className="min-w-0 flex-1">
+      <div className="flex min-h-full flex-1 items-start justify-between">
+        <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-2">
             <span
               className={`inline-flex h-5 w-5 items-center justify-center rounded-md ${iconBgStyles[variant]}`}
             >
               {icon}
             </span>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="min-w-0 text-[10px] font-semibold uppercase leading-4 tracking-[0.08em] text-muted-foreground">
               {label}
             </p>
           </div>
-          <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground tabular-nums sm:text-[28px]">
+          <p className="mt-3 text-[clamp(1.125rem,1.9vw,1.75rem)] font-semibold leading-tight tracking-tight text-foreground tabular-nums">
             {value}
           </p>
           {subValue && (
-            <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+            <p className="mt-1 text-[11px] leading-4 tabular-nums text-muted-foreground">
               {subValue}
             </p>
           )}
-          {negativeMetric && (
-            <div className="mt-5 border-t border-error/20 pt-3">
-              <p className="text-[10px] font-semibold uppercase leading-4 tracking-[0.08em] text-error/75">
-                {negativeMetric.label}
-              </p>
-              <p className="mt-1 text-xl font-semibold tracking-tight text-error tabular-nums">
-                {negativeMetric.value}
-              </p>
-              <p className="mt-0.5 text-xs text-error/80 tabular-nums">
-                {negativeMetric.subValue}
-              </p>
-            </div>
-          )}
           {trend && (
-            <div className="mt-2 flex items-center gap-1.5">
+            <div className="mt-auto flex items-center gap-1.5 pt-3">
               <TrendIcon className={`h-3.5 w-3.5 ${trendColorClass}`} />
               <span className={`text-xs font-medium ${trendColorClass}`}>
                 {trend.value}
@@ -271,20 +252,22 @@ export function DashboardFinancialIndicators({
       animate="visible"
       className="space-y-4"
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <IndicatorCard
           icon={<DollarSign className="h-4 w-4" />}
           label="Faturamento"
           subValue={grossSalesSub}
-          negativeMetric={{
-            label: "Devoluções, cancelamentos e pendências",
-            subValue: `${financialIndicators.excludedSales} Vendas`,
-            value: excludedRevenueValue,
-          }}
           value={formatMoney(financialIndicators.revenue, {
             maximumFractionDigits: 2,
             minimumFractionDigits: 2,
           })}
+        />
+        <IndicatorCard
+          icon={<TrendingDown className="h-4 w-4" />}
+          label="Devoluções, cancelamentos e pendências"
+          subValue={`${financialIndicators.excludedSales} Vendas`}
+          value={excludedRevenueValue}
+          variant="error"
         />
         <IndicatorCard
           icon={<Percent className="h-4 w-4" />}

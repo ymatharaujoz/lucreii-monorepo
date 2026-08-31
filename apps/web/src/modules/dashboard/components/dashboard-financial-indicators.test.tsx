@@ -87,7 +87,7 @@ afterEach(() => {
 });
 
 describe("DashboardFinancialIndicators", () => {
-  it("exibe os cinco indicadores financeiros principais", () => {
+  it("exibe os seis indicadores financeiros em uma grade responsiva", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
@@ -121,7 +121,12 @@ describe("DashboardFinancialIndicators", () => {
     expect(document.querySelectorAll("[class*=grid]").length).toBeGreaterThan(0);
     expect(
       Array.from(document.querySelectorAll("[class]")).some((element) =>
-        element.className.toString().includes("lg:grid-cols-5"),
+        element.className.toString().includes("lg:grid-cols-6"),
+      ),
+    ).toBe(true);
+    expect(
+      Array.from(document.querySelectorAll("[class]")).some((element) =>
+        element.className.toString().includes("md:grid-cols-3"),
       ),
     ).toBe(true);
     view.unmount();
