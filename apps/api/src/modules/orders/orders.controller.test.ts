@@ -296,6 +296,56 @@ describe("orders controller", () => {
     );
   });
 
+  it("updates product cost for selected orders", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: { id: "org_123", name: "Org", role: "owner", slug: "org" },
+      selectedCompanyId: "company_123",
+      session: { expiresAt: new Date("2026-06-20T00:00:00.000Z"), id: "session_123" },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(entitlementsService, "requireActiveEntitlement").mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(ordersService, "updateOrderProductCostBulk").mockResolvedValueOnce({
+      updatedCount: 2,
+    });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/orders/composition/product-cost/batch",
+      payload: {
+        orderIds: ["order_1", "order_2"],
+        productCostAmount: "22.50",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      data: { updatedCount: 2 },
+      error: null,
+    });
+    expect(ordersService.updateOrderProductCostBulk).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      }),
+      {
+        orderIds: ["order_1", "order_2"],
+        productCostAmount: "22.50",
+      },
+    );
+  });
+
   it("exports orders spreadsheet as xlsx attachment", async () => {
     vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
       organization: { id: "org_123", name: "Org", role: "owner", slug: "org" },

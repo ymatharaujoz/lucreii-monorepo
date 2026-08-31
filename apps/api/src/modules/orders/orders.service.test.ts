@@ -3160,6 +3160,113 @@ describe("OrdersService", () => {
     );
   });
 
+  it("updates selected orders product costs in one transaction", async () => {
+    const setMock = vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    });
+    const transactionMock = vi.fn(async (callback) =>
+      callback({
+        update: vi.fn().mockReturnValue({ set: setMock }),
+      }),
+    );
+    const db = {
+      query: {
+        externalOrders: {
+          findFirst: vi
+            .fn()
+            .mockResolvedValueOnce({
+              id: "order_row_1",
+              items: [{ quantity: 1 }],
+              metadata: {
+                compositionOverrides: { packagingCostAmount: "2.00" },
+              },
+              provider: "shopee",
+            })
+            .mockResolvedValueOnce({
+              id: "order_row_2",
+              items: [{ quantity: 2 }],
+              metadata: {},
+              provider: "shein",
+            }),
+        },
+      },
+      transaction: transactionMock,
+    };
+    const service = new OrdersService(db as never);
+
+    await expect(
+      service.updateOrderProductCostBulk(
+        {
+          organizationId: "org_123",
+          selectedCompanyId: "company_123",
+          userId: "user_123",
+        },
+        {
+          orderIds: ["order_row_1", "order_row_2"],
+          productCostAmount: "22.50",
+        },
+      ),
+    ).resolves.toEqual({ updatedCount: 2 });
+
+    expect(transactionMock).toHaveBeenCalledTimes(1);
+    expect(setMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        metadata: {
+          compositionOverrides: {
+            packagingCostAmount: "2.00",
+            productCostAmount: "22.50",
+          },
+        },
+      }),
+    );
+    expect(setMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        metadata: {
+          compositionOverrides: { productCostAmount: "22.50" },
+        },
+      }),
+    );
+  });
+
+  it("does not start a transaction when a selected order is unavailable", async () => {
+    const transactionMock = vi.fn();
+    const db = {
+      query: {
+        externalOrders: {
+          findFirst: vi
+            .fn()
+            .mockResolvedValueOnce({
+              id: "order_row_1",
+              items: [{ quantity: 1 }],
+              metadata: {},
+              provider: "shopee",
+            })
+            .mockResolvedValueOnce(null),
+        },
+      },
+      transaction: transactionMock,
+    };
+    const service = new OrdersService(db as never);
+
+    await expect(
+      service.updateOrderProductCostBulk(
+        {
+          organizationId: "org_123",
+          selectedCompanyId: "company_123",
+          userId: "user_123",
+        },
+        {
+          orderIds: ["order_row_1", "missing_order"],
+          productCostAmount: "22.50",
+        },
+      ),
+    ).rejects.toThrow("Order not found.");
+
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
   it("lists only orders from selected company and derives table totals", async () => {
     const db = {
       query: {

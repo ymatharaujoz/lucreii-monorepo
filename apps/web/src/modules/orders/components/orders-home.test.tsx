@@ -13,6 +13,7 @@ import { OrdersHome } from "./orders-home";
 const useOrdersListMock = vi.hoisted(() => vi.fn());
 const useOrderDetailsMock = vi.hoisted(() => vi.fn());
 const useUpdateOrderCompositionMock = vi.hoisted(() => vi.fn());
+const useUpdateOrderProductCostBulkMock = vi.hoisted(() => vi.fn());
 const downloadOrdersExportMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../hooks/use-orders-data", () => ({
@@ -20,6 +21,7 @@ vi.mock("../hooks/use-orders-data", () => ({
   useOrderDetails: useOrderDetailsMock,
   useOrdersList: useOrdersListMock,
   useUpdateOrderComposition: useUpdateOrderCompositionMock,
+  useUpdateOrderProductCostBulk: useUpdateOrderProductCostBulkMock,
 }));
 
 vi.mock("@/components/ui-premium/date-range-picker", () => ({
@@ -45,7 +47,11 @@ function mount(node: React.ReactNode) {
   const root = createRoot(container);
 
   act(() => {
-    root.render(<ReferenceMonthProvider companyId="company_1">{node}</ReferenceMonthProvider>);
+    root.render(
+      <ReferenceMonthProvider companyId="company_1">
+        {node}
+      </ReferenceMonthProvider>,
+    );
   });
 
   return {
@@ -85,9 +91,7 @@ function typeInputCharacter(element: HTMLInputElement, character: string) {
   const start = element.selectionStart ?? element.value.length;
   const end = element.selectionEnd ?? start;
   const nextValue =
-    element.value.slice(0, start) +
-    character +
-    element.value.slice(end);
+    element.value.slice(0, start) + character + element.value.slice(end);
 
   act(() => {
     element.dispatchEvent(
@@ -243,6 +247,11 @@ describe("OrdersHome", () => {
       isPending: false,
       mutateAsync: vi.fn().mockResolvedValue({}),
     });
+    useUpdateOrderProductCostBulkMock.mockReset();
+    useUpdateOrderProductCostBulkMock.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn().mockResolvedValue({ updatedCount: 1 }),
+    });
   });
 
   it("renders status dropdown options from API", () => {
@@ -312,7 +321,9 @@ describe("OrdersHome", () => {
         button.textContent?.includes("Compos"),
       )!,
     );
-    click(document.querySelector('button[aria-label="Editar custo do produto"]')!);
+    click(
+      document.querySelector('button[aria-label="Editar custo do produto"]')!,
+    );
 
     const input = document.querySelector<HTMLInputElement>(
       "#product-cost-input",
@@ -321,8 +332,8 @@ describe("OrdersHome", () => {
     changeInputValue(input!, "a2,50b");
     expect(input?.value).toBe("2,50");
     click(
-      Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent === "Salvar",
+      Array.from(document.querySelectorAll("button")).find(
+        (button) => button.textContent === "Salvar",
       )!,
     );
 
@@ -330,6 +341,45 @@ describe("OrdersHome", () => {
       orderId: "order_row_1",
       values: { productCostAmount: "2.50" },
     });
+
+    view.unmount();
+  });
+
+  it("updates product cost for selected orders without changing the catalog", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({ updatedCount: 1 });
+    useUpdateOrderProductCostBulkMock.mockReturnValue({
+      isPending: false,
+      mutateAsync,
+    });
+
+    const view = mount(<OrdersHome />);
+
+    click(
+      document.querySelector('input[aria-label="Selecionar MLB-SALE-9001"]')!,
+    );
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Editar Custo do Produto"),
+      )!,
+    );
+
+    expect(text()).toContain("O catálogo de produtos não será alterado.");
+    changeInputValue(
+      document.querySelector<HTMLInputElement>("#bulk-product-cost-input")!,
+      "22,50",
+    );
+    click(
+      Array.from(document.querySelectorAll("button")).find(
+        (button) => button.textContent === "Salvar",
+      )!,
+    );
+    await act(async () => undefined);
+
+    expect(mutateAsync).toHaveBeenCalledWith({
+      orderIds: ["order_row_1"],
+      productCostAmount: "22.50",
+    });
+    expect(text()).not.toContain("1 selecionado");
 
     view.unmount();
   });
@@ -349,14 +399,16 @@ describe("OrdersHome", () => {
         button.textContent?.includes("Compos"),
       )!,
     );
-    click(document.querySelector('button[aria-label="Editar custo do produto"]')!);
+    click(
+      document.querySelector('button[aria-label="Editar custo do produto"]')!,
+    );
     changeInputValue(
       document.querySelector<HTMLInputElement>("#product-cost-input")!,
       "80,00",
     );
     click(
-      Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent === "Cancelar",
+      Array.from(document.querySelectorAll("button")).find(
+        (button) => button.textContent === "Cancelar",
       )!,
     );
 
@@ -377,7 +429,9 @@ describe("OrdersHome", () => {
           button.textContent?.includes("Compos"),
         )!,
       );
-      click(document.querySelector('button[aria-label="Editar custo do produto"]')!);
+      click(
+        document.querySelector('button[aria-label="Editar custo do produto"]')!,
+      );
 
       const input = document.querySelector<HTMLInputElement>(
         "#product-cost-input",

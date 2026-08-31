@@ -6,6 +6,8 @@ import type {
   OrderDetails,
   OrderExportFilters,
   OrderListFilters,
+  OrderProductCostBulkUpdateInput,
+  OrderProductCostBulkUpdateResult,
   OrdersListResponse,
 } from "@lucreii/types";
 import {
@@ -145,6 +147,19 @@ export async function updateOrderComposition(
   return response.data;
 }
 
+export async function updateOrderProductCostBulk(
+  values: OrderProductCostBulkUpdateInput,
+): Promise<OrderProductCostBulkUpdateResult> {
+  const response = await apiClient.patch<{
+    data: OrderProductCostBulkUpdateResult;
+    error: null;
+  }>("/orders/composition/product-cost/batch", {
+    body: values,
+  });
+
+  return response.data;
+}
+
 export function useOrdersList(filters: OrderListFilters = {}) {
   const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
 
@@ -202,6 +217,17 @@ export function useUpdateOrderComposition() {
           variables.orderId,
         ],
       });
+    },
+  });
+}
+
+export function useUpdateOrderProductCostBulk() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateOrderProductCostBulk,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
     },
   });
 }

@@ -40,6 +40,8 @@ import type {
   IntegrationProviderSlug,
   OrdersMarginAudit,
   OrderListItem,
+  OrderProductCostBulkUpdateInput,
+  OrderProductCostBulkUpdateResult,
   OrdersListSummary,
   OrdersListResponse,
   OrderStatusLabel,
@@ -138,6 +140,11 @@ type LogicalOrder = {
   items: OrderLineItem[];
   order: OrderListItem;
   rows: OrderRow[];
+};
+
+type CompositionUpdateTarget = {
+  grouped: boolean;
+  rows: OrderRowShallow[];
 };
 
 export type ExportedOrderFinancialSummary = {
@@ -2790,6 +2797,74 @@ export class OrdersService {
       );
     }
 
+    const target = await this.readCompositionUpdateTarget(
+      authContext,
+      companyId,
+      orderRecordId,
+    );
+    await this.persistCompositionUpdates(authContext, companyId, [
+      { input, target },
+    ]);
+
+    return this.getOrderDetails(authContext, orderRecordId);
+  }
+
+  async updateOrderProductCostBulk(
+    authContext: TenantContext,
+    input: OrderProductCostBulkUpdateInput,
+  ): Promise<OrderProductCostBulkUpdateResult> {
+    const companyId = this.requireSelectedCompanyId(authContext);
+    if (input.orderIds.length === 0) {
+      throw new BadRequestException("At least one order is required.");
+    }
+
+    if (!hasValidProductCostOverride(input.productCostAmount)) {
+      throw new BadRequestException(
+        "Product cost must be zero or a positive amount with up to two decimals.",
+      );
+    }
+
+    if (new Set(input.orderIds).size !== input.orderIds.length) {
+      throw new BadRequestException("Order ids must be unique.");
+    }
+
+    const targets: CompositionUpdateTarget[] = [];
+    const updatedRowIds = new Set<string>();
+
+    for (const orderRecordId of input.orderIds) {
+      const target = await this.readCompositionUpdateTarget(
+        authContext,
+        companyId,
+        orderRecordId,
+      );
+
+      for (const row of target.rows) {
+        if (updatedRowIds.has(row.id)) {
+          throw new BadRequestException("Selected orders cannot overlap.");
+        }
+        updatedRowIds.add(row.id);
+      }
+
+      targets.push(target);
+    }
+
+    await this.persistCompositionUpdates(
+      authContext,
+      companyId,
+      targets.map((target) => ({
+        input: { productCostAmount: input.productCostAmount },
+        target,
+      })),
+    );
+
+    return { updatedCount: targets.length };
+  }
+
+  private async readCompositionUpdateTarget(
+    authContext: TenantContext,
+    companyId: string,
+    orderRecordId: string,
+  ): Promise<CompositionUpdateTarget> {
     const groupedDisplayOrderId =
       readMercadoLivreGroupedDisplayOrderId(orderRecordId);
     const rows = groupedDisplayOrderId
@@ -2836,21 +2911,40 @@ export class OrdersService {
       throw new NotFoundException("Order not found.");
     }
 
-    const quantityWeights = rows.map((row) =>
-      row.items.reduce(
-        (total, item) => total + BigInt(Math.max(0, Math.trunc(item.quantity))),
-        0n,
-      ),
-    );
-    const groupedProductCostAllocations = groupedDisplayOrderId
-      ? allocateCentsByWeights(
-          parseMoneyToCents(input.productCostAmount),
-          buildPositiveAllocationWeights(quantityWeights),
-        )
-      : [];
+    return {
+      grouped: groupedDisplayOrderId !== null,
+      rows: rows as OrderRowShallow[],
+    };
+  }
 
-    await this.db.transaction(async (transaction) => {
-      for (const [index, row] of rows.entries()) {
+  private async persistCompositionUpdates(
+    authContext: TenantContext,
+    companyId: string,
+    updates: Array<{
+      input: OrderCompositionUpdateInput;
+      target: CompositionUpdateTarget;
+    }>,
+  ) {
+    const rowsToUpdate = updates.flatMap(({ input, target }) => {
+      const providedFields = Object.entries(input).filter(
+        ([, value]) => value !== undefined,
+      );
+      const quantityWeights = target.rows.map((row) =>
+        row.items.reduce(
+          (total, item) =>
+            total + BigInt(Math.max(0, Math.trunc(item.quantity))),
+          0n,
+        ),
+      );
+      const groupedProductCostAllocations =
+        target.grouped && input.productCostAmount !== undefined
+          ? allocateCentsByWeights(
+              parseMoneyToCents(input.productCostAmount),
+              buildPositiveAllocationWeights(quantityWeights),
+            )
+          : null;
+
+      return target.rows.map((row, index) => {
         const metadata =
           row.metadata && typeof row.metadata === "object"
             ? { ...(row.metadata as Record<string, unknown>) }
@@ -2868,17 +2962,22 @@ export class OrdersService {
           }
 
           compositionOverrides[field] =
-            field === "productCostAmount" && groupedDisplayOrderId
+            field === "productCostAmount" && groupedProductCostAllocations
               ? formatCents(groupedProductCostAllocations[index] ?? 0n)
               : value;
         }
 
         metadata.compositionOverrides = compositionOverrides;
+        return { id: row.id, metadata };
+      });
+    });
 
+    await this.db.transaction(async (transaction) => {
+      for (const row of rowsToUpdate) {
         await transaction
           .update(externalOrders)
           .set({
-            metadata,
+            metadata: row.metadata,
             updatedAt: new Date(),
           })
           .where(
@@ -2890,8 +2989,6 @@ export class OrdersService {
           );
       }
     });
-
-    return this.getOrderDetails(authContext, orderRecordId);
   }
 
   private async readLogicalOrdersForExport(

@@ -20,6 +20,7 @@ import {
   OrderExportQueryDto,
   OrderListFiltersDto,
   UpdateOrderCompositionDto,
+  UpdateOrderProductCostBulkDto,
 } from "./orders.dto";
 import { OrdersService } from "./orders.service";
 
@@ -83,6 +84,24 @@ export class OrdersController {
     );
 
     return reply.send(buffer);
+  }
+
+  @Patch("composition/product-cost/batch")
+  async updateOrderProductCostBulk(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Body() body: UpdateOrderProductCostBulkDto,
+  ) {
+    return {
+      data: await this.ordersService.updateOrderProductCostBulk(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        body,
+      ),
+      error: null,
+    };
   }
 
   @Get(":id")

@@ -253,6 +253,23 @@ export const orderCompositionUpdateSchema = z.object({
   "At least one composition field is required.",
 );
 
+export const orderProductCostBulkUpdateSchema = z.object({
+  orderIds: z
+    .array(z.string().trim().min(1))
+    .min(1, "At least one order is required.")
+    .refine(
+      (ids) => new Set(ids).size === ids.length,
+      "Order ids must be unique.",
+    ),
+  productCostAmount: z
+    .string()
+    .trim()
+    .regex(
+      nonNegativeMoneyPattern,
+      "Product cost amount must be zero or a positive amount with up to 2 places.",
+    ),
+});
+
 export const ordersListApiResponseSchema = createApiSuccessResponseSchema(
   ordersListResponseSchema,
 );
@@ -263,4 +280,7 @@ export type OrderListFiltersInput = z.infer<typeof orderListFiltersSchema>;
 export type OrderExportQueryInput = z.infer<typeof orderExportQuerySchema>;
 export type OrderCompositionUpdateInput = z.infer<
   typeof orderCompositionUpdateSchema
+>;
+export type OrderProductCostBulkUpdateInput = z.infer<
+  typeof orderProductCostBulkUpdateSchema
 >;

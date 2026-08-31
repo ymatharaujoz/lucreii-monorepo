@@ -184,3 +184,12 @@ export type OrderCompositionUpdateInput = {
   shippingOrFixedFeeAmount?: string;
   packagingCostAmount?: string;
 };
+
+export type OrderProductCostBulkUpdateInput = {
+  orderIds: string[];
+  productCostAmount: string;
+};
+
+export type OrderProductCostBulkUpdateResult = {
+  updatedCount: number;
+};

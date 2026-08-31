@@ -53,6 +53,7 @@ import {
   useOrderDetails,
   useOrdersList,
   useUpdateOrderComposition,
+  useUpdateOrderProductCostBulk,
 } from "../hooks/use-orders-data";
 
 const PAGE_SIZE = 20;
@@ -709,8 +710,7 @@ function CompositionTab({
     composition.shippingOrFixedFeeAmount;
 
   const isShippingCost =
-    !composition.shippingBreakdown ||
-    Number(shippingDisplayAmount) <= 0;
+    !composition.shippingBreakdown || Number(shippingDisplayAmount) <= 0;
 
   const absShippingAmount = Math.abs(Number(shippingDisplayAmount ?? 0));
   const shippingPending = composition.pendingFinancialFields?.includes(
@@ -726,7 +726,8 @@ function CompositionTab({
     <div className="space-y-4">
       {composition.pendingFinancialFields?.length ? (
         <div className="rounded-xl border border-warning/25 bg-warning/8 px-4 py-3 text-xs text-foreground">
-          Custo Fixo e Imposto serão preenchidos quando a conexão do Mercado Livre estiver disponível.
+          Custo Fixo e Imposto serão preenchidos quando a conexão do Mercado
+          Livre estiver disponível.
         </div>
       ) : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -748,7 +749,10 @@ function CompositionTab({
           headerAction={
             <div className="flex items-center gap-1">
               {productCostSaved ? (
-                <span className="text-[10px] font-semibold text-accent" role="status">
+                <span
+                  className="text-[10px] font-semibold text-accent"
+                  role="status"
+                >
                   Salvo
                 </span>
               ) : null}
@@ -822,7 +826,8 @@ function CompositionTab({
                     className="mt-2 text-[11px] leading-snug text-muted-foreground"
                     id="product-cost-help"
                   >
-                    Aplicado somente a este pedido; o catálogo não será alterado.
+                    Aplicado somente a este pedido; o catálogo não será
+                    alterado.
                   </p>
                   {productCostError ? (
                     <p className="mt-2 text-xs text-red-600" role="alert">
@@ -872,19 +877,25 @@ function CompositionTab({
         <CompositionMetric
           icon={<Truck className="h-4 w-4" />}
           label={`Frete / Taxa Fixa${shippingPending ? " · pendente" : ""}`}
-          value={shippingPending ? "Pendente" : formatMoney(absShippingAmount.toString())}
+          value={
+            shippingPending
+              ? "Pendente"
+              : formatMoney(absShippingAmount.toString())
+          }
           negative={!shippingPending && isShippingCost}
           details={
             composition.shippingBreakdown
               ? [
                   {
                     label: "Frete pago pelo comprador",
-                    value: composition.shippingBreakdown.buyerShippingPaymentAmount,
+                    value:
+                      composition.shippingBreakdown.buyerShippingPaymentAmount,
                   },
                   {
                     label: "Tarifa bruta de envio",
                     negative: true,
-                    value: composition.shippingBreakdown.grossShippingTariffAmount,
+                    value:
+                      composition.shippingBreakdown.grossShippingTariffAmount,
                   },
                 ]
               : undefined
@@ -938,7 +949,9 @@ function buildStatusDropdownItems(
 export function OrdersHome() {
   const { referenceMonth } = useReferenceMonth();
 
-  return <OrdersHomeContent key={referenceMonth} referenceMonth={referenceMonth} />;
+  return (
+    <OrdersHomeContent key={referenceMonth} referenceMonth={referenceMonth} />
+  );
 }
 
 function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
@@ -956,7 +969,9 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
   const [saleIdDraft, setSaleIdDraft] = useState("");
   const [sku, setSku] = useState("");
   const [skuDraft, setSkuDraft] = useState("");
-  const [orderedFrom, setOrderedFrom] = useState(referenceMonthRange.orderedFrom);
+  const [orderedFrom, setOrderedFrom] = useState(
+    referenceMonthRange.orderedFrom,
+  );
   const [orderedTo, setOrderedTo] = useState(referenceMonthRange.orderedTo);
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>(
     [],
@@ -981,6 +996,12 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
   const [productCostDraft, setProductCostDraft] = useState("");
   const [productCostError, setProductCostError] = useState<string | null>(null);
   const [productCostSaved, setProductCostSaved] = useState(false);
+  const [bulkProductCostModalOpen, setBulkProductCostModalOpen] =
+    useState(false);
+  const [bulkProductCostDraft, setBulkProductCostDraft] = useState("");
+  const [bulkProductCostError, setBulkProductCostError] = useState<
+    string | null
+  >(null);
 
   const hasCustomDateRange =
     orderedFrom !== referenceMonthRange.orderedFrom ||
@@ -988,7 +1009,7 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
 
   const dateRangeLabelForPill = useMemo(() => {
     if (!orderedFrom && !orderedTo) return "";
-    
+
     const getTodayString = () => {
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1018,25 +1039,55 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     };
 
-    if (orderedFrom === getTodayString() && orderedTo === getTodayString()) return "Hoje";
-    if (orderedFrom === getYesterdayString() && orderedTo === getYesterdayString()) return "Ontem";
-    if (orderedFrom === getDaysAgoString(6) && orderedTo === getTodayString()) return "Últimos 7 dias";
-    if (orderedFrom === getDaysAgoString(29) && orderedTo === getTodayString()) return "Últimos 30 dias";
-    if (orderedFrom === getFirstDayOfThisMonth() && orderedTo === getTodayString()) return "Este mês";
-    if (orderedFrom === getFirstDayOfLastMonth() && orderedTo === getLastDayOfLastMonth()) return "Mês passado";
+    if (orderedFrom === getTodayString() && orderedTo === getTodayString())
+      return "Hoje";
+    if (
+      orderedFrom === getYesterdayString() &&
+      orderedTo === getYesterdayString()
+    )
+      return "Ontem";
+    if (orderedFrom === getDaysAgoString(6) && orderedTo === getTodayString())
+      return "Últimos 7 dias";
+    if (orderedFrom === getDaysAgoString(29) && orderedTo === getTodayString())
+      return "Últimos 30 dias";
+    if (
+      orderedFrom === getFirstDayOfThisMonth() &&
+      orderedTo === getTodayString()
+    )
+      return "Este mês";
+    if (
+      orderedFrom === getFirstDayOfLastMonth() &&
+      orderedTo === getLastDayOfLastMonth()
+    )
+      return "Mês passado";
 
     const formatLabel = (dateStr: string) => {
       if (!dateStr) return "";
       const parts = dateStr.split("-");
       if (parts.length !== 3) return dateStr;
-      const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+      const months = [
+        "Jan",
+        "Fev",
+        "Mar",
+        "Abr",
+        "Mai",
+        "Jun",
+        "Jul",
+        "Ago",
+        "Set",
+        "Out",
+        "Nov",
+        "Dez",
+      ];
       return `${parts[2]} ${months[parseInt(parts[1], 10) - 1]}`;
     };
-    
+
     if (orderedFrom && orderedTo) {
       return `${formatLabel(orderedFrom)} — ${formatLabel(orderedTo)}`;
     }
-    return orderedFrom ? `Desde ${formatLabel(orderedFrom)}` : `Até ${formatLabel(orderedTo)}`;
+    return orderedFrom
+      ? `Desde ${formatLabel(orderedFrom)}`
+      : `Até ${formatLabel(orderedTo)}`;
   }, [orderedFrom, orderedTo]);
 
   const provider =
@@ -1062,6 +1113,7 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
 
   const detailQuery = useOrderDetails(selectedOrderId, modalOpen);
   const updateOrderCompositionMutation = useUpdateOrderComposition();
+  const updateOrderProductCostBulkMutation = useUpdateOrderProductCostBulk();
 
   const handleEditProductCost = () => {
     if (!detailQuery.data) {
@@ -1119,6 +1171,50 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
     setIsEditingProductCost(false);
     setProductCostError(null);
     setProductCostSaved(false);
+  };
+
+  const handleOpenBulkProductCostModal = () => {
+    setBulkProductCostDraft("");
+    setBulkProductCostError(null);
+    setBulkProductCostModalOpen(true);
+  };
+
+  const handleCloseBulkProductCostModal = () => {
+    if (updateOrderProductCostBulkMutation.isPending) {
+      return;
+    }
+
+    setBulkProductCostModalOpen(false);
+    setBulkProductCostError(null);
+  };
+
+  const handleSaveBulkProductCost = async () => {
+    if (selectedOrderIds.length === 0) {
+      return;
+    }
+
+    const parsedValue = parseCurrencyValue(bulkProductCostDraft.trim());
+    if (!isValidProductCostInput(parsedValue)) {
+      setBulkProductCostError(
+        "Informe um valor zero ou positivo com até duas casas decimais.",
+      );
+      return;
+    }
+
+    setBulkProductCostError(null);
+    try {
+      await updateOrderProductCostBulkMutation.mutateAsync({
+        orderIds: selectedOrderIds,
+        productCostAmount: Number(parsedValue).toFixed(2),
+      });
+      setSelectedOrderIds([]);
+      setBulkProductCostModalOpen(false);
+      setBulkProductCostDraft("");
+    } catch {
+      setBulkProductCostError(
+        "Não foi possível salvar o custo. Tente novamente sem fechar a edição.",
+      );
+    }
   };
 
   useEffect(() => {
@@ -1399,7 +1495,8 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                     minDate={referenceMonthRange.orderedFrom}
                     maxDate={referenceMonthRange.orderedTo}
                     onChange={(fromStr, toStr) => {
-                      const nextFrom = fromStr || referenceMonthRange.orderedFrom;
+                      const nextFrom =
+                        fromStr || referenceMonthRange.orderedFrom;
                       const nextTo = toStr || referenceMonthRange.orderedTo;
 
                       setOrderedFrom(
@@ -1501,10 +1598,12 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mr-1 select-none">
                   Filtros ativos:
                 </span>
-                
+
                 {saleId && (
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
-                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">ID Venda:</span>
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">
+                      ID Venda:
+                    </span>
                     <span>{saleId}</span>
                     <button
                       type="button"
@@ -1522,7 +1621,9 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
 
                 {sku && (
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
-                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">SKU:</span>
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">
+                      SKU:
+                    </span>
                     <span>{sku}</span>
                     <button
                       type="button"
@@ -1539,15 +1640,23 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                 )}
 
                 {selectedMarketplaces.map((m) => {
-                  const label = PROVIDER_LABELS[m as IntegrationProviderSlug] ?? m;
+                  const label =
+                    PROVIDER_LABELS[m as IntegrationProviderSlug] ?? m;
                   return (
-                    <div key={m} className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
-                      <span className="text-muted-foreground text-[10px] uppercase font-semibold">Canal:</span>
+                    <div
+                      key={m}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium"
+                    >
+                      <span className="text-muted-foreground text-[10px] uppercase font-semibold">
+                        Canal:
+                      </span>
                       <span>{label}</span>
                       <button
                         type="button"
                         onClick={() => {
-                          setSelectedMarketplaces(selectedMarketplaces.filter((item) => item !== m));
+                          setSelectedMarketplaces(
+                            selectedMarketplaces.filter((item) => item !== m),
+                          );
                           setPage(1);
                         }}
                         className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
@@ -1560,7 +1669,9 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
 
                 {hasCustomDateRange && (
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
-                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">Período:</span>
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">
+                      Período:
+                    </span>
                     <span>{dateRangeLabelForPill}</span>
                     <button
                       type="button"
@@ -1578,7 +1689,9 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
 
                 {selectedStatus && (
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
-                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">Status:</span>
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">
+                      Status:
+                    </span>
                     <span>{selectedStatusLabel}</span>
                     <button
                       type="button"
@@ -1684,6 +1797,17 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                   </Button>
 
                   <div className="mx-1 hidden h-5 w-px bg-border/70 sm:block" />
+
+                  <Button
+                    className="h-8 gap-1.5 rounded-[var(--radius-sm)] border border-accent/30 bg-background px-3 text-xs font-semibold text-accent hover:bg-accent/10"
+                    disabled={updateOrderProductCostBulkMutation.isPending}
+                    onClick={handleOpenBulkProductCostModal}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Editar Custo do Produto
+                  </Button>
 
                   <Button
                     className="h-8 gap-1.5 rounded-[var(--radius-sm)] bg-accent/95 px-3 text-xs font-semibold text-accent-foreground shadow-[0_1px_0_0_rgba(255,255,255,0.25)_inset,var(--shadow-xs)] hover:bg-accent hover:shadow-[var(--shadow-sm)]"
@@ -1963,153 +2087,254 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                 [];
               return (
                 <>
-            <div className="flex justify-center">
-              <DetailTabs activeTab={detailTab} onChange={setDetailTab} />
-            </div>
+                  <div className="flex justify-center">
+                    <DetailTabs activeTab={detailTab} onChange={setDetailTab} />
+                  </div>
 
-            {(tags.length > 0 || pendingFinancialFields.length > 0) && (
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-surface-strong/35 px-4 py-3">
-                {tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    className="border-warning/25 bg-warning/10 text-warning"
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-                {pendingFinancialFields.length > 0 && (
-                  <span className="text-xs text-warning">
-                    Composição financeira parcialmente pendente
-                  </span>
-                )}
-              </div>
-            )}
+                  {(tags.length > 0 || pendingFinancialFields.length > 0) && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-surface-strong/35 px-4 py-3">
+                      {tags.map((tag) => (
+                        <Badge
+                          key={tag}
+                          className="border-warning/25 bg-warning/10 text-warning"
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                      {pendingFinancialFields.length > 0 && (
+                        <span className="text-xs text-warning">
+                          Composição financeira parcialmente pendente
+                        </span>
+                      )}
+                    </div>
+                  )}
 
-            {detailTab === "composition" ? (
-              <div className="space-y-4">
-                <CompositionTab
-                  composition={detailQuery.data.composition}
-                  isEditingProductCost={isEditingProductCost}
-                  isSavingProductCost={
-                    updateOrderCompositionMutation.isPending
-                  }
-                  onCancelProductCost={handleCancelProductCost}
-                  onChangeProductCostDraft={(value) => {
-                    setProductCostDraft(value);
-                    setProductCostError(null);
-                  }}
-                  onEditProductCost={handleEditProductCost}
-                  onSaveProductCost={() => {
-                    void handleSaveProductCost();
-                  }}
-                  productCostDraft={productCostDraft}
-                  productCostError={productCostError}
-                  productCostSaved={productCostSaved}
-                />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-[var(--radius-lg)] border border-border">
-                  <table className="w-full table-fixed border-separate border-spacing-0">
-                    <thead>
-                      <tr className="border-b border-border bg-surface-strong/95">
-                        <ItemSortableHeader
-                          column="displayName"
-                          width="220px"
-                          onSort={handleItemSort}
-                          sortConfig={itemSortConfig}
-                        >
-                          Produto
-                        </ItemSortableHeader>
-                        <ItemSortableHeader
-                          align="right"
-                          column="unitPrice"
-                          width="150px"
-                          onSort={handleItemSort}
-                          sortConfig={itemSortConfig}
-                        >
-                          Preço de Venda
-                        </ItemSortableHeader>
-                        <ItemSortableHeader
-                          align="right"
-                          column="quantity"
-                          width="180px"
-                          onSort={handleItemSort}
-                          sortConfig={itemSortConfig}
-                        >
-                          Quantidade
-                        </ItemSortableHeader>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(() => {
-                        const items = detailQuery.data.items;
-                        const itemSortDirection = itemSortConfig?.direction;
-                        const sortedItems =
-                          !itemSortConfig || !itemSortDirection
-                            ? items
-                            : [...items].sort((a, b) =>
-                                compareSortValues(
-                                  getItemSortValue(a, itemSortConfig.key),
-                                  getItemSortValue(b, itemSortConfig.key),
-                                  itemSortDirection,
-                                ),
-                              );
-
-                        if (sortedItems.length === 0) {
-                          return (
-                            <tr>
-                              <td colSpan={3}>
-                                <EmptyState
-                                  title="Nenhum produto encontrado"
-                                  description="Este pedido nao possui itens sincronizados."
-                                  icon={<Package className="h-6 w-6" />}
-                                />
-                              </td>
-                            </tr>
-                          );
+                  {detailTab === "composition" ? (
+                    <div className="space-y-4">
+                      <CompositionTab
+                        composition={detailQuery.data.composition}
+                        isEditingProductCost={isEditingProductCost}
+                        isSavingProductCost={
+                          updateOrderCompositionMutation.isPending
                         }
+                        onCancelProductCost={handleCancelProductCost}
+                        onChangeProductCostDraft={(value) => {
+                          setProductCostDraft(value);
+                          setProductCostError(null);
+                        }}
+                        onEditProductCost={handleEditProductCost}
+                        onSaveProductCost={() => {
+                          void handleSaveProductCost();
+                        }}
+                        productCostDraft={productCostDraft}
+                        productCostError={productCostError}
+                        productCostSaved={productCostSaved}
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-[var(--radius-lg)] border border-border">
+                        <table className="w-full table-fixed border-separate border-spacing-0">
+                          <thead>
+                            <tr className="border-b border-border bg-surface-strong/95">
+                              <ItemSortableHeader
+                                column="displayName"
+                                width="220px"
+                                onSort={handleItemSort}
+                                sortConfig={itemSortConfig}
+                              >
+                                Produto
+                              </ItemSortableHeader>
+                              <ItemSortableHeader
+                                align="right"
+                                column="unitPrice"
+                                width="150px"
+                                onSort={handleItemSort}
+                                sortConfig={itemSortConfig}
+                              >
+                                Preço de Venda
+                              </ItemSortableHeader>
+                              <ItemSortableHeader
+                                align="right"
+                                column="quantity"
+                                width="180px"
+                                onSort={handleItemSort}
+                                sortConfig={itemSortConfig}
+                              >
+                                Quantidade
+                              </ItemSortableHeader>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(() => {
+                              const items = detailQuery.data.items;
+                              const itemSortDirection =
+                                itemSortConfig?.direction;
+                              const sortedItems =
+                                !itemSortConfig || !itemSortDirection
+                                  ? items
+                                  : [...items].sort((a, b) =>
+                                      compareSortValues(
+                                        getItemSortValue(a, itemSortConfig.key),
+                                        getItemSortValue(b, itemSortConfig.key),
+                                        itemSortDirection,
+                                      ),
+                                    );
 
-                        return sortedItems.map((item) => (
-                          <tr
-                            key={item.id}
-                            className="border-b border-border/50 outline-none transition-colors hover:bg-surface-strong/30 focus-visible:bg-accent/5"
-                          >
-                            <td className="px-3 py-3 text-left align-top">
-                              <div className="flex items-start gap-3 overflow-hidden">
-                                <OrderItemThumbnail
-                                  alt={item.displayName}
-                                  src={item.imageUrl}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <p className="break-words text-sm font-medium text-foreground">
-                                    {item.displayName}
-                                  </p>
-                                  <p className="break-words text-[11px] text-muted-foreground">
-                                    {item.sku ?? "SKU não informado"}
-                                  </p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-3 py-3 text-right align-top text-sm font-semibold tabular-nums text-foreground">
-                              {formatMoney(item.unitPrice)}
-                            </td>
-                            <td className="px-3 py-3 text-right align-top text-sm font-semibold tabular-nums text-foreground">
-                              {item.quantity}
-                            </td>
-                          </tr>
-                        ));
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+                              if (sortedItems.length === 0) {
+                                return (
+                                  <tr>
+                                    <td colSpan={3}>
+                                      <EmptyState
+                                        title="Nenhum produto encontrado"
+                                        description="Este pedido nao possui itens sincronizados."
+                                        icon={<Package className="h-6 w-6" />}
+                                      />
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
+                              return sortedItems.map((item) => (
+                                <tr
+                                  key={item.id}
+                                  className="border-b border-border/50 outline-none transition-colors hover:bg-surface-strong/30 focus-visible:bg-accent/5"
+                                >
+                                  <td className="px-3 py-3 text-left align-top">
+                                    <div className="flex items-start gap-3 overflow-hidden">
+                                      <OrderItemThumbnail
+                                        alt={item.displayName}
+                                        src={item.imageUrl}
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="break-words text-sm font-medium text-foreground">
+                                          {item.displayName}
+                                        </p>
+                                        <p className="break-words text-[11px] text-muted-foreground">
+                                          {item.sku ?? "SKU não informado"}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-3 text-right align-top text-sm font-semibold tabular-nums text-foreground">
+                                    {formatMoney(item.unitPrice)}
+                                  </td>
+                                  <td className="px-3 py-3 text-right align-top text-sm font-semibold tabular-nums text-foreground">
+                                    {item.quantity}
+                                  </td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </>
               );
             })()}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        onClose={handleCloseBulkProductCostModal}
+        open={bulkProductCostModalOpen}
+        title="Editar Custo do Produto"
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSaveBulkProductCost();
+          }}
+        >
+          <div className="space-y-1">
+            <p className="text-sm text-foreground">
+              Aplicar mesmo custo total a {selectedOrderIds.length}{" "}
+              {selectedOrderIds.length === 1
+                ? "pedido selecionado"
+                : "pedidos selecionados"}
+              .
+            </p>
+            <p className="text-xs leading-snug text-muted-foreground">
+              Alteração vale somente para estes pedidos. O catálogo de produtos
+              não será alterado.
+            </p>
+          </div>
+
+          <div>
+            <label
+              className="text-xs font-semibold text-foreground"
+              htmlFor="bulk-product-cost-input"
+            >
+              Novo custo do pedido
+            </label>
+            <div className="relative mt-2">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                R$
+              </span>
+              <input
+                aria-describedby="bulk-product-cost-help"
+                aria-invalid={bulkProductCostError ? "true" : "false"}
+                autoComplete="off"
+                className="h-10 w-full rounded-[var(--radius-md)] border border-border bg-surface-strong pl-9 pr-3.5 text-sm text-foreground focus:border-border-focus focus:outline-2 focus:outline-accent/20"
+                disabled={updateOrderProductCostBulkMutation.isPending}
+                id="bulk-product-cost-input"
+                inputMode="decimal"
+                onKeyDown={(event) => {
+                  if (
+                    event.key.length === 1 &&
+                    !/[\d.,]/.test(event.key) &&
+                    !event.metaKey &&
+                    !event.ctrlKey
+                  ) {
+                    event.preventDefault();
+                  }
+                }}
+                onChange={(event) => {
+                  setBulkProductCostDraft(
+                    filterProductCostInput(event.target.value),
+                  );
+                  setBulkProductCostError(null);
+                }}
+                type="text"
+                value={bulkProductCostDraft}
+              />
+            </div>
+            <p
+              className="mt-2 text-[11px] leading-snug text-muted-foreground"
+              id="bulk-product-cost-help"
+            >
+              Informe valor total de cada pedido, não custo unitário.
+            </p>
+            {bulkProductCostError ? (
+              <p className="mt-2 text-xs text-red-600" role="alert">
+                {bulkProductCostError}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              disabled={updateOrderProductCostBulkMutation.isPending}
+              onClick={handleCloseBulkProductCostModal}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={updateOrderProductCostBulkMutation.isPending}
+              loading={updateOrderProductCostBulkMutation.isPending}
+              size="sm"
+              type="submit"
+            >
+              Salvar
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

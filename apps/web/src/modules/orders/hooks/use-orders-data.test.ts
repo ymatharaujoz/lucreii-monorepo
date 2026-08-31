@@ -19,7 +19,10 @@ vi.mock("@tanstack/react-query", () => ({
   }),
 }));
 vi.mock("@/lib/api/client", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/api/client")>("@/lib/api/client");
+  const actual =
+    await vi.importActual<typeof import("@/lib/api/client")>(
+      "@/lib/api/client",
+    );
 
   return {
     ...actual,
@@ -32,7 +35,9 @@ import {
   fetchOrderDetails,
   fetchOrders,
   updateOrderComposition,
+  updateOrderProductCostBulk,
   useUpdateOrderComposition,
+  useUpdateOrderProductCostBulk,
   useOrderDetails,
   useOrdersList,
 } from "./use-orders-data";
@@ -218,23 +223,23 @@ describe("orders protected fetchers", () => {
           unitPrice: "60.00",
         },
       ],
-        order: {
-          createdAt: "2026-06-20T12:00:00.000Z",
-          currency: "BRL",
-          displayOrderId: "MLB-1001",
-          fixedCostAmount: "0.00",
-          id: "order_row_1",
-          itemsSold: 0,
-          orderDate: "2026-06-20",
-          orderId: "MLB-1001",
-          orderedAt: "2026-06-20T10:15:00.000Z",
-          provider: "mercadolivre",
-          shippingAmount: "0.00",
-          sourceStatus: "paid",
-          tariffAmount: "0.00",
-          status: "paid",
-          statusLabel: "Pagamento aprovado",
-          totalFees: "0.00",
+      order: {
+        createdAt: "2026-06-20T12:00:00.000Z",
+        currency: "BRL",
+        displayOrderId: "MLB-1001",
+        fixedCostAmount: "0.00",
+        id: "order_row_1",
+        itemsSold: 0,
+        orderDate: "2026-06-20",
+        orderId: "MLB-1001",
+        orderedAt: "2026-06-20T10:15:00.000Z",
+        provider: "mercadolivre",
+        shippingAmount: "0.00",
+        sourceStatus: "paid",
+        tariffAmount: "0.00",
+        status: "paid",
+        statusLabel: "Pagamento aprovado",
+        totalFees: "0.00",
         totalWithFees: "0.00",
         totalWithoutFees: "0.00",
       },
@@ -330,8 +335,38 @@ describe("orders protected fetchers", () => {
     );
   });
 
+  it("updates product cost for selected orders through batch endpoint", async () => {
+    apiClientMock.patch.mockResolvedValue({
+      data: { updatedCount: 2 },
+      error: null,
+    });
+
+    await expect(
+      updateOrderProductCostBulk({
+        orderIds: ["order_1", "order_2"],
+        productCostAmount: "22.50",
+      }),
+    ).resolves.toEqual({ updatedCount: 2 });
+
+    expect(apiClientMock.patch).toHaveBeenCalledWith(
+      "/orders/composition/product-cost/batch",
+      expect.objectContaining({
+        body: {
+          orderIds: ["order_1", "order_2"],
+          productCostAmount: "22.50",
+        },
+      }),
+    );
+  });
+
   it("creates composition update mutation hook", () => {
     useUpdateOrderComposition();
+
+    expect(useMutationMock).toHaveBeenCalled();
+  });
+
+  it("creates batch product cost mutation hook", () => {
+    useUpdateOrderProductCostBulk();
 
     expect(useMutationMock).toHaveBeenCalled();
   });

@@ -3,6 +3,7 @@ import {
   orderDetailsApiResponseSchema,
   orderCompositionUpdateSchema,
   orderExportQuerySchema,
+  orderProductCostBulkUpdateSchema,
   ordersListSummarySchema,
   ordersListApiResponseSchema,
 } from "./orders";
@@ -188,9 +189,36 @@ describe("orders validation schemas", () => {
     expect(() =>
       orderCompositionUpdateSchema.parse({ productCostAmount: "1.234" }),
     ).toThrow();
-    expect(orderCompositionUpdateSchema.parse({ productCostAmount: "0" })).toEqual({
+    expect(
+      orderCompositionUpdateSchema.parse({ productCostAmount: "0" }),
+    ).toEqual({
       productCostAmount: "0",
     });
+  });
+
+  it("accepts a product cost update for multiple unique orders", () => {
+    expect(
+      orderProductCostBulkUpdateSchema.parse({
+        orderIds: ["order_1", "order_2"],
+        productCostAmount: "22.50",
+      }),
+    ).toEqual({
+      orderIds: ["order_1", "order_2"],
+      productCostAmount: "22.50",
+    });
+
+    expect(() =>
+      orderProductCostBulkUpdateSchema.parse({
+        orderIds: ["order_1", "order_1"],
+        productCostAmount: "22.50",
+      }),
+    ).toThrow();
+    expect(() =>
+      orderProductCostBulkUpdateSchema.parse({
+        orderIds: [],
+        productCostAmount: "-1.00",
+      }),
+    ).toThrow();
   });
 
   it("accepts negative contribution margin percentages in order details", () => {
