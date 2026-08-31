@@ -234,16 +234,10 @@ export function DashboardFinancialIndicators({
       : (displayedLiquidProfit / displayedRevenue) * 100;
   const netSalesSub = `${financialIndicators.netSales} Vendas Líquidas`;
   const excludedRevenue = normalizeNumber(financialIndicators.excludedRevenue);
-  const excludedRevenueValue =
-    excludedRevenue > 0
-      ? `− ${formatMoney(excludedRevenue, {
-          maximumFractionDigits: 2,
-          minimumFractionDigits: 2,
-        })}`
-      : formatMoney(excludedRevenue, {
-          maximumFractionDigits: 2,
-          minimumFractionDigits: 2,
-        });
+  const excludedRevenueValue = formatMoney(Math.abs(excludedRevenue), {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
 
   return (
     <motion.div

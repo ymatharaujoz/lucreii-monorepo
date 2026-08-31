@@ -101,11 +101,12 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).not.toContain("40 Vendas Totais");
     expect(text).toContain("12 Vendas Devolvidas, Cancelados ou Pendentes");
     expect(text).toContain("Devoluções");
-    expect(text).toContain("− R$ 3.200,88");
+    expect(text).toContain("R$ 3.200,88");
+    expect(text).not.toContain("− R$ 3.200,88");
     expect(
       Array.from(document.querySelectorAll("p")).some(
         (element) =>
-          element.textContent === "− R$ 3.200,88" &&
+          element.textContent === "R$ 3.200,88" &&
           element.className.toString().includes("whitespace-nowrap"),
       ),
     ).toBe(true);
