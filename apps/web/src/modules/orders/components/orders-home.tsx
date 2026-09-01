@@ -2313,8 +2313,7 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
               className="mt-2 text-[11px] leading-relaxed text-muted-foreground"
               id="bulk-product-cost-help"
             >
-              Informe valor total por pedido. Lucro e margem serão recalculados
-              automaticamente.
+              Lucro e margem serão recalculados automaticamente.
             </p>
             {bulkProductCostError ? (
               <p className="mt-2 text-xs text-red-600" role="alert">
