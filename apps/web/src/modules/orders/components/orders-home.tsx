@@ -2256,7 +2256,7 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                 Alteração em lote
               </p>
               <p className="mt-2 text-sm font-medium leading-snug text-foreground">
-                Mesmo custo total será aplicado a cada pedido selecionado.
+                Mesmo custo será aplicado a cada pedido selecionado.
               </p>
             </div>
             <div className="shrink-0 border-l border-border/70 pl-4 text-right">
