@@ -26,7 +26,9 @@ export class MercadoLivreTokenMaintenanceService
 
   constructor(
     @Inject(DATABASE_CLIENT) private readonly db: DatabaseClient,
+    @Inject(MercadoLivreTokenRefreshService)
     private readonly tokenRefreshService: MercadoLivreTokenRefreshService,
+    @Inject(SyncService)
     private readonly syncService: SyncService,
   ) {}
 

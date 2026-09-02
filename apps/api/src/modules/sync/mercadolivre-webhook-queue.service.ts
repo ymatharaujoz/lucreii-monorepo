@@ -127,6 +127,7 @@ export class MercadoLivreWebhookQueueService
   constructor(
     @Inject(DATABASE_CLIENT) private readonly db: DatabaseClient,
     @Inject(API_RUNTIME_ENV) private readonly env: ApiRuntimeEnv,
+    @Inject(SyncService)
     private readonly syncService: SyncService,
   ) {}
 

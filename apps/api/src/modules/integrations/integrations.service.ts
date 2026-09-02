@@ -236,7 +236,9 @@ export class IntegrationsService {
     private readonly syncService: SyncService,
     @Inject(API_RUNTIME_ENV)
     private readonly env: ApiRuntimeEnv,
+    @Inject(MercadoLivreTokenRefreshService)
     private readonly mercadoLivreTokenRefreshService: MercadoLivreTokenRefreshService,
+    @Inject(MercadoLivreWebhookQueueService)
     private readonly mercadoLivreWebhookQueueService: MercadoLivreWebhookQueueService,
   ) {
     this.providers = createIntegrationProviders(env);

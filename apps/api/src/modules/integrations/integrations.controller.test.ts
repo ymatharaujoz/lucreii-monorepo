@@ -5,6 +5,10 @@ import { buildApp } from "@/app";
 import { AuthService } from "@/modules/auth/auth.service";
 import { BillingService } from "@/modules/billing/billing.service";
 import { EntitlementsService } from "@/modules/billing/entitlements.service";
+import { MercadoLivreTokenMaintenanceService } from "@/modules/sync/mercadolivre-token-maintenance.service";
+import { MercadoLivreTokenRefreshService } from "@/modules/sync/mercadolivre-token-refresh.service";
+import { MercadoLivreWebhookQueueService } from "@/modules/sync/mercadolivre-webhook-queue.service";
+import { SyncService } from "@/modules/sync/sync.service";
 import { IntegrationsService } from "./integrations.service";
 
 describe("integrations controller", () => {
@@ -108,6 +112,42 @@ describe("integrations controller", () => {
       data: [expect.objectContaining({ provider: "mercadolivre" })],
       error: null,
     });
+  });
+
+  it("resolves Mercado Livre dependencies through the production bootstrap", () => {
+    const tokenRefreshService = app.get(MercadoLivreTokenRefreshService);
+    const syncService = app.get(SyncService);
+    const integrationsRuntime = integrationsService as unknown as {
+      mercadoLivreTokenRefreshService: MercadoLivreTokenRefreshService;
+      mercadoLivreWebhookQueueService: MercadoLivreWebhookQueueService;
+    };
+    const syncRuntime = syncService as unknown as {
+      mercadoLivreTokenRefreshService: MercadoLivreTokenRefreshService;
+    };
+    const maintenanceRuntime = app.get(
+      MercadoLivreTokenMaintenanceService,
+    ) as unknown as {
+      syncService: SyncService;
+      tokenRefreshService: MercadoLivreTokenRefreshService;
+    };
+    const webhookQueueRuntime = app.get(
+      MercadoLivreWebhookQueueService,
+    ) as unknown as {
+      syncService: SyncService;
+    };
+
+    expect(integrationsRuntime.mercadoLivreTokenRefreshService).toBe(
+      tokenRefreshService,
+    );
+    expect(integrationsRuntime.mercadoLivreWebhookQueueService).toBe(
+      app.get(MercadoLivreWebhookQueueService),
+    );
+    expect(syncRuntime.mercadoLivreTokenRefreshService).toBe(
+      tokenRefreshService,
+    );
+    expect(maintenanceRuntime.tokenRefreshService).toBe(tokenRefreshService);
+    expect(maintenanceRuntime.syncService).toBe(syncService);
+    expect(webhookQueueRuntime.syncService).toBe(syncService);
   });
 
   it("returns the Mercado Livre connect URL", async () => {

@@ -396,6 +396,7 @@ export class SyncService {
     private readonly financeService: FinanceService,
     @Inject(SyncPerformanceMaterializerService)
     private readonly syncPerformanceMaterializer: SyncPerformanceMaterializerService,
+    @Inject(MercadoLivreTokenRefreshService)
     private readonly mercadoLivreTokenRefreshService: MercadoLivreTokenRefreshService,
   ) {
     this.providers = createIntegrationProviders(this.env);
