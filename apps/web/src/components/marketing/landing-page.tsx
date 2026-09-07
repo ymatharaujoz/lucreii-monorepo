@@ -2,25 +2,17 @@
 
 import Link from "next/link";
 import { motion, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { scrollToLandingSection } from "@/components/marketing/scroll-to-landing-section";
-import { pricingPlans } from "@/lib/site";
 import { HeroMetrics } from "./hero-metrics";
 import { DashboardShowcase } from "./dashboard-showcase";
 import { SocialProof } from "./social-proof";
 import { IntegrationsSection } from "./integrations-section";
+import { MarketingPricingSection } from "./marketing-pricing-section";
 import { ParticleCanvas } from "@/components/auth/particle-canvas";
 import { ScheduleDemoLink } from "./schedule-demo-link";
 
 const easeOut = [0.16, 1, 0.3, 1] as const;
-
-function CheckIcon() {
-  return (
-    <svg className="h-4 w-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-    </svg>
-  );
-}
 
 function IconOrb({ children, color = "accent" }: { children: React.ReactNode; color?: string }) {
   const colorClasses: Record<string, string> = {
@@ -321,88 +313,8 @@ function FeatureCard({
   );
 }
 
-// Pricing Card Component
-function PricingCard({
-  name,
-  price,
-  suffix,
-  description,
-  features,
-  featured = false,
-  cta,
-  href,
-  delay,
-}: {
-  name: string;
-  price: string;
-  suffix: string;
-  description: string;
-  features: string[];
-  featured?: boolean;
-  cta: string;
-  href: string;
-  delay: number;
-}) {
-  const reduceMotion = useReducedMotion();
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{
-        duration: 0.6,
-        delay: reduceMotion ? 0 : delay,
-        ease: easeOut,
-      }}
-      whileHover={reduceMotion ? undefined : { y: -8, transition: { duration: 0.2 } }}
-      className={`relative grid grid-rows-subgrid row-span-5 gap-y-4 rounded-2xl border p-6 shadow-sm transition-all duration-300 hover:shadow-xl ${
-        featured
-          ? "border-accent bg-gradient-to-b from-surface to-accent/[0.02] ring-1 ring-accent/20"
-          : "border-border bg-surface"
-      }`}
-    >
-      {featured && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <span className="rounded-full bg-accent px-4 py-1 text-xs font-semibold text-white shadow-md">
-            Mais popular
-          </span>
-        </div>
-      )}
-
-      <h3 className="self-end text-sm font-semibold uppercase tracking-wider text-muted-foreground">{name}</h3>
-      <div className="flex items-baseline gap-1">
-        <span className="text-4xl font-bold text-foreground">{price}</span>
-        <span className="text-sm text-muted-foreground">{suffix}</span>
-      </div>
-      <p className="text-sm text-muted-foreground">{description}</p>
-
-      <Link
-        href={href}
-        className={`inline-flex h-11 items-center justify-center rounded-xl px-6 text-sm font-semibold transition-all ${
-          featured
-            ? "bg-accent text-white shadow-md hover:bg-accent-strong hover:shadow-lg"
-            : "border border-border bg-surface text-foreground hover:border-accent/30 hover:bg-accent/[0.02]"
-        }`}
-      >
-        {cta}
-      </Link>
-
-      <ul className="space-y-3">
-        {features.map((feature) => (
-          <li key={feature} className="flex items-start gap-3 text-sm text-muted-foreground">
-            <CheckIcon />
-            <span>{feature}</span>
-          </li>
-        ))}
-      </ul>
-    </motion.div>
-  );
-}
-
 export function LandingPage() {
   const reduceMotion = useReducedMotion();
-  const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const heroRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -501,13 +413,6 @@ export function LandingPage() {
       color: "green",
     },
   ];
-
-  const plans = pricingPlans.map((plan) => ({
-    ...plan,
-    cta: plan.ctaLabel,
-    href: plan.ctaHref,
-    features: [...plan.features],
-  }));
 
   return (
     <main className="relative">
@@ -659,82 +564,7 @@ export function LandingPage() {
         </div>
       </div>
 
-      {/* Pricing Section */}
-      <section id="planos" className="scroll-mt-28 py-24 md:py-32">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          {/* Section Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: easeOut }}
-            className="mb-12 text-center"
-          >
-            <span className="inline-flex items-center rounded-full border border-accent/20 bg-accent/5 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-accent">
-              Planos
-            </span>
-            <h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground md:text-4xl lg:text-5xl">
-              Escolha o plano ideal para você.
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
-              Comece gratuitamente e evolua conforme seu negócio cresce. Sem taxa de configuração, cancele quando
-              quiser.
-            </p>
-          </motion.div>
-
-          {/* Billing Toggle */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="mb-12 flex flex-col items-center gap-4"
-          >
-            <div className="inline-flex items-center rounded-full border border-border bg-surface p-1 shadow-sm">
-              {(["monthly", "annual"] as const).map((key) => {
-                const active = billing === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setBilling(key)}
-                    className={`relative rounded-full px-6 py-2.5 text-sm font-semibold transition-all ${
-                      active ? "text-white" : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {active && (
-                      <motion.span
-                        layoutId="billing-pill"
-                        className="absolute inset-0 rounded-full bg-accent shadow-md"
-                        transition={{ type: "spring", stiffness: 400, damping: 35 }}
-                      />
-                    )}
-                    <span className="relative">{key === "monthly" ? "Mensal" : "Anual"}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </motion.div>
-
-          {/* Pricing Cards */}
-          <div className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-3 lg:grid-rows-[auto_auto_1fr_auto_auto]">
-            {plans.map((plan, index) => (
-              <PricingCard
-                key={plan.name}
-                name={plan.name}
-                price={billing === "monthly" ? plan.monthlyPrice : plan.annualPrice}
-                suffix={billing === "monthly" ? plan.monthlySuffix : plan.annualSuffix}
-                description={plan.description}
-                features={plan.features}
-                featured={plan.featured}
-                cta={plan.cta}
-                href="/sign-in"
-                delay={index * 0.1}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
+      <MarketingPricingSection />
 
       {/* Final CTA Section */}
       <section id="demo" className="relative py-24 md:py-32">

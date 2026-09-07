@@ -16,17 +16,24 @@ function WhatsappIcon() {
 export function ScheduleDemoLink({
   className,
   allowDemoFallback = true,
+  label = "Fale conosco",
 }: {
   className: string;
   allowDemoFallback?: boolean;
+  label?: string;
 }) {
   const wa = getWhatsappDemoUrl(getClientPublicEnv()) ?? undefined;
 
   if (wa) {
     return (
-      <a href={wa} target="_blank" rel="noopener noreferrer" className={className}>
+      <a
+        href={wa}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={className}
+      >
         <WhatsappIcon />
-        Fale conosco
+        {label}
       </a>
     );
   }
@@ -35,7 +42,7 @@ export function ScheduleDemoLink({
     return (
       <span className={`${className} cursor-not-allowed opacity-60`}>
         <WhatsappIcon />
-        Fale conosco
+        {label}
       </span>
     );
   }
@@ -50,7 +57,7 @@ export function ScheduleDemoLink({
       }}
     >
       <WhatsappIcon />
-      Fale conosco
+      {label}
     </Link>
   );
 }
