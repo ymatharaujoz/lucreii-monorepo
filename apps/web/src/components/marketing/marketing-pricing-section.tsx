@@ -181,8 +181,8 @@ function PricingCard({
       }
       className={`relative flex h-full flex-col rounded-2xl border p-5 shadow-sm transition-shadow duration-300 hover:shadow-xl sm:p-6 ${
         plan.featured
-          ? "border-accent bg-gradient-to-b from-surface to-accent/[0.06] ring-1 ring-accent/20"
-          : "border-border bg-surface"
+          ? "border-accent bg-gradient-to-b from-surface-elevated to-accent/[0.06] shadow-[var(--shadow-glow)] ring-1 ring-accent/25 before:absolute before:inset-x-8 before:top-0 before:h-1 before:rounded-b-full before:bg-accent"
+          : "border-border/80 bg-surface/95 shadow-[var(--shadow-card)] backdrop-blur-sm"
       }`}
     >
       {plan.featured && (
@@ -193,17 +193,17 @@ function PricingCard({
 
       <div className="flex items-start justify-between gap-3">
         <div
-          className={`flex h-11 w-11 items-center justify-center rounded-2xl ${plan.iconClassName}`}
+          className={`flex h-12 w-12 items-center justify-center rounded-2xl ring-1 ring-black/5 ${plan.iconClassName}`}
         >
-          <PlanIcon aria-hidden className="h-6 w-6" strokeWidth={1.9} />
+          <PlanIcon aria-hidden className="h-6 w-6" strokeWidth={1.8} />
         </div>
         {plan.featured && (
           <span className="mt-1 h-2 w-2 rounded-full bg-accent shadow-[0_0_0_4px] shadow-accent/10" />
         )}
       </div>
 
-      <div className="mt-5 min-h-[6.25rem]">
-        <h3 className="text-2xl font-bold tracking-tight text-foreground">
+      <div className="mt-6 min-h-[6.5rem]">
+        <h3 className="text-[1.65rem] font-bold tracking-tight text-foreground">
           {plan.name}
         </h3>
         <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
@@ -211,9 +211,9 @@ function PricingCard({
         </p>
       </div>
 
-      <div className="mt-2 flex min-h-12 items-end gap-1.5">
+      <div className="mt-2 flex min-h-14 items-end gap-1.5">
         <span
-          className={`font-bold tracking-tight text-foreground ${plan.enterprise ? "text-2xl" : "text-[2rem]"}`}
+          className={`whitespace-nowrap font-bold tracking-tight text-foreground ${plan.enterprise ? "text-2xl" : "text-[2rem]"}`}
         >
           {plan.price}
         </span>
@@ -226,12 +226,12 @@ function PricingCard({
         {plan.enterprise ? (
           <ScheduleDemoLink
             label="Falar com um especialista"
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-accent bg-transparent px-3 text-center text-xs font-bold text-accent transition-colors hover:bg-accent/[0.06]"
+            className="inline-flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-accent bg-transparent px-3 text-center text-xs font-bold text-accent transition-colors hover:bg-accent/[0.06]"
           />
         ) : (
           <Link
             href="/sign-in"
-            className={`inline-flex h-11 w-full items-center justify-center rounded-lg px-3 text-center text-sm font-bold transition-all ${
+            className={`inline-flex h-12 w-full items-center justify-center rounded-xl px-3 text-center text-sm font-bold transition-all ${
               plan.featured
                 ? "bg-accent text-white shadow-md hover:bg-accent-strong hover:shadow-lg"
                 : "border border-accent/70 bg-transparent text-accent hover:bg-accent/[0.06]"
@@ -242,8 +242,10 @@ function PricingCard({
         )}
       </div>
 
-      <div className="mt-6 border-t border-border/80 pt-5">
-        <h4 className="text-xs font-bold text-foreground">Limites do plano</h4>
+      <div className="mt-7 border-t border-border/80 pt-5">
+        <h4 className="text-[0.7rem] font-bold uppercase tracking-[0.08em] text-foreground">
+          Limites do plano
+        </h4>
         <div className="mt-3 space-y-2.5">
           <PlanLimit icon={Building2}>{plan.cnpjLimit}</PlanLimit>
           <PlanLimit icon={Database}>
@@ -257,7 +259,7 @@ function PricingCard({
         </div>
       </div>
 
-      <ul className="mt-5 flex-1 space-y-2.5 border-t border-border/80 pt-5">
+      <ul className="mt-6 flex-1 space-y-3 border-t border-border/80 pt-5">
         {ALL_PLAN_FEATURES.map((feature) => (
           <li
             key={feature}
@@ -301,7 +303,7 @@ export function MarketingPricingSection() {
 
   return (
     <section id="planos" className="scroll-mt-28 py-24 md:py-32">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={reduceMotion ? false : { opacity: 0, y: 18 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -323,7 +325,7 @@ export function MarketingPricingSection() {
           </p>
         </motion.div>
 
-        <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid items-stretch gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {marketingPricingPlans.map((plan, index) => (
             <PricingCard key={plan.code} plan={plan} index={index} />
           ))}

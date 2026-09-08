@@ -75,6 +75,9 @@ describe("MarketingPricingSection", () => {
     expect(markup).toContain("Até 200 pedidos/mês");
     expect(markup).toContain("Até 7.500 pedidos/mês");
     expect(markup).toContain("Falar com um especialista");
+    expect(markup).toContain("xl:grid-cols-4");
+    expect(markup).toContain("2xl:grid-cols-5");
+    expect(markup).toContain("whitespace-nowrap");
     expect(markup).not.toContain("Anual");
     expect(markup).not.toContain("Mensal");
   });
