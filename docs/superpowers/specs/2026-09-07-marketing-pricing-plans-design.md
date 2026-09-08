@@ -65,3 +65,23 @@ Atualizar somente a seção de planos da página pública de marketing para refl
 - Criação de plano anual.
 - Alteração de outras páginas públicas ou da área autenticada.
 - Mudança de regras de limite no backend.
+
+## Visual refinement — 2026-09-07
+
+### Problem
+
+Em larguras intermediárias, cinco colunas comprimem os cards e quebram preços,
+CTAs e textos de benefícios.
+
+### Approved change
+
+- Trocar grid fixo por grid adaptativo com largura mínima aproximada de 240px.
+- Usar cinco colunas somente quando houver espaço real; permitir quatro, três,
+  duas ou uma coluna conforme viewport.
+- Reforçar cards com padding, hierarquia tipográfica, divisores, sombras e
+  altura uniforme por linha.
+- Impedir quebra de preços monetários e preservar “Sob consulta” como variante
+  textual do Enterprise.
+- Manter Pro como card destacado e preservar animações sutis com suporte a
+  `prefers-reduced-motion`.
+- Validar em desktop amplo, tablet e mobile.
