@@ -81,29 +81,33 @@ const dashboardCallouts = [
   },
 ] as const;
 
-function DesktopConnectors() {
+type ConnectorArrowProps = {
+  className: string;
+  d: string;
+  arrow: string;
+  viewBox: string;
+  delay?: number;
+};
+
+function ConnectorArrow({
+  className,
+  d,
+  arrow,
+  viewBox,
+  delay = 0,
+}: ConnectorArrowProps) {
   const reduceMotion = useReducedMotion();
 
   return (
     <svg
       aria-hidden="true"
-      className="pointer-events-none absolute -inset-x-2 -top-44 z-20 hidden h-[700px] w-[calc(100%+1rem)] 2xl:block"
-      viewBox="0 0 1536 700"
+      className={`absolute ${className}`}
+      viewBox={viewBox}
       fill="none"
       preserveAspectRatio="none"
     >
       <motion.path
-        d="M142 177 C142 244 168 257 226 286"
-        stroke="#079f94"
-        strokeWidth="2"
-        strokeLinecap="round"
-        initial={{ pathLength: reduceMotion ? 1 : 0, opacity: 0 }}
-        whileInView={{ pathLength: 1, opacity: 1 }}
-        viewport={{ once: true }}
-        transition={{ duration: reduceMotion ? 0 : 1, ease: easeOut }}
-      />
-      <motion.path
-        d="M313 590 C354 584 377 580 409 582"
+        d={d}
         stroke="#079f94"
         strokeWidth="2"
         strokeLinecap="round"
@@ -112,46 +116,55 @@ function DesktopConnectors() {
         viewport={{ once: true }}
         transition={{
           duration: reduceMotion ? 0 : 1,
-          delay: 0.1,
-          ease: easeOut,
-        }}
-      />
-      <motion.path
-        d="M1221 220 C1160 234 1113 286 1003 344"
-        stroke="#079f94"
-        strokeWidth="2"
-        strokeLinecap="round"
-        initial={{ pathLength: reduceMotion ? 1 : 0, opacity: 0 }}
-        whileInView={{ pathLength: 1, opacity: 1 }}
-        viewport={{ once: true }}
-        transition={{
-          duration: reduceMotion ? 0 : 1,
-          delay: 0.2,
-          ease: easeOut,
-        }}
-      />
-      <motion.path
-        d="M1350 478 C1323 448 1301 405 1289 374"
-        stroke="#079f94"
-        strokeWidth="2"
-        strokeLinecap="round"
-        initial={{ pathLength: reduceMotion ? 1 : 0, opacity: 0 }}
-        whileInView={{ pathLength: 1, opacity: 1 }}
-        viewport={{ once: true }}
-        transition={{
-          duration: reduceMotion ? 0 : 1,
-          delay: 0.3,
+          delay: reduceMotion ? 0 : delay,
           ease: easeOut,
         }}
       />
       <path
-        d="M226 286 l-14 -5 M226 286 l-8 -13 M409 582 l-13 2 M409 582 l-3 -13 M1003 344 l7 -13 M1003 344 l15 -3 M1289 374 l-13 4 M1289 374 l-2 14"
+        d={arrow}
         stroke="#079f94"
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+function DesktopConnectors() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-20 hidden 2xl:block"
+    >
+      <ConnectorArrow
+        className="left-[8.7%] top-0 h-[100px] w-[100px]"
+        viewBox="0 0 100 100"
+        d="M2 2 C2 45 22 70 70 86"
+        arrow="M70 86 l-13 -3 M70 86 l-5 -12"
+      />
+      <ConnectorArrow
+        className="left-[19.5%] top-[350px] h-[100px] w-[130px]"
+        viewBox="0 0 130 100"
+        d="M2 10 C42 10 78 42 120 82"
+        arrow="M120 82 l-14 -2 M120 82 l-2 -14"
+        delay={0.1}
+      />
+      <ConnectorArrow
+        className="left-[60.5%] top-[-85px] h-[240px] w-[250px]"
+        viewBox="0 0 250 240"
+        d="M245 4 C178 28 128 122 8 235"
+        arrow="M8 235 l5 -14 M8 235 l15 -3"
+        delay={0.2}
+      />
+      <ConnectorArrow
+        className="left-[83.2%] top-[195px] h-[100px] w-[110px]"
+        viewBox="0 0 110 100"
+        d="M105 85 C103 45 55 18 8 10"
+        arrow="M8 10 l14 -4 M8 10 l3 14"
+        delay={0.3}
+      />
+    </div>
   );
 }
 
