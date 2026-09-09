@@ -795,7 +795,7 @@ export function DashboardPreview({ wide = false }: { wide?: boolean }) {
             </div>
 
             <div
-              className={`mt-2 grid gap-2 ${wide ? "lg:grid-cols-[3fr_1.05fr]" : "md:grid-cols-[1.55fr_0.8fr]"}`}
+              className={`mt-2 grid gap-2 ${wide ? "lg:grid-cols-[3.25fr_1fr]" : "md:grid-cols-[1.55fr_0.8fr]"}`}
             >
               <FinancialChart wide={wide} />
               <MarketplaceStatus wide={wide} />

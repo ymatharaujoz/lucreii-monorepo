@@ -138,13 +138,13 @@ function DesktopConnectors() {
       className="pointer-events-none absolute inset-0 z-20 hidden 2xl:block"
     >
       <ConnectorArrow
-        className="left-[8.7%] top-0 h-[100px] w-[100px]"
+        className="left-[6.5%] top-0 h-[100px] w-[100px]"
         viewBox="0 0 100 100"
         d="M2 2 C2 45 22 70 70 86"
         arrow="M70 86 l-13 -3 M70 86 l-5 -12"
       />
       <ConnectorArrow
-        className="left-[19.5%] top-[350px] h-[100px] w-[130px]"
+        className="left-[18.2%] top-[350px] h-[100px] w-[130px]"
         viewBox="0 0 130 100"
         d="M2 10 C42 10 78 42 120 82"
         arrow="M120 82 l-14 -2 M120 82 l-2 -14"
@@ -158,10 +158,10 @@ function DesktopConnectors() {
         delay={0.2}
       />
       <ConnectorArrow
-        className="left-[83.2%] top-[195px] h-[100px] w-[110px]"
+        className="left-[84.8%] top-[195px] h-[100px] w-[110px]"
         viewBox="0 0 110 100"
-        d="M105 85 C103 45 55 18 8 10"
-        arrow="M8 10 l14 -4 M8 10 l3 14"
+        d="M105 85 C103 45 70 18 28 10"
+        arrow="M28 10 l14 -4 M28 10 l3 14"
         delay={0.3}
       />
     </div>
@@ -242,16 +242,16 @@ export function DashboardShowcase() {
         <div className="relative mx-auto mt-12 max-w-[1536px]">
           <DesktopConnectors />
 
-          <div className="absolute -top-36 left-[1.5%] z-30 hidden w-[306px] 2xl:block">
+          <div className="absolute -top-36 left-[-0.5%] z-30 hidden w-[306px] 2xl:block">
             <DashboardCallout {...dashboardCallouts[0]} />
           </div>
-          <div className="absolute left-[0.8%] top-[338px] z-30 hidden w-[270px] 2xl:block">
+          <div className="absolute left-[-1.2%] top-[338px] z-30 hidden w-[270px] 2xl:block">
             <DashboardCallout {...dashboardCallouts[1]} delay={0.1} />
           </div>
-          <div className="absolute -top-24 right-[0.5%] z-30 hidden w-[310px] 2xl:block">
+          <div className="absolute -top-24 right-[-0.8%] z-30 hidden w-[310px] 2xl:block">
             <DashboardCallout {...dashboardCallouts[2]} delay={0.2} />
           </div>
-          <div className="absolute right-0 top-[290px] z-30 hidden w-[205px] 2xl:block">
+          <div className="absolute right-[-1.7%] top-[290px] z-30 hidden w-[205px] 2xl:block">
             <DashboardCallout {...dashboardCallouts[3]} delay={0.3} />
           </div>
 
@@ -260,7 +260,7 @@ export function DashboardShowcase() {
             whileInView={{ opacity: 1, y: 0, scale: 1 }}
             viewport={{ once: true, amount: 0.15 }}
             transition={{ duration: reduceMotion ? 0 : 0.8, ease: easeOut }}
-            className="relative z-10 mx-auto max-w-[1120px]"
+            className="relative z-10 mx-auto max-w-[1100px]"
           >
             <DashboardPreview wide />
           </motion.div>
