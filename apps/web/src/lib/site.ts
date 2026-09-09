@@ -33,7 +33,7 @@ export function brandSeoTitle(tagline: string, source: Record<string, string | u
 export const marketingLandingNav = [
   { sectionId: "recursos", label: "Recursos" },
   { sectionId: "integracoes", label: "Integrações" },
-  { sectionId: "depoimentos", label: "Depoimentos" },
+  { sectionId: "como-funciona", label: "Como funciona" },
   { sectionId: "planos", label: "Planos" },
 ] as const;
 

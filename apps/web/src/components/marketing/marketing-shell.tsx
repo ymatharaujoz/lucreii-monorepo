@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { UserRound } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { BrandName } from "@/components/brand-name";
 import { MarketingBackdrop } from "@/components/marketing/marketing-backdrop";
 import { MarketingNavLinks } from "@/components/marketing/marketing-nav-links";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export function MarketingShell({
   children,
@@ -20,25 +20,32 @@ export function MarketingShell({
         {/* Header */}
         <header className="fixed left-0 right-0 top-0 z-50 px-4 pt-2 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <nav className="flex items-center justify-between rounded-2xl border border-border/50 bg-surface px-4 py-1.5 shadow-sm backdrop-blur-xl md:px-6">
+            <nav className="flex items-center justify-between rounded-[24px] border border-white/80 bg-white/90 px-4 py-2 shadow-[0_10px_30px_rgba(18,67,61,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-surface/90 md:px-6">
               {/* Logo */}
-              <Link href="/" className="group flex items-center gap-2.5">
-                <BrandLogo className="h-12 w-auto transition-transform group-hover:scale-105" />
-                <BrandName className="text-base font-bold tracking-tight" />
+              <Link
+                href="/"
+                className="group flex shrink-0 items-center gap-2.5"
+              >
+                <BrandLogo className="h-10 w-10 transition-transform group-hover:scale-105" />
+                <BrandName className="text-xl font-bold tracking-tight" />
               </Link>
 
               {/* Navigation */}
-              <div className="hidden items-center gap-1 md:flex">
+              <div className="hidden flex-1 items-center justify-center gap-1 md:flex">
                 <MarketingNavLinks linkClassName="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-accent/5 hover:text-foreground" />
               </div>
 
-              {/* CTA Button + Theme Toggle */}
-              <div className="flex items-center gap-3">
-                <ThemeToggle />
+              {/* CTA Button */}
+              <div className="ml-auto flex items-center">
                 <Link
                   href="/sign-in"
-                  className="inline-flex h-9 items-center justify-center rounded-xl bg-accent px-5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-accent-strong hover:shadow-md active:scale-[0.98]"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-accent px-6 text-sm font-semibold text-white shadow-sm transition-all hover:bg-accent-strong hover:shadow-md active:scale-[0.98]"
                 >
+                  <UserRound
+                    className="h-4 w-4"
+                    strokeWidth={2}
+                    aria-hidden="true"
+                  />
                   Acessar
                 </Link>
               </div>
@@ -47,7 +54,7 @@ export function MarketingShell({
         </header>
 
         {/* Spacer for fixed header */}
-        <div className="h-16" />
+        <div className="h-20" />
 
         {children}
 

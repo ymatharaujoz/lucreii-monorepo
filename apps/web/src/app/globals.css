@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   /* ─── Core palette - Soft canvas (easy on eyes, not pure white) ─── */
   --background: #e8eae9;
