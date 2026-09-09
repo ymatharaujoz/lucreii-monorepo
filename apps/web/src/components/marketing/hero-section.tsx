@@ -266,9 +266,12 @@ function DashboardSidebar() {
               )}
             </div>
             {children && (
-              <div className="ml-8 mt-1 space-y-1 border-l border-white/15 pl-3 text-[9px] text-white/70">
+              <div className="ml-6 mt-1 space-y-1 border-l border-white/15 pl-2 text-[9px] text-white/70">
                 {children.map((child) => (
-                  <p key={child} className="flex items-center gap-1.5">
+                  <p
+                    key={child}
+                    className="flex items-center gap-1.5 whitespace-nowrap"
+                  >
                     <span className="text-white/75" aria-hidden="true">
                       •
                     </span>
