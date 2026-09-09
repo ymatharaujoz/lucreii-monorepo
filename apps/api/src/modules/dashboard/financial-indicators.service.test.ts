@@ -3,9 +3,11 @@ import { FinancialIndicatorsService } from "./financial-indicators.service";
 
 function buildDb() {
   return {
+    insert: vi.fn(),
     query: {
       companies: { findFirst: vi.fn() },
       fixedCosts: { findMany: vi.fn() },
+      marketplaceAdvertising: { findFirst: vi.fn() },
       productMonthlyPerformance: { findMany: vi.fn() },
     },
   };
@@ -66,6 +68,7 @@ describe("FinancialIndicatorsService", () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);
     db.query.fixedCosts.findMany.mockResolvedValue([]);
+    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
     const productsService = buildProductsService([
       {
         advertisingCost: "3.00",
@@ -115,6 +118,7 @@ describe("FinancialIndicatorsService", () => {
       { amount: "10.00" },
       { amount: "5.50" },
     ]);
+    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
     const productsService = buildProductsService();
     const ordersService = buildOrdersService({
       grossSales: 31,
@@ -161,6 +165,7 @@ describe("FinancialIndicatorsService", () => {
       taxRateDefault: "0.00",
     });
     db.query.fixedCosts.findMany.mockResolvedValue([]);
+    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
     const productsService = buildProductsService([
       {
         advertisingCost: "0.00",
@@ -214,6 +219,7 @@ describe("FinancialIndicatorsService", () => {
       taxRateDefault: "0.00",
     });
     db.query.fixedCosts.findMany.mockResolvedValue([]);
+    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
     const productsService = {
       listPerformanceRows: vi
         .fn()
@@ -257,5 +263,75 @@ describe("FinancialIndicatorsService", () => {
     expect(result.netSales).toBe(32);
     expect(result.revenue).toBe("320.00");
     expect(productsService.listPerformanceRows).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the persisted marketplace advertising for the selected provider", async () => {
+    const db = buildDb();
+    db.query.companies.findFirst.mockResolvedValue(company);
+    db.query.fixedCosts.findMany.mockResolvedValue([]);
+    db.query.marketplaceAdvertising.findFirst.mockResolvedValue({
+      amount: "25.00",
+    });
+    const productsService = buildProductsService();
+    const ordersService = buildOrdersService({
+      marketplaceCommission: "0.00",
+      packagingCost: "0.00",
+      productCost: "0.00",
+      revenue: "100.00",
+      shippingCost: "0.00",
+      taxAmount: "0.00",
+    });
+
+    const result = await new FinancialIndicatorsService(
+      db as never,
+      productsService as never,
+      ordersService as never,
+    ).read("org-1", "user-1", "company-1", "shopee", "2026-05-01");
+
+    expect(result.advertising).toBe("25.00");
+    expect(result.netProfit).toBe("-25.00");
+    expect(db.query.marketplaceAdvertising.findFirst).toHaveBeenCalledOnce();
+  });
+
+  it("upserts marketplace advertising scoped to company, provider, and month", async () => {
+    const db = buildDb();
+    db.query.companies.findFirst.mockResolvedValue(company);
+    const returning = vi.fn().mockResolvedValue([
+      {
+        amount: "125.50",
+        provider: "shopee",
+        referenceMonth: "2026-05-01",
+      },
+    ]);
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    db.insert = vi.fn().mockReturnValue({ values });
+
+    const result = await new FinancialIndicatorsService(
+      db as never,
+      buildProductsService() as never,
+      buildOrdersService() as never,
+    ).updateMarketplaceAdvertising("org-1", "user-1", "company-1", {
+      amount: "125.50",
+      provider: "shopee",
+      referenceMonth: "2026-05-01",
+    });
+
+    expect(result).toEqual({
+      amount: "125.50",
+      provider: "shopee",
+      referenceMonth: "2026-05-01",
+    });
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: "125.50",
+        companyId: "company-1",
+        organizationId: "org-1",
+        provider: "shopee",
+        referenceMonth: "2026-05-01",
+        userId: "user-1",
+      }),
+    );
+    expect(onConflictDoUpdate).toHaveBeenCalledOnce();
   });
 });

@@ -1,4 +1,5 @@
 import type { DecimalString } from "./products";
+import type { IntegrationProviderSlug } from "./integrations";
 
 export type DashboardSummaryMetrics = {
   totalAdCosts: DecimalString;
@@ -136,4 +137,10 @@ export type DashboardFinancialIndicators = {
   taxAmount: DecimalString;
   totalProfit: DecimalString;
   variableCosts: DecimalString;
+};
+
+export type DashboardMarketplaceAdvertising = {
+  amount: DecimalString;
+  provider: IntegrationProviderSlug;
+  referenceMonth: string;
 };

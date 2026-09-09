@@ -4,6 +4,7 @@ import type {
   DashboardChannelChartRow,
   DashboardChartPoint,
   DashboardFinancialIndicators,
+  DashboardMarketplaceAdvertising,
   DashboardProfitabilityResponse,
   DashboardRecentSyncResponse,
   DashboardSummaryCard,
@@ -11,6 +12,7 @@ import type {
   DashboardSummaryResponse,
   IntegrationProviderSlug,
 } from "@lucreii/types";
+import type { DashboardMarketplaceAdvertisingUpdateInput } from "@lucreii/validation";
 import { FinanceService } from "@/modules/finance/finance.service";
 import { SyncService } from "@/modules/sync/sync.service";
 import { FinancialIndicatorsService } from "./financial-indicators.service";
@@ -154,6 +156,20 @@ export class DashboardService {
       companyId,
       provider,
       referenceMonth,
+    );
+  }
+
+  async updateMarketplaceAdvertising(
+    organizationId: string,
+    userId: string,
+    companyId: string,
+    input: DashboardMarketplaceAdvertisingUpdateInput,
+  ): Promise<DashboardMarketplaceAdvertising> {
+    return this.financialIndicatorsService.updateMarketplaceAdvertising(
+      organizationId,
+      userId,
+      companyId,
+      input,
     );
   }
 }

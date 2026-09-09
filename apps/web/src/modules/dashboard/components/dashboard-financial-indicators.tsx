@@ -14,11 +14,14 @@ import {
 import type {
   Company,
   DashboardFinancialIndicators as DashboardFinancialIndicatorsData,
+  DashboardMarketplaceAdvertising,
+  IntegrationProviderSlug,
 } from "@lucreii/types";
 import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, itemVariants } from "@/lib/animations";
 import { Button, Card, Input } from "@lucreii/ui";
 import {
+  buildMarketplaceAdvertisingPatch,
   buildCompanyDefaultsPatch,
   formatCurrencyInput,
 } from "./company-finance-defaults";
@@ -28,6 +31,9 @@ interface DashboardFinancialIndicatorsProps {
   activeCompany: Company | null;
   financialIndicators: DashboardFinancialIndicatorsData;
   onDefaultsSaved?: () => void;
+  provider?: IntegrationProviderSlug | null;
+  referenceMonth?: string;
+  showCompanyWideIndicators?: boolean;
 }
 
 interface IndicatorCardProps {
@@ -62,7 +68,7 @@ function normalizeNumber(value: string | number | undefined | null): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatIndicatorPercent(value: string) {
+function formatIndicatorPercent(value: string | number | undefined | null) {
   return `${normalizeNumber(value).toFixed(2)}%`;
 }
 
@@ -141,6 +147,9 @@ export function DashboardFinancialIndicators({
   activeCompany,
   financialIndicators,
   onDefaultsSaved,
+  provider = null,
+  referenceMonth,
+  showCompanyWideIndicators = true,
 }: DashboardFinancialIndicatorsProps) {
   const [savedDefaults, setSavedDefaults] = useState<{
     companyId: string;
@@ -149,6 +158,12 @@ export function DashboardFinancialIndicators({
   } | null>(null);
   const [fixedCostInput, setFixedCostInput] = useState("0,00");
   const [taxPercentInput, setTaxPercentInput] = useState("0,00");
+  const [advertisingInput, setAdvertisingInput] = useState("0,00");
+  const [savedMarketplaceAdvertising, setSavedMarketplaceAdvertising] =
+    useState<{
+      key: string;
+      amount: number;
+    } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
@@ -158,21 +173,76 @@ export function DashboardFinancialIndicators({
       ? savedDefaults
       : {
           companyId: activeCompany?.id ?? "",
-          fixedCost: Number.parseFloat(activeCompany?.fixedCostDefault ?? "0") || 0,
+          fixedCost:
+            Number.parseFloat(activeCompany?.fixedCostDefault ?? "0") || 0,
           taxPercent:
-            (Number.parseFloat(activeCompany?.taxRateDefault ?? "0") || 0) * 100,
+            (Number.parseFloat(activeCompany?.taxRateDefault ?? "0") || 0) *
+            100,
         };
 
+  const isMarketplaceView = !showCompanyWideIndicators;
+  const marketplaceAdvertisingKey = `${activeCompany?.id ?? ""}:${provider ?? ""}:${referenceMonth ?? ""}`;
+  const resolvedAdvertising =
+    isMarketplaceView &&
+    savedMarketplaceAdvertising?.key === marketplaceAdvertisingKey
+      ? savedMarketplaceAdvertising.amount
+      : normalizeNumber(financialIndicators.advertising);
+  const totalProfit = normalizeNumber(financialIndicators.totalProfit);
+  const revenue = normalizeNumber(financialIndicators.revenue);
+  const breakEven = normalizeNumber(financialIndicators.breakEvenRevenue);
+  const fixedCostResolved = normalizeNumber(financialIndicators.fixedCost);
+  const liquidProfit = totalProfit - fixedCostResolved;
+  const displayedTotalProfit = roundToCents(totalProfit);
+  const displayedLiquidProfit = roundToCents(liquidProfit);
+  const displayedRevenue = roundToCents(revenue);
+  const displayedVariableCosts = roundToCents(
+    normalizeNumber(financialIndicators.variableCosts),
+  );
+  const displayedAdvertising = roundToCents(resolvedAdvertising);
+  const contributionProfit = displayedRevenue - displayedVariableCosts;
+  const contributionMarginPercent =
+    displayedRevenue === 0 ? 0 : (contributionProfit / displayedRevenue) * 100;
+  const advertisingProfit = displayedTotalProfit - displayedAdvertising;
+  const advertisingMarginPercent =
+    displayedRevenue === 0 ? 0 : (advertisingProfit / displayedRevenue) * 100;
+  const netMarginPercent =
+    displayedRevenue === 0
+      ? 0
+      : (displayedLiquidProfit / displayedRevenue) * 100;
+  const netSalesSub = `${financialIndicators.netSales} Vendas Líquidas`;
+  const excludedRevenue = normalizeNumber(financialIndicators.excludedRevenue);
+  const excludedRevenueValue = formatMoney(Math.abs(excludedRevenue), {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+
   const cancelEditing = useCallback(() => {
-    setFixedCostInput(formatCurrencyInput(companyDefaults.fixedCost));
-    setTaxPercentInput(formatCurrencyInput(companyDefaults.taxPercent));
+    if (isMarketplaceView) {
+      setAdvertisingInput(formatCurrencyInput(displayedAdvertising));
+    } else {
+      setFixedCostInput(formatCurrencyInput(companyDefaults.fixedCost));
+      setTaxPercentInput(formatCurrencyInput(companyDefaults.taxPercent));
+    }
     setFeedbackMessage(null);
     setIsEditing(false);
-  }, [companyDefaults.fixedCost, companyDefaults.taxPercent]);
+  }, [
+    companyDefaults.fixedCost,
+    companyDefaults.taxPercent,
+    displayedAdvertising,
+    isMarketplaceView,
+  ]);
 
-  const saveCompanyDefaults = useCallback(async () => {
+  const saveFinancialInputs = useCallback(async () => {
     if (!activeCompany) {
       setFeedbackMessage("Nenhuma empresa ativa disponível para salvar");
+      setIsEditing(false);
+      return;
+    }
+
+    if (isMarketplaceView && (!provider || !referenceMonth)) {
+      setFeedbackMessage(
+        "Marketplace e mês de referência são necessários para salvar",
+      );
       setIsEditing(false);
       return;
     }
@@ -181,6 +251,31 @@ export function DashboardFinancialIndicators({
     setFeedbackMessage(null);
 
     try {
+      if (isMarketplaceView) {
+        const patch = buildMarketplaceAdvertisingPatch(advertisingInput);
+        const response = await apiClient.patch<{
+          data: DashboardMarketplaceAdvertising;
+          error: null;
+        }>("/dashboard/marketplace-advertising", {
+          body: {
+            ...patch,
+            provider,
+            referenceMonth,
+          },
+        });
+        const nextAdvertising = Number.parseFloat(response.data.amount) || 0;
+
+        setSavedMarketplaceAdvertising({
+          amount: nextAdvertising,
+          key: marketplaceAdvertisingKey,
+        });
+        setAdvertisingInput(formatCurrencyInput(nextAdvertising));
+        setFeedbackMessage("Publicidade salva.");
+        setIsEditing(false);
+        onDefaultsSaved?.();
+        return;
+      }
+
       const patch = buildCompanyDefaultsPatch({
         fixedCostInput,
         taxPercentInput,
@@ -189,7 +284,8 @@ export function DashboardFinancialIndicators({
         `/companies/${activeCompany.id}`,
         { body: patch },
       );
-      const nextFixedCost = Number.parseFloat(response.data.fixedCostDefault) || 0;
+      const nextFixedCost =
+        Number.parseFloat(response.data.fixedCostDefault) || 0;
       const nextTaxPercent =
         (Number.parseFloat(response.data.taxRateDefault) || 0) * 100;
 
@@ -216,28 +312,15 @@ export function DashboardFinancialIndicators({
     }
   }, [
     activeCompany,
+    advertisingInput,
     fixedCostInput,
+    isMarketplaceView,
+    marketplaceAdvertisingKey,
     onDefaultsSaved,
     taxPercentInput,
+    provider,
+    referenceMonth,
   ]);
-
-  const totalProfit = normalizeNumber(financialIndicators.totalProfit);
-  const revenue = normalizeNumber(financialIndicators.revenue);
-  const breakEven = normalizeNumber(financialIndicators.breakEvenRevenue);
-  const fixedCostResolved = normalizeNumber(financialIndicators.fixedCost);
-  const liquidProfit = totalProfit - fixedCostResolved;
-  const displayedLiquidProfit = roundToCents(liquidProfit);
-  const displayedRevenue = roundToCents(revenue);
-  const netMarginPercent =
-    displayedRevenue === 0
-      ? 0
-      : (displayedLiquidProfit / displayedRevenue) * 100;
-  const netSalesSub = `${financialIndicators.netSales} Vendas Líquidas`;
-  const excludedRevenue = normalizeNumber(financialIndicators.excludedRevenue);
-  const excludedRevenueValue = formatMoney(Math.abs(excludedRevenue), {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
-  });
 
   return (
     <motion.div
@@ -246,7 +329,9 @@ export function DashboardFinancialIndicators({
       animate="visible"
       className="space-y-4"
     >
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <div
+        className={`grid gap-3 sm:grid-cols-2 md:grid-cols-3 ${showCompanyWideIndicators ? "lg:grid-cols-6" : "lg:grid-cols-3"}`}
+      >
         <IndicatorCard
           icon={<DollarSign className="h-4 w-4" />}
           label="Faturamento"
@@ -263,111 +348,204 @@ export function DashboardFinancialIndicators({
           value={excludedRevenueValue}
           variant="error"
         />
-        <IndicatorCard
-          icon={<Percent className="h-4 w-4" />}
-          label="Margem Média"
-          subValue={`Lucro Total: ${formatMoney(financialIndicators.totalProfit, { maximumFractionDigits: 2 })}`}
-          trend={{
-            direction: totalProfit > 0 ? "up" : totalProfit < 0 ? "down" : "neutral",
-            value: totalProfit >= 0 ? "Lucrativo" : "Prejuízo",
-          }}
-          value={formatIndicatorPercent(financialIndicators.averageMarginPercent)}
-          variant={totalProfit > 0 ? "success" : totalProfit < 0 ? "error" : "warning"}
-        />
-        <IndicatorCard
-          icon={<Scale className="h-4 w-4" />}
-          label="Ponto de Equilíbrio"
-          subValue={`Custo Fixo: ${formatMoney(financialIndicators.fixedCost, { maximumFractionDigits: 2 })}`}
-          trend={{
-            direction: revenue >= breakEven && breakEven > 0 ? "up" : "down",
-            value: revenue >= breakEven && breakEven > 0 ? "Meta atingida" : "Abaixo da meta",
-          }}
-          value={formatMoney(financialIndicators.breakEvenRevenue, {
-            maximumFractionDigits: 2,
-            minimumFractionDigits: 2,
-          })}
-          variant={revenue >= breakEven && breakEven > 0 ? "success" : "warning"}
-        />
-        <IndicatorCard
-          icon={<DollarSign className="h-4 w-4" />}
-          label="Lucro Líquido"
-          subValue="Lucro Total - Custo Fixo"
-          trend={{
-            direction:
-              liquidProfit > 0 ? "up" : liquidProfit < 0 ? "down" : "neutral",
-            value:
-              liquidProfit > 0
-                ? "Resultado positivo"
-                : liquidProfit < 0
-                  ? "Resultado negativo"
-                  : "Resultado neutro",
-          }}
-          value={formatMoney(displayedLiquidProfit, {
-            maximumFractionDigits: 2,
-            minimumFractionDigits: 2,
-          })}
-          variant={
-            liquidProfit > 0
-              ? "success"
-              : liquidProfit < 0
-                ? "error"
-              : "warning"
-          }
-        />
-        <IndicatorCard
-          icon={<Percent className="h-4 w-4" />}
-          label="Margem Líquida"
-          subValue="Lucro Líquido / Faturamento"
-          trend={{
-            direction:
-              liquidProfit > 0 ? "up" : liquidProfit < 0 ? "down" : "neutral",
-            value:
-              liquidProfit > 0
-                ? "Margem positiva"
-                : liquidProfit < 0
-                  ? "Margem negativa"
-                  : "Margem neutra",
-          }}
-          value={formatNetMarginPercent(netMarginPercent)}
-          variant={
-            liquidProfit > 0
-              ? "success"
-              : liquidProfit < 0
-                ? "error"
-                : "warning"
-          }
-        />
+        {isMarketplaceView ? (
+          <IndicatorCard
+            icon={<Percent className="h-4 w-4" />}
+            label="Margem Contribuição"
+            subValue="Faturamento - Custos Variáveis"
+            trend={{
+              direction:
+                contributionProfit > 0
+                  ? "up"
+                  : contributionProfit < 0
+                    ? "down"
+                    : "neutral",
+              value:
+                contributionProfit > 0
+                  ? "Contribuição positiva"
+                  : contributionProfit < 0
+                    ? "Contribuição negativa"
+                    : "Contribuição neutra",
+            }}
+            value={formatNetMarginPercent(contributionMarginPercent)}
+            variant={
+              contributionProfit > 0
+                ? "success"
+                : contributionProfit < 0
+                  ? "error"
+                  : "warning"
+            }
+          />
+        ) : (
+          <IndicatorCard
+            icon={<Percent className="h-4 w-4" />}
+            label="Margem Média"
+            subValue={`Lucro Total: ${formatMoney(financialIndicators.totalProfit, { maximumFractionDigits: 2 })}`}
+            trend={{
+              direction:
+                totalProfit > 0 ? "up" : totalProfit < 0 ? "down" : "neutral",
+              value: totalProfit >= 0 ? "Lucrativo" : "Prejuízo",
+            }}
+            value={formatIndicatorPercent(
+              financialIndicators.averageMarginPercent,
+            )}
+            variant={
+              totalProfit > 0
+                ? "success"
+                : totalProfit < 0
+                  ? "error"
+                  : "warning"
+            }
+          />
+        )}
+        {showCompanyWideIndicators && (
+          <>
+            <IndicatorCard
+              icon={<Scale className="h-4 w-4" />}
+              label="Ponto de Equilíbrio"
+              subValue={`Custo Fixo: ${formatMoney(financialIndicators.fixedCost, { maximumFractionDigits: 2 })}`}
+              trend={{
+                direction:
+                  revenue >= breakEven && breakEven > 0 ? "up" : "down",
+                value:
+                  revenue >= breakEven && breakEven > 0
+                    ? "Meta atingida"
+                    : "Abaixo da meta",
+              }}
+              value={formatMoney(financialIndicators.breakEvenRevenue, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              })}
+              variant={
+                revenue >= breakEven && breakEven > 0 ? "success" : "warning"
+              }
+            />
+            <IndicatorCard
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Lucro Líquido"
+              subValue="Lucro Total - Custo Fixo"
+              trend={{
+                direction:
+                  liquidProfit > 0
+                    ? "up"
+                    : liquidProfit < 0
+                      ? "down"
+                      : "neutral",
+                value:
+                  liquidProfit > 0
+                    ? "Resultado positivo"
+                    : liquidProfit < 0
+                      ? "Resultado negativo"
+                      : "Resultado neutro",
+              }}
+              value={formatMoney(displayedLiquidProfit, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              })}
+              variant={
+                liquidProfit > 0
+                  ? "success"
+                  : liquidProfit < 0
+                    ? "error"
+                    : "warning"
+              }
+            />
+            <IndicatorCard
+              icon={<Percent className="h-4 w-4" />}
+              label="Margem Líquida"
+              subValue="Lucro Líquido / Faturamento"
+              trend={{
+                direction:
+                  liquidProfit > 0
+                    ? "up"
+                    : liquidProfit < 0
+                      ? "down"
+                      : "neutral",
+                value:
+                  liquidProfit > 0
+                    ? "Margem positiva"
+                    : liquidProfit < 0
+                      ? "Margem negativa"
+                      : "Margem neutra",
+              }}
+              value={formatNetMarginPercent(netMarginPercent)}
+              variant={
+                liquidProfit > 0
+                  ? "success"
+                  : liquidProfit < 0
+                    ? "error"
+                    : "warning"
+              }
+            />
+          </>
+        )}
       </div>
 
       <motion.div variants={itemVariants}>
-        <Card className="rounded-xl border border-border/80 bg-surface-elevated/40 px-4 py-3 shadow-[var(--shadow-xs)]" padding="none">
+        <Card
+          className="rounded-xl border border-border/80 bg-surface-elevated/40 px-4 py-3 shadow-[var(--shadow-xs)]"
+          padding="none"
+        >
           {isEditing ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-                <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Custo Fixo
-                  </span>
-                  <Input
-                    className="h-9 flex-1 text-right text-xs"
-                    inputMode="decimal"
-                    onChange={(event) => setFixedCostInput(event.target.value)}
-                    type="text"
-                    value={fixedCostInput}
-                  />
-                </label>
-                <label className="flex flex-1 items-center gap-2 sm:max-w-[180px]">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Imposto
-                  </span>
-                  <Input
-                    className="h-9 flex-1 text-right text-xs"
-                    inputMode="decimal"
-                    onChange={(event) => setTaxPercentInput(event.target.value)}
-                    type="text"
-                    value={taxPercentInput}
-                  />
-                </label>
+                {isMarketplaceView ? (
+                  <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Publicidade
+                    </span>
+                    <Input
+                      className="h-9 flex-1 text-right text-xs"
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        setAdvertisingInput(event.target.value)
+                      }
+                      type="text"
+                      value={advertisingInput}
+                    />
+                  </label>
+                ) : (
+                  <>
+                    <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Custo Fixo
+                      </span>
+                      <Input
+                        className="h-9 flex-1 text-right text-xs"
+                        inputMode="decimal"
+                        onChange={(event) =>
+                          setFixedCostInput(event.target.value)
+                        }
+                        type="text"
+                        value={fixedCostInput}
+                      />
+                    </label>
+                    <label className="flex flex-1 items-center gap-2 sm:max-w-[180px]">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Imposto
+                      </span>
+                      <Input
+                        className="h-9 flex-1 text-right text-xs"
+                        inputMode="decimal"
+                        onChange={(event) =>
+                          setTaxPercentInput(event.target.value)
+                        }
+                        type="text"
+                        value={taxPercentInput}
+                      />
+                    </label>
+                  </>
+                )}
+                {isMarketplaceView && (
+                  <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Margem Após Publicidade
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums text-foreground">
+                      {formatNetMarginPercent(advertisingMarginPercent)}
+                    </span>
+                  </div>
+                )}
               </div>
               {feedbackMessage && (
                 <p className="text-xs font-medium text-muted-foreground">
@@ -385,7 +563,7 @@ export function DashboardFinancialIndicators({
                 </Button>
                 <Button
                   loading={isSaving}
-                  onClick={() => void saveCompanyDefaults()}
+                  onClick={() => void saveFinancialInputs()}
                   size="sm"
                 >
                   Salvar
@@ -395,31 +573,66 @@ export function DashboardFinancialIndicators({
           ) : (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-accent" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Custo Fixo
-                  </span>
-                  <span className="text-sm font-semibold tabular-nums text-foreground">
-                    {formatMoney(fixedCostResolved)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Percent className="h-4 w-4 text-accent" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Imposto
-                  </span>
-                  <span className="text-sm font-semibold tabular-nums text-foreground">
-                    {formatCurrencyInput(companyDefaults.taxPercent)}%
-                  </span>
-                </div>
+                {isMarketplaceView ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-accent" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Publicidade
+                      </span>
+                      <span className="text-sm font-semibold tabular-nums text-foreground">
+                        {formatMoney(displayedAdvertising)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Percent className="h-4 w-4 text-accent" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Margem Após Publicidade
+                      </span>
+                      <span className="text-sm font-semibold tabular-nums text-foreground">
+                        {formatNetMarginPercent(advertisingMarginPercent)}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-accent" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Custo Fixo
+                      </span>
+                      <span className="text-sm font-semibold tabular-nums text-foreground">
+                        {formatMoney(fixedCostResolved)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Percent className="h-4 w-4 text-accent" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Imposto
+                      </span>
+                      <span className="text-sm font-semibold tabular-nums text-foreground">
+                        {formatCurrencyInput(companyDefaults.taxPercent)}%
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
               <Button
                 disabled={!activeCompany}
                 onClick={() => {
                   setFeedbackMessage(null);
-                  setFixedCostInput(formatCurrencyInput(companyDefaults.fixedCost));
-                  setTaxPercentInput(formatCurrencyInput(companyDefaults.taxPercent));
+                  if (isMarketplaceView) {
+                    setAdvertisingInput(
+                      formatCurrencyInput(displayedAdvertising),
+                    );
+                  } else {
+                    setFixedCostInput(
+                      formatCurrencyInput(companyDefaults.fixedCost),
+                    );
+                    setTaxPercentInput(
+                      formatCurrencyInput(companyDefaults.taxPercent),
+                    );
+                  }
                   setIsEditing(true);
                 }}
                 size="sm"

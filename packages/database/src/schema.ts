@@ -417,6 +417,54 @@ export const fixedCosts = pgTable(
   ],
 );
 
+export const marketplaceAdvertising = pgTable(
+  "marketplace_advertising",
+  {
+    id: id(),
+    organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    companyId: companyId().references(() => companies.id, {
+      onDelete: "cascade",
+    }),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    referenceMonth: date("reference_month").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 })
+      .default("0")
+      .notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check(
+      "marketplace_advertising_provider_valid",
+      sql`${table.provider} in ('mercadolivre', 'shopee', 'shein')`,
+    ),
+    check(
+      "marketplace_advertising_reference_month_first_day",
+      sql`${table.referenceMonth} = date_trunc('month', ${table.referenceMonth})::date`,
+    ),
+    check(
+      "marketplace_advertising_amount_non_negative",
+      sql`${table.amount} >= 0`,
+    ),
+    index("marketplace_advertising_organization_id_idx").on(
+      table.organizationId,
+    ),
+    index("marketplace_advertising_user_id_idx").on(table.userId),
+    index("marketplace_advertising_company_id_idx").on(table.companyId),
+    uniqueIndex("marketplace_advertising_company_provider_month_key").on(
+      table.organizationId,
+      table.companyId,
+      table.provider,
+      table.referenceMonth,
+    ),
+  ],
+);
+
 export const pricingSimulations = pgTable(
   "pricing_simulations",
   {
@@ -1398,6 +1446,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   companies: many(companies),
   fixedCosts: many(fixedCosts),
   productMonthlyPerformance: many(productMonthlyPerformance),
+  marketplaceAdvertising: many(marketplaceAdvertising),
   pricingSimulations: many(pricingSimulations),
   breakEvenRoasSimulations: many(breakEvenRoasSimulations),
   sessions: many(sessions),
@@ -1457,6 +1506,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   productFinanceDefaults: many(productFinanceDefaults),
   productCosts: many(productCosts),
   productMonthlyPerformance: many(productMonthlyPerformance),
+  marketplaceAdvertising: many(marketplaceAdvertising),
   pricingSimulations: many(pricingSimulations),
   breakEvenRoasSimulations: many(breakEvenRoasSimulations),
   adCosts: many(adCosts),
@@ -1475,6 +1525,7 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
     references: [users.id],
   }),
   fixedCosts: many(fixedCosts),
+  marketplaceAdvertising: many(marketplaceAdvertising),
   performanceRows: many(productMonthlyPerformance),
   pricingSimulations: many(pricingSimulations),
   breakEvenRoasSimulations: many(breakEvenRoasSimulations),
@@ -1807,6 +1858,24 @@ export const fixedCostsRelations = relations(fixedCosts, ({ one }) => ({
     references: [companies.id],
   }),
 }));
+
+export const marketplaceAdvertisingRelations = relations(
+  marketplaceAdvertising,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [marketplaceAdvertising.organizationId],
+      references: [organizations.id],
+    }),
+    user: one(users, {
+      fields: [marketplaceAdvertising.userId],
+      references: [users.id],
+    }),
+    company: one(companies, {
+      fields: [marketplaceAdvertising.companyId],
+      references: [companies.id],
+    }),
+  }),
+);
 
 export const pricingSimulationsRelations = relations(
   pricingSimulations,

@@ -13,26 +13,27 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("next/link", () => ({
-  default: ({
-    children,
-    href,
-  }: {
-    children: React.ReactNode;
-    href: string;
-  }) => React.createElement("a", { href }, children),
+  default: ({ children, href }: { children: React.ReactNode; href: string }) =>
+    React.createElement("a", { href }, children),
 }));
 
-const { useDashboardDataMock, useDashboardConnectionStatusesMock } = vi.hoisted(() => ({
-  useDashboardDataMock: vi.fn(),
-  useDashboardConnectionStatusesMock: vi.fn(),
-}));
+const { useDashboardDataMock, useDashboardConnectionStatusesMock } = vi.hoisted(
+  () => ({
+    useDashboardDataMock: vi.fn(),
+    useDashboardConnectionStatusesMock: vi.fn(),
+  }),
+);
 
 vi.mock("./dashboard-header", () => ({
   DashboardHeader: () => <div>Dashboard Header</div>,
 }));
 
 vi.mock("./dashboard-financial-indicators", () => ({
-  DashboardFinancialIndicators: () => <div>Indicators</div>,
+  DashboardFinancialIndicators: ({
+    showCompanyWideIndicators,
+  }: {
+    showCompanyWideIndicators?: boolean;
+  }) => <div>Indicators:{String(showCompanyWideIndicators)}</div>,
 }));
 
 vi.mock("./charts-section", () => ({
@@ -59,12 +60,14 @@ vi.mock("./marketplaces-section", () => ({
   MarketplacesSection: ({
     syncStatusByProvider,
   }: {
-    syncStatusByProvider: Record<string, DashboardRecentSyncResponse | undefined>;
+    syncStatusByProvider: Record<
+      string,
+      DashboardRecentSyncResponse | undefined
+    >;
   }) => (
     <div>
       ML:
-      {syncStatusByProvider.mercadolivre?.availability.reason ?? "missing"}
-      |
+      {syncStatusByProvider.mercadolivre?.availability.reason ?? "missing"}|
       Shopee:
       {syncStatusByProvider.shopee?.availability.reason ?? "missing"}
     </div>
@@ -77,7 +80,11 @@ function mount(node: React.ReactNode) {
   const root = createRoot(container);
 
   act(() => {
-    root.render(<ReferenceMonthProvider companyId="company_1">{node}</ReferenceMonthProvider>);
+    root.render(
+      <ReferenceMonthProvider companyId="company_1">
+        {node}
+      </ReferenceMonthProvider>,
+    );
   });
 
   return {
@@ -128,40 +135,63 @@ afterEach(() => {
 describe("DashboardHome", () => {
   it("keeps provider-specific connection state after switching to Shopee tab", () => {
     useDashboardDataMock.mockImplementation(
-      (provider: "mercadolivre" | "shopee" | null, referenceMonth?: string) => ({
-      businessStatus: "healthy",
-      chartsQuery: {
-        data:
-          provider === "shopee"
-            ? { channels: [{ channel: "shopee", grossRevenue: 800, netProfit: 180, unitsSold: 4 }], daily: [] }
-            : {
-                channels: [
-                  { channel: "Mercado Livre", grossRevenue: 1200, netProfit: 300, unitsSold: 5 },
-                  { channel: "shopee", grossRevenue: 800, netProfit: 180, unitsSold: 4 },
-                ],
-                daily: [],
-              },
-      },
-      error: null,
-      financialIndicatorsQuery: { data: {} },
-      financialState: "ready",
-      isLoading: false,
-      ordersSummaryQuery: {
-        data: {
-          summary: {
-            averageMargin: "0.10",
-            grossProfit: "100.00",
-            grossRevenue: "1000.00",
-            ordersCount: 2,
-            unitsSold: 3,
+      (
+        provider: "mercadolivre" | "shopee" | null,
+        referenceMonth?: string,
+      ) => ({
+        businessStatus: "healthy",
+        chartsQuery: {
+          data:
+            provider === "shopee"
+              ? {
+                  channels: [
+                    {
+                      channel: "shopee",
+                      grossRevenue: 800,
+                      netProfit: 180,
+                      unitsSold: 4,
+                    },
+                  ],
+                  daily: [],
+                }
+              : {
+                  channels: [
+                    {
+                      channel: "Mercado Livre",
+                      grossRevenue: 1200,
+                      netProfit: 300,
+                      unitsSold: 5,
+                    },
+                    {
+                      channel: "shopee",
+                      grossRevenue: 800,
+                      netProfit: 180,
+                      unitsSold: 4,
+                    },
+                  ],
+                  daily: [],
+                },
+        },
+        error: null,
+        financialIndicatorsQuery: { data: {} },
+        financialState: "ready",
+        isLoading: false,
+        ordersSummaryQuery: {
+          data: {
+            summary: {
+              averageMargin: "0.10",
+              grossProfit: "100.00",
+              grossRevenue: "1000.00",
+              ordersCount: 2,
+              unitsSold: 3,
+            },
           },
         },
-      },
-      profitabilityQuery: { data: { channels: [], products: [] } },
-      refetchAll: vi.fn(),
-      summaryQuery: { data: { cards: [], summary: {} } },
-      referenceMonth,
-    }),
+        profitabilityQuery: { data: { channels: [], products: [] } },
+        refetchAll: vi.fn(),
+        summaryQuery: { data: { cards: [], summary: {} } },
+        referenceMonth,
+      }),
     );
 
     useDashboardConnectionStatusesMock.mockReturnValue({
@@ -176,19 +206,24 @@ describe("DashboardHome", () => {
     );
 
     click(
-      Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent?.trim() === "Shopee",
+      Array.from(document.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === "Shopee",
       )!,
     );
 
-    expect(document.body.textContent ?? "").toMatch(/ML:available\|\s*Shopee:provider_disconnected/);
+    expect(document.body.textContent ?? "").toMatch(
+      /ML:available\|\s*Shopee:provider_disconnected/,
+    );
 
     view.unmount();
   });
 
   it("renders month selector with current month default and combines month with provider filter", () => {
     useDashboardDataMock.mockImplementation(
-      (provider: "mercadolivre" | "shopee" | null, referenceMonth?: string) => ({
+      (
+        provider: "mercadolivre" | "shopee" | null,
+        referenceMonth?: string,
+      ) => ({
         businessStatus: "healthy",
         chartsQuery: { data: { channels: [], daily: [] } },
         error: null,
@@ -229,14 +264,19 @@ describe("DashboardHome", () => {
 
     expect(document.body.textContent ?? "").toContain("julho de 2026");
     expect(useDashboardDataMock).toHaveBeenLastCalledWith(null, "2026-07-01");
+    expect(document.body.textContent ?? "").toContain("Indicators:true");
 
     click(
-      Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent?.trim() === "Shopee",
+      Array.from(document.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === "Shopee",
       )!,
     );
 
-    expect(useDashboardDataMock).toHaveBeenLastCalledWith("shopee", "2026-07-01");
+    expect(useDashboardDataMock).toHaveBeenLastCalledWith(
+      "shopee",
+      "2026-07-01",
+    );
+    expect(document.body.textContent ?? "").toContain("Indicators:false");
 
     view.unmount();
   });

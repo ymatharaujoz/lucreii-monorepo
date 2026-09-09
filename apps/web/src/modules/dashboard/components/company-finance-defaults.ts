@@ -46,8 +46,14 @@ export function buildCompanyDefaultsPatch(input: {
   };
 }
 
+export function buildMarketplaceAdvertisingPatch(input: string) {
+  return { amount: parseDigitsToDecimalString(input) };
+}
+
 export function getActiveCompany(companies: Company[]) {
-  return companies.find((company) => company.isSelected && company.isActive)
-    ?? companies.find((company) => company.isActive)
-    ?? null;
+  return (
+    companies.find((company) => company.isSelected && company.isActive) ??
+    companies.find((company) => company.isActive) ??
+    null
+  );
 }

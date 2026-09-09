@@ -204,6 +204,13 @@
       "when": 1787689328563,
       "tag": "0028_marketplace_webhook_events",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788879600000,
+      "tag": "0029_marketplace_advertising",
+      "breakpoints": true
     }
   ]
 }

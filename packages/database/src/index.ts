@@ -55,6 +55,10 @@ export type ExternalFee = typeof schema.externalFees.$inferSelect;
 export type NewExternalFee = typeof schema.externalFees.$inferInsert;
 export type FixedCost = typeof schema.fixedCosts.$inferSelect;
 export type NewFixedCost = typeof schema.fixedCosts.$inferInsert;
+export type MarketplaceAdvertising =
+  typeof schema.marketplaceAdvertising.$inferSelect;
+export type NewMarketplaceAdvertising =
+  typeof schema.marketplaceAdvertising.$inferInsert;
 export type Product = typeof schema.products.$inferSelect;
 export type NewProduct = typeof schema.products.$inferInsert;
 export type ProductImage = typeof schema.productImages.$inferSelect;

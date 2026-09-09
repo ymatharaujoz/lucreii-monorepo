@@ -313,6 +313,70 @@ describe("dashboard controller", () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it("updates marketplace advertising for the selected company", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: {
+        id: "org_123",
+        name: "Org",
+        role: "owner",
+        slug: "org",
+      },
+      selectedCompanyId: "company_123",
+      session: {
+        expiresAt: new Date("2026-04-22T00:00:00.000Z"),
+        id: "session_123",
+      },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(entitlementsService, "requireActiveEntitlement").mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    vi.spyOn(dashboardService, "updateMarketplaceAdvertising").mockResolvedValueOnce({
+      amount: "125.50",
+      provider: "shopee",
+      referenceMonth: "2026-07-01",
+    });
+
+    const response = await app.inject({
+      method: "PATCH",
+      payload: {
+        amount: "125.50",
+        provider: "shopee",
+        referenceMonth: "2026-07-01",
+      },
+      url: "/dashboard/marketplace-advertising",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(dashboardService.updateMarketplaceAdvertising).toHaveBeenCalledWith(
+      "org_123",
+      "user_123",
+      "company_123",
+      {
+        amount: "125.50",
+        provider: "shopee",
+        referenceMonth: "2026-07-01",
+      },
+    );
+    expect(response.json()).toEqual({
+      data: {
+        amount: "125.50",
+        provider: "shopee",
+        referenceMonth: "2026-07-01",
+      },
+      error: null,
+    });
+  });
+
   it("rejects unauthenticated requests", async () => {
     vi.spyOn(authService, "requireRequestContext").mockRejectedValueOnce(
       new UnauthorizedException("Authentication required."),

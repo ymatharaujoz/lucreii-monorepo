@@ -188,7 +188,11 @@ export function DashboardHome({ activeCompany, companyName }: DashboardHomeProps
           <DashboardFinancialIndicators
             activeCompany={activeCompany}
             financialIndicators={financialIndicatorsQuery.data}
+            key={`${providerFilter ?? "all"}:${referenceMonth}`}
             onDefaultsSaved={refetchAll}
+            provider={providerFilter}
+            referenceMonth={referenceMonth}
+            showCompanyWideIndicators={providerFilter === null}
           />
         </section>
       )}

@@ -17,7 +17,10 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("framer-motion", () => ({
   motion: {
-    div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement> & { children?: React.ReactNode }) =>
+    div: ({
+      children,
+      ...props
+    }: React.HTMLAttributes<HTMLDivElement> & { children?: React.ReactNode }) =>
       React.createElement("div", props, children),
   },
 }));
@@ -112,12 +115,15 @@ describe("DashboardFinancialIndicators", () => {
     ).toBe(true);
     expect(text).not.toContain("28 vendas líquidas");
     expect(text).toContain("33.55%");
+    expect(text).toContain("Margem Média");
+    expect(text).not.toContain("28,38%");
     expect(text).toContain("R$\u00a0596,13");
     expect(text).toContain("R$\u00a07.564,15");
     expect(text).toContain("27,65%");
     expect(text).not.toContain("R$\u00a07.564,15 (27,65%)");
     expect(text).toContain("Faturamento");
-    expect(text).toContain("Margem Média");
+    expect(text).not.toContain("Margem Contribuição");
+    expect(text).not.toContain("Faturamento - Custos Variáveis");
     expect(text).toContain("Ponto de Equilíbrio");
     expect(text).toContain("Lucro Líquido");
     expect(text).toContain("Margem Líquida");
@@ -127,7 +133,9 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).not.toContain("Lucro Real");
     expect(text).not.toContain("Publicidade");
 
-    expect(document.querySelectorAll("[class*=grid]").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll("[class*=grid]").length).toBeGreaterThan(
+      0,
+    );
     expect(
       Array.from(document.querySelectorAll("[class]")).some((element) =>
         element.className.toString().includes("lg:grid-cols-6"),
@@ -161,13 +169,45 @@ describe("DashboardFinancialIndicators", () => {
     view.unmount();
   });
 
+  it("oculta indicadores consolidados quando marketplace específico está selecionado", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={indicators}
+        provider="shopee"
+        referenceMonth="2026-07-01"
+        showCompanyWideIndicators={false}
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Faturamento");
+    expect(text).toContain("Devoluções");
+    expect(text).toContain("Margem Contribuição");
+    expect(text).toContain("22,96%");
+    expect(text).toContain("Publicidade");
+    expect(text).toContain("Margem Após Publicidade");
+    expect(text).not.toContain("Custo Fixo");
+    expect(text).not.toContain("Imposto");
+    expect(text).not.toContain("Margem Média");
+    expect(text).not.toContain("Ponto de Equilíbrio");
+    expect(text).not.toContain("Lucro Líquido");
+    expect(text).not.toContain("Margem Líquida");
+    expect(
+      Array.from(document.querySelectorAll("[class]")).some((element) =>
+        element.className.toString().includes("lg:grid-cols-3"),
+      ),
+    ).toBe(true);
+    view.unmount();
+  });
+
   it("preserva prejuízo e margem líquida negativa", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
         financialIndicators={{
           ...indicators,
-          averageMarginPercent: "-2.98",
+          averageMarginPercent: "99.99",
           breakEvenRevenue: "10961.24",
           fixedCost: "3138.54",
           fixedCostSource: "monthly",
@@ -176,17 +216,20 @@ describe("DashboardFinancialIndicators", () => {
           realProfit: "-1462.07",
           revenue: "5855.02",
           totalProfit: "-1676.47",
-          variableCosts: "4178.55",
+          variableCosts: "6029.50",
         }}
+        provider="shopee"
+        referenceMonth="2026-07-01"
+        showCompanyWideIndicators={false}
       />,
     );
 
-    expect(document.body.textContent ?? "").toContain("-2.98%");
-    expect(document.body.textContent ?? "").toContain("Prejuízo");
-    expect(document.body.textContent ?? "").toContain("-R$ 4.815,01");
-    expect(document.body.textContent ?? "").toContain("-82,24%");
-    expect(document.body.textContent ?? "").toContain("Resultado negativo");
-    expect(document.body.textContent ?? "").toContain("-R$ 1.676,47");
+    expect(document.body.textContent ?? "").toContain("-2,98%");
+    expect(document.body.textContent ?? "").toContain("Contribuição negativa");
+    expect(document.body.textContent ?? "").toContain("-53,93%");
+    expect(document.body.textContent ?? "").toContain(
+      "Margem Após Publicidade",
+    );
     view.unmount();
   });
 
@@ -219,13 +262,14 @@ describe("DashboardFinancialIndicators", () => {
           revenue: "0.00",
           totalProfit: "100.00",
         }}
+        provider="shopee"
+        referenceMonth="2026-07-01"
+        showCompanyWideIndicators={false}
       />,
     );
 
     const text = document.body.textContent ?? "";
-    expect(text).toContain("R$\u00a0100,00");
     expect(text).toContain("0,00%");
-    expect(text).not.toContain("R$\u00a0100,00 (0,00%)");
     view.unmount();
   });
 
@@ -243,12 +287,14 @@ describe("DashboardFinancialIndicators", () => {
       />,
     );
 
-    const editButton = Array.from(document.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Editar"),
+    const editButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Editar"),
     );
-    act(() => editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    const saveButton = Array.from(document.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Salvar"),
+    act(() =>
+      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+    const saveButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Salvar"),
     );
     await act(async () => {
       saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -259,6 +305,59 @@ describe("DashboardFinancialIndicators", () => {
       body: { fixedCostDefault: "2987.71", taxRateDefault: "0.100000" },
     });
     expect(onDefaultsSaved).toHaveBeenCalledOnce();
+    view.unmount();
+  });
+
+  it("salva publicidade no marketplace e mantém margem após publicidade somente leitura", async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({
+      data: {
+        amount: "1481.33",
+        provider: "shopee",
+        referenceMonth: "2026-07-01",
+      },
+      error: null,
+    });
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={indicators}
+        provider="shopee"
+        referenceMonth="2026-07-01"
+        showCompanyWideIndicators={false}
+      />,
+    );
+
+    const editButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Editar"),
+    );
+    act(() =>
+      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+
+    expect(document.querySelectorAll("input")).toHaveLength(1);
+    expect(document.body.textContent ?? "").toContain(
+      "Margem Após Publicidade",
+    );
+    expect(document.body.textContent ?? "").not.toContain("Custo Fixo");
+
+    const saveButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Salvar"),
+    );
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(apiClient.patch).toHaveBeenCalledWith(
+      "/dashboard/marketplace-advertising",
+      {
+        body: {
+          amount: "1481.33",
+          provider: "shopee",
+          referenceMonth: "2026-07-01",
+        },
+      },
+    );
     view.unmount();
   });
 });

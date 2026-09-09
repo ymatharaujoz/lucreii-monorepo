@@ -1,5 +1,8 @@
 import { Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { type DatabaseClient } from "@lucreii/database";
+import {
+  marketplaceAdvertising,
+  type DatabaseClient,
+} from "@lucreii/database";
 import {
   calculateFinancialIndicators,
   calculateFinancialIndicatorsFromTotals,
@@ -7,9 +10,11 @@ import {
 } from "@lucreii/domain";
 import type {
   DashboardFinancialIndicators,
+  DashboardMarketplaceAdvertising,
   IntegrationProviderSlug,
   ProductPerformanceListItem,
 } from "@lucreii/types";
+import type { DashboardMarketplaceAdvertisingUpdateInput } from "@lucreii/validation";
 import { and, eq } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 import { OrdersService } from "@/modules/orders/orders.service";
@@ -114,6 +119,21 @@ export class FinancialIndicatorsService {
       })),
       taxRate: company.taxRateDefault,
     });
+    const savedMarketplaceAdvertising = provider
+      ? await this.db.query.marketplaceAdvertising.findFirst({
+          where: (table) =>
+            and(
+              eq(table.organizationId, organizationId),
+              eq(table.userId, userId),
+              eq(table.companyId, companyId),
+              eq(table.provider, provider),
+              eq(table.referenceMonth, referenceMonth),
+            ),
+        })
+      : null;
+    const advertising = provider
+      ? savedMarketplaceAdvertising?.amount ?? "0.00"
+      : performanceIndicators.advertising;
     const ordersSummary = await this.ordersService.readExportedFinancialSummary(
       {
         organizationId,
@@ -123,7 +143,7 @@ export class FinancialIndicatorsService {
       { provider, referenceMonth },
     );
     const result = calculateFinancialIndicatorsFromTotals({
-      advertising: performanceIndicators.advertising,
+      advertising,
       fixedCost,
       marketplaceCommission: ordersSummary.marketplaceCommission,
       netSales: ordersSummary.netSales,
@@ -141,6 +161,57 @@ export class FinancialIndicatorsService {
       excludedSales: ordersSummary.excludedSales,
       fixedCostSource: hasMonthlyFixedCosts ? "monthly" : "company_default",
       grossSales: ordersSummary.grossSales,
+    };
+  }
+
+  async updateMarketplaceAdvertising(
+    organizationId: string,
+    userId: string,
+    companyId: string,
+    input: DashboardMarketplaceAdvertisingUpdateInput,
+  ): Promise<DashboardMarketplaceAdvertising> {
+    const company = await this.db.query.companies.findFirst({
+      where: (table) =>
+        and(
+          eq(table.id, companyId),
+          eq(table.organizationId, organizationId),
+          eq(table.userId, userId),
+        ),
+    });
+
+    if (!company) {
+      throw new NotFoundException("Company not found.");
+    }
+
+    const [row] = await this.db
+      .insert(marketplaceAdvertising)
+      .values({
+        amount: input.amount,
+        companyId,
+        organizationId,
+        provider: input.provider,
+        referenceMonth: input.referenceMonth,
+        userId,
+      })
+      .onConflictDoUpdate({
+        target: [
+          marketplaceAdvertising.organizationId,
+          marketplaceAdvertising.companyId,
+          marketplaceAdvertising.provider,
+          marketplaceAdvertising.referenceMonth,
+        ],
+        set: {
+          amount: input.amount,
+          updatedAt: new Date(),
+          userId,
+        },
+      })
+      .returning();
+
+    return {
+      amount: String(row.amount),
+      provider: row.provider as IntegrationProviderSlug,
+      referenceMonth: row.referenceMonth,
     };
   }
 }
