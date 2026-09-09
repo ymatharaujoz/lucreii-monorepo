@@ -109,17 +109,19 @@ describe("MarketingHero", () => {
   it("renders the demonstrative dashboard data from the reference", () => {
     const markup = renderToStaticMarkup(<MarketingHero />);
 
-    expect(markup).toMatch(/(Bom dia|Boa tarde|Boa noite), vendedor!/);
+    expect(markup).toContain("Bom dia, Razão Social");
     expect(markup).toContain("Setembro de 2026");
-    expect(markup).toContain("R$ 42.580,00");
-    expect(markup).toContain("28,6%");
-    expect(markup).toContain("R$ 28.430,00");
-    expect(markup).toContain("R$ 12.180,00");
-    expect(markup).toContain("Evolução do lucro líquido");
-    expect(markup).toContain("Performance por canal");
-    expect(markup).toContain(">Lucro</span>");
-    expect(markup).toContain("Insights da Lucreii");
-    expect(markup).not.toContain("Todas as informações que você precisa, em um só lugar.");
+    expect(markup).toContain("R$ 16.581,25");
+    expect(markup).toContain("R$ 3.094,33");
+    expect(markup).toContain("42,19%");
+    expect(markup).toContain("R$ 4.250,63");
+    expect(markup).toContain("R$ 5.202,67");
+    expect(markup).toContain("31,38%");
+    expect(markup).toContain("Evolução financeira");
+    expect(markup).toContain("Marketplaces");
+    expect(markup).toContain("Conectado");
+    expect(markup).toContain("Desconectado");
+    expect(markup).not.toContain("Insights da Lucreii");
   });
 
   it("selects the dashboard greeting from the local hour", () => {
@@ -130,7 +132,9 @@ describe("MarketingHero", () => {
   });
 
   it("hides the hand icon at night", () => {
-    const markup = renderToStaticMarkup(<DashboardGreeting greeting="Boa noite" />);
+    const markup = renderToStaticMarkup(
+      <DashboardGreeting greeting="Boa noite" />,
+    );
 
     expect(markup).toContain("Boa noite, vendedor!");
     expect(markup).not.toContain("<svg");
