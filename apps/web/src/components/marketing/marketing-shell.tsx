@@ -1,11 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { UserRound } from "lucide-react";
+import { Instagram, Linkedin, UserRound, Youtube } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { BrandName } from "@/components/brand-name";
 import { MarketingBackdrop } from "@/components/marketing/marketing-backdrop";
 import { MarketingNavLinks } from "@/components/marketing/marketing-nav-links";
+
+const footerColumns = [
+  {
+    title: "Produto",
+    links: [
+      { label: "Recursos", href: "#recursos" },
+      { label: "Integrações", href: "#integracoes" },
+      { label: "Planos", href: "#planos" },
+    ],
+  },
+  {
+    title: "Suporte",
+    links: [
+      { label: "Central de ajuda", href: "mailto:suporte@lucreii.com" },
+      { label: "Fale conosco", href: "#demo" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [{ label: "Termos de Uso" }, { label: "Política de Privacidade" }],
+  },
+] as const;
+
+const socialLinks = [
+  { label: "Instagram", icon: Instagram },
+  { label: "YouTube", icon: Youtube },
+  { label: "LinkedIn", icon: Linkedin },
+] as const;
 
 export function MarketingShell({
   children,
@@ -58,25 +86,62 @@ export function MarketingShell({
 
         {children}
 
-        {/* Footer */}
-        <footer className="border-t border-border bg-surface py-12 backdrop-blur-sm">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
-              {/* Logo */}
-              <Link href="/" className="flex items-center gap-2.5">
-                <BrandLogo className="h-14 w-auto" />
-                <BrandName className="text-sm font-semibold" />
-              </Link>
+        <footer className="border-t border-[#dcebe9] bg-[#f7fbfa]/95 backdrop-blur-sm dark:border-white/10 dark:bg-surface/95">
+          <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-10 lg:py-11">
+            <div className="grid gap-10 md:grid-cols-[1.35fr_0.8fr_0.8fr_0.95fr] md:gap-8 lg:grid-cols-[1.55fr_0.85fr_0.85fr_1.1fr] lg:gap-10">
+              <div>
+                <Link href="/" className="inline-flex items-center gap-2.5">
+                  <BrandLogo className="h-12 w-auto" />
+                  <BrandName className="text-xl font-bold tracking-tight" />
+                </Link>
+                <p className="mt-2 max-w-[220px] text-xs text-muted-foreground">
+                  Clareza para vender com lucro.
+                </p>
+              </div>
 
-              {/* Links */}
-              <nav className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2">
-                <MarketingNavLinks linkClassName="text-sm text-muted-foreground transition-colors hover:text-foreground" />
-              </nav>
+              {footerColumns.map(({ title, links }) => (
+                <div key={title}>
+                  <h2 className="text-sm font-bold text-foreground">{title}</h2>
+                  <nav className="mt-4 flex flex-col items-start gap-2.5" aria-label={title}>
+                    {links.map((link) =>
+                      "href" in link ? (
+                        <Link
+                          key={link.label}
+                          href={link.href}
+                          className="text-sm text-muted-foreground transition-colors hover:text-accent"
+                        >
+                          {link.label}
+                        </Link>
+                      ) : (
+                        <span key={link.label} className="text-sm text-muted-foreground">
+                          {link.label}
+                        </span>
+                      ),
+                    )}
+                  </nav>
+                </div>
+              ))}
 
-              {/* Copyright */}
-              <p className="text-xs text-muted-foreground">
-                &copy; {new Date().getFullYear()} Lucreii. Todos os direitos reservados.
-              </p>
+              <div className="md:border-l md:border-[#dcebe9] md:pl-7 dark:md:border-white/10 lg:pl-8">
+                <h2 className="text-sm font-bold text-foreground">Acompanhe a Lucreii</h2>
+                <div className="mt-4 flex items-center gap-2.5">
+                  {socialLinks.map(({ label, icon: Icon }) => (
+                    <span
+                      key={label}
+                      role="img"
+                      aria-label={label}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#dce8e7] bg-[#edf4f3] text-[#647874] dark:border-white/10 dark:bg-white/10 dark:text-foreground-soft"
+                    >
+                      <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} aria-hidden="true" />
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-9 flex flex-col gap-3 border-t border-[#dcebe9] pt-5 text-xs text-muted-foreground dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
+              <p>&copy; {new Date().getFullYear()} Lucreii. Todos os direitos reservados.</p>
+              <p>Mais que dados. Decisões melhores.</p>
             </div>
           </div>
         </footer>
