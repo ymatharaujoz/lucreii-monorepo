@@ -41,7 +41,7 @@ export function LandingPage() {
 
       <MarketingPricingSection />
 
-      <section id="demo" className="relative overflow-hidden border-t border-white/70 py-16 sm:py-20 md:py-24 dark:border-white/10">
+      <section id="demo" className="relative overflow-hidden border-t border-white/70 pb-12 pt-20 sm:pb-12 sm:pt-28 md:pb-12 md:pt-32 dark:border-white/10">
         <div
           aria-hidden="true"
           className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.98),transparent_48%),linear-gradient(145deg,#f1fbfa_0%,#e4f6f3_54%,#f3fbfa_100%)] dark:bg-[linear-gradient(145deg,#102522_0%,#0e211f_55%,#11201f_100%)]"
@@ -65,11 +65,21 @@ export function LandingPage() {
         >
           <path d="M-30 80C146 142 92 302 238 344" stroke="#8bd5cc" strokeWidth="1.2" />
           <path d="M1630 56C1462 122 1512 260 1374 350" stroke="#8bd5cc" strokeWidth="1.2" />
-          <path d="M44 82 238 344M1552 68l-178 282" stroke="#8bd5cc" strokeWidth="1" strokeDasharray="4 10" />
-          <circle cx="44" cy="82" r="4" fill="#83bdb6" />
-          <circle cx="238" cy="344" r="4" fill="#83bdb6" />
-          <circle cx="1552" cy="68" r="4" fill="#83bdb6" />
-          <circle cx="1374" cy="350" r="4" fill="#83bdb6" />
+          <path d="M38 160 194 98 308 58M194 98 145 228 233 270 38 160M145 228 44 343" stroke="#9adbd4" strokeWidth="1" />
+          <path d="M1298 67 1428 124 1379 205 1533 359M1428 124 1516 172 1533 359M1379 205 1438 319" stroke="#9adbd4" strokeWidth="1" />
+          <path d="M44 82 238 344M1552 68l-178 282M44 343 145 228M1516 172l-78 147" stroke="#8bd5cc" strokeWidth="1" strokeDasharray="4 10" />
+          <circle cx="38" cy="160" r="3.5" fill="#83bdb6" />
+          <circle cx="194" cy="98" r="4" fill="#83bdb6" />
+          <circle cx="308" cy="58" r="3.5" fill="#83bdb6" />
+          <circle cx="145" cy="228" r="3.5" fill="#83bdb6" />
+          <circle cx="233" cy="270" r="4" fill="#83bdb6" />
+          <circle cx="44" cy="343" r="3" fill="#83bdb6" />
+          <circle cx="1298" cy="67" r="3.5" fill="#83bdb6" />
+          <circle cx="1428" cy="124" r="4" fill="#83bdb6" />
+          <circle cx="1379" cy="205" r="3.5" fill="#83bdb6" />
+          <circle cx="1516" cy="172" r="3" fill="#83bdb6" />
+          <circle cx="1438" cy="319" r="3.5" fill="#83bdb6" />
+          <circle cx="1533" cy="359" r="4" fill="#83bdb6" />
         </svg>
 
         <div className="relative z-10 mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
@@ -79,12 +89,12 @@ export function LandingPage() {
             viewport={{ once: true }}
             transition={{ duration: reduceMotion ? 0 : 0.6, ease: easeOut }}
           >
-            <h2 className="text-[clamp(2.5rem,5vw,4.35rem)] font-extrabold leading-[0.98] tracking-[-0.065em] text-foreground">
+            <h2 className="text-[clamp(2.5rem,4vw,3.75rem)] font-extrabold leading-[0.98] tracking-[-0.065em] text-foreground">
               Pronto para ver o lucro real
               <br />
               <span className="text-accent">do seu negócio?</span>
             </h2>
-            <p className="mx-auto mt-5 max-w-4xl text-lg leading-[1.4] text-foreground-soft sm:text-[1.3rem]">
+            <p className="mx-auto mt-6 max-w-[840px] text-lg leading-[1.4] text-foreground-soft sm:text-[1.3rem]">
               Conecte seus marketplaces e descubra, com os números da sua própria operação, quanto realmente sobra das suas vendas.
             </p>
 
@@ -119,7 +129,7 @@ export function LandingPage() {
               </span>
             </div>
 
-            <div className="mt-11 flex items-center justify-center gap-4 sm:gap-7">
+            <div className="mt-14 flex items-center justify-center gap-4 sm:gap-7">
               <span className="h-px w-12 bg-accent sm:w-16" aria-hidden="true" />
               <p className="text-base font-medium text-foreground-soft sm:text-lg">
                 Comece com seus próprios dados. Decida com números, não com achismos.

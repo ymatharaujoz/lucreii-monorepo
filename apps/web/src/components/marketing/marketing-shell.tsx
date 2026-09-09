@@ -87,16 +87,18 @@ export function MarketingShell({
         {children}
 
         <footer className="border-t border-[#dcebe9] bg-[#f7fbfa]/95 backdrop-blur-sm dark:border-white/10 dark:bg-surface/95">
-          <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-10 lg:py-11">
-            <div className="grid gap-10 md:grid-cols-[1.35fr_0.8fr_0.8fr_0.95fr] md:gap-8 lg:grid-cols-[1.55fr_0.85fr_0.85fr_1.1fr] lg:gap-10">
+          <div className="mx-auto max-w-[1400px] px-5 py-9 sm:px-8 lg:px-10 lg:py-10">
+            <div className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-[330px_153px_158px_194px_minmax(0,1fr)] xl:gap-x-[45px]">
               <div>
-                <Link href="/" className="inline-flex items-center gap-2.5">
-                  <BrandLogo className="h-12 w-auto" />
-                  <BrandName className="text-xl font-bold tracking-tight" />
+                <Link href="/" className="inline-flex items-start gap-3">
+                  <BrandLogo className="h-12 w-12 shrink-0" />
+                  <span className="flex flex-col">
+                    <BrandName className="text-2xl font-bold leading-none tracking-tight" />
+                    <span className="mt-2 text-xs text-muted-foreground">
+                      Clareza para vender com lucro.
+                    </span>
+                  </span>
                 </Link>
-                <p className="mt-2 max-w-[220px] text-xs text-muted-foreground">
-                  Clareza para vender com lucro.
-                </p>
               </div>
 
               {footerColumns.map(({ title, links }) => (
@@ -122,15 +124,15 @@ export function MarketingShell({
                 </div>
               ))}
 
-              <div className="md:border-l md:border-[#dcebe9] md:pl-7 dark:md:border-white/10 lg:pl-8">
+              <div className="md:border-l md:border-[#dcebe9] md:pl-7 dark:md:border-white/10 xl:pl-8">
                 <h2 className="text-sm font-bold text-foreground">Acompanhe a Lucreii</h2>
-                <div className="mt-4 flex items-center gap-2.5">
+                <div className="mt-4 flex items-center gap-3">
                   {socialLinks.map(({ label, icon: Icon }) => (
                     <span
                       key={label}
                       role="img"
                       aria-label={label}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#dce8e7] bg-[#edf4f3] text-[#647874] dark:border-white/10 dark:bg-white/10 dark:text-foreground-soft"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#dce8e7] bg-[#edf4f3] text-[#647874] dark:border-white/10 dark:bg-white/10 dark:text-foreground-soft"
                     >
                       <Icon className="h-[18px] w-[18px]" strokeWidth={1.8} aria-hidden="true" />
                     </span>
@@ -139,7 +141,7 @@ export function MarketingShell({
               </div>
             </div>
 
-            <div className="mt-9 flex flex-col gap-3 border-t border-[#dcebe9] pt-5 text-xs text-muted-foreground dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-10 flex flex-col gap-3 border-t border-[#dcebe9] pt-5 text-xs text-muted-foreground dark:border-white/10 sm:flex-row sm:items-center sm:justify-between">
               <p>&copy; {new Date().getFullYear()} Lucreii. Todos os direitos reservados.</p>
               <p>Mais que dados. Decisões melhores.</p>
             </div>

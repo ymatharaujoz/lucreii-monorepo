@@ -291,64 +291,54 @@ function MiniAdsVisual({ reduceMotion }: { reduceMotion: boolean | null }) {
 
   return (
     <div className="mt-auto rounded-2xl border border-white/90 bg-white/80 p-4 shadow-[0_8px_20px_rgba(150,100,20,0.05)] dark:border-white/10 dark:bg-surface/70 sm:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-medium text-foreground-soft">Resultado dos anúncios</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <p className="text-xl font-bold tracking-[-0.04em] text-foreground">3,4x</p>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#d98b12]">ROAS</span>
+      <div className="flex items-end gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="relative h-[82px] overflow-hidden rounded-xl bg-[#fffaf0] px-3 pb-3 pt-2" aria-label="Gráfico demonstrativo do retorno dos anúncios">
+            <div className="pointer-events-none absolute inset-x-3 top-2 bottom-3 flex flex-col justify-between" aria-hidden="true">
+              <span className="border-t border-[#f3d9a8]" />
+              <span className="border-t border-[#f3d9a8]" />
+              <span className="border-t border-[#f3d9a8]" />
+            </div>
+            <div className="relative flex h-full items-end gap-1.5" aria-hidden="true">
+              {bars.map((height, index) => (
+                <motion.span
+                  key={height}
+                  initial={reduceMotion ? false : { scaleY: 0.2, opacity: 0.65 }}
+                  whileInView={{ scaleY: 1, opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{
+                    duration: reduceMotion ? 0 : 0.58,
+                    delay: reduceMotion ? 0 : index * 0.08,
+                    ease: easeOut,
+                  }}
+                  className={`relative z-[1] min-w-0 flex-1 origin-bottom rounded-t-md ${
+                    index === bars.length - 1 ? "bg-[#e58d11]" : "bg-[#f5b754]"
+                  }`}
+                  style={{ height: `${height}%` }}
+                />
+              ))}
+            </div>
           </div>
-          <p className="mt-1 text-xs font-semibold text-[#d98b12]">↑ 12,8% vs. período anterior</p>
-        </div>
-        <span className="pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-foreground-soft">ADS</span>
-      </div>
-
-      <div className="mt-4 flex items-end gap-4">
-        <div className="relative h-[82px] min-w-0 flex-1 overflow-hidden rounded-xl bg-[#fffaf0] px-3 pb-3 pt-2" aria-label="Gráfico demonstrativo do retorno dos anúncios">
-          <div className="pointer-events-none absolute inset-x-3 top-2 bottom-3 flex flex-col justify-between" aria-hidden="true">
-            <span className="border-t border-[#f3d9a8]" />
-            <span className="border-t border-[#f3d9a8]" />
-            <span className="border-t border-[#f3d9a8]" />
-          </div>
-          <div className="relative flex h-full items-end gap-1.5" aria-hidden="true">
-            {bars.map((height, index) => (
-              <motion.span
-                key={height}
-                initial={reduceMotion ? false : { scaleY: 0.2, opacity: 0.65 }}
-                whileInView={{ scaleY: 1, opacity: 1 }}
-                viewport={{ once: true }}
-                transition={{
-                  duration: reduceMotion ? 0 : 0.58,
-                  delay: reduceMotion ? 0 : index * 0.08,
-                  ease: easeOut,
-                }}
-                className={`relative z-[1] min-w-0 flex-1 origin-bottom rounded-t-md ${
-                  index === bars.length - 1 ? "bg-[#e58d11]" : "bg-[#f5b754]"
-                }`}
-                style={{ height: `${height}%` }}
-              />
-            ))}
+          <div className="mt-2 grid grid-cols-5 text-center text-[9px] text-muted-foreground">
+            {labels.map((label) => <span key={label}>{label}</span>)}
           </div>
         </div>
-      <motion.span
-        className="relative flex h-[76px] w-[76px] shrink-0 items-center justify-center rounded-full bg-[#ffe1a7] text-[#e58d11]"
-        animate={
-          reduceMotion === false
-            ? { scale: [1, 1.035, 1], rotate: [0, 2, 0] }
-            : undefined
-        }
-        transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
-      >
-        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 76 76" fill="none" aria-hidden="true">
-          <path d="M52 24c4 2 6 5 7 9M53 43c3-1 5-3 7-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          <circle cx="59" cy="19" r="1.6" fill="currentColor" />
-          <circle cx="64" cy="46" r="1.6" fill="currentColor" />
-        </svg>
-        <Megaphone className="h-9 w-9" strokeWidth={1.8} aria-hidden="true" />
-      </motion.span>
-      </div>
-      <div className="mt-2 flex justify-between px-1 text-[9px] text-muted-foreground">
-        {labels.map((label) => <span key={label}>{label}</span>)}
+        <motion.span
+          className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#ffe1a7] text-[#e58d11] sm:h-[76px] sm:w-[76px]"
+          animate={
+            reduceMotion === false
+              ? { scale: [1, 1.035, 1], rotate: [0, 2, 0] }
+              : undefined
+          }
+          transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 76 76" fill="none" aria-hidden="true">
+            <path d="M52 24c4 2 6 5 7 9M53 43c3-1 5-3 7-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <circle cx="59" cy="19" r="1.6" fill="currentColor" />
+            <circle cx="64" cy="46" r="1.6" fill="currentColor" />
+          </svg>
+          <Megaphone className="h-8 w-8 sm:h-9 sm:w-9" strokeWidth={1.8} aria-hidden="true" />
+        </motion.span>
       </div>
     </div>
   );

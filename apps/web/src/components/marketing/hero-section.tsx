@@ -495,6 +495,24 @@ function InsightsPanel() {
   );
 }
 
+export function DashboardGreeting({ greeting }: { greeting: string }) {
+  return (
+    <h2 className="text-base font-bold tracking-tight text-foreground sm:text-lg">
+      {greeting}, vendedor!
+      {greeting !== "Boa noite" && (
+        <>
+          {" "}
+          <Hand
+            className="inline-block h-4 w-4 text-accent sm:h-[18px] sm:w-[18px]"
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
+        </>
+      )}
+    </h2>
+  );
+}
+
 function DashboardPreview() {
   const reduceMotion = useReducedMotion();
   const greeting = useSyncExternalStore(
@@ -520,14 +538,7 @@ function DashboardPreview() {
           <div className="min-w-0 p-3 sm:p-4">
             <header className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-bold tracking-tight text-foreground sm:text-lg">
-                  {greeting}, vendedor!{" "}
-                  <Hand
-                    className="inline-block h-4 w-4 text-accent sm:h-[18px] sm:w-[18px]"
-                    strokeWidth={1.8}
-                    aria-hidden="true"
-                  />
-                </h2>
+                <DashboardGreeting greeting={greeting} />
                 <p className="mt-0.5 text-[9px] text-muted-foreground sm:text-[10px]">
                   Aqui está um resumo do seu negócio.
                 </p>

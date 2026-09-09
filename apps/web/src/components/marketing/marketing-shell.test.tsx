@@ -60,6 +60,9 @@ describe("MarketingShell header", () => {
     expect(markup).toContain('href="#planos"');
     expect(markup).toContain("Clareza para vender com lucro.");
     expect(markup).toContain("Central de ajuda");
+    expect(markup).toContain("Produto");
+    expect(markup).toContain("Suporte");
+    expect(markup).toContain("Legal");
     expect(markup).toContain("Acompanhe a Lucreii");
     expect(markup).toContain("Mais que dados. Decisões melhores.");
     expect(markup).not.toContain("Alternar tema");

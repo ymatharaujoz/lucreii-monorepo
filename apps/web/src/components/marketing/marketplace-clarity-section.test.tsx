@@ -67,10 +67,12 @@ describe("MarketplaceClaritySection", () => {
     expect(markup).toContain("Smartwatch");
     expect(markup).toContain("Atenção");
     expect(markup).toContain("Acompanhe o investimento em ADS");
-    expect(markup).toContain("Resultado dos anúncios");
-    expect(markup).toContain("3,4x");
-    expect(markup).toContain("ROAS");
     expect(markup).toContain("Gráfico demonstrativo do retorno dos anúncios");
+    expect(markup).not.toContain("Resultado dos anúncios");
+    expect(markup).not.toContain(">3,4x</p>");
+    expect(markup).not.toContain(">ROAS</span>");
+    expect(markup).not.toContain("↑ 12,8% vs. período anterior");
+    expect(markup).not.toContain(">ADS</span>");
     expect(markup).toContain("bluetooth-headphones.png");
     expect(markup).toContain("gaming-mouse.png");
     expect(markup).toContain("smartwatch.png");

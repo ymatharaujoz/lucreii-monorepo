@@ -4,7 +4,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getDashboardGreeting, MarketingHero } from "./hero-section";
+import {
+  DashboardGreeting,
+  getDashboardGreeting,
+  MarketingHero,
+} from "./hero-section";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -123,5 +127,12 @@ describe("MarketingHero", () => {
     expect(getDashboardGreeting(14)).toBe("Boa tarde");
     expect(getDashboardGreeting(21)).toBe("Boa noite");
     expect(getDashboardGreeting(2)).toBe("Boa noite");
+  });
+
+  it("hides the hand icon at night", () => {
+    const markup = renderToStaticMarkup(<DashboardGreeting greeting="Boa noite" />);
+
+    expect(markup).toContain("Boa noite, vendedor!");
+    expect(markup).not.toContain("<svg");
   });
 });
