@@ -4,7 +4,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MarketingHero } from "./hero-section";
+import { getDashboardGreeting, MarketingHero } from "./hero-section";
 
 vi.mock("next/link", () => ({
   default: ({
@@ -105,7 +105,7 @@ describe("MarketingHero", () => {
   it("renders the demonstrative dashboard data from the reference", () => {
     const markup = renderToStaticMarkup(<MarketingHero />);
 
-    expect(markup).toContain("Olá, vendedor!");
+    expect(markup).toMatch(/(Bom dia|Boa tarde|Boa noite), vendedor!/);
     expect(markup).toContain("Setembro de 2026");
     expect(markup).toContain("R$ 42.580,00");
     expect(markup).toContain("28,6%");
@@ -113,7 +113,15 @@ describe("MarketingHero", () => {
     expect(markup).toContain("R$ 12.180,00");
     expect(markup).toContain("Evolução do lucro líquido");
     expect(markup).toContain("Performance por canal");
+    expect(markup).toContain(">Lucro</span>");
     expect(markup).toContain("Insights da Lucreii");
     expect(markup).not.toContain("Todas as informações que você precisa, em um só lugar.");
+  });
+
+  it("selects the dashboard greeting from the local hour", () => {
+    expect(getDashboardGreeting(8)).toBe("Bom dia");
+    expect(getDashboardGreeting(14)).toBe("Boa tarde");
+    expect(getDashboardGreeting(21)).toBe("Boa noite");
+    expect(getDashboardGreeting(2)).toBe("Boa noite");
   });
 });

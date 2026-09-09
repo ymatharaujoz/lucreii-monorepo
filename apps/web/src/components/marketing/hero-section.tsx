@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import {
   ArrowRight,
   BarChart3,
   CalendarDays,
   Check,
   Clock3,
+  Hand,
   Headphones,
   LayoutDashboard,
   Megaphone,
@@ -32,6 +34,21 @@ import {
 } from "./marketplace-icons";
 
 const easeOut = [0.16, 1, 0.3, 1] as const;
+
+export function getDashboardGreeting(hour: number) {
+  if (hour >= 5 && hour < 12) return "Bom dia";
+  if (hour >= 12 && hour < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function subscribeToDashboardClock(onChange: () => void) {
+  const interval = window.setInterval(onChange, 60_000);
+  return () => window.clearInterval(interval);
+}
+
+function getCurrentDashboardGreeting() {
+  return getDashboardGreeting(new Date().getHours());
+}
 
 function createRevealVariants(reduceMotion: boolean | null) {
   return {
@@ -425,7 +442,7 @@ function ChannelPerformance() {
       <div className="mt-3 grid grid-cols-[1.3fr_1fr_1fr] gap-2 border-b border-border pb-2 text-[8px] font-semibold uppercase text-muted-foreground">
         <span>Marketplace</span>
         <span>Faturamento</span>
-        <span>Lucro líquido</span>
+        <span>Lucro</span>
       </div>
       <div className="mt-2 space-y-2.5">
         {rows.map(({ name, icon: Icon, revenue, profit }) => (
@@ -480,6 +497,11 @@ function InsightsPanel() {
 
 function DashboardPreview() {
   const reduceMotion = useReducedMotion();
+  const greeting = useSyncExternalStore(
+    subscribeToDashboardClock,
+    getCurrentDashboardGreeting,
+    () => "Boa tarde",
+  );
 
   return (
     <motion.div
@@ -499,7 +521,12 @@ function DashboardPreview() {
             <header className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-bold tracking-tight text-foreground sm:text-lg">
-                  Olá, vendedor! 👋
+                  {greeting}, vendedor!{" "}
+                  <Hand
+                    className="inline-block h-4 w-4 text-accent sm:h-[18px] sm:w-[18px]"
+                    strokeWidth={1.8}
+                    aria-hidden="true"
+                  />
                 </h2>
                 <p className="mt-0.5 text-[9px] text-muted-foreground sm:text-[10px]">
                   Aqui está um resumo do seu negócio.
