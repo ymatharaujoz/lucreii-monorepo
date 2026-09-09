@@ -352,12 +352,16 @@ function MetricCard({
   );
 }
 
-function FinancialChart() {
+function FinancialChart({ wide = false }: { wide?: boolean }) {
   const reduceMotion = useReducedMotion();
   const revenuePath =
     "M10 108 C24 108 28 54 42 61 S58 72 69 52 S81 80 94 74 S108 86 119 65 S132 78 143 49 S156 105 170 83 S184 95 201 91 S214 96 226 92";
   const profitPath =
     "M10 116 C24 112 30 104 43 110 S58 95 70 108 S84 101 97 104 S112 95 124 103 S138 99 151 102 S170 97 183 105 S206 101 226 106";
+  const wideRevenuePath =
+    "M0 170 C35 171 45 84 75 95 S115 116 145 85 S185 130 215 113 S250 144 280 99 S315 127 350 67 S390 170 425 128 S465 158 510 142 S548 155 585 137 S620 155 652 127 S690 167 724 120 S760 99 790 136 S824 194 850 165 S880 184 910 174 S950 183 1000 178";
+  const wideProfitPath =
+    "M0 190 C32 183 55 177 82 188 S122 181 150 191 S185 177 214 188 S255 181 286 191 S322 180 354 190 S390 181 425 191 S465 180 500 190 S540 182 575 191 S610 179 645 189 S684 181 720 190 S754 182 790 191 S830 180 866 189 S910 183 946 191 S970 184 1000 188";
 
   return (
     <div className="rounded-[14px] border border-[#dfe9ea] bg-white p-3">
@@ -383,67 +387,141 @@ function FinancialChart() {
           </span>
         </div>
       </div>
-      <div className="relative mt-2 h-[132px]">
-        <svg
-          viewBox="0 0 236 132"
-          className="h-full w-full overflow-visible"
-          aria-label="Gráfico demonstrativo de receita e lucro"
-          role="img"
-        >
-          {[18, 48, 78, 108].map((y) => (
-            <line
-              key={y}
-              x1="10"
-              x2="226"
-              y1={y}
-              y2={y}
-              stroke="#edf2f2"
-              strokeWidth="1"
+      {wide ? (
+        <div className="mt-2 flex gap-2">
+          <div className="flex h-[154px] w-7 shrink-0 flex-col justify-between pb-5 pt-1 text-[7px] text-[#819398]">
+            <span>R$750</span>
+            <span>R$500</span>
+            <span>R$250</span>
+            <span>R$0</span>
+            <span>-R$250</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <svg
+              viewBox="0 0 1000 220"
+              className="h-[154px] w-full overflow-visible"
+              preserveAspectRatio="none"
+              aria-label="Gráfico demonstrativo de receita e lucro"
+              role="img"
+            >
+              {[20, 62, 104, 146, 188].map((y) => (
+                <line
+                  key={y}
+                  x1="0"
+                  x2="1000"
+                  y1={y}
+                  y2={y}
+                  stroke="#edf2f2"
+                  strokeWidth="1"
+                />
+              ))}
+              <motion.path
+                d={wideRevenuePath}
+                fill="none"
+                stroke="#0e9f91"
+                strokeWidth="3"
+                strokeLinecap="round"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: reduceMotion ? 0 : 1.2, ease: easeOut }}
+              />
+              <motion.path
+                d={wideProfitPath}
+                fill="none"
+                stroke="#8ba4b4"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                initial={{ pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{
+                  duration: reduceMotion ? 0 : 1.1,
+                  delay: reduceMotion ? 0 : 0.15,
+                  ease: easeOut,
+                }}
+              />
+            </svg>
+            <div className="flex justify-between text-[7px] text-[#819398]">
+              {[
+                "1 de ago.",
+                "4 de ago.",
+                "7 de ago.",
+                "10 de ago.",
+                "13 de ago.",
+                "16 de ago.",
+                "19 de ago.",
+                "22 de ago.",
+                "25 de ago.",
+                "28 de ago.",
+                "31 de ago.",
+              ].map((label) => (
+                <span key={label}>{label}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="relative mt-2 h-[132px]">
+          <svg
+            viewBox="0 0 236 132"
+            className="h-full w-full overflow-visible"
+            aria-label="Gráfico demonstrativo de receita e lucro"
+            role="img"
+          >
+            {[18, 48, 78, 108].map((y) => (
+              <line
+                key={y}
+                x1="10"
+                x2="226"
+                y1={y}
+                y2={y}
+                stroke="#edf2f2"
+                strokeWidth="1"
+              />
+            ))}
+            <motion.path
+              d={revenuePath}
+              fill="none"
+              stroke="#0e9f91"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: reduceMotion ? 0 : 1.2, ease: easeOut }}
             />
-          ))}
-          <motion.path
-            d={revenuePath}
-            fill="none"
-            stroke="#0e9f91"
-            strokeWidth="2.4"
-            strokeLinecap="round"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: reduceMotion ? 0 : 1.2, ease: easeOut }}
-          />
-          <motion.path
-            d={profitPath}
-            fill="none"
-            stroke="#8ba4b4"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{
-              duration: reduceMotion ? 0 : 1.1,
-              delay: reduceMotion ? 0 : 0.15,
-              ease: easeOut,
-            }}
-          />
-        </svg>
-        <div className="absolute bottom-0 left-1 right-1 flex justify-between text-[7px] text-[#819398]">
-          <span>1 de ago.</span>
-          <span>5 de ago.</span>
-          <span>9 de ago.</span>
-          <span>13 de ago.</span>
-          <span>17 de ago.</span>
-          <span>22 de ago.</span>
-          <span>28 de ago.</span>
-          <span>31 de ago.</span>
+            <motion.path
+              d={profitPath}
+              fill="none"
+              stroke="#8ba4b4"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{
+                duration: reduceMotion ? 0 : 1.1,
+                delay: reduceMotion ? 0 : 0.15,
+                ease: easeOut,
+              }}
+            />
+          </svg>
+          <div className="absolute bottom-0 left-1 right-1 flex justify-between text-[7px] text-[#819398]">
+            <span>1 de ago.</span>
+            <span>5 de ago.</span>
+            <span>9 de ago.</span>
+            <span>13 de ago.</span>
+            <span>17 de ago.</span>
+            <span>22 de ago.</span>
+            <span>28 de ago.</span>
+            <span>31 de ago.</span>
+          </div>
+          <div className="absolute bottom-5 left-0 flex flex-col justify-between text-[7px] text-[#819398]">
+            <span>R$750</span>
+            <span>R$500</span>
+            <span>R$250</span>
+            <span>R$0</span>
+            <span>-R$250</span>
+          </div>
         </div>
-        <div className="absolute bottom-5 left-0 flex flex-col justify-between text-[7px] text-[#819398]">
-          <span>R$750</span>
-          <span>R$500</span>
-          <span>R$250</span>
-          <span>R$0</span>
-          <span>-R$250</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -469,9 +547,11 @@ const dashboardMarketplaces = [
   },
 ] as const;
 
-function MarketplaceStatus() {
+function MarketplaceStatus({ wide = false }: { wide?: boolean }) {
   return (
-    <div className="rounded-[14px] border border-[#dfe9ea] bg-white p-3">
+    <div
+      className={`rounded-[14px] border border-[#dfe9ea] bg-white ${wide ? "p-2.5" : "p-3"}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[10px] font-bold text-[#263c40]">Marketplaces</p>
@@ -520,6 +600,8 @@ export function DashboardGreeting({
     </h2>
   );
 }
+
+const dashboardMonth = "Setembro de 2026";
 
 export function DashboardPreview({ wide = false }: { wide?: boolean }) {
   const reduceMotion = useReducedMotion();
@@ -613,7 +695,7 @@ export function DashboardPreview({ wide = false }: { wide?: boolean }) {
                     className="h-3.5 w-3.5 text-[#637c81]"
                     aria-hidden="true"
                   />
-                  <span className="hidden sm:inline">Setembro de 2026</span>
+                  <span className="hidden sm:inline">{dashboardMonth}</span>
                   <span className="sm:hidden">Set/26</span>
                   <ChevronDown
                     className="h-3 w-3 text-[#637c81]"
@@ -630,7 +712,7 @@ export function DashboardPreview({ wide = false }: { wide?: boolean }) {
                     className="h-3.5 w-3.5 text-[#637c81]"
                     aria-hidden="true"
                   />
-                  <span className="hidden sm:inline">Setembro de 2026</span>
+                  <span className="hidden sm:inline">{dashboardMonth}</span>
                   <span className="sm:hidden">Set/26</span>
                   <ChevronDown
                     className="h-3 w-3 text-[#637c81]"
@@ -651,7 +733,7 @@ export function DashboardPreview({ wide = false }: { wide?: boolean }) {
                     Mês de referência
                   </span>
                   <strong className="truncate text-[#334b50]">
-                    agosto de 2026
+                    {dashboardMonth}
                   </strong>
                   <ChevronDown
                     className="h-3 w-3 shrink-0 text-[#637c81]"
@@ -712,9 +794,11 @@ export function DashboardPreview({ wide = false }: { wide?: boolean }) {
               </span>
             </div>
 
-            <div className="mt-2 grid gap-2 md:grid-cols-[1.55fr_0.8fr]">
-              <FinancialChart />
-              <MarketplaceStatus />
+            <div
+              className={`mt-2 grid gap-2 ${wide ? "lg:grid-cols-[3fr_1.05fr]" : "md:grid-cols-[1.55fr_0.8fr]"}`}
+            >
+              <FinancialChart wide={wide} />
+              <MarketplaceStatus wide={wide} />
             </div>
           </div>
         </div>

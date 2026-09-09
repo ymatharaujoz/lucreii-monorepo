@@ -56,6 +56,8 @@ describe("DashboardShowcase", () => {
     );
     expect(markup).toContain("Veja quanto realmente sobra no seu bolso");
     expect(markup).toContain('aria-label="Prévia do dashboard"');
+    expect(markup).toContain("Setembro de 2026");
+    expect(markup).not.toContain("agosto de 2026");
     expect(markup).toContain(
       "Menos planilhas. Mais clareza para tomar decisões.",
     );

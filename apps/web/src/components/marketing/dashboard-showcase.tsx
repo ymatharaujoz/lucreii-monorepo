@@ -103,7 +103,7 @@ function DesktopConnectors() {
         transition={{ duration: reduceMotion ? 0 : 1, ease: easeOut }}
       />
       <motion.path
-        d="M313 590 C354 574 368 563 401 536"
+        d="M313 590 C354 584 377 580 409 582"
         stroke="#079f94"
         strokeWidth="2"
         strokeLinecap="round"
@@ -117,7 +117,7 @@ function DesktopConnectors() {
         }}
       />
       <motion.path
-        d="M1221 90 C1160 96 1113 156 1003 236"
+        d="M1221 220 C1160 234 1113 286 1003 344"
         stroke="#079f94"
         strokeWidth="2"
         strokeLinecap="round"
@@ -131,7 +131,7 @@ function DesktopConnectors() {
         }}
       />
       <motion.path
-        d="M1350 478 C1323 448 1301 439 1289 425"
+        d="M1350 478 C1323 448 1301 405 1289 374"
         stroke="#079f94"
         strokeWidth="2"
         strokeLinecap="round"
@@ -145,7 +145,7 @@ function DesktopConnectors() {
         }}
       />
       <path
-        d="M226 286 l-14 -5 M226 286 l-8 -13 M401 536 l-13 2 M401 536 l-3 -13 M1003 236 l7 -13 M1003 236 l15 -3 M1289 425 l-13 4 M1289 425 l-2 14"
+        d="M226 286 l-14 -5 M226 286 l-8 -13 M409 582 l-13 2 M409 582 l-3 -13 M1003 344 l7 -13 M1003 344 l15 -3 M1289 374 l-13 4 M1289 374 l-2 14"
         stroke="#079f94"
         strokeWidth="2"
         strokeLinecap="round"
@@ -235,7 +235,7 @@ export function DashboardShowcase() {
           <div className="absolute left-[0.8%] top-[338px] z-30 hidden w-[270px] 2xl:block">
             <DashboardCallout {...dashboardCallouts[1]} delay={0.1} />
           </div>
-          <div className="absolute -top-44 right-[1.5%] z-30 hidden w-[320px] 2xl:block">
+          <div className="absolute -top-24 right-[0.5%] z-30 hidden w-[310px] 2xl:block">
             <DashboardCallout {...dashboardCallouts[2]} delay={0.2} />
           </div>
           <div className="absolute right-0 top-[290px] z-30 hidden w-[205px] 2xl:block">
