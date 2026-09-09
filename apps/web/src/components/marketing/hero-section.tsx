@@ -14,6 +14,7 @@ import {
   Headphones,
   LayoutDashboard,
   Megaphone,
+  Moon,
   Package,
   Plug2,
   Settings2,
@@ -238,9 +239,11 @@ const dashboardNavItems: Array<{
   { label: "Assinatura", icon: CreditCard },
 ] as const;
 
-function DashboardSidebar() {
+function DashboardSidebar({ showFooter = false }: { showFooter?: boolean }) {
   return (
-    <aside className="hidden bg-[#102c31] px-3 py-5 text-white sm:block">
+    <aside
+      className={`hidden bg-[#102c31] px-3 py-5 text-white ${showFooter ? "sm:flex sm:flex-col" : "sm:block"}`}
+    >
       <div className="flex items-center gap-2 px-2">
         <BrandLogoLight className="h-7 w-7 rounded-[7px] bg-white p-1" />
         <span className="text-[17px] font-bold tracking-tight">Lucreii</span>
@@ -283,6 +286,20 @@ function DashboardSidebar() {
           </div>
         ))}
       </nav>
+
+      {showFooter && (
+        <div className="mt-auto border-t border-white/15 pt-3">
+          <p className="text-center text-[9px] text-white/45">2.0.3</p>
+          <div className="mt-4 flex items-center gap-2 px-1">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-[9px] font-bold">
+              ER
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[9px] font-medium">Razão Social</p>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
@@ -504,7 +521,7 @@ export function DashboardGreeting({
   );
 }
 
-function DashboardPreview() {
+export function DashboardPreview({ wide = false }: { wide?: boolean }) {
   const reduceMotion = useReducedMotion();
   const metrics = [
     {
@@ -561,6 +578,7 @@ function DashboardPreview() {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: reduceMotion ? 0 : 0.8, ease: easeOut }}
       className="relative"
+      aria-label="Prévia do dashboard"
     >
       <div
         className="absolute -inset-5 rounded-[30px] bg-[#4ac5b4]/15 blur-3xl"
@@ -568,7 +586,7 @@ function DashboardPreview() {
       />
       <div className="relative overflow-hidden rounded-[21px] border border-white/95 bg-[#f5faf9] shadow-[0_24px_68px_rgba(13,66,59,0.18)]">
         <div className="grid sm:grid-cols-[148px_minmax(0,1fr)]">
-          <DashboardSidebar />
+          <DashboardSidebar showFooter={wide} />
           <div className="min-w-0 p-3 sm:p-4">
             <header className="flex items-start justify-between gap-3">
               <div>
@@ -580,38 +598,86 @@ function DashboardPreview() {
                   Visão consolidada do seu negócio nos principais marketplaces.
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dce8e9] bg-white px-2.5 py-2 text-[8px] font-semibold text-[#334b50] sm:px-3">
-                <CalendarDays
-                  className="h-3.5 w-3.5 text-[#637c81]"
-                  aria-hidden="true"
-                />
-                <span className="hidden sm:inline">Setembro de 2026</span>
-                <span className="sm:hidden">Set/26</span>
-                <ChevronDown
-                  className="h-3 w-3 text-[#637c81]"
-                  aria-hidden="true"
-                />
-              </div>
+              {wide ? (
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-[#dce8e9] bg-white text-[#334b50]">
+                    <Moon className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                  <span className="rounded-full border border-[#dce8e9] bg-white px-3 py-1.5 text-[8px] font-semibold text-[#334b50]">
+                    Sair
+                  </span>
+                </div>
+              ) : (
+                <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dce8e9] bg-white px-2.5 py-2 text-[8px] font-semibold text-[#334b50] sm:px-3">
+                  <CalendarDays
+                    className="h-3.5 w-3.5 text-[#637c81]"
+                    aria-hidden="true"
+                  />
+                  <span className="hidden sm:inline">Setembro de 2026</span>
+                  <span className="sm:hidden">Set/26</span>
+                  <ChevronDown
+                    className="h-3 w-3 text-[#637c81]"
+                    aria-hidden="true"
+                  />
+                </div>
+              )}
             </header>
 
-            <div className="mt-3 flex justify-end gap-1.5 text-[8px] text-[#637c81]">
-              {[
-                { label: "Todos", active: true },
-                { label: "Mercado Livre", active: false },
-                { label: "Shopee", active: false },
-                { label: "Shein", active: false },
-              ].map(({ label, active }) => (
-                <span
-                  key={label}
-                  className={`rounded-full px-2.5 py-1 ${active ? "bg-accent font-semibold text-white" : "bg-white"}`}
-                >
-                  {label}
-                </span>
-              ))}
+            {wide && (
+              <div className="mt-3 flex justify-end">
+                <div className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#dce8e9] bg-white px-2.5 py-2 text-[8px] font-semibold text-[#334b50] sm:px-3">
+                  <CalendarDays
+                    className="h-3.5 w-3.5 text-[#637c81]"
+                    aria-hidden="true"
+                  />
+                  <span className="hidden sm:inline">Setembro de 2026</span>
+                  <span className="sm:hidden">Set/26</span>
+                  <ChevronDown
+                    className="h-3 w-3 text-[#637c81]"
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 flex items-center justify-between gap-3 text-[8px] text-[#637c81]">
+              {wide && (
+                <div className="flex min-w-0 items-center gap-1.5 rounded-lg border border-[#dce8e9] bg-white px-2.5 py-2 sm:px-3">
+                  <CalendarDays
+                    className="h-3.5 w-3.5 shrink-0 text-[#637c81]"
+                    aria-hidden="true"
+                  />
+                  <span className="hidden uppercase tracking-[0.04em] sm:inline">
+                    Mês de referência
+                  </span>
+                  <strong className="truncate text-[#334b50]">
+                    agosto de 2026
+                  </strong>
+                  <ChevronDown
+                    className="h-3 w-3 shrink-0 text-[#637c81]"
+                    aria-hidden="true"
+                  />
+                </div>
+              )}
+              <div className="ml-auto flex justify-end gap-1.5">
+                {[
+                  { label: "Todos", active: true },
+                  { label: "Mercado Livre", active: false },
+                  { label: "Shopee", active: false },
+                  { label: "Shein", active: false },
+                ].map(({ label, active }) => (
+                  <span
+                    key={label}
+                    className={`rounded-full px-2.5 py-1 ${active ? "bg-accent font-semibold text-white" : "bg-white"}`}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
             </div>
 
             <motion.div
-              className="mt-2 grid grid-cols-3 items-stretch gap-2"
+              className={`mt-2 grid items-stretch gap-2 ${wide ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" : "grid-cols-3"}`}
               initial="hidden"
               animate="visible"
               variants={{
