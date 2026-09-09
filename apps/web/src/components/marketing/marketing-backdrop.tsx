@@ -5,13 +5,9 @@ import { motion } from "framer-motion";
 export function MarketingBackdrop() {
   return (
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      {/* Base: same canvas as body / app shell (globals.css) */}
+      {/* Shared light canvas keeps the fixed menu connected to the hero. */}
       <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 85% 55% at 50% -12%, rgba(14, 122, 111, 0.055), transparent 58%), radial-gradient(ellipse 55% 45% at 92% 18%, rgba(14, 122, 111, 0.035), transparent 52%), linear-gradient(180deg, var(--background) 0%, var(--background-soft) 100%)",
-        }}
+        className="marketing-site-canvas absolute inset-0"
       />
 
       {/* Subtle grid pattern */}

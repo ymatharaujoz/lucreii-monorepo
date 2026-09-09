@@ -67,6 +67,9 @@ describe("MarketplaceClaritySection", () => {
     expect(markup).toContain("Smartwatch");
     expect(markup).toContain("Atenção");
     expect(markup).toContain("Acompanhe o investimento em ADS");
+    expect(markup).toContain("bluetooth-headphones.png");
+    expect(markup).toContain("gaming-mouse.png");
+    expect(markup).toContain("smartwatch.png");
   });
 
   it("renders the reference trust band and omits the former testimonials copy", () => {

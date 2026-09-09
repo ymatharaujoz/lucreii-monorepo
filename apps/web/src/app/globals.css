@@ -331,6 +331,20 @@ h4 {
   font-family: var(--font-body), system-ui, -apple-system, sans-serif;
 }
 
+.marketing-site-canvas {
+  background:
+    radial-gradient(ellipse 85% 55% at 50% -12%, rgba(122, 211, 198, 0.13), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 92% 18%, rgba(255, 255, 255, 0.72), transparent 52%),
+    linear-gradient(145deg, #f1fbfa 0%, #e4f6f3 52%, #f3fbfa 100%);
+}
+
+.dark .marketing-site-canvas {
+  background:
+    radial-gradient(ellipse 85% 55% at 50% -12%, rgba(26, 188, 156, 0.08), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 92% 18%, rgba(26, 188, 156, 0.05), transparent 52%),
+    linear-gradient(145deg, #0f211f 0%, #102a27 52%, #10201f 100%);
+}
+
 .marketing-site h1,
 .marketing-site h2,
 .marketing-site h3 {

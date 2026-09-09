@@ -1,15 +1,13 @@
 "use client";
 
+import Image from "next/image";
 import {
   BarChart3,
   Box,
   Coins,
-  Headphones,
   Megaphone,
-  Mouse,
   ShoppingCart,
   Target,
-  Watch,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 
@@ -230,14 +228,29 @@ function MiniProfitVisual({ reduceMotion }: { reduceMotion: boolean | null }) {
 
 function MiniProductsVisual({ reduceMotion }: { reduceMotion: boolean | null }) {
   const products = [
-    { name: "Fone Bluetooth", status: "Lucro", icon: Headphones, statusClass: "bg-[#dff6f0] text-[#168576]" },
-    { name: "Mouse Gamer", status: "Lucro", icon: Mouse, statusClass: "bg-[#dff6f0] text-[#168576]" },
-    { name: "Smartwatch", status: "Atenção", icon: Watch, statusClass: "bg-[#ffe2e6] text-[#cf4554]" },
+    {
+      name: "Fone Bluetooth",
+      status: "Lucro",
+      image: "/marketing/products/bluetooth-headphones.png",
+      statusClass: "bg-[#dff6f0] text-[#168576]",
+    },
+    {
+      name: "Mouse Gamer",
+      status: "Lucro",
+      image: "/marketing/products/gaming-mouse.png",
+      statusClass: "bg-[#dff6f0] text-[#168576]",
+    },
+    {
+      name: "Smartwatch",
+      status: "Atenção",
+      image: "/marketing/products/smartwatch.png",
+      statusClass: "bg-[#ffe2e6] text-[#cf4554]",
+    },
   ] as const;
 
   return (
     <div className="mt-auto space-y-2 rounded-2xl border border-white/90 bg-white/80 p-4 shadow-[0_8px_20px_rgba(31,91,136,0.05)] dark:border-white/10 dark:bg-surface/70">
-      {products.map(({ name, status, icon: Icon, statusClass }, index) => (
+      {products.map(({ name, status, image, statusClass }, index) => (
         <motion.div
           key={name}
           initial={reduceMotion ? false : { opacity: 0, x: -8 }}
@@ -251,8 +264,15 @@ function MiniProductsVisual({ reduceMotion }: { reduceMotion: boolean | null }) 
           className="flex items-center justify-between gap-3 border-b border-border/60 py-1.5 last:border-0 last:pb-0 first:pt-0"
         >
           <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
-            <span className="flex h-7 w-5 shrink-0 items-center justify-center text-[#17232c]" aria-hidden="true">
-              <Icon className="h-5 w-5" strokeWidth={1.8} />
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center" aria-hidden="true">
+              <Image
+                src={image}
+                alt=""
+                width={32}
+                height={32}
+                sizes="32px"
+                className="h-7 w-7 object-contain"
+              />
             </span>
             <span className="truncate">{name}</span>
           </span>
