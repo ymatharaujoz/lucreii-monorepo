@@ -121,6 +121,9 @@ describe("MarketingHero", () => {
     expect(markup).toContain("Marketplaces");
     expect(markup).toContain("Conectado");
     expect(markup).toContain("Desconectado");
+    expect(markup).not.toContain("Conta principal");
+    expect(markup).not.toContain("2.0.3");
+    expect(markup).not.toContain(">ER<");
     expect(markup).not.toContain("Insights da Lucreii");
   });
 

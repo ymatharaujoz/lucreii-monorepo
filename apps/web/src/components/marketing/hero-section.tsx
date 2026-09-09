@@ -26,6 +26,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
+import { BrandLogoLight } from "@/components/brand-logo-light";
 import { ScheduleDemoLink } from "./schedule-demo-link";
 import {
   MercadoLivreMiniIcon,
@@ -241,23 +242,18 @@ function DashboardSidebar() {
   return (
     <aside className="hidden bg-[#102c31] px-3 py-5 text-white sm:block">
       <div className="flex items-center gap-2 px-2">
-        <span className="relative flex h-7 w-7 items-end justify-center overflow-hidden rounded-[7px] bg-white text-[#102c31]">
-          <span className="absolute bottom-1 left-1 h-3 w-1 bg-[#0e7a6f]" />
-          <span className="absolute bottom-1 left-2.5 h-4 w-1 bg-[#0e7a6f]" />
-          <span className="absolute bottom-1 left-4 h-5 w-1 bg-[#0e7a6f]" />
-          <span className="absolute left-1 top-1 h-px w-5 rotate-[-26deg] bg-[#0e7a6f]" />
-        </span>
+        <BrandLogoLight className="h-7 w-7 rounded-[7px] bg-white p-1" />
         <span className="text-[17px] font-bold tracking-tight">Lucreii</span>
       </div>
 
       <nav
-        className="mt-7 space-y-1"
+        className="mt-7 space-y-1.5"
         aria-label="Prévia da navegação do dashboard"
       >
         {dashboardNavItems.map(({ label, icon: Icon, active, children }) => (
           <div key={label}>
             <div
-              className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-[10px] ${active ? "bg-accent text-white shadow-[0_7px_18px_rgba(14,122,111,0.26)]" : "text-white/80"}`}
+              className={`flex min-h-8 items-center gap-2 rounded-lg px-2.5 py-1.5 text-[10px] ${active ? "bg-accent text-white shadow-[0_7px_18px_rgba(14,122,111,0.26)]" : "text-white/80"}`}
             >
               <Icon
                 className="h-3.5 w-3.5 shrink-0"
@@ -272,26 +268,18 @@ function DashboardSidebar() {
             {children && (
               <div className="ml-8 mt-1 space-y-1 border-l border-white/15 pl-3 text-[9px] text-white/70">
                 {children.map((child) => (
-                  <p key={child}>{child}</p>
+                  <p key={child} className="flex items-center gap-1.5">
+                    <span className="text-white/75" aria-hidden="true">
+                      •
+                    </span>
+                    {child}
+                  </p>
                 ))}
               </div>
             )}
           </div>
         ))}
       </nav>
-
-      <div className="mt-24 border-t border-white/15 pt-3">
-        <p className="text-center text-[9px] text-white/45">2.0.3</p>
-        <div className="mt-4 flex items-center gap-2 px-1">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-[9px] font-bold">
-            ER
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[9px] font-medium">Razão Social</p>
-            <p className="text-[8px] text-white/45">Conta principal</p>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 }
@@ -320,7 +308,7 @@ function MetricCard({
   }[tone];
 
   return (
-    <div className={`min-w-0 rounded-[14px] border p-3 ${toneClass}`}>
+    <div className={`h-[104px] min-w-0 rounded-[14px] border p-3 ${toneClass}`}>
       <div className="flex items-start gap-2">
         <Icon
           className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${tone === "rose" ? "text-[#ef777d]" : "text-accent"}`}
@@ -334,7 +322,9 @@ function MetricCard({
       <p className="mt-1.5 truncate text-[16px] font-bold tracking-tight text-[#12292d] sm:text-[18px]">
         {value}
       </p>
-      <p className="mt-0.5 truncate text-[9px] text-[#74898e]">{detail}</p>
+      <p className="mt-0.5 min-h-5 line-clamp-2 text-[9px] leading-[1.2] text-[#74898e]">
+        {detail}
+      </p>
       {status && (
         <p className="mt-1 text-[9px] font-semibold text-accent">↗ {status}</p>
       )}
@@ -618,7 +608,7 @@ function DashboardPreview() {
             </div>
 
             <motion.div
-              className="mt-2 grid grid-cols-3 gap-2"
+              className="mt-2 grid grid-cols-3 items-stretch gap-2"
               initial="hidden"
               animate="visible"
               variants={{
