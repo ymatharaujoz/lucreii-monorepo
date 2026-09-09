@@ -570,33 +570,8 @@ function IntegrationCallout() {
           </div>
 
           <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
-            <div className="hidden items-start gap-2 text-accent sm:flex">
-              <svg
-                className="mt-1 h-12 w-14 shrink-0"
-                viewBox="0 0 56 48"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="M52 5C42 7 35 14 35 26c0 8-8 14-27 14"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="m10 34-4 6 7 2"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <p className="max-w-[180px] font-['Segoe_Print','Comic_Sans_MS',cursive] text-base leading-tight text-foreground/75">
-                Seus dados organizados e seu lucro no controle.
-              </p>
-            </div>
             <motion.div
-              className="mt-4 grid grid-cols-4 gap-2"
+              className="grid grid-cols-4 gap-2"
               animate={reduceMotion === false ? { y: [0, -3, 0] } : undefined}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
             >

@@ -114,8 +114,6 @@ describe("MarketingHero", () => {
     expect(markup).toContain("Evolução do lucro líquido");
     expect(markup).toContain("Performance por canal");
     expect(markup).toContain("Insights da Lucreii");
-    expect(markup).toContain(
-      "Todas as informações que você precisa, em um só lugar.",
-    );
+    expect(markup).not.toContain("Todas as informações que você precisa, em um só lugar.");
   });
 });

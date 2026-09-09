@@ -97,6 +97,6 @@ describe("IntegrationsSection", () => {
     expect(markup).toContain("Já vende no Mercado Livre ou Shopee?");
     expect(markup).toContain("Sem cartão de crédito");
     expect(markup).toContain("Cancele quando quiser");
-    expect(markup).toContain("Seus dados organizados e seu lucro no controle.");
+    expect(markup).not.toContain("Seus dados organizados e seu lucro no controle.");
   });
 });
