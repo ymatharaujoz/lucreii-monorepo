@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -29,8 +30,7 @@ import {
 import type { AuthenticatedRequestContext } from "@/modules/auth/auth.types";
 import type { BillingInterval } from "./billing.types";
 
-const TRIAL_DAYS = 7;
-const CHECKOUT_RESERVATION_MS = 24 * 60 * 60 * 1000;
+const CHECKOUT_TRIAL_MINIMUM_MS = 48 * 60 * 60 * 1000;
 const BILLING_PRICE_CONFIG_LABEL = "Stripe billing configuration";
 
 @Injectable()
@@ -52,81 +52,85 @@ export class BillingService {
     planCode: BillingPlanCode,
     interval: BillingInterval,
   ) {
-    const priceId = this.resolvePriceId(planCode, interval);
-    await this.validateConfiguredPrice(planCode, interval, priceId);
-    const customerId = await this.ensureCheckoutCustomer(authContext);
-    const billingTrial = await this.ensureBillingTrial(authContext);
-    let trialEligible =
-      planCode === "start" && billingTrial.redeemedAt === null;
+    const organization = this.requireBillingOwner(authContext);
+    const billingTrial = await this.findBillingTrial(authContext.user.id);
 
-    if (trialEligible && billingTrial.checkoutSessionId) {
-      const existingSession = await this.stripe.checkout.sessions.retrieve(
-        billingTrial.checkoutSessionId,
-      );
-
-      if (
-        existingSession.status === "open" &&
-        existingSession.url &&
-        billingTrial.reservedUntil &&
-        billingTrial.reservedUntil > new Date() &&
-        billingTrial.planCode === planCode &&
-        billingTrial.interval === interval
-      ) {
-        return {
-          checkoutUrl: existingSession.url,
-          sessionId: existingSession.id,
-        };
-      }
-
-      if (existingSession.status === "complete") {
-        await this.redeemTrial(authContext.user.id, existingSession.id);
-        trialEligible = false;
-      }
+    if (!billingTrial || billingTrial.organizationId !== organization.id) {
+      throw new BadRequestException("Internal trial was not found for this workspace.");
     }
 
-    if (trialEligible && billingTrial.checkoutSessionId) {
-      await this.expireReservedCheckout(billingTrial.checkoutSessionId);
-      await this.clearTrialReservation(
-        billingTrial.id,
-        billingTrial.checkoutSessionId,
+    const priceId = this.resolvePriceId(planCode, interval);
+    await this.validateConfiguredPrice(planCode, interval, priceId);
+    const reusableCheckout = await this.findReusableOpenCheckout({
+      organizationId: organization.id,
+      userId: authContext.user.id,
+    });
+
+    if (reusableCheckout) {
+      return reusableCheckout;
+    }
+
+    const customerId = await this.ensureCheckoutCustomer(authContext);
+
+    const activeSubscription = await this.db.query.subscriptions.findFirst({
+      where: (table, { and, eq }) =>
+        and(
+          eq(table.organizationId, organization.id),
+          eq(table.provider, "stripe"),
+          isNotNull(table.externalSubscriptionId),
+        ),
+      orderBy: (table, { desc }) => [desc(table.updatedAt)],
+    });
+
+    if (
+      activeSubscription &&
+      new Set(["active", "trialing", "past_due"]).has(activeSubscription.status)
+    ) {
+      throw new BadRequestException(
+        "This workspace already has a Stripe subscription. Manage it in the billing portal.",
       );
     }
 
     const successUrl = `${this.env.WEB_APP_ORIGIN}/app/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${this.env.WEB_APP_ORIGIN}/app/billing?checkout=cancelled`;
+    const now = Date.now();
+    const isTrialActive = billingTrial.trialEndsAt.getTime() > now;
+    const remainingTrialMs = billingTrial.trialEndsAt.getTime() - now;
+    const usesSetupCheckout =
+      isTrialActive && remainingTrialMs <= CHECKOUT_TRIAL_MINIMUM_MS;
+    const metadata = {
+      interval,
+      organizationId: organization.id,
+      planCode,
+      userId: authContext.user.id,
+    };
     let session: Stripe.Checkout.Session;
 
     try {
-      session = await this.stripe.checkout.sessions.create({
-        cancel_url: cancelUrl,
-        customer: customerId,
-        line_items: [
-          {
-            price: priceId,
-            quantity: 1,
-          },
-        ],
-        metadata: {
-          interval,
-          organizationId: authContext.organization?.id ?? "",
-          planCode,
-          trialEligible: String(trialEligible),
-          userId: authContext.user.id,
-        },
-        mode: "subscription",
-        payment_method_collection: "always",
-        subscription_data: {
-          metadata: {
-            interval,
-            organizationId: authContext.organization?.id ?? "",
-            planCode,
-            trialEligible: String(trialEligible),
-            userId: authContext.user.id,
-          },
-          ...(trialEligible ? { trial_period_days: TRIAL_DAYS } : {}),
-        },
-        success_url: successUrl,
-      });
+      session = usesSetupCheckout
+        ? await this.stripe.checkout.sessions.create({
+            cancel_url: cancelUrl,
+            customer: customerId,
+            metadata,
+            mode: "setup",
+            payment_method_types: ["card"],
+            success_url: successUrl,
+          })
+        : await this.stripe.checkout.sessions.create({
+            cancel_url: cancelUrl,
+            customer: customerId,
+            line_items: [{ price: priceId, quantity: 1 }],
+            metadata,
+            mode: "subscription",
+            payment_method_collection: "always",
+            subscription_data: {
+              metadata,
+              ...(isTrialActive
+                ? { trial_end: Math.floor(billingTrial.trialEndsAt.getTime() / 1000) }
+                : {}),
+            },
+            success_url: successUrl,
+          });
     } catch (error: unknown) {
       this.rethrowStripePriceConfigurationError(error, {
         interval,
@@ -142,47 +146,10 @@ export class BillingService {
       );
     }
 
-    if (trialEligible) {
-      const reserved = await this.reserveTrialCheckout({
-        billingTrialId: billingTrial.id,
-        checkoutSessionId: session.id,
-        expiresAt:
-          this.toDate(session.expires_at) ??
-          new Date(Date.now() + CHECKOUT_RESERVATION_MS),
-        interval,
-        planCode,
-      });
-
-      if (!reserved) {
-        await this.expireReservedCheckout(session.id);
-        const winningTrial = await this.findBillingTrial(
-          authContext.user.id,
-          authContext.user.email,
-        );
-
-        if (winningTrial?.checkoutSessionId) {
-          const winningSession = await this.stripe.checkout.sessions.retrieve(
-            winningTrial.checkoutSessionId,
-          );
-
-          if (winningSession.status === "open" && winningSession.url) {
-            return {
-              checkoutUrl: winningSession.url,
-              sessionId: winningSession.id,
-            };
-          }
-        }
-
-        throw new BadRequestException(
-          "Unable to reserve Stripe trial checkout.",
-        );
-      }
-    }
-
     await this.upsertPendingCheckoutRecord({
       checkoutSessionId: session.id,
       interval,
-      organizationId: authContext.organization?.id ?? null,
+      organizationId: organization.id,
       planCode,
       stripeCustomerId: customerId,
       stripeSubscriptionId: null,
@@ -200,15 +167,10 @@ export class BillingService {
     authContext: AuthenticatedRequestContext,
     sessionId: string,
   ) {
+    this.requireBillingOwner(authContext);
     const session = await this.stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["subscription"],
     });
-
-    if (session.mode !== "subscription") {
-      throw new BadRequestException(
-        "Checkout session is not a subscription checkout.",
-      );
-    }
 
     const sessionUserId = session.metadata?.userId;
     if (!sessionUserId || sessionUserId !== authContext.user.id) {
@@ -222,14 +184,19 @@ export class BillingService {
     }
 
     const customerId = this.readStripeCustomerIdFromSession(session.customer);
-    const externalSubscriptionId = this.readStripeSubscriptionIdFromSession(
-      session.subscription,
-    );
     const sessionOrganizationId = this.normalizeNullableString(
       session.metadata?.organizationId,
     );
     const interval = this.resolveIntervalFromCheckoutSession(session);
     const planCode = this.resolvePlanCodeFromCheckoutSession(session);
+    const externalSubscriptionId =
+      session.mode === "setup"
+        ? await this.finalizeSetupCheckoutSubscription(session)
+        : this.readStripeSubscriptionIdFromSession(session.subscription);
+
+    if (!sessionOrganizationId) {
+      throw new BadRequestException("Checkout session is missing a workspace.");
+    }
 
     await this.upsertPendingCheckoutRecord({
       checkoutSessionId: session.id,
@@ -239,17 +206,13 @@ export class BillingService {
       stripeCustomerId: customerId,
       stripeSubscriptionId: externalSubscriptionId,
       userId: authContext.user.id,
-      status: sessionOrganizationId ? "completed" : "confirmed",
+      status: "completed",
     });
-    await this.redeemTrial(authContext.user.id, session.id);
-
-    if (sessionOrganizationId) {
-      await this.syncSubscriptionByExternalId(
-        externalSubscriptionId,
-        sessionOrganizationId,
-        customerId,
-      );
-    }
+    await this.syncSubscriptionByExternalId(
+      externalSubscriptionId,
+      sessionOrganizationId,
+      customerId,
+    );
   }
 
   async reconcileOrganizationSubscriptionWithStripe(organizationId: string) {
@@ -306,57 +269,40 @@ export class BillingService {
     }
   }
 
-  async completePendingCheckoutForOrganization(input: {
-    organizationId: string;
-    userId: string;
-  }) {
-    return this.db.transaction((tx) =>
-      this.completePendingCheckoutForOrganizationTx(
-        tx as DatabaseClient,
-        input,
-      ),
-    );
-  }
-
-  async completePendingCheckoutForOrganizationTx(
+  async assignTrialToOrganizationTx(
     tx: DatabaseClient,
     input: {
       organizationId: string;
       userId: string;
     },
   ) {
-    const pendingCheckout = await tx.query.pendingCheckouts.findFirst({
-      where: (table, { and, eq }) =>
-        and(eq(table.userId, input.userId), eq(table.status, "confirmed")),
-      orderBy: (table, { desc }) => [desc(table.updatedAt)],
-    });
-
-    if (!pendingCheckout?.stripeSubscriptionId) {
-      throw new BadRequestException(
-        "No confirmed checkout is waiting for onboarding.",
-      );
-    }
-
-    const subscription = await this.stripe.subscriptions.retrieve(
-      pendingCheckout.stripeSubscriptionId,
-    );
-    const subscriptionId = await this.syncSubscriptionObjectDb(
-      tx,
-      subscription,
-      input.organizationId,
-      pendingCheckout.stripeCustomerId,
-    );
-
-    await tx
-      .update(pendingCheckouts)
+    const [assignedTrial] = await tx
+      .update(billingTrials)
       .set({
         organizationId: input.organizationId,
-        status: "completed",
         updatedAt: new Date(),
       })
-      .where(eq(pendingCheckouts.id, pendingCheckout.id));
+      .where(
+        and(
+          eq(billingTrials.userId, input.userId),
+          isNull(billingTrials.organizationId),
+        ),
+      )
+      .returning({ id: billingTrials.id });
 
-    return subscriptionId;
+    if (assignedTrial) {
+      return assignedTrial.id;
+    }
+
+    const existingTrial = await tx.query.billingTrials.findFirst({
+      where: (table, { eq }) => eq(table.userId, input.userId),
+    });
+
+    if (existingTrial?.organizationId === input.organizationId) {
+      return existingTrial.id;
+    }
+
+    throw new BadRequestException("Internal trial was not found for this user.");
   }
 
   async processWebhook(
@@ -419,15 +365,19 @@ export class BillingService {
       );
     }
 
-    const externalSubscriptionId = this.readStripeSubscriptionIdFromSession(
-      session.subscription,
-    );
     const customerId = this.readStripeCustomerIdFromSession(session.customer);
     const organizationId = this.normalizeNullableString(
       session.metadata?.organizationId,
     );
+    if (!organizationId) {
+      throw new BadRequestException("Checkout webhook is missing a workspace.");
+    }
     const interval = this.resolveIntervalFromCheckoutSession(session);
     const planCode = this.resolvePlanCodeFromCheckoutSession(session);
+    const externalSubscriptionId =
+      session.mode === "setup"
+        ? await this.finalizeSetupCheckoutSubscription(session)
+        : this.readStripeSubscriptionIdFromSession(session.subscription);
 
     await this.upsertPendingCheckoutRecord({
       checkoutSessionId: session.id,
@@ -437,49 +387,30 @@ export class BillingService {
       stripeCustomerId: customerId,
       stripeSubscriptionId: externalSubscriptionId,
       userId,
-      status: organizationId ? "completed" : "confirmed",
+      status: "completed",
     });
-    await this.redeemTrial(userId, session.id);
+    const localSubscriptionId = await this.syncSubscriptionByExternalId(
+      externalSubscriptionId,
+      organizationId,
+      customerId,
+    );
 
-    if (organizationId) {
-      const localSubscriptionId = await this.syncSubscriptionByExternalId(
-        externalSubscriptionId,
-        organizationId,
-        customerId,
-      );
-
-      await this.recordSubscriptionEvent({
-        event,
-        organizationId,
-        subscriptionId: localSubscriptionId,
-      });
-    }
+    await this.recordSubscriptionEvent({
+      event,
+      organizationId,
+      subscriptionId: localSubscriptionId,
+    });
   }
 
   private async handleCheckoutSessionExpired(event: Stripe.Event) {
     const session = event.data.object as Stripe.Checkout.Session;
-    const userId = session.metadata?.userId;
-
-    if (!userId) {
-      return;
-    }
-
     await this.db
-      .update(billingTrials)
+      .update(pendingCheckouts)
       .set({
-        checkoutSessionId: null,
-        interval: null,
-        planCode: null,
-        reservedUntil: null,
+        status: "expired",
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(billingTrials.userId, userId),
-          eq(billingTrials.checkoutSessionId, session.id),
-          isNull(billingTrials.redeemedAt),
-        ),
-      );
+      .where(eq(pendingCheckouts.checkoutSessionId, session.id));
   }
 
   private async handleSubscriptionEvent(event: Stripe.Event) {
@@ -634,120 +565,67 @@ export class BillingService {
     return created.id;
   }
 
-  private async ensureBillingTrial(authContext: AuthenticatedRequestContext) {
-    const email = authContext.user.email.trim().toLowerCase();
-    const existing = await this.findBillingTrial(authContext.user.id, email);
-
-    if (existing) {
-      return existing;
-    }
-
-    await this.db
-      .insert(billingTrials)
-      .values({
-        email,
-        userId: authContext.user.id,
-      })
-      .onConflictDoNothing();
-
-    const created = await this.findBillingTrial(authContext.user.id, email);
-
-    if (!created) {
-      throw new BadRequestException(
-        "Unable to initialize billing trial eligibility.",
-      );
-    }
-
-    return created;
-  }
-
-  private findBillingTrial(userId: string, email: string) {
+  private findBillingTrial(userId: string) {
     return this.db.query.billingTrials.findFirst({
-      where: (table, { eq, or }) =>
-        or(
-          eq(table.userId, userId),
-          eq(table.email, email.trim().toLowerCase()),
-        ),
+      where: (table, { eq }) => eq(table.userId, userId),
     });
   }
 
-  private async reserveTrialCheckout(input: {
-    billingTrialId: string;
-    checkoutSessionId: string;
-    expiresAt: Date;
-    interval: BillingInterval;
-    planCode: BillingPlanCode;
-  }) {
-    const [reserved] = await this.db
-      .update(billingTrials)
-      .set({
-        checkoutSessionId: input.checkoutSessionId,
-        interval: input.interval,
-        planCode: input.planCode,
-        reservedUntil: input.expiresAt,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(billingTrials.id, input.billingTrialId),
-          isNull(billingTrials.checkoutSessionId),
-          isNull(billingTrials.redeemedAt),
-        ),
-      )
-      .returning({ id: billingTrials.id });
-
-    return Boolean(reserved);
-  }
-
-  private async clearTrialReservation(
-    billingTrialId: string,
-    checkoutSessionId: string,
-  ) {
-    await this.db
-      .update(billingTrials)
-      .set({
-        checkoutSessionId: null,
-        interval: null,
-        planCode: null,
-        reservedUntil: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(billingTrials.id, billingTrialId),
-          eq(billingTrials.checkoutSessionId, checkoutSessionId),
-          isNull(billingTrials.redeemedAt),
-        ),
-      );
-  }
-
-  private async redeemTrial(userId: string, checkoutSessionId: string) {
-    await this.db
-      .update(billingTrials)
-      .set({
-        redeemedAt: new Date(),
-        reservedUntil: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(billingTrials.userId, userId),
-          eq(billingTrials.checkoutSessionId, checkoutSessionId),
-          isNull(billingTrials.redeemedAt),
-        ),
-      );
-  }
-
-  private async expireReservedCheckout(checkoutSessionId: string) {
-    try {
-      await this.stripe.checkout.sessions.expire(checkoutSessionId);
-    } catch (error: unknown) {
-      if (error instanceof Stripe.errors.StripeInvalidRequestError) {
-        return;
-      }
-
-      throw error;
+  private requireBillingOwner(authContext: AuthenticatedRequestContext) {
+    if (!authContext.organization || authContext.organization.role !== "owner") {
+      throw new ForbiddenException("Only workspace owners can manage billing.");
     }
+
+    return authContext.organization;
+  }
+
+  private async finalizeSetupCheckoutSubscription(
+    session: Stripe.Checkout.Session,
+  ) {
+    const organizationId = this.normalizeNullableString(
+      session.metadata?.organizationId,
+    );
+    const userId = this.normalizeNullableString(session.metadata?.userId);
+    const setupIntentId = this.readStripeSetupIntentIdFromSession(session.setup_intent);
+
+    if (!organizationId || !userId) {
+      throw new BadRequestException("Setup checkout is missing billing metadata.");
+    }
+
+    const setupIntent = await this.stripe.setupIntents.retrieve(setupIntentId);
+    const paymentMethodId = this.readStripePaymentMethodId(
+      setupIntent.payment_method,
+    );
+    const trial = await this.findBillingTrial(userId);
+    const planCode = this.resolvePlanCodeFromCheckoutSession(session);
+    const interval = this.resolveIntervalFromCheckoutSession(session);
+    const priceId = this.resolvePriceId(planCode, interval);
+    const stillInTrial =
+      trial?.organizationId === organizationId &&
+      trial.trialEndsAt.getTime() > Date.now();
+    const subscription = await this.stripe.subscriptions.create(
+      {
+        customer: this.readStripeCustomerIdFromSession(session.customer),
+        default_payment_method: paymentMethodId,
+        items: [{ price: priceId }],
+        metadata: {
+          checkoutSessionId: session.id,
+          interval,
+          organizationId,
+          planCode,
+          userId,
+        },
+        payment_settings: {
+          save_default_payment_method: "on_subscription",
+        },
+        ...(stillInTrial
+          ? { trial_end: Math.floor(trial.trialEndsAt.getTime() / 1000) }
+          : {}),
+      },
+      { idempotencyKey: `setup-checkout-subscription:${session.id}` },
+    );
+
+    return subscription.id;
   }
 
   private async ensureCheckoutCustomer(
@@ -912,6 +790,52 @@ export class BillingService {
     return created;
   }
 
+  private async findReusableOpenCheckout(input: {
+    organizationId: string;
+    userId: string;
+  }) {
+    const pendingCheckout = await this.db.query.pendingCheckouts.findFirst({
+      where: (table, { and, eq }) =>
+        and(
+          eq(table.organizationId, input.organizationId),
+          eq(table.status, "created"),
+          eq(table.userId, input.userId),
+        ),
+      orderBy: (table, { desc }) => [desc(table.updatedAt)],
+    });
+
+    if (!pendingCheckout) {
+      return null;
+    }
+
+    const session = await this.stripe.checkout.sessions.retrieve(
+      pendingCheckout.checkoutSessionId,
+    );
+
+    if (session.status === "open" && session.url) {
+      return {
+        checkoutUrl: session.url,
+        sessionId: session.id,
+      };
+    }
+
+    await this.db
+      .update(pendingCheckouts)
+      .set({
+        status: session.status === "complete" ? "completed" : "expired",
+        updatedAt: new Date(),
+      })
+      .where(eq(pendingCheckouts.id, pendingCheckout.id));
+
+    if (session.status === "complete") {
+      throw new BadRequestException(
+        "Checkout was completed. Return to the application to confirm the subscription.",
+      );
+    }
+
+    return null;
+  }
+
   private async recordSubscriptionEvent(input: {
     event: Stripe.Event;
     organizationId: string;
@@ -961,10 +885,7 @@ export class BillingService {
     for (const [code, intervals] of Object.entries(
       this.readConfiguredPriceIdMap(),
     ) as [BillingPlanCode, Record<BillingInterval, string>][]) {
-      if (
-        intervals.monthly === priceId ||
-        intervals.annual === priceId
-      ) {
+      if (intervals.monthly === priceId) {
         return BILLING_PLAN_BY_CODE[code];
       }
     }
@@ -993,33 +914,11 @@ export class BillingService {
   }
 
   private resolveInterval(subscription: Stripe.Subscription): BillingInterval {
-    const firstItem = subscription.items.data[0];
-    const priceId = firstItem?.price?.id;
-
-    if (priceId) {
-      for (const code of Object.keys(BILLING_PLAN_BY_CODE) as BillingPlanCode[]) {
-        if (this.resolvePriceId(code, "annual") === priceId) {
-          return "annual";
-        }
-
-        if (this.resolvePriceId(code, "monthly") === priceId) {
-          return "monthly";
-        }
-      }
-
-    }
-
-    if (firstItem?.price?.recurring?.interval === "year") {
-      return "annual";
-    }
-
     return "monthly";
   }
 
   private resolveIntervalFromCheckoutSession(session: Stripe.Checkout.Session) {
-    const interval = session.metadata?.interval;
-
-    return interval === "annual" ? "annual" : "monthly";
+    return "monthly" as const;
   }
 
   private resolvePlanCodeFromCheckoutSession(
@@ -1079,21 +978,49 @@ export class BillingService {
     return typeof value === "number" ? new Date(value * 1000) : null;
   }
 
+  private readStripeSetupIntentIdFromSession(
+    setupIntent: string | Stripe.SetupIntent | null,
+  ) {
+    if (typeof setupIntent === "string") {
+      return setupIntent;
+    }
+
+    if (setupIntent && typeof setupIntent === "object" && "id" in setupIntent) {
+      return setupIntent.id;
+    }
+
+    throw new BadRequestException("Checkout session did not attach a setup intent.");
+  }
+
+  private readStripePaymentMethodId(
+    paymentMethod: string | Stripe.PaymentMethod | null,
+  ) {
+    if (typeof paymentMethod === "string") {
+      return paymentMethod;
+    }
+
+    if (paymentMethod && typeof paymentMethod === "object" && "id" in paymentMethod) {
+      return paymentMethod.id;
+    }
+
+    throw new BadRequestException("Setup checkout did not collect a payment method.");
+  }
+
   private readConfiguredPriceIdMap(): Record<
     BillingPlanCode,
     Record<BillingInterval, string>
   > {
     return {
       business: {
-        annual: this.env.STRIPE_PRICE_BUSINESS_ANNUAL,
         monthly: this.env.STRIPE_PRICE_BUSINESS_MONTHLY,
       },
+      essencial: {
+        monthly: this.env.STRIPE_PRICE_ESSENCIAL_MONTHLY ?? "",
+      },
       pro: {
-        annual: this.env.STRIPE_PRICE_PRO_ANNUAL,
         monthly: this.env.STRIPE_PRICE_PRO_MONTHLY,
       },
       start: {
-        annual: this.env.STRIPE_PRICE_START_ANNUAL,
         monthly: this.env.STRIPE_PRICE_START_MONTHLY,
       },
     };
@@ -1169,6 +1096,7 @@ export class BillingService {
   }
 
   async createCustomerPortalSession(authContext: AuthenticatedRequestContext) {
+    this.requireBillingOwner(authContext);
     // Buscar o customer ID da organização ou do pending checkout
     let customerId: string | null = null;
 

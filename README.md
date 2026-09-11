@@ -93,7 +93,7 @@ Environment variables are split per project. Each app owns its `.env` and `.env.
 - `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_API_KEY` — Better Auth configuration
 - `DATABASE_URL` — runtime DB URL
 - `DATABASE_MIGRATION_URL` — preferred DB URL for Drizzle migrations, seed, and Studio
-- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_ANNUAL` — billing
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_START_MONTHLY`, `STRIPE_PRICE_ESSENCIAL_MONTHLY`, `STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_BUSINESS_MONTHLY` — billing mensal
 - `MERCADOLIVRE_*` and `SHOPEE_*` — optional marketplace integrations
 - `SYNC_RELAX_GUARDS` — local/testing helper; ignored in production
 

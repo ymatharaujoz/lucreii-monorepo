@@ -33,7 +33,10 @@ export class EntitlementGuard implements CanActivate {
     await this.billingService.reconcileOrganizationSubscriptionWithStripe(
       organization.id,
     );
-    await this.entitlementsService.requireActiveEntitlement(organization.id);
+    await this.entitlementsService.requireActiveEntitlement({
+      organizationId: organization.id,
+      userId: authContext.user.id,
+    });
 
     return true;
   }

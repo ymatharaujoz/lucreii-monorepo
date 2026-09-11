@@ -1,6 +1,7 @@
 import type {
   BillingInterval,
   BillingPlanCode,
+  BillingTrial,
 } from "@lucreii/types";
 import { BILLING_INTERVALS, BILLING_PLAN_CODES } from "@lucreii/types";
 
@@ -18,8 +19,7 @@ export type BillingStateStatus = (typeof BILLING_STATE_STATUSES)[number];
 export type BillingSnapshot = {
   organizationId: string | null;
   entitled: boolean;
-  trialEligible?: boolean;
-  trialDays?: number;
+  trial?: BillingTrial;
   status?: BillingStateStatus;
   customer: {
     externalCustomerId: string;

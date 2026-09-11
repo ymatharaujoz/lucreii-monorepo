@@ -1,51 +1,55 @@
-﻿# Teste do trial Stripe de 7 dias
+# Trial grátis sem cartão
 
 ## Objetivo
 
-Validar que um e-mail recebe um Ãºnico trial de 7 dias, informa cartÃ£o no Stripe Checkout e
-sÃ³ Ã© cobrado depois do trial. Assinaturas `trialing` e `active` liberam acesso; `past_due`,
-`unpaid`, `paused` e `canceled` bloqueiam acesso.
+O trial da Lucreii é interno: começa na criação da conta, dura exatamente sete
+dias e não exige cartão nem chamada à Stripe. A Stripe é a fonte de verdade
+apenas para assinaturas pagas.
 
-O trial Ã© configurado pela API na Checkout Session. Os Prices mensal e anual continuam
-recorrentes e nÃ£o precisam de configuraÃ§Ã£o de trial no Stripe Dashboard.
+O registro em `billing_trials` é único por usuário e e-mail, contém
+`trial_started_at`, `trial_ends_at` e é associado ao workspace quando o owner
+conclui o onboarding.
 
-## PrÃ©-requisitos
+## Configuração
 
-Use somente chaves do Stripe Sandbox/Test mode:
+Crie quatro Prices recorrentes mensais, ativos e na moeda BRL, no Stripe:
+
+| Plano | Valor |
+| --- | ---: |
+| Start | R$ 49,90/mês |
+| Essencial | R$ 99,90/mês |
+| Pro | R$ 179,90/mês |
+| Business | R$ 249,90/mês |
+
+Configure somente os IDs mensais:
 
 ```env
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
-STRIPE_PRICE_START_MONTHLY=price_1TiiHEAcc6lqNf7obNTfV2UF
-STRIPE_PRICE_START_ANNUAL=price_1TiiHfAcc6lqNf7o1HBx8o6c
-STRIPE_PRICE_PRO_MONTHLY=price_1TiiI0Acc6lqNf7oijT1DqqH
-STRIPE_PRICE_PRO_ANNUAL=price_1TiiICAcc6lqNf7olbaW6UZw
-STRIPE_PRICE_BUSINESS_MONTHLY=price_1TiiItAcc6lqNf7oYZv2jHVt
-STRIPE_PRICE_BUSINESS_ANNUAL=price_1TiiJBAcc6lqNf7osFGYo2ko
+STRIPE_PRICE_START_MONTHLY=price_...
+STRIPE_PRICE_ESSENCIAL_MONTHLY=price_...
+STRIPE_PRICE_PRO_MONTHLY=price_...
+STRIPE_PRICE_BUSINESS_MONTHLY=price_...
 WEB_APP_ORIGIN=http://localhost:3000
 ```
 
-Confirme que ambos os Prices estÃ£o ativos, usam a moeda esperada e tÃªm recorrÃªncia
-`month` e `year`, respectivamente.
-
-Aplique as migraÃ§Ãµes antes do teste:
+Antes do deploy, aplique a migração:
 
 ```bash
 corepack pnpm db:migrate
 ```
 
-## Webhook local
+Não há Price ou Checkout para Enterprise: esse plano abre contato com um
+especialista.
 
-Instale e autentique o Stripe CLI. Em seguida:
+## Webhooks locais
 
 ```bash
 stripe login
 stripe listen --forward-to localhost:4000/billing/stripe/webhook
 ```
 
-Copie o `whsec_...` exibido para `STRIPE_WEBHOOK_SECRET` e reinicie a API.
-
-No endpoint de produÃ§Ã£o, habilite estes eventos:
+Copie o `whsec_...` exibido para `STRIPE_WEBHOOK_SECRET`. Habilite em produção:
 
 - `checkout.session.completed`
 - `checkout.session.expired`
@@ -53,97 +57,35 @@ No endpoint de produÃ§Ã£o, habilite estes eventos:
 - `customer.subscription.updated`
 - `customer.subscription.deleted`
 
-## Fluxo de sucesso
+## Cenários de validação
 
-1. Crie conta com e-mail ainda nÃ£o presente em `billing_trials`.
-2. Abra `/app/billing`.
-3. Confirme textos â€œTeste grÃ¡tis por 7 diasâ€, â€œCartÃ£o obrigatÃ³rioâ€ e cobranÃ§a automÃ¡tica.
-4. Teste primeiro plano mensal e depois repita com outro e-mail no anual.
-5. Use cartÃ£o `4242 4242 4242 4242`, validade futura e qualquer CVC.
-6. Conclua Checkout.
-7. Confirme redirecionamento, onboarding e acesso Ã s rotas protegidas.
-8. No Stripe Dashboard, confirme assinatura `trialing`, cartÃ£o salvo e `trial_end` em 7 dias.
-9. No banco, confirme:
+1. Crie uma conta. Confirme que não há Checkout, cartão ou cliente Stripe e que
+   `billing_trials` tem início e fim separados por sete dias.
+2. Conclua o onboarding. Confirme que o mesmo trial foi ligado ao workspace e
+   que o Dashboard abre com a faixa “Seu teste termina em N dias”.
+3. Confirme que um membro que não é owner não vê “Ver planos” e recebe `403`
+   ao chamar checkout ou portal diretamente.
+4. Com mais de 48 horas restantes, escolha um plano. O Checkout deve coletar
+   cartão e criar uma assinatura com `trial_end` igual a `trial_ends_at`.
+5. Com menos de 48 horas restantes, o Checkout deve usar modo `setup`; após a
+   confirmação, a API cria uma assinatura idempotente com o mesmo `trial_end`.
+6. Depois do vencimento, confirme que APIs protegidas retornam `402`, o app
+   redireciona a `/app/billing`, e o Checkout cria assinatura sem `trial_end`.
+7. Use `4242 4242 4242 4242` no Sandbox para sucesso. Para falha posterior,
+   use `4000 0000 0000 0341`, avance a simulação/Test Clock e confirme que
+   `past_due` bloqueia acesso até a Stripe retornar `active`.
 
-```sql
-select user_id, email, checkout_session_id, interval, reserved_until, redeemed_at
-from billing_trials
-order by created_at desc;
+## Diagnóstico
 
-select status, interval, trial_start, trial_end, current_period_start, current_period_end
-from subscriptions
-order by updated_at desc;
-```
+- Checkout antes do fim falha perto da expiração: verifique se a API escolheu
+  `mode: setup` com menos de 48 horas; Checkout não aceita `trial_end` menor.
+- Cobrança acontece antes da data original: compare `trial_ends_at` com
+  `subscription.trial_end` no Stripe.
+- Interface desatualizada: consulte `GET /billing/subscription`; a resposta
+  contém o objeto `trial` e o entitlement calculado no servidor.
 
-`redeemed_at` deve estar preenchido somente apÃ³s Checkout concluÃ­do. `trial_start` e
-`trial_end` devem refletir os timestamps retornados pela Stripe.
+## Referências
 
-## Reuso, troca e expiraÃ§Ã£o
-
-1. Inicie Checkout e volte sem concluir.
-2. Clique novamente no mesmo intervalo: a aplicaÃ§Ã£o deve reutilizar a sessÃ£o aberta.
-3. Troque mensal por anual: a sessÃ£o anterior deve ser expirada e substituÃ­da.
-4. Expire a sessÃ£o pelo Stripe Dashboard ou CLI.
-5. Confirme recebimento de `checkout.session.expired`.
-6. Confirme que `checkout_session_id`, `interval` e `reserved_until` foram limpos e que o
-   trial ainda estÃ¡ disponÃ­vel.
-
-## Trial Ãºnico por e-mail
-
-1. Conclua o primeiro Checkout.
-2. Cancele a assinatura pelo Customer Portal.
-3. Aguarde ou force sincronizaÃ§Ã£o atÃ© status local `canceled`.
-4. Inicie novo Checkout usando a mesma conta.
-5. Confirme que Checkout mostra cobranÃ§a imediata e a assinatura nova nÃ£o possui trial.
-
-Contas histÃ³ricas com `pending_checkouts.status` igual a `confirmed` ou `completed` sÃ£o
-marcadas como trial jÃ¡ utilizado pela migraÃ§Ã£o `0011_billing_trials.sql`.
-
-## Fim do trial e primeira cobranÃ§a
-
-No Stripe Dashboard em modo sandbox:
-
-1. Abra a assinatura.
-2. Use **Run simulation** na Ã¡rea de Billing para criar uma simulaÃ§Ã£o/Test Clock.
-3. Avance o relÃ³gio para depois de `trial_end`.
-4. Confirme emissÃ£o da primeira invoice e transiÃ§Ã£o da assinatura.
-
-Com cartÃ£o de sucesso, resultado esperado:
-
-- invoice paga;
-- assinatura muda de `trialing` para `active`;
-- webhook `customer.subscription.updated` atualiza estado local;
-- acesso continua liberado.
-
-## Falha da primeira cobranÃ§a
-
-Para simular cartÃ£o salvo que falha em cobranÃ§a posterior, use
-`4000 0000 0000 0341` no Sandbox. O mÃ©todo pode ser anexado, mas cobranÃ§as falham.
-
-1. Conclua Checkout com trial.
-2. Avance a simulaÃ§Ã£o/Test Clock alÃ©m de `trial_end`.
-3. Confirme invoice nÃ£o paga e assinatura `past_due`.
-4. Confirme webhook `customer.subscription.updated`.
-5. Consulte `GET /billing/subscription`: `entitled` deve ser `false`.
-6. Confirme redirecionamento das rotas protegidas para `/app/billing`.
-7. Atualize cartÃ£o pelo Customer Portal e pague a invoice.
-8. ApÃ³s Stripe retornar assinatura para `active`, confirme acesso restaurado.
-
-A polÃ­tica de retries/cancelamento final continua configurada no Stripe Billing. Lucreii
-bloqueia acesso assim que o status recebido deixa de ser `trialing` ou `active`.
-
-## DiagnÃ³stico
-
-- Checkout nÃ£o pede cartÃ£o: confirme `payment_method_collection=always`.
-- Trial nÃ£o aparece: confirme que `billing_trials.redeemed_at` estÃ¡ nulo para o e-mail.
-- Novo trial indevido: confirme entrega de `checkout.session.completed` e execuÃ§Ã£o da
-  confirmaÃ§Ã£o de Checkout no retorno da aplicaÃ§Ã£o.
-- UI nÃ£o atualiza: consulte `GET /billing/subscription`; essa rota reconcilia assinatura com
-  Stripe antes de retornar o snapshot.
-- Webhook retorna 400: confirme corpo bruto e `STRIPE_WEBHOOK_SECRET` do listener atual.
-
-## ReferÃªncias
-
-- [Stripe Checkout free trials](https://docs.stripe.com/payments/checkout/free-trials)
-- [Stripe Billing simulations](https://docs.stripe.com/billing/testing/test-clocks/simulate-subscriptions)
-- [Stripe webhook testing](https://docs.stripe.com/webhooks/test)
+- [Checkout Sessions API](https://docs.stripe.com/api/checkout/sessions/create)
+- [Subscriptions API](https://docs.stripe.com/api/subscriptions/create)
+- [Stripe test clocks](https://docs.stripe.com/billing/testing/test-clocks)

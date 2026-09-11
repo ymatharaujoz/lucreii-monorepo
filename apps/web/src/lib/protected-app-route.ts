@@ -2,9 +2,8 @@ import type { ServerAuthState } from "@/lib/server-auth";
 import type { ServerBillingState } from "@/lib/server-billing";
 
 /**
- * Assinatura válida para usar a área /app (escolher plano já foi resolvido).
- * - `active`: assinatura ativa/trial vinculada à organização.
- * - `pending_onboarding`: checkout confirmado no Stripe; workspace ainda não existe (criar em seguida).
+ * Entitlement válido para usar a área /app: assinatura Stripe ativa ou trial
+ * interno ainda vigente.
  */
 export function hasSubscriptionForProtectedApp(
   billingState: ServerBillingState | null,
@@ -35,7 +34,7 @@ export function hasManageableBillingSubscription(
 }
 
 /**
- * Fluxo: sem assinatura → /app/billing; com assinatura e sem org → /app/onboarding; caso contrário segue na rota.
+ * Fluxo: sem workspace → onboarding; sem entitlement → planos; caso contrário segue.
  */
 export function resolveProtectedAppRedirect(
   authState: ServerAuthState | null,
@@ -45,12 +44,12 @@ export function resolveProtectedAppRedirect(
     return "/sign-in";
   }
 
-  if (!hasSubscriptionForProtectedApp(billingState)) {
-    return "/app/billing";
-  }
-
   if (!authState.organization) {
     return "/app/onboarding";
+  }
+
+  if (!hasSubscriptionForProtectedApp(billingState)) {
+    return "/app/billing";
   }
 
   return null;

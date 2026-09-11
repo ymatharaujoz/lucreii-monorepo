@@ -23,7 +23,9 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
   }
 
   // Com assinatura ativa: redireciona para gerenciamento
-  if (hasManageableBillingSubscription(billingState)) {
+  const canManageBilling = authState.organization?.role === "owner";
+
+  if (canManageBilling && hasManageableBillingSubscription(billingState)) {
     redirect("/app/billing/manage");
   }
 
@@ -31,11 +33,11 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-surface-strong/20">
       <div className="px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
         <BillingPanel
+          canManageBilling={canManageBilling}
           checkoutSessionId={resolvedSearchParams?.session_id ?? null}
           checkoutState={resolvedSearchParams?.checkout ?? null}
           organizationName={authState.organization?.name ?? authState.user.name}
-          trialDays={billingState?.trialDays ?? 7}
-          trialEligible={billingState?.trialEligible ?? false}
+          trial={billingState?.trial ?? null}
         />
       </div>
     </div>

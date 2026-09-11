@@ -15,22 +15,28 @@ describe("BillingPanel", () => {
     vi.clearAllMocks();
   });
 
-  it("presents the free trial terms for eligible users", () => {
+  it("keeps the original trial end date when a plan is chosen early", () => {
     const markup = renderToStaticMarkup(
       createElement(BillingPanel, {
         checkoutSessionId: null,
         checkoutState: null,
+        canManageBilling: true,
         organizationName: "Lucreii",
-        trialDays: 7,
-        trialEligible: true,
+        trial: {
+          endsAt: "2030-01-08T12:00:00.000Z",
+          organizationId: "org_123",
+          remainingDays: 7,
+          startedAt: "2030-01-01T12:00:00.000Z",
+          status: "active",
+        },
       }),
     );
 
-    expect(markup).toContain("Teste grátis por 7 dias");
-    expect(markup).toContain("Começar teste grátis");
-    expect(markup).toContain("Cadastre seu cartão agora");
-    expect(markup).toContain("Cobrança automática após 7 dias grátis");
+    expect(markup).toContain("Escolha seu plano");
+    expect(markup).toContain("Nenhum novo período grátis será criado");
+    expect(markup).toContain("Escolher Start");
     expect(markup).toContain("Start");
+    expect(markup).toContain("Essencial");
     expect(markup).toContain("Pro");
     expect(markup).toContain("Business");
     expect(markup).toContain("1 CNPJ");
@@ -38,20 +44,25 @@ describe("BillingPanel", () => {
     expect(markup).toContain("5 CNPJs");
   });
 
-  it("presents immediate subscription copy after trial redemption", () => {
+  it("shows immediate charging copy after trial expiration", () => {
     const markup = renderToStaticMarkup(
       createElement(BillingPanel, {
         checkoutSessionId: null,
         checkoutState: null,
+        canManageBilling: true,
         organizationName: "Lucreii",
-        trialDays: 7,
-        trialEligible: false,
+        trial: {
+          endsAt: "2030-01-08T12:00:00.000Z",
+          organizationId: "org_123",
+          remainingDays: 0,
+          startedAt: "2030-01-01T12:00:00.000Z",
+          status: "expired",
+        },
       }),
     );
 
-    expect(markup).toContain("Ative sua assinatura");
-    expect(markup).toContain(">Assinar<");
+    expect(markup).toContain("Seu teste terminou");
+    expect(markup).toContain("A cobrança é imediata");
     expect(markup).not.toContain("Começar teste grátis");
-    expect(markup).not.toContain("Cobrança automática após 7 dias grátis");
   });
 });

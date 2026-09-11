@@ -1,11 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { pricingPlans } from "@/lib/site";
-
-type BillingCycle = "annual" | "monthly";
 
 const easeOut = [0.16, 1, 0.3, 1] as const;
 
@@ -19,15 +16,13 @@ function CheckIcon() {
 
 function PricingCard({
   plan,
-  cycle,
   index,
 }: {
   plan: (typeof pricingPlans)[0];
-  cycle: BillingCycle;
   index: number;
 }) {
-  const price = cycle === "annual" ? plan.annualPrice : plan.monthlyPrice;
-  const suffix = cycle === "annual" ? plan.annualSuffix : plan.monthlySuffix;
+  const price = plan.monthlyPrice;
+  const suffix = plan.monthlySuffix;
   const isFeatured = Boolean(plan.featured);
 
   return (
@@ -70,30 +65,11 @@ function PricingCard({
       {/* Price */}
       <div className="mb-6">
         <div className="flex items-baseline gap-1">
-          <AnimatePresence mode="wait">
-            <motion.span
-              key={price}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.2 }}
-              className="text-4xl font-bold tracking-tight text-foreground"
-            >
-              {price}
-            </motion.span>
-          </AnimatePresence>
+          <span className="text-4xl font-bold tracking-tight text-foreground">
+            {price}
+          </span>
         </div>
-        <AnimatePresence mode="wait">
-          <motion.p
-            key={suffix}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="mt-1 text-sm text-muted-foreground"
-          >
-            {suffix}
-          </motion.p>
-        </AnimatePresence>
+        <p className="mt-1 text-sm text-muted-foreground">{suffix}</p>
       </div>
 
       {/* CTA Button */}
@@ -128,46 +104,12 @@ function PricingCard({
 }
 
 export function PricingToggle() {
-  const [cycle, setCycle] = useState<BillingCycle>("annual");
-
   return (
     <div className="space-y-8">
-      {/* Toggle */}
-      <div className="flex flex-col items-center gap-4">
-        <div className="inline-flex items-center rounded-full border border-border bg-surface p-1 shadow-sm">
-          {(["annual", "monthly"] as BillingCycle[]).map((option) => {
-            const active = cycle === option;
-            return (
-              <button
-                key={option}
-                type="button"
-                onClick={() => setCycle(option)}
-                className={`relative rounded-full px-6 py-2.5 text-sm font-semibold transition-colors ${
-                  active ? "text-white" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="pricingToggle"
-                    className="absolute inset-0 rounded-full bg-accent shadow-md"
-                    transition={{
-                      type: "spring",
-                      stiffness: 500,
-                      damping: 35,
-                    }}
-                  />
-                )}
-                <span className="relative z-10">{option === "annual" ? "Anual" : "Mensal"}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Pricing Cards */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         {pricingPlans.map((plan, index) => (
-          <PricingCard key={plan.name} plan={plan} cycle={cycle} index={index} />
+          <PricingCard key={plan.name} plan={plan} index={index} />
         ))}
       </div>
     </div>

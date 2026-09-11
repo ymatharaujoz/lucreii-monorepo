@@ -14,11 +14,9 @@ const env = {
   STRIPE_SECRET_KEY: "stripe",
   STRIPE_WEBHOOK_SECRET: "webhook",
   STRIPE_PRICE_START_MONTHLY: "price_start_monthly",
-  STRIPE_PRICE_START_ANNUAL: "price_start_annual",
+      STRIPE_PRICE_ESSENCIAL_MONTHLY: "price_essencial_monthly",
   STRIPE_PRICE_PRO_MONTHLY: "price_pro_monthly",
-  STRIPE_PRICE_PRO_ANNUAL: "price_pro_annual",
   STRIPE_PRICE_BUSINESS_MONTHLY: "price_business_monthly",
-  STRIPE_PRICE_BUSINESS_ANNUAL: "price_business_annual",
   NODE_ENV: "test",
   SYNC_RELAX_GUARDS: false,
   WEB_APP_ORIGIN: "http://localhost:3000",
@@ -73,6 +71,45 @@ function createService({
 }
 
 describe("AuthService", () => {
+  it("creates the internal seven-day trial in the signup transaction", async () => {
+    const values = vi.fn().mockResolvedValue(undefined);
+    const transaction = vi.fn(async (work: (tx: unknown) => Promise<void>) =>
+      work({ insert: vi.fn(() => ({ values })) }),
+    );
+    const db = {
+      query: {
+        users: { findFirst: vi.fn().mockResolvedValue(null) },
+      },
+      transaction,
+    };
+    const service = new AuthService(
+      db as never,
+      { findDefaultOrganization: vi.fn() } as never,
+    );
+    const before = Date.now();
+
+    await service.signUp(
+      {
+        email: " Owner@Lucreii.Local ",
+        name: "Owner",
+        password: "password123",
+      },
+      {},
+    );
+
+    const trialInsert = values.mock.calls
+      .map(([input]) => input)
+      .find((input) => "trialEndsAt" in input);
+    expect(trialInsert).toMatchObject({
+      email: "owner@lucreii.local",
+      userId: expect.any(String),
+    });
+    expect(trialInsert.trialEndsAt.getTime() - trialInsert.trialStartedAt.getTime()).toBe(
+      7 * 24 * 60 * 60 * 1000,
+    );
+    expect(trialInsert.trialStartedAt.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
   it("returns null when api session cookie is missing", async () => {
     const { db, service } = createService();
 

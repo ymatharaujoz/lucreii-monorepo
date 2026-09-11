@@ -86,8 +86,13 @@ describe("readServerBillingState", () => {
               organizationId: "org_123",
               pendingCheckout: null,
               status: "inactive",
-              trialDays: 7,
-              trialEligible: false,
+              trial: {
+                endsAt: "2026-04-29T00:00:00.000Z",
+                organizationId: "org_123",
+                remainingDays: 0,
+                startedAt: "2026-04-22T00:00:00.000Z",
+                status: "expired",
+              },
               subscription: {
                 cancelAtPeriodEnd: false,
                 currentPeriodEnd: null,
@@ -121,8 +126,13 @@ describe("readServerBillingState", () => {
       organizationId: "org_123",
       pendingCheckout: null,
       status: "inactive",
-      trialDays: 7,
-      trialEligible: false,
+      trial: {
+        endsAt: "2026-04-29T00:00:00.000Z",
+        organizationId: "org_123",
+        remainingDays: 0,
+        startedAt: "2026-04-22T00:00:00.000Z",
+        status: "expired",
+      },
       subscription: {
         cancelAtPeriodEnd: false,
         currentPeriodEnd: null,

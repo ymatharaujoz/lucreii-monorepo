@@ -14,7 +14,6 @@ export function resolveSiteConfig(source: Record<string, string | undefined> = p
     domainFallback: SITE_DOMAIN_FALLBACK,
     icon: env.NEXT_PUBLIC_APP_ICON,
     name,
-    priceAnnualLabel: env.NEXT_PUBLIC_PRICE_ANNUAL_LABEL,
     priceMonthlyLabel: env.NEXT_PUBLIC_PRICE_MONTHLY_LABEL,
   };
 }

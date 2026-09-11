@@ -19,7 +19,10 @@ export default async function ManageBillingPage() {
   }
 
   // Sem assinatura: redireciona para checkout
-  if (!hasManageableBillingSubscription(billingState)) {
+  if (
+    authState.organization?.role !== "owner" ||
+    !hasManageableBillingSubscription(billingState)
+  ) {
     redirect("/app/billing");
   }
 

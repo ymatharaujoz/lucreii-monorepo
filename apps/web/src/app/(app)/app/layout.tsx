@@ -54,6 +54,8 @@ export default async function ProtectedAppLayout({
       planLimit={planLimit}
       hasSubscription={hasSubscription}
       hasOnboarded={hasOnboarded}
+      canManageBilling={authState.organization?.role === "owner"}
+      trial={billingState?.trial ?? null}
     >
       {children}
     </AppLayoutClient>

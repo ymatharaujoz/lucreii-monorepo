@@ -96,7 +96,9 @@ export function SignInPanel({ initialErrorMessage = null }: SignInPanelProps) {
             {mode === "sign-in" ? "Acesse sua conta" : "Crie sua conta"}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gerencie suas finanças com clareza e precisão.
+            {mode === "sign-up"
+              ? "Comece 7 dias grátis, sem cartão de crédito."
+              : "Gerencie suas finanças com clareza e precisão."}
           </p>
         </div>
 

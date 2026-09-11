@@ -761,20 +761,21 @@ export const billingTrials = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     email: varchar("email", { length: 320 }).notNull(),
-    checkoutSessionId: varchar("checkout_session_id", { length: 255 }),
-    interval: varchar("interval", { length: 32 }),
-    planCode: varchar("plan_code", { length: 64 }),
-    reservedUntil: timestamp("reserved_until", { withTimezone: true }),
-    redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
+    organizationId: uuid("organization_id").references(
+      () => organizations.id,
+      { onDelete: "set null" },
+    ),
+    trialStartedAt: timestamp("trial_started_at", {
+      withTimezone: true,
+    }).notNull(),
+    trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }).notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (table) => [
     uniqueIndex("billing_trials_user_id_key").on(table.userId),
     uniqueIndex("billing_trials_email_key").on(table.email),
-    uniqueIndex("billing_trials_checkout_session_id_key").on(
-      table.checkoutSessionId,
-    ),
+    index("billing_trials_organization_id_idx").on(table.organizationId),
   ],
 );
 
@@ -1491,6 +1492,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   members: many(organizationMembers),
   companies: many(companies),
   billingCustomers: many(billingCustomers),
+  billingTrials: many(billingTrials),
   subscriptions: many(subscriptions),
   pendingCheckouts: many(pendingCheckouts),
   subscriptionEvents: many(subscriptionEvents),
@@ -1577,6 +1579,10 @@ export const subscriptionsRelations = relations(
 );
 
 export const billingTrialsRelations = relations(billingTrials, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [billingTrials.organizationId],
+    references: [organizations.id],
+  }),
   user: one(users, {
     fields: [billingTrials.userId],
     references: [users.id],

@@ -51,7 +51,7 @@ export class OnboardingService {
         },
       );
 
-      await this.billingService.completePendingCheckoutForOrganizationTx(tx as DatabaseClient, {
+      await this.billingService.assignTrialToOrganizationTx(tx as DatabaseClient, {
         organizationId: membership.organization.id,
         userId: authContext.user.id,
       });

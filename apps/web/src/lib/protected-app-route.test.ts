@@ -27,8 +27,7 @@ describe("hasManageableBillingSubscription", () => {
             trialEnd: null,
             trialStart: null,
           },
-          trialDays: 7,
-          trialEligible: false,
+          trial: null,
         }),
       ).toBe(true);
     },
@@ -54,8 +53,7 @@ describe("hasManageableBillingSubscription", () => {
           trialEnd: null,
           trialStart: null,
         },
-        trialDays: 7,
-        trialEligible: false,
+        trial: null,
       }),
     ).toBe(false);
   });

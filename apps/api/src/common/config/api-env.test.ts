@@ -6,11 +6,9 @@ const runtimeUrl =
 
 describe("readApiEnv", () => {
   const stripePlanPrices = {
-    STRIPE_PRICE_BUSINESS_ANNUAL: "price_business_annual",
     STRIPE_PRICE_BUSINESS_MONTHLY: "price_business_monthly",
-    STRIPE_PRICE_PRO_ANNUAL: "price_pro_annual",
+    STRIPE_PRICE_ESSENCIAL_MONTHLY: "price_essencial_monthly",
     STRIPE_PRICE_PRO_MONTHLY: "price_pro_monthly",
-    STRIPE_PRICE_START_ANNUAL: "price_start_annual",
     STRIPE_PRICE_START_MONTHLY: "price_start_monthly",
   } as const;
 
@@ -177,7 +175,7 @@ describe("readApiEnv", () => {
     );
   });
 
-  it("requires configured Stripe prices for every plan and interval", () => {
+  it("requires configured Stripe prices for every monthly plan", () => {
     expect(() =>
       readApiEnv({
         API_HOST: "127.0.0.1",
@@ -187,9 +185,8 @@ describe("readApiEnv", () => {
         STRIPE_SECRET_KEY: "stripe",
         STRIPE_WEBHOOK_SECRET: "webhook",
         STRIPE_PRICE_START_MONTHLY: "price_start_monthly",
-        STRIPE_PRICE_START_ANNUAL: "price_start_annual",
+        STRIPE_PRICE_ESSENCIAL_MONTHLY: "",
         STRIPE_PRICE_PRO_MONTHLY: "price_pro_monthly",
-        STRIPE_PRICE_PRO_ANNUAL: "price_pro_annual",
         STRIPE_PRICE_BUSINESS_MONTHLY: "price_business_monthly",
         NODE_ENV: "test",
         WEB_APP_ORIGIN: "http://localhost:3000",

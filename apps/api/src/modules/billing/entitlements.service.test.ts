@@ -2,188 +2,104 @@ import { describe, expect, it, vi } from "vitest";
 import { EntitlementsService } from "./entitlements.service";
 
 function createService({
-  billingCustomer = null,
   billingTrial = null,
   subscription = null,
-  pendingCheckout = null,
-  pendingCheckoutError,
 }: {
-  billingCustomer?: unknown;
   billingTrial?: unknown;
   subscription?: unknown;
-  pendingCheckout?: unknown;
-  pendingCheckoutError?: unknown;
 } = {}) {
-  const pendingFindFirst = vi.fn();
-  if (pendingCheckoutError !== undefined) {
-    pendingFindFirst.mockRejectedValue(pendingCheckoutError);
-  } else {
-    pendingFindFirst.mockResolvedValue(pendingCheckout);
-  }
-
   const db = {
     query: {
-      billingCustomers: {
-        findFirst: vi.fn().mockResolvedValue(billingCustomer),
-      },
-      billingTrials: {
-        findFirst: vi.fn().mockResolvedValue(billingTrial),
-      },
-      subscriptions: {
-        findFirst: vi.fn().mockResolvedValue(subscription),
-      },
-      pendingCheckouts: {
-        findFirst: pendingFindFirst,
-      },
+      billingCustomers: { findFirst: vi.fn().mockResolvedValue(null) },
+      billingTrials: { findFirst: vi.fn().mockResolvedValue(billingTrial) },
+      pendingCheckouts: { findFirst: vi.fn().mockResolvedValue(null) },
+      subscriptions: { findFirst: vi.fn().mockResolvedValue(subscription) },
     },
   };
 
-  return {
-    db,
-    service: new EntitlementsService(db as never),
-  };
+  return new EntitlementsService(db as never);
 }
 
 describe("EntitlementsService", () => {
-  it("treats active subscriptions as entitled", async () => {
-    const { service } = createService({
-      subscription: {
-        billingCustomerId: "billing_customer_row",
-        cancelAtPeriodEnd: false,
-        currentPeriodEnd: new Date("2026-05-01T00:00:00.000Z"),
-        currentPeriodStart: new Date("2026-04-01T00:00:00.000Z"),
-        externalSubscriptionId: "sub_123",
-        id: "subscription_123",
-        interval: "monthly",
-        planCode: "lucreii",
+  it("authorizes a workspace during its internal trial", async () => {
+    const service = createService({
+      billingTrial: {
+        organizationId: "org_123",
+        trialEndsAt: new Date(Date.now() + 6 * 86_400_000),
+        trialStartedAt: new Date(Date.now() - 86_400_000),
+      },
+    });
+
+    await expect(
+      service.getBillingSnapshot({ organizationId: "org_123", userId: "user_123" }),
+    ).resolves.toMatchObject({
+      entitled: true,
+      status: "active",
+      trial: {
+        organizationId: "org_123",
+        remainingDays: 5,
         status: "active",
       },
     });
-
-    await expect(service.isOrganizationEntitled("org_123")).resolves.toBe(true);
   });
 
-  it("returns trial eligibility and trial dates in billing snapshot", async () => {
-    const { service } = createService({
+  it("expires the trial exactly at its end and returns an inactive entitlement", async () => {
+    const end = new Date(Date.now());
+    const service = createService({
       billingTrial: {
-        redeemedAt: null,
-      },
-      subscription: {
-        billingCustomerId: "billing_customer_row",
-        cancelAtPeriodEnd: false,
-        currentPeriodEnd: new Date("2026-06-21T00:00:00.000Z"),
-        currentPeriodStart: new Date("2026-06-14T00:00:00.000Z"),
-        externalSubscriptionId: "sub_trial",
-        id: "subscription_123",
-        interval: "monthly",
-        planCode: "lucreii",
-        status: "trialing",
-        trialEnd: new Date("2026-06-21T00:00:00.000Z"),
-        trialStart: new Date("2026-06-14T00:00:00.000Z"),
+        organizationId: "org_123",
+        trialEndsAt: end,
+        trialStartedAt: new Date(end.getTime() - 7 * 86_400_000),
       },
     });
 
     await expect(
-      service.getBillingSnapshot({
-        organizationId: "org_123",
-        userId: "user_123",
-      }),
-    ).resolves.toMatchObject({
-      trialDays: 7,
-      trialEligible: true,
-      subscription: {
-        trialEnd: "2026-06-21T00:00:00.000Z",
-        trialStart: "2026-06-14T00:00:00.000Z",
-      },
-    });
+      service.requireActiveEntitlement({ organizationId: "org_123", userId: "user_123" }),
+    ).rejects.toMatchObject({ status: 402 });
   });
 
-  it("treats trialing subscriptions as entitled", async () => {
-    const { service } = createService({
+  it("keeps a valid paid Stripe subscription entitled after the internal trial ends", async () => {
+    const service = createService({
+      billingTrial: {
+        organizationId: "org_123",
+        trialEndsAt: new Date(Date.now() - 1),
+        trialStartedAt: new Date(Date.now() - 7 * 86_400_000),
+      },
       subscription: {
-        billingCustomerId: "billing_customer_row",
+        billingCustomerId: "billing_customer_123",
         cancelAtPeriodEnd: false,
-        currentPeriodEnd: new Date("2026-05-01T00:00:00.000Z"),
-        currentPeriodStart: new Date("2026-04-01T00:00:00.000Z"),
+        currentPeriodEnd: null,
+        currentPeriodStart: null,
         externalSubscriptionId: "sub_123",
         id: "subscription_123",
         interval: "monthly",
-        planCode: "lucreii",
-        status: "trialing",
+        planCode: "start",
+        status: "active",
+        trialEnd: null,
+        trialStart: null,
       },
     });
 
     await expect(service.isOrganizationEntitled("org_123")).resolves.toBe(true);
   });
 
-  it("blocks past-due subscriptions immediately", async () => {
-    const { service } = createService({
+  it("blocks failed Stripe payments", async () => {
+    const service = createService({
       subscription: {
-        billingCustomerId: "billing_customer_row",
+        billingCustomerId: "billing_customer_123",
         cancelAtPeriodEnd: false,
-        currentPeriodEnd: new Date("2026-06-21T00:00:00.000Z"),
-        currentPeriodStart: new Date("2026-06-14T00:00:00.000Z"),
-        externalSubscriptionId: "sub_past_due",
+        currentPeriodEnd: null,
+        currentPeriodStart: null,
+        externalSubscriptionId: "sub_123",
         id: "subscription_123",
         interval: "monthly",
-        planCode: "lucreii",
+        planCode: "start",
         status: "past_due",
-        trialEnd: new Date("2026-06-21T00:00:00.000Z"),
-        trialStart: new Date("2026-06-14T00:00:00.000Z"),
+        trialEnd: null,
+        trialStart: null,
       },
     });
 
-    await expect(service.isOrganizationEntitled("org_123")).resolves.toBe(
-      false,
-    );
-  });
-
-  it("returns an inactive snapshot when no subscription exists", async () => {
-    const { service } = createService({
-      billingCustomer: {
-        externalCustomerId: "cus_123",
-        id: "billing_customer_123",
-      },
-    });
-
-    await expect(service.getBillingSnapshot("org_123")).resolves.toEqual({
-      customer: {
-        externalCustomerId: "cus_123",
-        id: "billing_customer_123",
-      },
-      entitled: false,
-      organizationId: "org_123",
-      pendingCheckout: null,
-      status: "inactive",
-      subscription: null,
-      trialDays: 7,
-      trialEligible: false,
-    });
-  });
-
-  it("treats a missing pending_checkouts table as no pending checkout", async () => {
-    const err = Object.assign(
-      new Error('relation "pending_checkouts" does not exist'),
-      {
-        code: "42P01",
-      },
-    );
-    const { service } = createService({
-      subscription: null,
-      pendingCheckoutError: err,
-    });
-
-    await expect(
-      service.getBillingSnapshot({
-        organizationId: null,
-        userId: "user_123",
-      }),
-    ).resolves.toMatchObject({
-      entitled: false,
-      organizationId: null,
-      pendingCheckout: null,
-      status: "no_checkout",
-      subscription: null,
-    });
+    await expect(service.isOrganizationEntitled("org_123")).resolves.toBe(false);
   });
 });

@@ -149,11 +149,18 @@ export const billingPendingCheckoutSchema = z.object({
   status: z.string().trim().min(1),
 });
 
+export const billingTrialSchema = z.object({
+  endsAt: isoDateTimeField("Trial end"),
+  organizationId: z.string().trim().min(1).nullable(),
+  remainingDays: z.number().int().min(0),
+  startedAt: isoDateTimeField("Trial start"),
+  status: z.enum(["active", "expired"]),
+});
+
 export const billingStateSchema = z.object({
   organizationId: z.string().trim().min(1).nullable(),
   entitled: z.boolean(),
-  trialEligible: z.boolean(),
-  trialDays: z.number().int().positive(),
+  trial: billingTrialSchema.nullable(),
   status: billingStateStatusSchema,
   customer: z
     .object({

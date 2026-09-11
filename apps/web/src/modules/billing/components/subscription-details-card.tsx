@@ -24,8 +24,6 @@ interface SubscriptionDetailsCardProps {
 function formatInterval(interval: string): string {
   const intervals: Record<string, string> = {
     monthly: "Mensal",
-    annual: "Anual",
-    year: "Anual",
     month: "Mensal",
   };
   return intervals[interval] || interval;

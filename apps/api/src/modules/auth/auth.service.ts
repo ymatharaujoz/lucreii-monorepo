@@ -9,6 +9,7 @@ import {
 } from "@nestjs/common";
 import {
   accounts,
+  billingTrials,
   sessions,
   users,
   type DatabaseClient,
@@ -21,6 +22,7 @@ import { OrganizationProvisioningService } from "./organization-provisioning.ser
 
 const CREDENTIAL_PROVIDER_ID = "credential";
 const COMPANY_HEADER_NAME = "x-lucreii-company-id";
+const INTERNAL_TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
 const scrypt = promisify(nodeScrypt);
 
 type SessionRecord = {
@@ -70,6 +72,8 @@ export class AuthService {
     const sessionToken = createAuthSessionToken();
     const passwordHash = await this.hashPassword(input.password);
     const expiresAt = new Date(Date.now() + AUTH_SESSION_TTL_MS);
+    const trialStartedAt = new Date();
+    const trialEndsAt = new Date(trialStartedAt.getTime() + INTERNAL_TRIAL_MS);
 
     await this.db.transaction(async (tx) => {
       await tx.insert(users).values({
@@ -92,6 +96,12 @@ export class AuthService {
         ipAddress: metadata.ipAddress ?? null,
         token: sessionToken,
         userAgent: this.normalizeUserAgent(metadata.userAgent),
+        userId,
+      });
+      await tx.insert(billingTrials).values({
+        email,
+        trialEndsAt,
+        trialStartedAt,
         userId,
       });
     });
