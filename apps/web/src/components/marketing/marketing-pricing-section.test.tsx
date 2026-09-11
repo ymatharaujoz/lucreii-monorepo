@@ -75,6 +75,16 @@ describe("MarketingPricingSection", () => {
     expect(markup).toContain("Até 200 pedidos/mês");
     expect(markup).toContain("Até 7.500 pedidos/mês");
     expect(markup).toContain("Falar com um especialista");
+    for (const feature of [
+      "Dashboard financeiro",
+      "Rentabilidade e ROI por produto",
+      "Taxa e impacto das devoluções",
+      "Calculadora de precificação",
+      "Ponto de equilíbrio",
+      "Integração com marketplaces",
+    ]) {
+      expect(markup).toContain(feature);
+    }
     expect(markup).toContain("xl:grid-cols-4");
     expect(markup).toContain("2xl:grid-cols-5");
     expect(markup).toContain("whitespace-nowrap");

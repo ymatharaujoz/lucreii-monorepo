@@ -19,12 +19,12 @@ import type { LucideIcon } from "lucide-react";
 import { ScheduleDemoLink } from "./schedule-demo-link";
 
 const ALL_PLAN_FEATURES = [
-  "Todas as funcionalidades",
-  "Todos os marketplaces",
-  "Relatórios completos",
-  "DRE e lucro por produto",
-  "Gestão de anúncios (ADS)",
-  "Suporte por e-mail e chat",
+  "Dashboard financeiro",
+  "Rentabilidade e ROI por produto",
+  "Taxa e impacto das devoluções",
+  "Calculadora de precificação",
+  "Ponto de equilíbrio",
+  "Integração com marketplaces",
 ] as const;
 
 type MarketingPricingPlan = {
