@@ -796,10 +796,15 @@ describe("MercadoLivreProvider", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("does not expose non-JSON token responses in errors", async () => {
+  it("includes safe diagnostics without exposing non-JSON token responses", async () => {
     const provider = createProvider();
     const fetchMock = vi.fn().mockResolvedValueOnce(
       new Response("access_token=secret-token", {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          server: "mercadolivre-edge",
+          "x-request-id": "meli-request-123",
+        },
         status: 502,
       }),
     );
@@ -810,6 +815,13 @@ describe("MercadoLivreProvider", () => {
     );
 
     expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(
+      'diagnostics={"contentType":"text/html; charset=utf-8",',
+    );
+    expect((error as Error).message).toContain(
+      '"requestId":"meli-request-123"',
+    );
+    expect((error as Error).message).toContain('"server":"mercadolivre-edge"');
     expect((error as Error).message).toContain("payload=[non-json response]");
     expect((error as Error).message).not.toContain("secret-token");
     expect(fetchMock).toHaveBeenCalledTimes(1);

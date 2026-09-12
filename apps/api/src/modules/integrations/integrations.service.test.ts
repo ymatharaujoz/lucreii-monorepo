@@ -657,7 +657,7 @@ describe("IntegrationsService", () => {
     ).resolves.toContain("message=");
   });
 
-  it("logs Mercado Livre callback code when provider returns one", async () => {
+  it("does not log Mercado Livre callback code", async () => {
     const { service } = createService();
     const loggerSpy = vi.spyOn(service["logger"], "log");
 
@@ -667,7 +667,10 @@ describe("IntegrationsService", () => {
     });
 
     expect(loggerSpy).toHaveBeenCalledWith(
-      expect.stringContaining("code=TG-abc123"),
+      expect.stringContaining("hasCode=yes"),
+    );
+    expect(loggerSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("TG-abc123"),
     );
   });
 

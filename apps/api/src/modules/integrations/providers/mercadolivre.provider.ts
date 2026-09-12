@@ -538,6 +538,31 @@ function formatProviderErrorPayload(payload: unknown) {
     : JSON.stringify(sanitizeProviderPayload(payload));
 }
 
+function readProviderResponseHeader(response: Response, name: string) {
+  const value = response.headers.get(name);
+
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.replace(/[\r\n]/g, " ").trim();
+  return normalized.length > 0 ? normalized.slice(0, 200) : null;
+}
+
+function formatProviderResponseDiagnostics(
+  response: Response,
+  durationMs: number,
+) {
+  return JSON.stringify({
+    contentType: readProviderResponseHeader(response, "content-type"),
+    durationMs,
+    requestId:
+      readProviderResponseHeader(response, "x-request-id") ??
+      readProviderResponseHeader(response, "x-correlation-id"),
+    server: readProviderResponseHeader(response, "server"),
+  });
+}
+
 function buildCodeChallenge(codeVerifier: string) {
   return createHash("sha256").update(codeVerifier).digest("base64url");
 }
@@ -1658,6 +1683,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
       tokenRequestBody.set("code_verifier", input.codeVerifier);
     }
 
+    const tokenRequestStartedAt = Date.now();
     const tokenResponse = await fetch(
       "https://api.mercadolibre.com/oauth/token",
       {
@@ -1668,6 +1694,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
         },
         method: "POST",
       },
+    );
+    const tokenResponseDiagnostics = formatProviderResponseDiagnostics(
+      tokenResponse,
+      Date.now() - tokenRequestStartedAt,
     );
 
     const tokenPayload = (await parseProviderResponse(tokenResponse)) as
@@ -1695,11 +1725,12 @@ export class MercadoLivreProvider implements IntegrationProvider {
           requiresOfflineAccess
             ? " The Mercado Livre app must grant offline_access to return refresh_token. Reauthorize the account."
             : ""
-        } status=${tokenResponse.status} payload=${formatProviderErrorPayload(tokenPayload)}`,
+        } status=${tokenResponse.status} diagnostics=${tokenResponseDiagnostics} payload=${formatProviderErrorPayload(tokenPayload)}`,
         "remote_request_failed",
       );
     }
 
+    const profileRequestStartedAt = Date.now();
     const profileResponse = await fetch(
       "https://api.mercadolibre.com/users/me",
       {
@@ -1709,6 +1740,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
         },
         method: "GET",
       },
+    );
+    const profileResponseDiagnostics = formatProviderResponseDiagnostics(
+      profileResponse,
+      Date.now() - profileRequestStartedAt,
     );
     const profilePayload = (await parseProviderResponse(profileResponse)) as
       | MercadoLivreProfileResponse
@@ -1720,7 +1755,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
       !profilePayload.id
     ) {
       throw new IntegrationProviderError(
-        `Mercado Livre account lookup failed. status=${profileResponse.status} payload=${formatProviderErrorPayload(profilePayload)}`,
+        `Mercado Livre account lookup failed. status=${profileResponse.status} diagnostics=${profileResponseDiagnostics} payload=${formatProviderErrorPayload(profilePayload)}`,
         "remote_request_failed",
       );
     }
