@@ -17,15 +17,17 @@ import {
   dashboardSummaryApiResponseSchema,
 } from "@lucreii/validation";
 import { ApiClientError, apiClient } from "@/lib/api/client";
-import { buildReferenceMonthDateRange } from "@/lib/reference-month";
-import { fetchOrders } from "@/modules/orders/hooks/use-orders-data";
-import { deriveBusinessStatus, determineDashboardFinancialState } from "../calculations/financial-state";
+import {
+  deriveBusinessStatus,
+  determineDashboardFinancialState,
+} from "../calculations/financial-state";
 
 const dashboardSummaryQueryKey = ["dashboard-summary"] as const;
 const dashboardChartsQueryKey = ["dashboard-charts"] as const;
 const dashboardProfitabilityQueryKey = ["dashboard-profitability"] as const;
-const dashboardOrdersSummaryQueryKey = ["dashboard-orders-summary"] as const;
-const dashboardFinancialIndicatorsQueryKey = ["dashboard-financial-indicators"] as const;
+const dashboardFinancialIndicatorsQueryKey = [
+  "dashboard-financial-indicators",
+] as const;
 
 function readSelectedCompanyIdFromBrowserCookie() {
   if (typeof document === "undefined") {
@@ -61,7 +63,8 @@ export async function fetchDashboardSummary(
   providerOrLegacy?: IntegrationProviderSlug | boolean | null,
   referenceMonth?: string,
 ): Promise<DashboardSummaryResponse> {
-  const provider = typeof providerOrLegacy === "string" ? providerOrLegacy : null;
+  const provider =
+    typeof providerOrLegacy === "string" ? providerOrLegacy : null;
   return apiClient.getValidatedData(
     dashboardUrl("/dashboard/summary", provider, referenceMonth),
     dashboardSummaryApiResponseSchema,
@@ -112,39 +115,36 @@ export function useDashboardData(
   referenceMonth?: string,
 ) {
   const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
-  const monthRange = referenceMonth ? buildReferenceMonthDateRange(referenceMonth) : null;
-  const ordersSummaryQuery = useQuery({
-    queryFn: () =>
-      fetchOrders({
-        ...(monthRange ?? {}),
-        page: 1,
-        pageSize: 1,
-        ...(provider ? { provider } : {}),
-      }),
-    queryKey: [
-      ...dashboardOrdersSummaryQueryKey,
-      selectedCompanyId,
-      provider,
-      monthRange?.orderedFrom ?? "",
-      monthRange?.orderedTo ?? "",
-    ],
-    retry: 2,
-  });
   const summaryQuery = useQuery({
     queryFn: () => fetchDashboardSummary(provider, referenceMonth),
-    queryKey: [...dashboardSummaryQueryKey, selectedCompanyId, provider, referenceMonth ?? ""],
+    queryKey: [
+      ...dashboardSummaryQueryKey,
+      selectedCompanyId,
+      provider,
+      referenceMonth ?? "",
+    ],
     retry: 2,
   });
 
   const chartsQuery = useQuery({
     queryFn: () => fetchDashboardCharts(provider, referenceMonth),
-    queryKey: [...dashboardChartsQueryKey, selectedCompanyId, provider, referenceMonth ?? ""],
+    queryKey: [
+      ...dashboardChartsQueryKey,
+      selectedCompanyId,
+      provider,
+      referenceMonth ?? "",
+    ],
     retry: 2,
   });
 
   const profitabilityQuery = useQuery({
     queryFn: () => fetchDashboardProfitability(provider, referenceMonth),
-    queryKey: [...dashboardProfitabilityQueryKey, selectedCompanyId, provider, referenceMonth ?? ""],
+    queryKey: [
+      ...dashboardProfitabilityQueryKey,
+      selectedCompanyId,
+      provider,
+      referenceMonth ?? "",
+    ],
     retry: 2,
   });
   const financialIndicatorsQuery = useQuery({
@@ -159,13 +159,11 @@ export function useDashboardData(
   });
 
   const isLoading =
-    ordersSummaryQuery.isLoading ||
     summaryQuery.isLoading ||
     chartsQuery.isLoading ||
     profitabilityQuery.isLoading ||
     financialIndicatorsQuery.isLoading;
   const error =
-    ordersSummaryQuery.error ||
     summaryQuery.error ||
     chartsQuery.error ||
     profitabilityQuery.error ||
@@ -179,7 +177,6 @@ export function useDashboardData(
   const businessStatus = deriveBusinessStatus(summaryQuery.data);
 
   return {
-    ordersSummaryQuery,
     summaryQuery,
     chartsQuery,
     profitabilityQuery,
@@ -189,7 +186,6 @@ export function useDashboardData(
     financialState,
     businessStatus,
     refetchAll() {
-      ordersSummaryQuery.refetch();
       summaryQuery.refetch();
       chartsQuery.refetch();
       profitabilityQuery.refetch();

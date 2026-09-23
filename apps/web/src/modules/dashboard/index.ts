@@ -1,6 +1,5 @@
 export * from "./components";
 export * from "./calculations/financial-state";
-export * from "./calculations/insights";
 export * from "./calculations/kpi-data";
 export * from "./calculations/product-health";
 export * from "./calculations/product-rows";

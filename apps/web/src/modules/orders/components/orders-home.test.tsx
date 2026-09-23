@@ -24,23 +24,6 @@ vi.mock("../hooks/use-orders-data", () => ({
   useUpdateOrderProductCostBulk: useUpdateOrderProductCostBulkMock,
 }));
 
-vi.mock("@/components/ui-premium/date-range-picker", () => ({
-  DateRangePicker: ({ from, to, onChange }: any) => (
-    <div>
-      <input
-        type="date"
-        value={from}
-        onChange={(e) => onChange(e.target.value, to)}
-      />
-      <input
-        type="date"
-        value={to}
-        onChange={(e) => onChange(from, e.target.value)}
-      />
-    </div>
-  ),
-}));
-
 function mount(node: React.ReactNode) {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -825,6 +808,9 @@ describe("OrdersHome", () => {
     expect(mainContent).toContain("46,00%");
     expect(mainContent).toContain("R$ 92,00");
     expect(mainContent).not.toContain("Receita Liquida");
+    expect(
+      document.querySelector("div.max-h-\\[600px\\].overflow-auto"),
+    ).toBeTruthy();
 
     view.unmount();
   });
@@ -1010,8 +996,18 @@ describe("OrdersHome", () => {
     view.unmount();
   });
 
-  it("passes ordered date range filters to list query and clears them", () => {
-    const view = mount(<OrdersHome />);
+  it("uses dashboard month and provider filters without local period or channel controls", async () => {
+    const view = mount(
+      <OrdersHome provider="shopee" referenceMonth="2026-07-01" />,
+    );
+
+    expect(useOrdersListMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        orderedFrom: "2026-07-01",
+        orderedTo: "2026-07-31",
+        provider: "shopee",
+      }),
+    );
 
     click(
       Array.from(document.querySelectorAll("button")).find((button) =>
@@ -1019,33 +1015,27 @@ describe("OrdersHome", () => {
       )!,
     );
 
-    const dateInputs = Array.from(
-      document.querySelectorAll('input[type="date"]'),
-    ) as HTMLInputElement[];
-    const [orderedFromInput, orderedToInput] = dateInputs;
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+    expect(
+      Array.from(document.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === "Canais",
+      ),
+    ).toBeUndefined();
 
-    changeInputValue(orderedFromInput, "2026-06-05");
-    changeInputValue(orderedToInput, "2026-06-20");
+    await act(async () => {
+      click(
+        Array.from(document.querySelectorAll("button")).find((button) =>
+          button.textContent?.includes("Exportar"),
+        )!,
+      );
+      await Promise.resolve();
+    });
 
-    expect(useOrdersListMock).toHaveBeenLastCalledWith(
+    expect(downloadOrdersExportMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        orderedFrom: "2026-06-05",
-        orderedTo: "2026-06-20",
-      }),
-    );
-
-    click(
-      Array.from(document.querySelectorAll("button")).find((button) =>
-        button.textContent?.includes("Limpar"),
-      )!,
-    );
-
-    expect(useOrdersListMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        orderedFrom: "2026-06-01",
-        orderedTo: "2026-06-30",
-        page: 1,
-        pageSize: 20,
+        orderedFrom: "2026-07-01",
+        orderedTo: "2026-07-31",
+        provider: "shopee",
       }),
     );
 

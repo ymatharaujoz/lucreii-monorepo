@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppSidebar } from "./app-sidebar";
 
-const usePathnameMock = vi.hoisted(() => vi.fn(() => "/app/orders"));
+const usePathnameMock = vi.hoisted(() => vi.fn(() => "/app"));
 
 vi.mock("next/navigation", () => ({
   usePathname: usePathnameMock,
@@ -84,20 +84,17 @@ describe("AppSidebar pricing navigation", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     vi.clearAllMocks();
-    usePathnameMock.mockReturnValue("/app/orders");
+    usePathnameMock.mockReturnValue("/app");
   });
 
-  it("renders Calculadora below Pedidos and expands its nested pricing tools", () => {
+  it("renders Calculadora without a Pedidos navigation item and expands its nested pricing tools", () => {
     const view = mount(<AppSidebar {...sidebarProps()} />);
     const calculatorLink = document.querySelector(
       'button[data-href="/app/pricing"]',
     );
 
-    expect(document.body.textContent).toContain("Pedidos");
+    expect(document.body.textContent).not.toContain("Pedidos");
     expect(document.body.textContent).toContain("Calculadora");
-    expect(document.body.textContent?.indexOf("Pedidos")).toBeLessThan(
-      document.body.textContent?.indexOf("Calculadora") ?? 0,
-    );
     expect(document.body.textContent).not.toContain("Lucro Desejado");
 
     act(() => {

@@ -62,23 +62,6 @@ const IntegrationsIcon = () => (
   </svg>
 );
 
-const OrdersIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M3 6h18" />
-    <path d="M7 12h10" />
-    <path d="M9 18h6" />
-  </svg>
-);
-
 const PricingIcon = () => (
   <svg
     width="18"
@@ -140,11 +123,6 @@ const navLinks: NavItem[] = [
       { href: "/app/products/catalog", label: "Catálogo" },
       { href: "/app/products/performance", label: "Performance" },
     ],
-  },
-  {
-    href: "/app/orders",
-    label: "Pedidos",
-    icon: OrdersIcon,
   },
   {
     href: "/app/pricing",

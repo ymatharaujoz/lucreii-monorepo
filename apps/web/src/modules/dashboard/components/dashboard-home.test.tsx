@@ -23,6 +23,12 @@ const { useDashboardDataMock, useDashboardConnectionStatusesMock } = vi.hoisted(
     useDashboardConnectionStatusesMock: vi.fn(),
   }),
 );
+const ordersHomeMock = vi.hoisted(() =>
+  vi.fn((_props: { provider: string | null; referenceMonth: string }) => {
+    void _props;
+    return <div>Orders</div>;
+  }),
+);
 
 vi.mock("./dashboard-header", () => ({
   DashboardHeader: () => <div>Dashboard Header</div>,
@@ -40,12 +46,12 @@ vi.mock("./charts-section", () => ({
   ChartsSection: () => <div>Charts</div>,
 }));
 
-vi.mock("./insights-section", () => ({
-  InsightsSection: () => <div>Insights</div>,
-}));
-
 vi.mock("./products-table", () => ({
   ProductsTable: () => <div>Products</div>,
+}));
+
+vi.mock("@/modules/orders", () => ({
+  OrdersHome: ordersHomeMock,
 }));
 
 vi.mock("../hooks/use-dashboard-data", () => ({
@@ -130,6 +136,7 @@ afterEach(() => {
   vi.useRealTimers();
   useDashboardDataMock.mockReset();
   useDashboardConnectionStatusesMock.mockReset();
+  ordersHomeMock.mockClear();
 });
 
 describe("DashboardHome", () => {
@@ -264,6 +271,10 @@ describe("DashboardHome", () => {
 
     expect(document.body.textContent ?? "").toContain("julho de 2026");
     expect(useDashboardDataMock).toHaveBeenLastCalledWith(null, "2026-07-01");
+    expect(ordersHomeMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      provider: null,
+      referenceMonth: "2026-07-01",
+    });
     expect(document.body.textContent ?? "").toContain("Indicators:true");
 
     click(
@@ -276,7 +287,12 @@ describe("DashboardHome", () => {
       "shopee",
       "2026-07-01",
     );
+    expect(ordersHomeMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      provider: "shopee",
+      referenceMonth: "2026-07-01",
+    });
     expect(document.body.textContent ?? "").toContain("Indicators:false");
+    expect(document.body.textContent ?? "").not.toContain("Insights");
 
     view.unmount();
   });

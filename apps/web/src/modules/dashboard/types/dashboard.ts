@@ -10,7 +10,11 @@ export type DashboardPeriod = "7d" | "30d" | "90d" | "12m";
 
 export type DashboardBusinessStatus = "healthy" | "attention" | "review";
 
-export type DashboardFinancialState = "ready" | "sync" | "catalog" | "insufficient";
+export type DashboardFinancialState =
+  | "ready"
+  | "sync"
+  | "catalog"
+  | "insufficient";
 
 export type ProductHealthStatus =
   | "critical"
@@ -35,7 +39,17 @@ export type DashboardKpiItem = {
   key: string;
   label: string;
   value: string;
-  icon: "revenue" | "profit" | "margin" | "ads" | "orders" | "units" | "critical" | "channel" | "roi" | "roas";
+  icon:
+    | "revenue"
+    | "profit"
+    | "margin"
+    | "ads"
+    | "orders"
+    | "units"
+    | "critical"
+    | "channel"
+    | "roi"
+    | "roas";
   variant: DashboardKpiTone;
   helperText?: string;
   trend?: {
@@ -79,13 +93,3 @@ export type DashboardProductDetailRow = {
 
 // Legacy type for backward compatibility
 export type DashboardProductRow = DashboardProductDetailRow;
-
-export type DashboardInsight = {
-  id: string;
-  type: "growth" | "alert" | "tip" | "info" | "ai";
-  title: string;
-  description: string;
-  priority?: "high" | "medium" | "low";
-  href?: string;
-  actionLabel?: string;
-};

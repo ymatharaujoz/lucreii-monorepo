@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUpDown,
-  CalendarRange,
   CheckCheck,
   ChevronDown,
   ChevronUp,
@@ -19,7 +18,6 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
-  Store,
   Truck,
   X,
 } from "lucide-react";
@@ -34,8 +32,6 @@ import {
 } from "@lucreii/ui";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { StatusBadge } from "@/components/ui-premium/status-badge";
-import { MultiSelectDropdown } from "@/components/ui-premium/multi-select-dropdown";
-import { DateRangePicker } from "@/components/ui-premium/date-range-picker";
 import { slideInUpVariants } from "@/lib/animations";
 import { buildReferenceMonthDateRange } from "@/lib/reference-month";
 import { useReferenceMonth } from "@/lib/reference-month-context";
@@ -58,15 +54,10 @@ import {
 
 const PAGE_SIZE = 20;
 
-const PROVIDER_FILTER_OPTIONS: {
-  value: IntegrationProviderSlug;
-  label: string;
-  swatch: string;
-}[] = [
-  { value: "mercadolivre", label: "Mercado Livre", swatch: "#ffe600" },
-  { value: "shopee", label: "Shopee", swatch: "#fa5230" },
-  { value: "shein", label: "Shein", swatch: "#111111" },
-];
+export interface OrdersHomeProps {
+  provider?: IntegrationProviderSlug | null;
+  referenceMonth?: string;
+}
 
 const PROVIDER_LABELS: Record<IntegrationProviderSlug, string> = {
   mercadolivre: "Mercado Livre",
@@ -296,45 +287,9 @@ function getProviderBadge(provider: string) {
   return <Badge>{provider || "-"}</Badge>;
 }
 
-function getSortValue(
-  row: OrderListItem,
-  key: SortKey,
-): string | number | null {
-  switch (key) {
-    case "orderId":
-      return row.displayOrderId;
-    case "provider":
-      return PROVIDER_LABELS[row.provider] ?? row.provider;
-    case "statusLabel":
-      return row.statusLabel;
-    case "orderedAt":
-      return row.orderedAt;
-    case "contributionMarginPercent":
-      return row.contributionMarginPercent === null
-        ? null
-        : Number(row.contributionMarginPercent);
-    case "shippingAmount":
-      return Number(row.shippingAmount);
-    case "tariffAmount":
-      return Number(row.tariffAmount);
-    case "fixedCostAmount":
-      return Number(row.fixedCostAmount);
-    case "totalWithFees":
-      return Number(row.totalWithFees);
-    case "totalProfitAmount":
-      return row.totalProfitAmount === null
-        ? null
-        : Number(row.totalProfitAmount);
-    case "itemsSold":
-      return row.itemsSold;
-    default:
-      return null;
-  }
-}
-
 function compareSortValues(
-  a: ReturnType<typeof getSortValue>,
-  b: ReturnType<typeof getSortValue>,
+  a: string | number | null,
+  b: string | number | null,
   direction: "asc" | "desc",
 ): number {
   const aNull = a === null || a === undefined;
@@ -946,15 +901,26 @@ function buildStatusDropdownItems(
   ];
 }
 
-export function OrdersHome() {
-  const { referenceMonth } = useReferenceMonth();
+export function OrdersHome({
+  provider = null,
+  referenceMonth: providedReferenceMonth,
+}: OrdersHomeProps = {}) {
+  const { referenceMonth: contextReferenceMonth } = useReferenceMonth();
+  const referenceMonth = providedReferenceMonth ?? contextReferenceMonth;
 
   return (
-    <OrdersHomeContent key={referenceMonth} referenceMonth={referenceMonth} />
+    <OrdersHomeContent
+      key={`${referenceMonth}:${provider ?? "all"}`}
+      provider={provider}
+      referenceMonth={referenceMonth}
+    />
   );
 }
 
-function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
+function OrdersHomeContent({
+  provider,
+  referenceMonth,
+}: Required<OrdersHomeProps>) {
   const referenceMonthRange = useMemo(() => {
     const range = buildReferenceMonthDateRange(referenceMonth);
 
@@ -969,13 +935,6 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
   const [saleIdDraft, setSaleIdDraft] = useState("");
   const [sku, setSku] = useState("");
   const [skuDraft, setSkuDraft] = useState("");
-  const [orderedFrom, setOrderedFrom] = useState(
-    referenceMonthRange.orderedFrom,
-  );
-  const [orderedTo, setOrderedTo] = useState(referenceMonthRange.orderedTo);
-  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>(
-    [],
-  );
   const [selectedStatus, setSelectedStatus] =
     useState<OrderCanonicalStatus | null>(null);
   const [showFilters, setShowFilters] = useState(false);
@@ -1003,103 +962,13 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
     string | null
   >(null);
 
-  const hasCustomDateRange =
-    orderedFrom !== referenceMonthRange.orderedFrom ||
-    orderedTo !== referenceMonthRange.orderedTo;
-
-  const dateRangeLabelForPill = useMemo(() => {
-    if (!orderedFrom && !orderedTo) return "";
-
-    const getTodayString = () => {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    };
-    const getYesterdayString = () => {
-      const d = new Date();
-      d.setDate(d.getDate() - 1);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    };
-    const getDaysAgoString = (days: number) => {
-      const d = new Date();
-      d.setDate(d.getDate() - days);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    };
-    const getFirstDayOfThisMonth = () => {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-    };
-    const getFirstDayOfLastMonth = () => {
-      const d = new Date();
-      d.setMonth(d.getMonth() - 1);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-    };
-    const getLastDayOfLastMonth = () => {
-      const d = new Date();
-      d.setDate(0);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    };
-
-    if (orderedFrom === getTodayString() && orderedTo === getTodayString())
-      return "Hoje";
-    if (
-      orderedFrom === getYesterdayString() &&
-      orderedTo === getYesterdayString()
-    )
-      return "Ontem";
-    if (orderedFrom === getDaysAgoString(6) && orderedTo === getTodayString())
-      return "Últimos 7 dias";
-    if (orderedFrom === getDaysAgoString(29) && orderedTo === getTodayString())
-      return "Últimos 30 dias";
-    if (
-      orderedFrom === getFirstDayOfThisMonth() &&
-      orderedTo === getTodayString()
-    )
-      return "Este mês";
-    if (
-      orderedFrom === getFirstDayOfLastMonth() &&
-      orderedTo === getLastDayOfLastMonth()
-    )
-      return "Mês passado";
-
-    const formatLabel = (dateStr: string) => {
-      if (!dateStr) return "";
-      const parts = dateStr.split("-");
-      if (parts.length !== 3) return dateStr;
-      const months = [
-        "Jan",
-        "Fev",
-        "Mar",
-        "Abr",
-        "Mai",
-        "Jun",
-        "Jul",
-        "Ago",
-        "Set",
-        "Out",
-        "Nov",
-        "Dez",
-      ];
-      return `${parts[2]} ${months[parseInt(parts[1], 10) - 1]}`;
-    };
-
-    if (orderedFrom && orderedTo) {
-      return `${formatLabel(orderedFrom)} — ${formatLabel(orderedTo)}`;
-    }
-    return orderedFrom
-      ? `Desde ${formatLabel(orderedFrom)}`
-      : `Até ${formatLabel(orderedTo)}`;
-  }, [orderedFrom, orderedTo]);
-
-  const provider =
-    selectedMarketplaces.length === 1 ? selectedMarketplaces[0] : "";
-
   const listQuery = useOrdersList({
     includeSummary: false,
     page,
     pageSize: PAGE_SIZE,
     ...(saleId ? { saleId } : {}),
     ...(sku ? { sku } : {}),
-    ...(provider ? { provider: provider as IntegrationProviderSlug } : {}),
+    ...(provider ? { provider } : {}),
     ...(selectedStatus ? { status: selectedStatus } : {}),
     ...(sortConfig?.direction
       ? {
@@ -1107,8 +976,8 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
           sortDirection: sortConfig.direction,
         }
       : {}),
-    ...(orderedFrom ? { orderedFrom } : {}),
-    ...(orderedTo ? { orderedTo } : {}),
+    orderedFrom: referenceMonthRange.orderedFrom,
+    orderedTo: referenceMonthRange.orderedTo,
   });
 
   const detailQuery = useOrderDetails(selectedOrderId, modalOpen);
@@ -1217,12 +1086,6 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
     }
   };
 
-  useEffect(() => {
-    if (!modalOpen) {
-      setDetailTab("items");
-    }
-  }, [modalOpen]);
-
   const rows = useMemo(
     () => listQuery.data?.items ?? [],
     [listQuery.data?.items],
@@ -1241,25 +1104,16 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
   const hasActiveFilters =
     saleId.trim().length > 0 ||
     sku.trim().length > 0 ||
-    selectedMarketplaces.length > 0 ||
-    selectedStatus !== null ||
-    hasCustomDateRange;
+    selectedStatus !== null;
 
   const activeFilterCount =
-    (saleId.trim() ? 1 : 0) +
-    (sku.trim() ? 1 : 0) +
-    selectedMarketplaces.length +
-    (selectedStatus ? 1 : 0) +
-    (hasCustomDateRange ? 1 : 0);
+    (saleId.trim() ? 1 : 0) + (sku.trim() ? 1 : 0) + (selectedStatus ? 1 : 0);
 
   const clearAllFilters = () => {
     setSaleId("");
     setSaleIdDraft("");
     setSku("");
     setSkuDraft("");
-    setOrderedFrom(referenceMonthRange.orderedFrom);
-    setOrderedTo(referenceMonthRange.orderedTo);
-    setSelectedMarketplaces([]);
     setSelectedStatus(null);
     setPage(1);
   };
@@ -1290,13 +1144,11 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
           ? { ids }
           : {
               includeSummary: false,
-              orderedFrom: orderedFrom || undefined,
-              orderedTo: orderedTo || undefined,
+              orderedFrom: referenceMonthRange.orderedFrom,
+              orderedTo: referenceMonthRange.orderedTo,
               page: currentPage,
               pageSize: PAGE_SIZE,
-              provider: provider
-                ? (provider as IntegrationProviderSlug)
-                : undefined,
+              provider: provider ?? undefined,
               saleId: saleId || undefined,
               sku: sku || undefined,
               status: selectedStatus ?? undefined,
@@ -1471,60 +1323,6 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                     </button>
                   </form>
 
-                  <MultiSelectDropdown
-                    align="left"
-                    emptyLabel="Todos os canais"
-                    label="Canais"
-                    onChange={(next) => {
-                      setSelectedMarketplaces(next);
-                      setPage(1);
-                    }}
-                    options={PROVIDER_FILTER_OPTIONS.map((option) => ({
-                      id: option.value,
-                      label: option.label,
-                      swatch: option.swatch,
-                    }))}
-                    selected={selectedMarketplaces}
-                    triggerIcon={<Store className="h-3.5 w-3.5" />}
-                  />
-
-                  <DateRangePicker
-                    key={referenceMonth}
-                    from={orderedFrom}
-                    to={orderedTo}
-                    minDate={referenceMonthRange.orderedFrom}
-                    maxDate={referenceMonthRange.orderedTo}
-                    onChange={(fromStr, toStr) => {
-                      const nextFrom =
-                        fromStr || referenceMonthRange.orderedFrom;
-                      const nextTo = toStr || referenceMonthRange.orderedTo;
-
-                      setOrderedFrom(
-                        nextFrom < referenceMonthRange.orderedFrom
-                          ? referenceMonthRange.orderedFrom
-                          : nextFrom > referenceMonthRange.orderedTo
-                            ? referenceMonthRange.orderedTo
-                            : nextFrom,
-                      );
-                      setOrderedTo(
-                        nextTo > referenceMonthRange.orderedTo
-                          ? referenceMonthRange.orderedTo
-                          : nextTo < referenceMonthRange.orderedFrom
-                            ? referenceMonthRange.orderedFrom
-                            : nextTo,
-                      );
-                      setPage(1);
-                    }}
-                    presets={[
-                      {
-                        from: referenceMonthRange.orderedFrom,
-                        key: `reference-month-${referenceMonth}`,
-                        label: "Todo o mês",
-                        to: referenceMonthRange.orderedTo,
-                      },
-                    ]}
-                  />
-
                   <Dropdown
                     align="left"
                     items={buildStatusDropdownItems(
@@ -1630,54 +1428,6 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
                       onClick={() => {
                         setSku("");
                         setSkuDraft("");
-                        setPage(1);
-                      }}
-                      className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
-
-                {selectedMarketplaces.map((m) => {
-                  const label =
-                    PROVIDER_LABELS[m as IntegrationProviderSlug] ?? m;
-                  return (
-                    <div
-                      key={m}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium"
-                    >
-                      <span className="text-muted-foreground text-[10px] uppercase font-semibold">
-                        Canal:
-                      </span>
-                      <span>{label}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedMarketplaces(
-                            selectedMarketplaces.filter((item) => item !== m),
-                          );
-                          setPage(1);
-                        }}
-                        className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  );
-                })}
-
-                {hasCustomDateRange && (
-                  <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
-                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">
-                      Período:
-                    </span>
-                    <span>{dateRangeLabelForPill}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setOrderedFrom(referenceMonthRange.orderedFrom);
-                        setOrderedTo(referenceMonthRange.orderedTo);
                         setPage(1);
                       }}
                       className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
@@ -1836,7 +1586,7 @@ function OrdersHomeContent({ referenceMonth }: { referenceMonth: string }) {
             </span>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className="max-h-[600px] min-h-0 flex-1 overflow-auto">
             <table className="w-full min-w-[1100px] border-separate border-spacing-0">
               <thead>
                 <tr className="border-b border-border bg-surface-strong/95">

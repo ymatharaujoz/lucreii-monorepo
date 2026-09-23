@@ -2,7 +2,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { determineDashboardFinancialState } from "./calculations/financial-state";
-import { buildDashboardInsights } from "./calculations/insights";
 import { buildDashboardKpis } from "./calculations/kpi-data";
 import { buildDashboardProductRows } from "./calculations/product-rows";
 import { ProductsTable } from "./components/products-table";
@@ -100,9 +99,17 @@ const profitability = {
 
 describe("dashboard foundation helpers", () => {
   it("derives financial states correctly", () => {
-    expect(determineDashboardFinancialState(summary, charts, profitability)).toBe("ready");
+    expect(
+      determineDashboardFinancialState(summary, charts, profitability),
+    ).toBe("ready");
     // Sem dados de sync (daily vazio) mas com custos cadastrados → deve mostrar dados (não bloquear)
-    expect(determineDashboardFinancialState(summary, { ...charts, daily: [] }, profitability)).toBe("ready");
+    expect(
+      determineDashboardFinancialState(
+        summary,
+        { ...charts, daily: [] },
+        profitability,
+      ),
+    ).toBe("ready");
     expect(
       determineDashboardFinancialState(
         {
@@ -118,7 +125,9 @@ describe("dashboard foundation helpers", () => {
         profitability,
       ),
     ).toBe("catalog");
-    expect(determineDashboardFinancialState(undefined, charts, profitability)).toBe("insufficient");
+    expect(
+      determineDashboardFinancialState(undefined, charts, profitability),
+    ).toBe("insufficient");
   });
 
   it("formats money, percent, and numbers with fallbacks", () => {
@@ -145,30 +154,6 @@ describe("dashboard foundation helpers", () => {
     expect(kpis[5]?.value).toBe("20.0x");
   });
 
-  it("keeps dashboard insights tied to explicit contract metrics without heuristic ad or margin thresholds", () => {
-    const insights = buildDashboardInsights({
-      ...summary,
-      summary: {
-        ...summary.summary,
-        avgRoas: "0.50",
-        grossMarginPercent: "5.00",
-        netProfit: "90.00",
-        totalAdCosts: "120.00",
-      },
-    });
-
-    expect(insights).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: "profit-positive",
-        }),
-      ]),
-    );
-    expect(insights.map((insight) => insight.id)).not.toEqual(
-      expect.arrayContaining(["ads-high", "margin-low"]),
-    );
-  });
-
   it("maps profitability rows from explicit API contract and classifies health", () => {
     const rows = buildDashboardProductRows(profitability);
 
@@ -187,11 +172,15 @@ describe("dashboard foundation helpers", () => {
   });
 
   it("classifies critical products", () => {
-    expect(getProductHealthStatus({ margin: -3, profit: -10, roi: -0.1, roas: 0.5 })).toBe("critical");
+    expect(
+      getProductHealthStatus({ margin: -3, profit: -10, roi: -0.1, roas: 0.5 }),
+    ).toBe("critical");
   });
 
   it("renders the top products table from profitability data", () => {
-    const markup = renderToStaticMarkup(createElement(ProductsTable, { data: profitability }));
+    const markup = renderToStaticMarkup(
+      createElement(ProductsTable, { data: profitability }),
+    );
 
     expect(markup).toContain("TOP 10 Produtos");
     expect(markup).toContain("Maiores lucros por SKU");
