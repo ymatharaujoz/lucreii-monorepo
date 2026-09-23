@@ -293,6 +293,50 @@ describe("FinancialIndicatorsService", () => {
     expect(db.query.marketplaceAdvertising.findFirst).toHaveBeenCalledOnce();
   });
 
+  it("prorates monthly fixed cost and advertising for a partial date range", async () => {
+    const db = buildDb();
+    db.query.companies.findFirst.mockResolvedValue(company);
+    db.query.fixedCosts.findMany.mockResolvedValue([]);
+    db.query.marketplaceAdvertising.findFirst.mockResolvedValue({
+      amount: "31.00",
+    });
+    const productsService = buildProductsService();
+    const ordersService = buildOrdersService({
+      marketplaceCommission: "0.00",
+      packagingCost: "0.00",
+      productCost: "0.00",
+      revenue: "100.00",
+      shippingCost: "0.00",
+      taxAmount: "0.00",
+    });
+
+    const result = await new FinancialIndicatorsService(
+      db as never,
+      productsService as never,
+      ordersService as never,
+    ).read("org-1", "user-1", "company-1", "shopee", "2026-07-01", {
+      dateFrom: "2026-07-01",
+      dateTo: "2026-07-10",
+    });
+
+    expect(result.advertising).toBe("10.00");
+    expect(result.fixedCost).toBe("32.26");
+    expect(result.monthlyAdvertising).toBe("31.00");
+    expect(ordersService.readExportedFinancialSummary).toHaveBeenCalledWith(
+      {
+        organizationId: "org-1",
+        selectedCompanyId: "company-1",
+        userId: "user-1",
+      },
+      {
+        dateFrom: "2026-07-01",
+        dateTo: "2026-07-10",
+        provider: "shopee",
+        referenceMonth: "2026-07-01",
+      },
+    );
+  });
+
   it("upserts marketplace advertising scoped to company, provider, and month", async () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);

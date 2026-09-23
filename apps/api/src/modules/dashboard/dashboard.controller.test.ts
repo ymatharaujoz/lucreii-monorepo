@@ -97,7 +97,7 @@ describe("dashboard controller", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: "/dashboard/summary?provider=shopee&referenceMonth=2026-07-01",
+      url: "/dashboard/summary?provider=shopee&referenceMonth=2026-07-01&dateFrom=2026-07-02&dateTo=2026-07-09",
     });
 
     expect(response.statusCode).toBe(200);
@@ -106,6 +106,7 @@ describe("dashboard controller", () => {
       "company_123",
       "shopee",
       "2026-07-01",
+      { dateFrom: "2026-07-02", dateTo: "2026-07-09" },
     );
     expect(response.json()).toEqual({
       data: expect.objectContaining({
@@ -189,6 +190,7 @@ describe("dashboard controller", () => {
       "company_123",
       undefined,
       "2026-07-01",
+      undefined,
     );
     expect(dashboardService.readRecentSync).toHaveBeenCalledWith(
       "org_123",
@@ -200,6 +202,7 @@ describe("dashboard controller", () => {
       "company_123",
       undefined,
       "2026-07-01",
+      undefined,
     );
   });
 
@@ -240,6 +243,7 @@ describe("dashboard controller", () => {
       fixedCostSource: "monthly",
       grossSales: 125,
       marketplaceCommission: "5000.00",
+      monthlyAdvertising: "1481.33",
       netMarginPercent: "12.04",
       netProfit: "3295.11",
       netSales: 100,
@@ -265,6 +269,7 @@ describe("dashboard controller", () => {
       "company_123",
       "shopee",
       "2026-04-01",
+      undefined,
     );
     expect(response.json()).toEqual({
       data: expect.objectContaining({

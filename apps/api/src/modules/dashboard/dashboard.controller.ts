@@ -7,24 +7,126 @@ import { EntitlementGuard } from "@/modules/billing/entitlement.guard";
 import { DashboardService } from "./dashboard.service";
 import { UpdateDashboardMarketplaceAdvertisingRequestDto } from "./dashboard.dto";
 
-class DashboardProviderQueryDto {
-  static schema = z.object({
-    provider: z.enum(["mercadolivre", "shopee", "shein"]).optional(),
-    referenceMonth: z.string().trim().regex(/^\d{4}-\d{2}-01$/).optional(),
-  });
+const referenceMonthSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-01$/);
+const isoDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => {
+    const date = new Date(`${value}T12:00:00.000Z`);
+    return date.toISOString().slice(0, 10) === value;
+  }, "Invalid calendar date.");
 
+function getSaoPauloCurrentDate(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+  }).formatToParts(now);
+  const day = parts.find((part) => part.type === "day")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const year = parts.find((part) => part.type === "year")?.value;
+
+  return year && month && day
+    ? `${year}-${month}-${day}`
+    : now.toISOString().slice(0, 10);
+}
+
+function createDashboardQuerySchema(
+  referenceMonth: z.ZodType<string | undefined>,
+) {
+  return z
+    .object({
+      dateFrom: isoDateSchema.optional(),
+      dateTo: isoDateSchema.optional(),
+      provider: z.enum(["mercadolivre", "shopee", "shein"]).optional(),
+      referenceMonth,
+    })
+    .superRefine((value, context) => {
+      const hasDateFrom = value.dateFrom !== undefined;
+      const hasDateTo = value.dateTo !== undefined;
+
+      if (hasDateFrom !== hasDateTo) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "dateFrom and dateTo must be provided together.",
+          path: hasDateFrom ? ["dateTo"] : ["dateFrom"],
+        });
+        return;
+      }
+
+      if (!value.dateFrom || !value.dateTo) {
+        return;
+      }
+
+      if (!value.referenceMonth) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "referenceMonth is required when filtering by date.",
+          path: ["referenceMonth"],
+        });
+      }
+
+      if (value.dateFrom > value.dateTo) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "dateFrom must be on or before dateTo.",
+          path: ["dateFrom"],
+        });
+      }
+
+      if (
+        value.referenceMonth &&
+        (value.dateFrom.slice(0, 7) !== value.referenceMonth.slice(0, 7) ||
+          value.dateTo.slice(0, 7) !== value.referenceMonth.slice(0, 7))
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Selected dates must belong to referenceMonth.",
+          path: ["dateFrom"],
+        });
+      }
+
+      const today = getSaoPauloCurrentDate();
+      if (value.dateFrom > today || value.dateTo > today) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Selected dates cannot be in the future.",
+          path: value.dateFrom > today ? ["dateFrom"] : ["dateTo"],
+        });
+      }
+    });
+}
+
+class DashboardProviderQueryDto {
+  static schema = createDashboardQuerySchema(referenceMonthSchema.optional());
+
+  dateFrom?: string;
+  dateTo?: string;
   provider?: "mercadolivre" | "shopee" | "shein";
   referenceMonth?: string;
 }
 
 class DashboardFinancialIndicatorsQueryDto {
-  static schema = z.object({
-    provider: z.enum(["mercadolivre", "shopee", "shein"]).optional(),
-    referenceMonth: z.string().trim().regex(/^\d{4}-\d{2}-01$/),
-  });
+  static schema = createDashboardQuerySchema(referenceMonthSchema);
 
+  dateFrom?: string;
+  dateTo?: string;
   provider?: "mercadolivre" | "shopee" | "shein";
   referenceMonth!: string;
+}
+
+function getDashboardDateRange(query: {
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  return query.dateFrom && query.dateTo
+    ? { dateFrom: query.dateFrom, dateTo: query.dateTo }
+    : undefined;
 }
 
 @Controller("dashboard")
@@ -47,6 +149,7 @@ export class DashboardController {
         companyId,
         query.provider,
         query.referenceMonth,
+        getDashboardDateRange(query),
       ),
       error: null,
     };
@@ -64,6 +167,7 @@ export class DashboardController {
         companyId,
         query.provider,
         query.referenceMonth,
+        getDashboardDateRange(query),
       ),
       error: null,
     };
@@ -97,6 +201,7 @@ export class DashboardController {
         companyId,
         query.provider,
         query.referenceMonth,
+        getDashboardDateRange(query),
       ),
       error: null,
     };
@@ -115,6 +220,7 @@ export class DashboardController {
         companyId,
         query.provider,
         query.referenceMonth,
+        getDashboardDateRange(query),
       ),
       error: null,
     };

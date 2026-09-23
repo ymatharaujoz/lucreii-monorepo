@@ -6763,5 +6763,18 @@ describe("OrdersService", () => {
       orderedTo: "2026-06-30",
       provider: "mercadolivre",
     });
+
+    await service.readExportedFinancialSummary(context, {
+      dateFrom: "2026-06-10",
+      dateTo: "2026-06-12",
+      provider: "mercadolivre",
+      referenceMonth: "2026-06-01",
+    });
+
+    expect(readLogicalOrdersForExport).toHaveBeenNthCalledWith(3, context, {
+      orderedFrom: "2026-06-10",
+      orderedTo: "2026-06-12",
+      provider: "mercadolivre",
+    });
   });
 });

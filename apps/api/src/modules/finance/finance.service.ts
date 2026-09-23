@@ -53,6 +53,11 @@ type ProductPresentationRow = Product & {
   images: ProductImage[];
 };
 
+export type FinanceDateRange = {
+  dateFrom: string;
+  dateTo: string;
+};
+
 export function normalizeSku(value: string | null | undefined) {
   if (!value) {
     return null;
@@ -131,6 +136,14 @@ export function buildReferenceMonthRange(referenceMonth: string) {
 
   const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
   const end = new Date(Date.UTC(month === 12 ? year + 1 : year, month === 12 ? 0 : month, 1, 0, 0, 0, 0));
+
+  return { end, start };
+}
+
+export function buildFinanceDateRange(dateRange: FinanceDateRange) {
+  const start = new Date(`${dateRange.dateFrom}T00:00:00.000Z`);
+  const end = new Date(`${dateRange.dateTo}T00:00:00.000Z`);
+  end.setUTCDate(end.getUTCDate() + 1);
 
   return { end, start };
 }
@@ -324,10 +337,13 @@ export class FinanceService {
     companyId: string,
     provider?: IntegrationProviderSlug,
     referenceMonth?: string,
+    dateRange?: FinanceDateRange,
   ): Promise<FinanceSnapshot> {
-    const referenceMonthRange = referenceMonth
-      ? buildReferenceMonthRange(referenceMonth)
-      : null;
+    const financeDateRange = dateRange
+      ? buildFinanceDateRange(dateRange)
+      : referenceMonth
+        ? buildReferenceMonthRange(referenceMonth)
+        : null;
     const [productRows, orderRows, adCostRows, expenseRows, externalProductRows] = await Promise.all([
       this.db.query.products.findMany({
         orderBy: (table) => [desc(table.createdAt)],
@@ -350,8 +366,8 @@ export class FinanceService {
             eq(table.organizationId, organizationId),
             eq(table.companyId, companyId),
             ...(provider ? [eq(table.provider, provider)] : []),
-            ...(referenceMonthRange
-              ? [gte(table.orderedAt, referenceMonthRange.start), lt(table.orderedAt, referenceMonthRange.end)]
+            ...(financeDateRange
+              ? [gte(table.orderedAt, financeDateRange.start), lt(table.orderedAt, financeDateRange.end)]
               : []),
           ),
         with: {
@@ -366,10 +382,10 @@ export class FinanceService {
             eq(table.organizationId, organizationId),
             eq(table.companyId, companyId),
             ...(provider ? [eq(table.channel, provider)] : []),
-            ...(referenceMonthRange
+            ...(financeDateRange
               ? [
-                  gte(table.spentAt, referenceMonthRange.start.toISOString().slice(0, 10)),
-                  lt(table.spentAt, referenceMonthRange.end.toISOString().slice(0, 10)),
+                  gte(table.spentAt, financeDateRange.start.toISOString().slice(0, 10)),
+                  lt(table.spentAt, financeDateRange.end.toISOString().slice(0, 10)),
                 ]
               : []),
           ),
@@ -380,10 +396,10 @@ export class FinanceService {
           and(
             eq(table.organizationId, organizationId),
             eq(table.companyId, companyId),
-            ...(referenceMonthRange
+            ...(financeDateRange
               ? [
-                  gte(table.incurredAt, referenceMonthRange.start.toISOString().slice(0, 10)),
-                  lt(table.incurredAt, referenceMonthRange.end.toISOString().slice(0, 10)),
+                  gte(table.incurredAt, financeDateRange.start.toISOString().slice(0, 10)),
+                  lt(table.incurredAt, financeDateRange.end.toISOString().slice(0, 10)),
                 ]
               : []),
           ),
@@ -441,12 +457,14 @@ export class FinanceService {
     companyId: string,
     provider?: IntegrationProviderSlug,
     referenceMonth?: string,
+    dateRange?: FinanceDateRange,
   ): Promise<DashboardReadModel> {
     const snapshot = await this.buildFinanceSnapshot(
       organizationId,
       companyId,
       provider,
       referenceMonth,
+      dateRange,
     );
     const overview = buildFinanceOverview(snapshot);
     const productProfitability = buildProductProfitabilityMetrics(snapshot);
@@ -516,9 +534,17 @@ export class FinanceService {
     companyId: string,
     provider?: IntegrationProviderSlug,
     referenceMonth?: string,
+    dateRange?: FinanceDateRange,
   ): Promise<DashboardSummaryMetrics> {
-    return (await this.buildDashboardReadModel(organizationId, companyId, provider, referenceMonth))
-      .summary;
+    return (
+      await this.buildDashboardReadModel(
+        organizationId,
+        companyId,
+        provider,
+        referenceMonth,
+        dateRange,
+      )
+    ).summary;
   }
 
   async readDailyMetrics(

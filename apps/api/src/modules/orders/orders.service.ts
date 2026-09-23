@@ -2665,13 +2665,18 @@ export class OrdersService {
   async readExportedFinancialSummary(
     authContext: TenantContext,
     input: {
+      dateFrom?: string;
+      dateTo?: string;
       provider?: IntegrationProviderSlug;
       referenceMonth: string;
     },
   ): Promise<ExportedOrderFinancialSummary> {
-    const monthRange = buildReferenceMonthOrderRange(input.referenceMonth);
+    const orderRange =
+      input.dateFrom && input.dateTo
+        ? { orderedFrom: input.dateFrom, orderedTo: input.dateTo }
+        : buildReferenceMonthOrderRange(input.referenceMonth);
     const logicalOrders = await this.readLogicalOrdersForExport(authContext, {
-      ...monthRange,
+      ...orderRange,
       ...(input.provider ? { provider: input.provider } : {}),
     });
 

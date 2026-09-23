@@ -33,7 +33,10 @@ import {
 import { Pagination } from "@/components/ui-premium/pagination";
 import { StatusBadge } from "@/components/ui-premium/status-badge";
 import { slideInUpVariants } from "@/lib/animations";
-import { buildReferenceMonthDateRange } from "@/lib/reference-month";
+import {
+  buildReferenceMonthDateRange,
+  type ReferenceMonthDateRange,
+} from "@/lib/reference-month";
 import { useReferenceMonth } from "@/lib/reference-month-context";
 import { parseCurrencyValue } from "@/modules/products/components/currency-input";
 import type {
@@ -55,6 +58,7 @@ import {
 const PAGE_SIZE = 20;
 
 export interface OrdersHomeProps {
+  dateRange?: ReferenceMonthDateRange;
   provider?: IntegrationProviderSlug | null;
   referenceMonth?: string;
 }
@@ -902,34 +906,41 @@ function buildStatusDropdownItems(
 }
 
 export function OrdersHome({
+  dateRange: providedDateRange,
   provider = null,
   referenceMonth: providedReferenceMonth,
 }: OrdersHomeProps = {}) {
   const { referenceMonth: contextReferenceMonth } = useReferenceMonth();
   const referenceMonth = providedReferenceMonth ?? contextReferenceMonth;
+  const fallbackDateRange = useMemo(() => {
+    const range = buildReferenceMonthDateRange(referenceMonth);
+
+    return range
+      ? { dateFrom: range.orderedFrom, dateTo: range.orderedTo }
+      : null;
+  }, [referenceMonth]);
+  const dateRange = providedDateRange ?? fallbackDateRange;
+
+  if (!dateRange) {
+    throw new Error("Invalid global reference month.");
+  }
 
   return (
     <OrdersHomeContent
-      key={`${referenceMonth}:${provider ?? "all"}`}
+      key={`${referenceMonth}:${dateRange.dateFrom}:${dateRange.dateTo}:${provider ?? "all"}`}
+      dateRange={dateRange}
       provider={provider}
-      referenceMonth={referenceMonth}
     />
   );
 }
 
 function OrdersHomeContent({
+  dateRange,
   provider,
-  referenceMonth,
-}: Required<OrdersHomeProps>) {
-  const referenceMonthRange = useMemo(() => {
-    const range = buildReferenceMonthDateRange(referenceMonth);
-
-    if (!range) {
-      throw new Error("Invalid global reference month.");
-    }
-
-    return range;
-  }, [referenceMonth]);
+}: {
+  dateRange: ReferenceMonthDateRange;
+  provider: IntegrationProviderSlug | null;
+}) {
   const [page, setPage] = useState(1);
   const [saleId, setSaleId] = useState("");
   const [saleIdDraft, setSaleIdDraft] = useState("");
@@ -976,8 +987,8 @@ function OrdersHomeContent({
           sortDirection: sortConfig.direction,
         }
       : {}),
-    orderedFrom: referenceMonthRange.orderedFrom,
-    orderedTo: referenceMonthRange.orderedTo,
+    orderedFrom: dateRange.dateFrom,
+    orderedTo: dateRange.dateTo,
   });
 
   const detailQuery = useOrderDetails(selectedOrderId, modalOpen);
@@ -1144,8 +1155,8 @@ function OrdersHomeContent({
           ? { ids }
           : {
               includeSummary: false,
-              orderedFrom: referenceMonthRange.orderedFrom,
-              orderedTo: referenceMonthRange.orderedTo,
+              orderedFrom: dateRange.dateFrom,
+              orderedTo: dateRange.dateTo,
               page: currentPage,
               pageSize: PAGE_SIZE,
               provider: provider ?? undefined,

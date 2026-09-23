@@ -78,6 +78,7 @@ describe("MarketplacesPage", () => {
       expect.objectContaining({
         activeCompany: expect.objectContaining({ id: "company_1" }),
         companyName: "Lucreii",
+        dateRangeDefault: "today",
         indicatorMode: "marketplace",
         showCompanyDefaultsEditor: false,
         showMarketplaceConnections: false,

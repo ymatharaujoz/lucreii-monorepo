@@ -126,6 +126,7 @@ export type DashboardFinancialIndicators = {
   excludedSales: number;
   grossSales: number;
   marketplaceCommission: DecimalString;
+  monthlyAdvertising: DecimalString;
   netMarginPercent: DecimalString;
   netProfit: DecimalString;
   netSales: number;

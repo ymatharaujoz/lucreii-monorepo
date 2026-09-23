@@ -19,6 +19,10 @@ import type {
 } from "@lucreii/types";
 import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, itemVariants } from "@/lib/animations";
+import {
+  getReferenceMonthDateRangeProration,
+  type ReferenceMonthDateRange,
+} from "@/lib/reference-month";
 import { Button, Card, Input } from "@lucreii/ui";
 import {
   buildMarketplaceAdvertisingPatch,
@@ -29,6 +33,7 @@ import { formatMoney } from "../utils/formatters";
 
 interface DashboardFinancialIndicatorsProps {
   activeCompany: Company | null;
+  dateRange?: ReferenceMonthDateRange;
   financialIndicators: DashboardFinancialIndicatorsData;
   indicatorMode?: "dashboard" | "marketplace";
   onDefaultsSaved?: () => void;
@@ -147,6 +152,7 @@ function IndicatorCard({
 
 export function DashboardFinancialIndicators({
   activeCompany,
+  dateRange,
   financialIndicators,
   indicatorMode = "dashboard",
   onDefaultsSaved,
@@ -186,12 +192,20 @@ export function DashboardFinancialIndicators({
 
   const isMarketplaceView = !showCompanyWideIndicators;
   const isMarketplaceIndicatorMode = indicatorMode === "marketplace";
+  const dateRangeProration =
+    referenceMonth && dateRange
+      ? getReferenceMonthDateRangeProration(referenceMonth, dateRange)
+      : 1;
+  const isPartialDateRange = dateRangeProration < 1;
   const marketplaceAdvertisingKey = `${activeCompany?.id ?? ""}:${provider ?? ""}:${referenceMonth ?? ""}`;
-  const resolvedAdvertising =
+  const resolvedMonthlyAdvertising =
     isMarketplaceView &&
     savedMarketplaceAdvertising?.key === marketplaceAdvertisingKey
       ? savedMarketplaceAdvertising.amount
-      : normalizeNumber(financialIndicators.advertising);
+      : normalizeNumber(
+          financialIndicators.monthlyAdvertising ??
+            financialIndicators.advertising,
+        );
   const totalProfit = normalizeNumber(financialIndicators.totalProfit);
   const revenue = normalizeNumber(financialIndicators.revenue);
   const breakEven = normalizeNumber(financialIndicators.breakEvenRevenue);
@@ -203,7 +217,10 @@ export function DashboardFinancialIndicators({
   const displayedVariableCosts = roundToCents(
     normalizeNumber(financialIndicators.variableCosts),
   );
-  const displayedAdvertising = roundToCents(resolvedAdvertising);
+  const displayedMonthlyAdvertising = roundToCents(resolvedMonthlyAdvertising);
+  const displayedAdvertising = roundToCents(
+    resolvedMonthlyAdvertising * dateRangeProration,
+  );
   const displayedCost = roundToCents(
     normalizeNumber(financialIndicators.productCost) +
       normalizeNumber(financialIndicators.packagingCost),
@@ -237,7 +254,7 @@ export function DashboardFinancialIndicators({
 
   const cancelEditing = useCallback(() => {
     if (isMarketplaceView) {
-      setAdvertisingInput(formatCurrencyInput(displayedAdvertising));
+      setAdvertisingInput(formatCurrencyInput(displayedMonthlyAdvertising));
     } else {
       setFixedCostInput(formatCurrencyInput(companyDefaults.fixedCost));
       setTaxPercentInput(formatCurrencyInput(companyDefaults.taxPercent));
@@ -247,7 +264,7 @@ export function DashboardFinancialIndicators({
   }, [
     companyDefaults.fixedCost,
     companyDefaults.taxPercent,
-    displayedAdvertising,
+    displayedMonthlyAdvertising,
     isMarketplaceView,
   ]);
 
@@ -610,7 +627,9 @@ export function DashboardFinancialIndicators({
                   {isMarketplaceView ? (
                     <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Publicidade
+                        {isPartialDateRange
+                          ? "Publicidade mensal"
+                          : "Publicidade"}
                       </span>
                       <Input
                         className="h-9 flex-1 text-right text-xs"
@@ -626,7 +645,9 @@ export function DashboardFinancialIndicators({
                     <>
                       <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Custo Fixo
+                          {isPartialDateRange
+                            ? "Custo Fixo mensal"
+                            : "Custo Fixo"}
                         </span>
                         <Input
                           className="h-9 flex-1 text-right text-xs"
@@ -696,7 +717,9 @@ export function DashboardFinancialIndicators({
                       <div className="flex items-center gap-2">
                         <DollarSign className="h-4 w-4 text-accent" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Publicidade
+                          {isPartialDateRange
+                            ? "Publicidade rateada"
+                            : "Publicidade"}
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
                           {formatMoney(displayedAdvertising)}
@@ -717,7 +740,9 @@ export function DashboardFinancialIndicators({
                       <div className="flex items-center gap-2">
                         <DollarSign className="h-4 w-4 text-accent" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Custo Fixo
+                          {isPartialDateRange
+                            ? "Custo Fixo rateado"
+                            : "Custo Fixo"}
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
                           {formatMoney(fixedCostResolved)}
@@ -741,7 +766,7 @@ export function DashboardFinancialIndicators({
                     setFeedbackMessage(null);
                     if (isMarketplaceView) {
                       setAdvertisingInput(
-                        formatCurrencyInput(displayedAdvertising),
+                        formatCurrencyInput(displayedMonthlyAdvertising),
                       );
                     } else {
                       setFixedCostInput(

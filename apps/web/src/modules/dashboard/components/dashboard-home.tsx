@@ -1,13 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { RefreshCw, AlertCircle, ChevronDown, Calendar } from "lucide-react";
 import type { Company, IntegrationProviderSlug } from "@lucreii/types";
-import { Card, EmptyState, Skeleton, Button, Dropdown } from "@lucreii/ui";
+import {
+  Card,
+  EmptyState,
+  Skeleton,
+  Button,
+  Dropdown,
+  Input,
+} from "@lucreii/ui";
 import { ApiClientError } from "@/lib/api/client";
-import { formatReferenceMonthPtBr } from "@/lib/reference-month";
+import {
+  formatReferenceMonthPtBr,
+  getReferenceMonthDateBounds,
+  getReferenceMonthDefaultDateRange,
+  type ReferenceMonthDateRange,
+  type ReferenceMonthDateRangeDefault,
+} from "@/lib/reference-month";
 import { useReferenceMonth } from "@/lib/reference-month-context";
 import { containerVariants, fadeInVariants } from "@/lib/animations";
 import {
@@ -26,6 +39,7 @@ import { useDashboardConnectionStatuses } from "../hooks/use-dashboard-connectio
 interface DashboardHomeProps {
   activeCompany: Company | null;
   companyName: string;
+  dateRangeDefault?: ReferenceMonthDateRangeDefault;
   indicatorMode?: "dashboard" | "marketplace";
   showCompanyDefaultsEditor?: boolean;
   showMarketplaceConnections?: boolean;
@@ -34,11 +48,26 @@ interface DashboardHomeProps {
   showProviderFilter?: boolean;
 }
 
+type SelectedDateRange = ReferenceMonthDateRange & {
+  dateRangeDefault: ReferenceMonthDateRangeDefault;
+  referenceMonth: string;
+};
+
 function ReferenceMonthToolbar({
+  dateRange,
+  maxDate,
+  minDate,
+  onDateFromChange,
+  onDateToChange,
   onReferenceMonthChange,
   options,
   referenceMonth,
 }: {
+  dateRange: ReferenceMonthDateRange;
+  maxDate: string;
+  minDate: string;
+  onDateFromChange: (value: string) => void;
+  onDateToChange: (value: string) => void;
   onReferenceMonthChange: (value: string) => void;
   options: readonly string[];
   referenceMonth: string;
@@ -49,27 +78,55 @@ function ReferenceMonthToolbar({
   }));
 
   return (
-    <Dropdown
-      align="left"
-      items={items}
-      onSelect={(id) => onReferenceMonthChange(id)}
-      trigger={
-        <div className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[var(--radius-md)] border border-border bg-background pl-2.5 pr-2.5 text-xs font-semibold text-foreground transition-all duration-[var(--transition-fast)] outline-none hover:border-border-strong hover:shadow-[var(--shadow-xs)]">
-          <Calendar className="h-3.5 w-3.5 shrink-0 text-accent" />
-          <span className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 md:inline">
-            Mês de Referência
-          </span>
-          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 md:hidden">
-            Mês
-          </span>
-          <span aria-hidden className="h-3 w-px shrink-0 bg-border/70" />
-          <span className="font-semibold text-foreground text-xs leading-none">
-            {formatReferenceMonthPtBr(referenceMonth)}
-          </span>
-          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-[var(--transition-fast)]" />
-        </div>
-      }
-    />
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <Dropdown
+        align="left"
+        items={items}
+        onSelect={(id) => onReferenceMonthChange(id)}
+        trigger={
+          <div className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[var(--radius-md)] border border-border bg-background pl-2.5 pr-2.5 text-xs font-semibold text-foreground transition-all duration-[var(--transition-fast)] outline-none hover:border-border-strong hover:shadow-[var(--shadow-xs)]">
+            <Calendar className="h-3.5 w-3.5 shrink-0 text-accent" />
+            <span className="hidden text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 md:inline">
+              Mês de Referência
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70 md:hidden">
+              Mês
+            </span>
+            <span aria-hidden className="h-3 w-px shrink-0 bg-border/70" />
+            <span className="font-semibold text-foreground text-xs leading-none">
+              {formatReferenceMonthPtBr(referenceMonth)}
+            </span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-[var(--transition-fast)]" />
+          </div>
+        }
+      />
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+          De
+          <Input
+            aria-label="Data inicial"
+            className="h-8 w-[132px] px-2 text-xs"
+            max={dateRange.dateTo}
+            min={minDate}
+            onChange={(event) => onDateFromChange(event.target.value)}
+            type="date"
+            value={dateRange.dateFrom}
+          />
+        </label>
+        <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+          Até
+          <Input
+            aria-label="Data final"
+            className="h-8 w-[132px] px-2 text-xs"
+            max={maxDate}
+            min={dateRange.dateFrom}
+            onChange={(event) => onDateToChange(event.target.value)}
+            type="date"
+            value={dateRange.dateTo}
+          />
+        </label>
+      </div>
+    </div>
   );
 }
 
@@ -129,6 +186,7 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
 export function DashboardHome({
   activeCompany,
   companyName,
+  dateRangeDefault = "month",
   indicatorMode = "dashboard",
   showCompanyDefaultsEditor = true,
   showMarketplaceConnections = true,
@@ -140,6 +198,55 @@ export function DashboardHome({
     useState<IntegrationProviderSlug | null>(null);
   const { referenceMonth, referenceMonthOptions, setReferenceMonth } =
     useReferenceMonth();
+  const [selectedDateRange, setSelectedDateRange] = useState<SelectedDateRange>(
+    () => {
+      const initialRange = getReferenceMonthDefaultDateRange(
+        referenceMonth,
+        dateRangeDefault,
+      );
+
+      if (!initialRange) {
+        throw new Error("Invalid reference month.");
+      }
+
+      return {
+        ...initialRange,
+        dateRangeDefault,
+        referenceMonth,
+      };
+    },
+  );
+  const dateBounds = useMemo(() => {
+    const bounds = getReferenceMonthDateBounds(referenceMonth);
+
+    if (!bounds) {
+      throw new Error("Invalid reference month.");
+    }
+
+    return bounds;
+  }, [referenceMonth]);
+  const dateRange = useMemo(() => {
+    if (
+      selectedDateRange.referenceMonth === referenceMonth &&
+      selectedDateRange.dateRangeDefault === dateRangeDefault
+    ) {
+      return {
+        dateFrom: selectedDateRange.dateFrom,
+        dateTo: selectedDateRange.dateTo,
+      };
+    }
+
+    const defaultRange = getReferenceMonthDefaultDateRange(
+      referenceMonth,
+      dateRangeDefault,
+    );
+
+    if (!defaultRange) {
+      throw new Error("Invalid reference month.");
+    }
+
+    return defaultRange;
+  }, [dateRangeDefault, referenceMonth, selectedDateRange]);
   const {
     chartsQuery,
     profitabilityQuery,
@@ -149,7 +256,7 @@ export function DashboardHome({
     financialState,
     businessStatus,
     refetchAll,
-  } = useDashboardData(providerFilter, referenceMonth);
+  } = useDashboardData(providerFilter, referenceMonth, dateRange);
   const { syncStatusByProvider } = useDashboardConnectionStatuses();
 
   if (isLoading) {
@@ -176,6 +283,42 @@ export function DashboardHome({
 
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <ReferenceMonthToolbar
+          dateRange={dateRange}
+          maxDate={dateBounds.maxDate}
+          minDate={dateBounds.minDate}
+          onDateFromChange={(dateFrom) => {
+            if (
+              !dateFrom ||
+              dateFrom < dateBounds.minDate ||
+              dateFrom > dateBounds.maxDate
+            ) {
+              return;
+            }
+
+            setSelectedDateRange({
+              dateFrom,
+              dateRangeDefault,
+              dateTo: dateFrom > dateRange.dateTo ? dateFrom : dateRange.dateTo,
+              referenceMonth,
+            });
+          }}
+          onDateToChange={(dateTo) => {
+            if (
+              !dateTo ||
+              dateTo < dateBounds.minDate ||
+              dateTo > dateBounds.maxDate
+            ) {
+              return;
+            }
+
+            setSelectedDateRange({
+              dateFrom:
+                dateTo < dateRange.dateFrom ? dateTo : dateRange.dateFrom,
+              dateRangeDefault,
+              dateTo,
+              referenceMonth,
+            });
+          }}
           onReferenceMonthChange={setReferenceMonth}
           options={referenceMonthOptions}
           referenceMonth={referenceMonth}
@@ -221,11 +364,12 @@ export function DashboardHome({
           <DashboardFinancialIndicators
             activeCompany={activeCompany}
             financialIndicators={financialIndicatorsQuery.data}
-            key={`${providerFilter ?? "all"}:${referenceMonth}`}
+            key={`${providerFilter ?? "all"}:${referenceMonth}:${dateRange.dateFrom}:${dateRange.dateTo}`}
             indicatorMode={indicatorMode}
             onDefaultsSaved={refetchAll}
             provider={providerFilter}
             referenceMonth={referenceMonth}
+            dateRange={dateRange}
             showCompanyDefaultsEditor={showCompanyDefaultsEditor}
             showCompanyWideIndicators={providerFilter === null}
           />
@@ -271,6 +415,7 @@ export function DashboardHome({
       {showOrders ? (
         <motion.section variants={fadeInVariants}>
           <OrdersHome
+            dateRange={dateRange}
             provider={providerFilter}
             referenceMonth={referenceMonth}
           />

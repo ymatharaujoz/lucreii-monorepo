@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildFinanceDateRange,
   buildReferenceMonthRange,
   FinanceService,
   normalizeSku,
@@ -70,6 +71,18 @@ describe("finance service helpers", () => {
     expect(buildReferenceMonthRange("2026-07-01")).toEqual({
       start: new Date("2026-07-01T00:00:00.000Z"),
       end: new Date("2026-08-01T00:00:00.000Z"),
+    });
+  });
+
+  it("builds an exclusive end boundary for a selected date range", () => {
+    expect(
+      buildFinanceDateRange({
+        dateFrom: "2026-07-02",
+        dateTo: "2026-07-09",
+      }),
+    ).toEqual({
+      start: new Date("2026-07-02T00:00:00.000Z"),
+      end: new Date("2026-07-10T00:00:00.000Z"),
     });
   });
 });

@@ -5,7 +5,10 @@ const apiClientMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api/client", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/api/client")>("@/lib/api/client");
+  const actual =
+    await vi.importActual<typeof import("@/lib/api/client")>(
+      "@/lib/api/client",
+    );
 
   return {
     ...actual,
@@ -13,7 +16,12 @@ vi.mock("@/lib/api/client", async () => {
   };
 });
 
-import { fetchDashboardCharts, fetchDashboardProfitability, fetchDashboardSummary } from "./use-dashboard-data";
+import {
+  fetchDashboardCharts,
+  fetchDashboardFinancialIndicators,
+  fetchDashboardProfitability,
+  fetchDashboardSummary,
+} from "./use-dashboard-data";
 
 describe("dashboard protected fetchers", () => {
   beforeEach(() => {
@@ -53,7 +61,7 @@ describe("dashboard protected fetchers", () => {
     );
   });
 
-  it("appends referenceMonth to dashboard endpoints when month filter is provided", async () => {
+  it("appends the reference month and date range to dashboard endpoints", async () => {
     apiClientMock.getValidatedData.mockResolvedValue({
       cards: [],
       channels: [],
@@ -81,23 +89,31 @@ describe("dashboard protected fetchers", () => {
       },
     });
 
-    await fetchDashboardSummary("shopee", "2026-07-01");
-    await fetchDashboardCharts("shopee", "2026-07-01");
-    await fetchDashboardProfitability("shopee", "2026-07-01");
+    const dateRange = { dateFrom: "2026-07-02", dateTo: "2026-07-09" };
+
+    await fetchDashboardSummary("shopee", "2026-07-01", dateRange);
+    await fetchDashboardCharts("shopee", "2026-07-01", dateRange);
+    await fetchDashboardProfitability("shopee", "2026-07-01", dateRange);
+    await fetchDashboardFinancialIndicators("shopee", "2026-07-01", dateRange);
 
     expect(apiClientMock.getValidatedData).toHaveBeenNthCalledWith(
       1,
-      "/dashboard/summary?provider=shopee&referenceMonth=2026-07-01",
+      "/dashboard/summary?provider=shopee&referenceMonth=2026-07-01&dateFrom=2026-07-02&dateTo=2026-07-09",
       expect.any(Object),
     );
     expect(apiClientMock.getValidatedData).toHaveBeenNthCalledWith(
       2,
-      "/dashboard/charts?provider=shopee&referenceMonth=2026-07-01",
+      "/dashboard/charts?provider=shopee&referenceMonth=2026-07-01&dateFrom=2026-07-02&dateTo=2026-07-09",
       expect.any(Object),
     );
     expect(apiClientMock.getValidatedData).toHaveBeenNthCalledWith(
       3,
-      "/dashboard/profitability?provider=shopee&referenceMonth=2026-07-01",
+      "/dashboard/profitability?provider=shopee&referenceMonth=2026-07-01&dateFrom=2026-07-02&dateTo=2026-07-09",
+      expect.any(Object),
+    );
+    expect(apiClientMock.getValidatedData).toHaveBeenNthCalledWith(
+      4,
+      "/dashboard/financial-indicators?provider=shopee&referenceMonth=2026-07-01&dateFrom=2026-07-02&dateTo=2026-07-09",
       expect.any(Object),
     );
   });

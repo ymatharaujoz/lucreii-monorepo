@@ -57,6 +57,7 @@ const indicators: DashboardFinancialIndicatorsData = {
   fixedCostSource: "monthly",
   grossSales: 40,
   marketplaceCommission: "7000.00",
+  monthlyAdvertising: "1481.33",
   netMarginPercent: "12.04",
   netProfit: "3295.11",
   netSales: 28,
@@ -457,6 +458,35 @@ describe("DashboardFinancialIndicators", () => {
         },
       },
     );
+    view.unmount();
+  });
+
+  it("mostra a publicidade rateada e edita o valor mensal no intervalo parcial", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        dateRange={{ dateFrom: "2026-07-01", dateTo: "2026-07-10" }}
+        financialIndicators={indicators}
+        provider="shopee"
+        referenceMonth="2026-07-01"
+        showCompanyWideIndicators={false}
+      />,
+    );
+
+    expect(document.body.textContent ?? "").toContain("Publicidade rateada");
+
+    const editButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Editar"),
+    );
+    act(() =>
+      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+
+    expect(document.body.textContent ?? "").toContain("Publicidade mensal");
+    expect(document.querySelector<HTMLInputElement>("input")?.value).toBe(
+      "1.481,33",
+    );
+
     view.unmount();
   });
 });

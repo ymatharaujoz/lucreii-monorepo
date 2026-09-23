@@ -17,6 +17,7 @@ const financialIndicatorsData = {
   fixedCostSource: "monthly",
   grossSales: 12,
   marketplaceCommission: "100.00",
+  monthlyAdvertising: "10.00",
   netMarginPercent: "-26.29",
   netProfit: "-1539.00",
   netSales: 10,

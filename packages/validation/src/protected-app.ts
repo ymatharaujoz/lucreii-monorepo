@@ -317,6 +317,7 @@ export const dashboardFinancialIndicatorsResponseSchema = z.object({
   excludedSales: z.number().int().min(0),
   grossSales: z.number().int().min(0),
   marketplaceCommission: decimalField("Marketplace commission"),
+  monthlyAdvertising: decimalField("Monthly advertising"),
   netMarginPercent: decimalField("Net margin percent"),
   netProfit: decimalField("Net profit"),
   netSales: z.number().int().min(0),

@@ -996,15 +996,19 @@ describe("OrdersHome", () => {
     view.unmount();
   });
 
-  it("uses dashboard month and provider filters without local period or channel controls", async () => {
+  it("uses dashboard date range and provider filters without local period or channel controls", async () => {
     const view = mount(
-      <OrdersHome provider="shopee" referenceMonth="2026-07-01" />,
+      <OrdersHome
+        dateRange={{ dateFrom: "2026-07-10", dateTo: "2026-07-12" }}
+        provider="shopee"
+        referenceMonth="2026-07-01"
+      />,
     );
 
     expect(useOrdersListMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        orderedFrom: "2026-07-01",
-        orderedTo: "2026-07-31",
+        orderedFrom: "2026-07-10",
+        orderedTo: "2026-07-12",
         provider: "shopee",
       }),
     );
@@ -1033,8 +1037,8 @@ describe("OrdersHome", () => {
 
     expect(downloadOrdersExportMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        orderedFrom: "2026-07-01",
-        orderedTo: "2026-07-31",
+        orderedFrom: "2026-07-10",
+        orderedTo: "2026-07-12",
         provider: "shopee",
       }),
     );

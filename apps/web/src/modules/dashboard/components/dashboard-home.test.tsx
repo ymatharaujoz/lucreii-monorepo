@@ -24,10 +24,16 @@ const { useDashboardDataMock, useDashboardConnectionStatusesMock } = vi.hoisted(
   }),
 );
 const ordersHomeMock = vi.hoisted(() =>
-  vi.fn((_props: { provider: string | null; referenceMonth: string }) => {
-    void _props;
-    return <div>Orders</div>;
-  }),
+  vi.fn(
+    (_props: {
+      dateRange: { dateFrom: string; dateTo: string };
+      provider: string | null;
+      referenceMonth: string;
+    }) => {
+      void _props;
+      return <div>Orders</div>;
+    },
+  ),
 );
 const productRankingModalMock = vi.hoisted(() =>
   vi.fn((_props: { data: { channels: unknown[]; products: unknown[] } }) => {
@@ -244,6 +250,9 @@ describe("DashboardHome", () => {
       },
     });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
+
     const view = mount(
       <DashboardHome activeCompany={null} companyName="Lucreii" />,
     );
@@ -257,10 +266,10 @@ describe("DashboardHome", () => {
         ),
       ),
     ).toBe(false);
-    expect(useDashboardDataMock).toHaveBeenLastCalledWith(
-      null,
-      expect.any(String),
-    );
+    expect(useDashboardDataMock).toHaveBeenLastCalledWith(null, "2026-07-01", {
+      dateFrom: "2026-07-01",
+      dateTo: "2026-07-10",
+    });
     expect(dashboardFinancialIndicatorsMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
         indicatorMode: "dashboard",
@@ -269,6 +278,11 @@ describe("DashboardHome", () => {
       }),
       undefined,
     );
+    expect(
+      Array.from(
+        document.querySelectorAll<HTMLInputElement>('input[type="date"]'),
+      ).map((input) => input.value),
+    ).toEqual(["2026-07-01", "2026-07-10"]);
     expect(marketplacesSectionMock).toHaveBeenCalledOnce();
 
     expect(document.body.textContent ?? "").toMatch(
@@ -328,6 +342,7 @@ describe("DashboardHome", () => {
         showOrders
         showProductRanking
         showProviderFilter
+        dateRangeDefault="today"
       />,
     );
 
@@ -349,8 +364,12 @@ describe("DashboardHome", () => {
       undefined,
     );
     expect(marketplacesSectionMock).not.toHaveBeenCalled();
-    expect(useDashboardDataMock).toHaveBeenLastCalledWith(null, "2026-07-01");
+    expect(useDashboardDataMock).toHaveBeenLastCalledWith(null, "2026-07-01", {
+      dateFrom: "2026-07-10",
+      dateTo: "2026-07-10",
+    });
     expect(ordersHomeMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      dateRange: { dateFrom: "2026-07-10", dateTo: "2026-07-10" },
       provider: null,
       referenceMonth: "2026-07-01",
     });
@@ -365,8 +384,10 @@ describe("DashboardHome", () => {
     expect(useDashboardDataMock).toHaveBeenLastCalledWith(
       "shopee",
       "2026-07-01",
+      { dateFrom: "2026-07-10", dateTo: "2026-07-10" },
     );
     expect(ordersHomeMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      dateRange: { dateFrom: "2026-07-10", dateTo: "2026-07-10" },
       provider: "shopee",
       referenceMonth: "2026-07-01",
     });

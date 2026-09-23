@@ -17,6 +17,11 @@ import { FinanceService } from "@/modules/finance/finance.service";
 import { SyncService } from "@/modules/sync/sync.service";
 import { FinancialIndicatorsService } from "./financial-indicators.service";
 
+export type DashboardDateRange = {
+  dateFrom: string;
+  dateTo: string;
+};
+
 function toNumber(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -72,12 +77,14 @@ export class DashboardService {
     companyId: string,
     provider?: IntegrationProviderSlug,
     referenceMonth?: string,
+    dateRange?: DashboardDateRange,
   ): Promise<DashboardSummaryResponse> {
     const summary = await this.financeService.readSummaryMetrics(
       organizationId,
       companyId,
       provider,
       referenceMonth,
+      dateRange,
     );
 
     return {
@@ -91,12 +98,14 @@ export class DashboardService {
     companyId: string,
     provider?: IntegrationProviderSlug,
     referenceMonth?: string,
+    dateRange?: DashboardDateRange,
   ): Promise<DashboardChartsResponse> {
     const readModel = await this.financeService.buildDashboardReadModel(
       organizationId,
       companyId,
       provider,
       referenceMonth,
+      dateRange,
     );
 
     return {
@@ -129,12 +138,14 @@ export class DashboardService {
     companyId: string,
     provider?: IntegrationProviderSlug,
     referenceMonth?: string,
+    dateRange?: DashboardDateRange,
   ): Promise<DashboardProfitabilityResponse> {
     const readModel = await this.financeService.buildDashboardReadModel(
       organizationId,
       companyId,
       provider,
       referenceMonth,
+      dateRange,
     );
 
     return {
@@ -149,6 +160,7 @@ export class DashboardService {
     companyId: string,
     provider: IntegrationProviderSlug | undefined,
     referenceMonth: string,
+    dateRange?: DashboardDateRange,
   ): Promise<DashboardFinancialIndicators> {
     return this.financialIndicatorsService.read(
       organizationId,
@@ -156,6 +168,7 @@ export class DashboardService {
       companyId,
       provider,
       referenceMonth,
+      dateRange,
     );
   }
 

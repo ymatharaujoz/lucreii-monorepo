@@ -13,6 +13,7 @@ const indicators: DashboardFinancialIndicators = {
   fixedCostSource: "monthly",
   grossSales: 101,
   marketplaceCommission: "7000.00",
+  monthlyAdvertising: "1481.33",
   netMarginPercent: "12.04",
   netProfit: "3295.11",
   netSales: 100,

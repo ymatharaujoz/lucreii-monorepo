@@ -19,6 +19,34 @@ import { and, eq } from "drizzle-orm";
 import { DATABASE_CLIENT } from "@/common/tokens";
 import { OrdersService } from "@/modules/orders/orders.service";
 import { ProductsService } from "@/modules/products/products.service";
+import type { DashboardDateRange } from "./dashboard.service";
+
+function prorateMonthlyAmount(
+  amount: string,
+  referenceMonth: string,
+  dateRange?: DashboardDateRange,
+) {
+  if (!dateRange) {
+    return amount;
+  }
+
+  const [startYear, startMonth, startDay] = dateRange.dateFrom
+    .split("-")
+    .map(Number);
+  const [endYear, endMonth, endDay] = dateRange.dateTo.split("-").map(Number);
+  const [monthYear, monthNumber] = referenceMonth.slice(0, 7).split("-").map(Number);
+  const selectedDays =
+    (Date.UTC(endYear, endMonth - 1, endDay) -
+      Date.UTC(startYear, startMonth - 1, startDay)) /
+      86_400_000 +
+    1;
+  const daysInMonth = new Date(Date.UTC(monthYear, monthNumber, 0)).getUTCDate();
+  const parsedAmount = Number(amount);
+
+  return Number.isFinite(parsedAmount)
+    ? (parsedAmount * (selectedDays / daysInMonth)).toFixed(2)
+    : "0.00";
+}
 
 @Injectable()
 export class FinancialIndicatorsService {
@@ -71,6 +99,7 @@ export class FinancialIndicatorsService {
     companyId: string,
     provider: IntegrationProviderSlug | undefined,
     referenceMonth: string,
+    dateRange?: DashboardDateRange,
   ): Promise<DashboardFinancialIndicators> {
     const company = await this.db.query.companies.findFirst({
       where: (table) =>
@@ -131,20 +160,34 @@ export class FinancialIndicatorsService {
             ),
         })
       : null;
-    const advertising = provider
+    const monthlyAdvertising = provider
       ? savedMarketplaceAdvertising?.amount ?? "0.00"
       : performanceIndicators.advertising;
+    const advertising = prorateMonthlyAmount(
+      monthlyAdvertising,
+      referenceMonth,
+      dateRange,
+    );
+    const proratedFixedCost = prorateMonthlyAmount(
+      fixedCost,
+      referenceMonth,
+      dateRange,
+    );
     const ordersSummary = await this.ordersService.readExportedFinancialSummary(
       {
         organizationId,
         selectedCompanyId: companyId,
         userId,
       },
-      { provider, referenceMonth },
+      {
+        ...(dateRange ?? {}),
+        provider,
+        referenceMonth,
+      },
     );
     const result = calculateFinancialIndicatorsFromTotals({
       advertising,
-      fixedCost,
+      fixedCost: proratedFixedCost,
       marketplaceCommission: ordersSummary.marketplaceCommission,
       netSales: ordersSummary.netSales,
       packagingCost: ordersSummary.packagingCost,
@@ -161,6 +204,7 @@ export class FinancialIndicatorsService {
       excludedSales: ordersSummary.excludedSales,
       fixedCostSource: hasMonthlyFixedCosts ? "monthly" : "company_default",
       grossSales: ordersSummary.grossSales,
+      monthlyAdvertising,
     };
   }
 
