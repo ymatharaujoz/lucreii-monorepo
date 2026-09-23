@@ -278,11 +278,7 @@ describe("DashboardHome", () => {
       }),
       undefined,
     );
-    expect(
-      Array.from(
-        document.querySelectorAll<HTMLInputElement>('input[type="date"]'),
-      ).map((input) => input.value),
-    ).toEqual(["2026-07-01", "2026-07-10"]);
+    expect(document.body.textContent ?? "").toContain("1 jul. — 10 jul. 2026");
     expect(marketplacesSectionMock).toHaveBeenCalledOnce();
 
     expect(document.body.textContent ?? "").toMatch(
@@ -346,7 +342,7 @@ describe("DashboardHome", () => {
       />,
     );
 
-    expect(document.body.textContent ?? "").toContain("julho de 2026");
+    expect(document.body.textContent ?? "").toContain("10 jul. 2026");
     expect(productRankingModalMock).toHaveBeenLastCalledWith(
       { data: { channels: [], products: [] } },
       undefined,
