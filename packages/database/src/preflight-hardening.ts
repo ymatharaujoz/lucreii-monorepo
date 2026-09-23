@@ -1,6 +1,9 @@
 import { readMigrationDatabaseUrl, readRuntimeDatabaseUrl } from "./database-url";
 import { createPostgresConnection } from "./connection";
-import { APPLICATION_TABLE_NAMES } from "./hardening-config";
+import {
+  APPLICATION_TABLE_NAMES,
+  isSupabasePostgresHostname,
+} from "./hardening-config";
 import { loadRepoEnv } from "./load-repo-env";
 
 const SUPABASE_ROLE_NAMES = ["anon", "authenticated"] as const;
@@ -36,7 +39,7 @@ function assertSupabaseConnectionUrl(label: string, value: string) {
     throw new Error(`${label} must use the PostgreSQL protocol.`);
   }
 
-  if (!url.hostname.endsWith(".supabase.co")) {
+  if (!isSupabasePostgresHostname(url.hostname)) {
     throw new Error(`${label} must target a Supabase PostgreSQL host.`);
   }
 }

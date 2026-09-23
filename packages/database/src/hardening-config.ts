@@ -39,6 +39,19 @@ export const APPLICATION_TABLE_NAMES = [
   "verification",
 ] as const;
 
+const SUPABASE_POSTGRES_HOST_SUFFIXES = [
+  ".supabase.co",
+  ".pooler.supabase.com",
+] as const;
+
+export function isSupabasePostgresHostname(hostname: string) {
+  const normalizedHostname = hostname.toLowerCase().replace(/\.$/, "");
+
+  return SUPABASE_POSTGRES_HOST_SUFFIXES.some((suffix) =>
+    normalizedHostname.endsWith(suffix),
+  );
+}
+
 export type OnlineIndexDefinition = {
   name: string;
   statement: string;
