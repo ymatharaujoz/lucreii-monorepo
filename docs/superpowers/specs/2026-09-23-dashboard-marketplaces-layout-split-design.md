@@ -26,7 +26,7 @@ Tornar `/app` uma visão financeira consolidada, sem seletor de canal, e reduzir
 
 - `/app` não contém botões de filtro de canal e todas as consultas usam `provider: null`.
 - `/app/marketplaces` mantém filtros de canal e repassa canal/mês para ranking e pedidos.
-- `/app/marketplaces` não contém Custo Fixo, Imposto ou ação de editar esses padrões quando canal é Todos.
+- `/app/marketplaces` não contém a linha nem ação de editar Custo Fixo/Imposto quando canal é Todos; cartões financeiros existentes permanecem inalterados.
 - Ao selecionar um canal em Marketplaces, edição de Publicidade permanece disponível.
 - `/app/marketplaces` não renderiza Marketplaces, Integrações ativas nem Gerenciar no painel de gráficos.
 - Evolução Financeira ocupa largura total em Marketplaces.

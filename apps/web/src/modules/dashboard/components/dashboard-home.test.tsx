@@ -35,21 +35,58 @@ const productRankingModalMock = vi.hoisted(() =>
     return <div>Product Ranking</div>;
   }),
 );
+const dashboardFinancialIndicatorsMock = vi.hoisted(() =>
+  vi.fn(
+    ({
+      showCompanyDefaultsEditor,
+      showCompanyWideIndicators,
+    }: {
+      showCompanyDefaultsEditor?: boolean;
+      showCompanyWideIndicators?: boolean;
+    }) => (
+      <div>
+        Indicators:{String(showCompanyWideIndicators)}| Defaults:
+        {String(showCompanyDefaultsEditor)}
+      </div>
+    ),
+  ),
+);
+const chartsSectionMock = vi.hoisted(() =>
+  vi.fn((_props: { className?: string }) => {
+    void _props;
+    return <div>Charts</div>;
+  }),
+);
+const marketplacesSectionMock = vi.hoisted(() =>
+  vi.fn(
+    ({
+      syncStatusByProvider,
+    }: {
+      syncStatusByProvider: Record<
+        string,
+        DashboardRecentSyncResponse | undefined
+      >;
+    }) => (
+      <div>
+        ML:
+        {syncStatusByProvider.mercadolivre?.availability.reason ?? "missing"}|
+        Shopee:
+        {syncStatusByProvider.shopee?.availability.reason ?? "missing"}
+      </div>
+    ),
+  ),
+);
 
 vi.mock("./dashboard-header", () => ({
   DashboardHeader: () => <div>Dashboard Header</div>,
 }));
 
 vi.mock("./dashboard-financial-indicators", () => ({
-  DashboardFinancialIndicators: ({
-    showCompanyWideIndicators,
-  }: {
-    showCompanyWideIndicators?: boolean;
-  }) => <div>Indicators:{String(showCompanyWideIndicators)}</div>,
+  DashboardFinancialIndicators: dashboardFinancialIndicatorsMock,
 }));
 
 vi.mock("./charts-section", () => ({
-  ChartsSection: () => <div>Charts</div>,
+  ChartsSection: chartsSectionMock,
 }));
 
 vi.mock("./product-ranking-modal", () => ({
@@ -69,21 +106,7 @@ vi.mock("../hooks/use-dashboard-connection-statuses", () => ({
 }));
 
 vi.mock("./marketplaces-section", () => ({
-  MarketplacesSection: ({
-    syncStatusByProvider,
-  }: {
-    syncStatusByProvider: Record<
-      string,
-      DashboardRecentSyncResponse | undefined
-    >;
-  }) => (
-    <div>
-      ML:
-      {syncStatusByProvider.mercadolivre?.availability.reason ?? "missing"}|
-      Shopee:
-      {syncStatusByProvider.shopee?.availability.reason ?? "missing"}
-    </div>
-  ),
+  MarketplacesSection: marketplacesSectionMock,
 }));
 
 function mount(node: React.ReactNode) {
@@ -144,10 +167,13 @@ afterEach(() => {
   useDashboardConnectionStatusesMock.mockReset();
   ordersHomeMock.mockClear();
   productRankingModalMock.mockClear();
+  dashboardFinancialIndicatorsMock.mockClear();
+  chartsSectionMock.mockClear();
+  marketplacesSectionMock.mockClear();
 });
 
 describe("DashboardHome", () => {
-  it("keeps provider-specific connection state after switching to Shopee tab", () => {
+  it("keeps Dashboard consolidated without rendering provider controls", () => {
     useDashboardDataMock.mockImplementation(
       (
         provider: "mercadolivre" | "shopee" | null,
@@ -221,12 +247,25 @@ describe("DashboardHome", () => {
 
     expect(ordersHomeMock).not.toHaveBeenCalled();
     expect(productRankingModalMock).not.toHaveBeenCalled();
-
-    click(
-      Array.from(document.querySelectorAll("button")).find(
-        (button) => button.textContent?.trim() === "Shopee",
-      )!,
+    expect(
+      Array.from(document.querySelectorAll("button")).some((button) =>
+        ["Todos", "Mercado Livre", "Shopee", "Shein"].includes(
+          button.textContent?.trim() ?? "",
+        ),
+      ),
+    ).toBe(false);
+    expect(useDashboardDataMock).toHaveBeenLastCalledWith(
+      null,
+      expect.any(String),
     );
+    expect(dashboardFinancialIndicatorsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        showCompanyDefaultsEditor: true,
+        showCompanyWideIndicators: true,
+      }),
+      undefined,
+    );
+    expect(marketplacesSectionMock).toHaveBeenCalledOnce();
 
     expect(document.body.textContent ?? "").toMatch(
       /ML:available\|\s*Shopee:provider_disconnected/,
@@ -279,8 +318,11 @@ describe("DashboardHome", () => {
       <DashboardHome
         activeCompany={null}
         companyName="Lucreii"
+        showCompanyDefaultsEditor={false}
+        showMarketplaceConnections={false}
         showOrders
         showProductRanking
+        showProviderFilter
       />,
     );
 
@@ -289,6 +331,18 @@ describe("DashboardHome", () => {
       { data: { channels: [], products: [] } },
       undefined,
     );
+    expect(dashboardFinancialIndicatorsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        showCompanyDefaultsEditor: false,
+        showCompanyWideIndicators: true,
+      }),
+      undefined,
+    );
+    expect(chartsSectionMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ className: "h-full w-full" }),
+      undefined,
+    );
+    expect(marketplacesSectionMock).not.toHaveBeenCalled();
     expect(useDashboardDataMock).toHaveBeenLastCalledWith(null, "2026-07-01");
     expect(ordersHomeMock.mock.calls.at(-1)?.[0]).toMatchObject({
       provider: null,
@@ -311,6 +365,7 @@ describe("DashboardHome", () => {
       referenceMonth: "2026-07-01",
     });
     expect(document.body.textContent ?? "").toContain("Indicators:false");
+    expect(document.body.textContent ?? "").toContain("Defaults:false");
     expect(document.body.textContent ?? "").not.toContain("Insights");
 
     view.unmount();

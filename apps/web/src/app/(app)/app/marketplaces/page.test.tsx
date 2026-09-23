@@ -78,8 +78,11 @@ describe("MarketplacesPage", () => {
       expect.objectContaining({
         activeCompany: expect.objectContaining({ id: "company_1" }),
         companyName: "Lucreii",
+        showCompanyDefaultsEditor: false,
+        showMarketplaceConnections: false,
         showOrders: true,
         showProductRanking: true,
+        showProviderFilter: true,
       }),
       undefined,
     );

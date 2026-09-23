@@ -26,8 +26,11 @@ import { useDashboardConnectionStatuses } from "../hooks/use-dashboard-connectio
 interface DashboardHomeProps {
   activeCompany: Company | null;
   companyName: string;
+  showCompanyDefaultsEditor?: boolean;
+  showMarketplaceConnections?: boolean;
   showOrders?: boolean;
   showProductRanking?: boolean;
+  showProviderFilter?: boolean;
 }
 
 function ReferenceMonthToolbar({
@@ -125,8 +128,11 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
 export function DashboardHome({
   activeCompany,
   companyName,
+  showCompanyDefaultsEditor = true,
+  showMarketplaceConnections = true,
   showOrders = false,
   showProductRanking = false,
+  showProviderFilter = false,
 }: DashboardHomeProps) {
   const [providerFilter, setProviderFilter] =
     useState<IntegrationProviderSlug | null>(null);
@@ -173,35 +179,39 @@ export function DashboardHome({
           referenceMonth={referenceMonth}
         />
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-          <div className="flex w-fit rounded-xl border border-border bg-surface-strong p-1 shadow-[var(--shadow-xs)]">
-            {(
-              [
-                [null, "Todos"],
-                ["mercadolivre", "Mercado Livre"],
-                ["shopee", "Shopee"],
-                ["shein", "Shein"],
-              ] as const
-            ).map(([provider, label]) => (
-              <button
-                key={provider ?? "all"}
-                type="button"
-                onClick={() => setProviderFilter(provider)}
-                className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all duration-[var(--transition-fast)] ${
-                  providerFilter === provider
-                    ? "bg-accent text-accent-foreground shadow-[var(--shadow-xs)]"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+        {(showProviderFilter || showProductRanking) && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+            {showProviderFilter && (
+              <div className="flex w-fit rounded-xl border border-border bg-surface-strong p-1 shadow-[var(--shadow-xs)]">
+                {(
+                  [
+                    [null, "Todos"],
+                    ["mercadolivre", "Mercado Livre"],
+                    ["shopee", "Shopee"],
+                    ["shein", "Shein"],
+                  ] as const
+                ).map(([provider, label]) => (
+                  <button
+                    key={provider ?? "all"}
+                    type="button"
+                    onClick={() => setProviderFilter(provider)}
+                    className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all duration-[var(--transition-fast)] ${
+                      providerFilter === provider
+                        ? "bg-accent text-accent-foreground shadow-[var(--shadow-xs)]"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
 
-          {showProductRanking ? (
-            <ProductRankingModal data={profitabilityQuery.data} />
-          ) : null}
-        </div>
+            {showProductRanking ? (
+              <ProductRankingModal data={profitabilityQuery.data} />
+            ) : null}
+          </div>
+        )}
       </div>
 
       {financialIndicatorsQuery.data && (
@@ -213,18 +223,27 @@ export function DashboardHome({
             onDefaultsSaved={refetchAll}
             provider={providerFilter}
             referenceMonth={referenceMonth}
+            showCompanyDefaultsEditor={showCompanyDefaultsEditor}
             showCompanyWideIndicators={providerFilter === null}
           />
         </section>
       )}
 
       {chartsQuery.data && (
-        <section className="grid items-stretch gap-4 lg:grid-cols-[1fr_300px]">
-          <ChartsSection data={chartsQuery.data} className="h-full" />
-          <MarketplacesSection
-            data={chartsQuery.data}
-            syncStatusByProvider={syncStatusByProvider}
-          />
+        <section
+          className={
+            showMarketplaceConnections
+              ? "grid items-stretch gap-4 lg:grid-cols-[1fr_300px]"
+              : "w-full"
+          }
+        >
+          <ChartsSection data={chartsQuery.data} className="h-full w-full" />
+          {showMarketplaceConnections ? (
+            <MarketplacesSection
+              data={chartsQuery.data}
+              syncStatusByProvider={syncStatusByProvider}
+            />
+          ) : null}
         </section>
       )}
 

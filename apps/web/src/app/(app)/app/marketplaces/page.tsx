@@ -42,8 +42,11 @@ export default async function MarketplacesPage() {
         authState.organization?.name ??
         authState.user.name
       }
+      showCompanyDefaultsEditor={false}
+      showMarketplaceConnections={false}
       showOrders
       showProductRanking
+      showProviderFilter
     />
   );
 }

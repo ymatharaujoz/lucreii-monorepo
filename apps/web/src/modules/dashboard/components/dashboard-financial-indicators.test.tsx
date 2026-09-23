@@ -201,6 +201,21 @@ describe("DashboardFinancialIndicators", () => {
     view.unmount();
   });
 
+  it("oculta apenas a linha de edição consolidada quando solicitado", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={indicators}
+        showCompanyDefaultsEditor={false}
+      />,
+    );
+
+    expect(document.body.textContent ?? "").not.toContain("Editar");
+    expect(document.querySelectorAll("input")).toHaveLength(0);
+    expect(document.body.textContent ?? "").toContain("Ponto de Equilíbrio");
+    view.unmount();
+  });
+
   it("preserva prejuízo e margem líquida negativa", () => {
     const view = mount(
       <DashboardFinancialIndicators

@@ -33,6 +33,7 @@ interface DashboardFinancialIndicatorsProps {
   onDefaultsSaved?: () => void;
   provider?: IntegrationProviderSlug | null;
   referenceMonth?: string;
+  showCompanyDefaultsEditor?: boolean;
   showCompanyWideIndicators?: boolean;
 }
 
@@ -149,6 +150,7 @@ export function DashboardFinancialIndicators({
   onDefaultsSaved,
   provider = null,
   referenceMonth,
+  showCompanyDefaultsEditor = true,
   showCompanyWideIndicators = true,
 }: DashboardFinancialIndicatorsProps) {
   const [savedDefaults, setSavedDefaults] = useState<{
@@ -481,111 +483,64 @@ export function DashboardFinancialIndicators({
         )}
       </div>
 
-      <motion.div variants={itemVariants}>
-        <Card
-          className="rounded-xl border border-border/80 bg-surface-elevated/40 px-4 py-3 shadow-[var(--shadow-xs)]"
-          padding="none"
-        >
-          {isEditing ? (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-                {isMarketplaceView ? (
-                  <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Publicidade
-                    </span>
-                    <Input
-                      className="h-9 flex-1 text-right text-xs"
-                      inputMode="decimal"
-                      onChange={(event) =>
-                        setAdvertisingInput(event.target.value)
-                      }
-                      type="text"
-                      value={advertisingInput}
-                    />
-                  </label>
-                ) : (
-                  <>
-                    <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Custo Fixo
-                      </span>
-                      <Input
-                        className="h-9 flex-1 text-right text-xs"
-                        inputMode="decimal"
-                        onChange={(event) =>
-                          setFixedCostInput(event.target.value)
-                        }
-                        type="text"
-                        value={fixedCostInput}
-                      />
-                    </label>
-                    <label className="flex flex-1 items-center gap-2 sm:max-w-[180px]">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Imposto
-                      </span>
-                      <Input
-                        className="h-9 flex-1 text-right text-xs"
-                        inputMode="decimal"
-                        onChange={(event) =>
-                          setTaxPercentInput(event.target.value)
-                        }
-                        type="text"
-                        value={taxPercentInput}
-                      />
-                    </label>
-                  </>
-                )}
-                {isMarketplaceView && (
-                  <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Margem Após Publicidade
-                    </span>
-                    <span className="text-sm font-semibold tabular-nums text-foreground">
-                      {formatNetMarginPercent(advertisingMarginPercent)}
-                    </span>
-                  </div>
-                )}
-              </div>
-              {feedbackMessage && (
-                <p className="text-xs font-medium text-muted-foreground">
-                  {feedbackMessage}
-                </p>
-              )}
-              <div className="flex shrink-0 gap-2">
-                <Button
-                  disabled={isSaving}
-                  onClick={cancelEditing}
-                  size="sm"
-                  variant="ghost"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  loading={isSaving}
-                  onClick={() => void saveFinancialInputs()}
-                  size="sm"
-                >
-                  Salvar
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {(isMarketplaceView || showCompanyDefaultsEditor) && (
+        <motion.div variants={itemVariants}>
+          <Card
+            className="rounded-xl border border-border/80 bg-surface-elevated/40 px-4 py-3 shadow-[var(--shadow-xs)]"
+            padding="none"
+          >
+            {isEditing ? (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                {isMarketplaceView ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-accent" />
+                <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+                  {isMarketplaceView ? (
+                    <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         Publicidade
                       </span>
-                      <span className="text-sm font-semibold tabular-nums text-foreground">
-                        {formatMoney(displayedAdvertising)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Percent className="h-4 w-4 text-accent" />
+                      <Input
+                        className="h-9 flex-1 text-right text-xs"
+                        inputMode="decimal"
+                        onChange={(event) =>
+                          setAdvertisingInput(event.target.value)
+                        }
+                        type="text"
+                        value={advertisingInput}
+                      />
+                    </label>
+                  ) : (
+                    <>
+                      <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Custo Fixo
+                        </span>
+                        <Input
+                          className="h-9 flex-1 text-right text-xs"
+                          inputMode="decimal"
+                          onChange={(event) =>
+                            setFixedCostInput(event.target.value)
+                          }
+                          type="text"
+                          value={fixedCostInput}
+                        />
+                      </label>
+                      <label className="flex flex-1 items-center gap-2 sm:max-w-[180px]">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Imposto
+                        </span>
+                        <Input
+                          className="h-9 flex-1 text-right text-xs"
+                          inputMode="decimal"
+                          onChange={(event) =>
+                            setTaxPercentInput(event.target.value)
+                          }
+                          type="text"
+                          value={taxPercentInput}
+                        />
+                      </label>
+                    </>
+                  )}
+                  {isMarketplaceView && (
+                    <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                         Margem Após Publicidade
                       </span>
@@ -593,58 +548,107 @@ export function DashboardFinancialIndicators({
                         {formatNetMarginPercent(advertisingMarginPercent)}
                       </span>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-accent" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Custo Fixo
-                      </span>
-                      <span className="text-sm font-semibold tabular-nums text-foreground">
-                        {formatMoney(fixedCostResolved)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Percent className="h-4 w-4 text-accent" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Imposto
-                      </span>
-                      <span className="text-sm font-semibold tabular-nums text-foreground">
-                        {formatCurrencyInput(companyDefaults.taxPercent)}%
-                      </span>
-                    </div>
-                  </>
+                  )}
+                </div>
+                {feedbackMessage && (
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {feedbackMessage}
+                  </p>
                 )}
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    disabled={isSaving}
+                    onClick={cancelEditing}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    loading={isSaving}
+                    onClick={() => void saveFinancialInputs()}
+                    size="sm"
+                  >
+                    Salvar
+                  </Button>
+                </div>
               </div>
-              <Button
-                disabled={!activeCompany}
-                onClick={() => {
-                  setFeedbackMessage(null);
-                  if (isMarketplaceView) {
-                    setAdvertisingInput(
-                      formatCurrencyInput(displayedAdvertising),
-                    );
-                  } else {
-                    setFixedCostInput(
-                      formatCurrencyInput(companyDefaults.fixedCost),
-                    );
-                    setTaxPercentInput(
-                      formatCurrencyInput(companyDefaults.taxPercent),
-                    );
-                  }
-                  setIsEditing(true);
-                }}
-                size="sm"
-                variant="secondary"
-              >
-                <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                Editar
-              </Button>
-            </div>
-          )}
-        </Card>
-      </motion.div>
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  {isMarketplaceView ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-accent" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Publicidade
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          {formatMoney(displayedAdvertising)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Percent className="h-4 w-4 text-accent" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Margem Após Publicidade
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          {formatNetMarginPercent(advertisingMarginPercent)}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-accent" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Custo Fixo
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          {formatMoney(fixedCostResolved)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Percent className="h-4 w-4 text-accent" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Imposto
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          {formatCurrencyInput(companyDefaults.taxPercent)}%
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <Button
+                  disabled={!activeCompany}
+                  onClick={() => {
+                    setFeedbackMessage(null);
+                    if (isMarketplaceView) {
+                      setAdvertisingInput(
+                        formatCurrencyInput(displayedAdvertising),
+                      );
+                    } else {
+                      setFixedCostInput(
+                        formatCurrencyInput(companyDefaults.fixedCost),
+                      );
+                      setTaxPercentInput(
+                        formatCurrencyInput(companyDefaults.taxPercent),
+                      );
+                    }
+                    setIsEditing(true);
+                  }}
+                  size="sm"
+                  variant="secondary"
+                >
+                  <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                  Editar
+                </Button>
+              </div>
+            )}
+          </Card>
+        </motion.div>
+      )}
     </motion.div>
   );
 }
