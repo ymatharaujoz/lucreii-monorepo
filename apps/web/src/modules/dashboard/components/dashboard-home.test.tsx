@@ -38,14 +38,17 @@ const productRankingModalMock = vi.hoisted(() =>
 const dashboardFinancialIndicatorsMock = vi.hoisted(() =>
   vi.fn(
     ({
+      indicatorMode,
       showCompanyDefaultsEditor,
       showCompanyWideIndicators,
     }: {
+      indicatorMode?: "dashboard" | "marketplace";
       showCompanyDefaultsEditor?: boolean;
       showCompanyWideIndicators?: boolean;
     }) => (
       <div>
-        Indicators:{String(showCompanyWideIndicators)}| Defaults:
+        Indicators:{String(showCompanyWideIndicators)}| Mode:
+        {indicatorMode}| Defaults:
         {String(showCompanyDefaultsEditor)}
       </div>
     ),
@@ -260,6 +263,7 @@ describe("DashboardHome", () => {
     );
     expect(dashboardFinancialIndicatorsMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        indicatorMode: "dashboard",
         showCompanyDefaultsEditor: true,
         showCompanyWideIndicators: true,
       }),
@@ -318,6 +322,7 @@ describe("DashboardHome", () => {
       <DashboardHome
         activeCompany={null}
         companyName="Lucreii"
+        indicatorMode="marketplace"
         showCompanyDefaultsEditor={false}
         showMarketplaceConnections={false}
         showOrders
@@ -333,6 +338,7 @@ describe("DashboardHome", () => {
     );
     expect(dashboardFinancialIndicatorsMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        indicatorMode: "marketplace",
         showCompanyDefaultsEditor: false,
         showCompanyWideIndicators: true,
       }),

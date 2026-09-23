@@ -30,6 +30,7 @@ import { formatMoney } from "../utils/formatters";
 interface DashboardFinancialIndicatorsProps {
   activeCompany: Company | null;
   financialIndicators: DashboardFinancialIndicatorsData;
+  indicatorMode?: "dashboard" | "marketplace";
   onDefaultsSaved?: () => void;
   provider?: IntegrationProviderSlug | null;
   referenceMonth?: string;
@@ -147,6 +148,7 @@ function IndicatorCard({
 export function DashboardFinancialIndicators({
   activeCompany,
   financialIndicators,
+  indicatorMode = "dashboard",
   onDefaultsSaved,
   provider = null,
   referenceMonth,
@@ -183,6 +185,7 @@ export function DashboardFinancialIndicators({
         };
 
   const isMarketplaceView = !showCompanyWideIndicators;
+  const isMarketplaceIndicatorMode = indicatorMode === "marketplace";
   const marketplaceAdvertisingKey = `${activeCompany?.id ?? ""}:${provider ?? ""}:${referenceMonth ?? ""}`;
   const resolvedAdvertising =
     isMarketplaceView &&
@@ -201,6 +204,20 @@ export function DashboardFinancialIndicators({
     normalizeNumber(financialIndicators.variableCosts),
   );
   const displayedAdvertising = roundToCents(resolvedAdvertising);
+  const displayedCost = roundToCents(
+    normalizeNumber(financialIndicators.productCost) +
+      normalizeNumber(financialIndicators.packagingCost),
+  );
+  const displayedTax = roundToCents(
+    normalizeNumber(financialIndicators.taxAmount),
+  );
+  const displayedCostAndTax = roundToCents(displayedCost + displayedTax);
+  const displayedMarketplaceCommission = roundToCents(
+    normalizeNumber(financialIndicators.marketplaceCommission),
+  );
+  const displayedShipping = roundToCents(
+    normalizeNumber(financialIndicators.shippingCost),
+  );
   const contributionProfit = displayedRevenue - displayedVariableCosts;
   const contributionMarginPercent =
     displayedRevenue === 0 ? 0 : (contributionProfit / displayedRevenue) * 100;
@@ -332,125 +349,52 @@ export function DashboardFinancialIndicators({
       className="space-y-4"
     >
       <div
-        className={`grid gap-3 sm:grid-cols-2 md:grid-cols-3 ${showCompanyWideIndicators ? "lg:grid-cols-6" : "lg:grid-cols-3"}`}
+        className={`grid gap-3 sm:grid-cols-2 md:grid-cols-3 ${isMarketplaceIndicatorMode || showCompanyWideIndicators ? "lg:grid-cols-6" : "lg:grid-cols-3"}`}
       >
-        <IndicatorCard
-          icon={<DollarSign className="h-4 w-4" />}
-          label="Faturamento"
-          subValue={netSalesSub}
-          value={formatMoney(financialIndicators.revenue, {
-            maximumFractionDigits: 2,
-            minimumFractionDigits: 2,
-          })}
-        />
-        <IndicatorCard
-          icon={<TrendingDown className="h-4 w-4" />}
-          label="Devoluções"
-          subValue={`${financialIndicators.excludedSales} Vendas Devolvidas, Cancelados ou Pendentes`}
-          value={excludedRevenueValue}
-          variant="error"
-        />
-        {isMarketplaceView ? (
-          <IndicatorCard
-            icon={<Percent className="h-4 w-4" />}
-            label="Margem Contribuição"
-            subValue="Faturamento - Custos Variáveis"
-            trend={{
-              direction:
-                contributionProfit > 0
-                  ? "up"
-                  : contributionProfit < 0
-                    ? "down"
-                    : "neutral",
-              value:
-                contributionProfit > 0
-                  ? "Contribuição positiva"
-                  : contributionProfit < 0
-                    ? "Contribuição negativa"
-                    : "Contribuição neutra",
-            }}
-            value={formatNetMarginPercent(contributionMarginPercent)}
-            variant={
-              contributionProfit > 0
-                ? "success"
-                : contributionProfit < 0
-                  ? "error"
-                  : "warning"
-            }
-          />
-        ) : (
-          <IndicatorCard
-            icon={<Percent className="h-4 w-4" />}
-            label="Margem Média"
-            subValue={`Lucro Total: ${formatMoney(financialIndicators.totalProfit, { maximumFractionDigits: 2 })}`}
-            trend={{
-              direction:
-                totalProfit > 0 ? "up" : totalProfit < 0 ? "down" : "neutral",
-              value: totalProfit >= 0 ? "Lucrativo" : "Prejuízo",
-            }}
-            value={formatIndicatorPercent(
-              financialIndicators.averageMarginPercent,
-            )}
-            variant={
-              totalProfit > 0
-                ? "success"
-                : totalProfit < 0
-                  ? "error"
-                  : "warning"
-            }
-          />
-        )}
-        {showCompanyWideIndicators && (
+        {isMarketplaceIndicatorMode ? (
           <>
             <IndicatorCard
-              icon={<Scale className="h-4 w-4" />}
-              label="Ponto de Equilíbrio"
-              subValue={`Custo Fixo: ${formatMoney(financialIndicators.fixedCost, { maximumFractionDigits: 2 })}`}
-              trend={{
-                direction:
-                  revenue >= breakEven && breakEven > 0 ? "up" : "down",
-                value:
-                  revenue >= breakEven && breakEven > 0
-                    ? "Meta atingida"
-                    : "Abaixo da meta",
-              }}
-              value={formatMoney(financialIndicators.breakEvenRevenue, {
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Faturamento"
+              subValue={netSalesSub}
+              value={formatMoney(financialIndicators.revenue, {
                 maximumFractionDigits: 2,
                 minimumFractionDigits: 2,
               })}
-              variant={
-                revenue >= breakEven && breakEven > 0 ? "success" : "warning"
-              }
+            />
+            <IndicatorCard
+              icon={<TrendingDown className="h-4 w-4" />}
+              label="Devoluções"
+              subValue={`${financialIndicators.excludedSales} Vendas Devolvidas, Cancelados ou Pendentes`}
+              value={excludedRevenueValue}
+              variant="error"
             />
             <IndicatorCard
               icon={<DollarSign className="h-4 w-4" />}
-              label="Lucro Líquido"
-              subValue="Lucro Total - Custo Fixo"
-              trend={{
-                direction:
-                  liquidProfit > 0
-                    ? "up"
-                    : liquidProfit < 0
-                      ? "down"
-                      : "neutral",
-                value:
-                  liquidProfit > 0
-                    ? "Resultado positivo"
-                    : liquidProfit < 0
-                      ? "Resultado negativo"
-                      : "Resultado neutro",
-              }}
-              value={formatMoney(displayedLiquidProfit, {
+              label="Custo & Imposto"
+              subValue={`Custo: ${formatMoney(displayedCost, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} · Imposto: ${formatMoney(displayedTax, { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`}
+              value={formatMoney(displayedCostAndTax, {
                 maximumFractionDigits: 2,
                 minimumFractionDigits: 2,
               })}
-              variant={
-                liquidProfit > 0
-                  ? "success"
-                  : liquidProfit < 0
-                    ? "error"
-                    : "warning"
-              }
+            />
+            <IndicatorCard
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Tarifa de Venda"
+              subValue="Comissões de marketplace"
+              value={formatMoney(displayedMarketplaceCommission, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              })}
+            />
+            <IndicatorCard
+              icon={<TrendingDown className="h-4 w-4" />}
+              label="Frete Total"
+              subValue="Frete dos pedidos"
+              value={formatMoney(displayedShipping, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              })}
             />
             <IndicatorCard
               icon={<Percent className="h-4 w-4" />}
@@ -480,10 +424,167 @@ export function DashboardFinancialIndicators({
               }
             />
           </>
+        ) : (
+          <>
+            <IndicatorCard
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Faturamento"
+              subValue={netSalesSub}
+              value={formatMoney(financialIndicators.revenue, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              })}
+            />
+            <IndicatorCard
+              icon={<TrendingDown className="h-4 w-4" />}
+              label="Devoluções"
+              subValue={`${financialIndicators.excludedSales} Vendas Devolvidas, Cancelados ou Pendentes`}
+              value={excludedRevenueValue}
+              variant="error"
+            />
+            {isMarketplaceView ? (
+              <IndicatorCard
+                icon={<Percent className="h-4 w-4" />}
+                label="Margem Contribuição"
+                subValue="Faturamento - Custos Variáveis"
+                trend={{
+                  direction:
+                    contributionProfit > 0
+                      ? "up"
+                      : contributionProfit < 0
+                        ? "down"
+                        : "neutral",
+                  value:
+                    contributionProfit > 0
+                      ? "Contribuição positiva"
+                      : contributionProfit < 0
+                        ? "Contribuição negativa"
+                        : "Contribuição neutra",
+                }}
+                value={formatNetMarginPercent(contributionMarginPercent)}
+                variant={
+                  contributionProfit > 0
+                    ? "success"
+                    : contributionProfit < 0
+                      ? "error"
+                      : "warning"
+                }
+              />
+            ) : (
+              <IndicatorCard
+                icon={<Percent className="h-4 w-4" />}
+                label="Margem Média"
+                subValue={`Lucro Total: ${formatMoney(financialIndicators.totalProfit, { maximumFractionDigits: 2 })}`}
+                trend={{
+                  direction:
+                    totalProfit > 0
+                      ? "up"
+                      : totalProfit < 0
+                        ? "down"
+                        : "neutral",
+                  value: totalProfit >= 0 ? "Lucrativo" : "Prejuízo",
+                }}
+                value={formatIndicatorPercent(
+                  financialIndicators.averageMarginPercent,
+                )}
+                variant={
+                  totalProfit > 0
+                    ? "success"
+                    : totalProfit < 0
+                      ? "error"
+                      : "warning"
+                }
+              />
+            )}
+            {showCompanyWideIndicators && (
+              <>
+                <IndicatorCard
+                  icon={<Scale className="h-4 w-4" />}
+                  label="Ponto de Equilíbrio"
+                  subValue={`Custo Fixo: ${formatMoney(financialIndicators.fixedCost, { maximumFractionDigits: 2 })}`}
+                  trend={{
+                    direction:
+                      revenue >= breakEven && breakEven > 0 ? "up" : "down",
+                    value:
+                      revenue >= breakEven && breakEven > 0
+                        ? "Meta atingida"
+                        : "Abaixo da meta",
+                  }}
+                  value={formatMoney(financialIndicators.breakEvenRevenue, {
+                    maximumFractionDigits: 2,
+                    minimumFractionDigits: 2,
+                  })}
+                  variant={
+                    revenue >= breakEven && breakEven > 0
+                      ? "success"
+                      : "warning"
+                  }
+                />
+                <IndicatorCard
+                  icon={<DollarSign className="h-4 w-4" />}
+                  label="Lucro Líquido"
+                  subValue="Lucro Total - Custo Fixo"
+                  trend={{
+                    direction:
+                      liquidProfit > 0
+                        ? "up"
+                        : liquidProfit < 0
+                          ? "down"
+                          : "neutral",
+                    value:
+                      liquidProfit > 0
+                        ? "Resultado positivo"
+                        : liquidProfit < 0
+                          ? "Resultado negativo"
+                          : "Resultado neutro",
+                  }}
+                  value={formatMoney(displayedLiquidProfit, {
+                    maximumFractionDigits: 2,
+                    minimumFractionDigits: 2,
+                  })}
+                  variant={
+                    liquidProfit > 0
+                      ? "success"
+                      : liquidProfit < 0
+                        ? "error"
+                        : "warning"
+                  }
+                />
+                <IndicatorCard
+                  icon={<Percent className="h-4 w-4" />}
+                  label="Margem Líquida"
+                  subValue="Lucro Líquido / Faturamento"
+                  trend={{
+                    direction:
+                      liquidProfit > 0
+                        ? "up"
+                        : liquidProfit < 0
+                          ? "down"
+                          : "neutral",
+                    value:
+                      liquidProfit > 0
+                        ? "Margem positiva"
+                        : liquidProfit < 0
+                          ? "Margem negativa"
+                          : "Margem neutra",
+                  }}
+                  value={formatNetMarginPercent(netMarginPercent)}
+                  variant={
+                    liquidProfit > 0
+                      ? "success"
+                      : liquidProfit < 0
+                        ? "error"
+                        : "warning"
+                  }
+                />
+              </>
+            )}
+          </>
         )}
       </div>
 
-      {(isMarketplaceView || showCompanyDefaultsEditor) && (
+      {(isMarketplaceView ||
+        (showCompanyDefaultsEditor && !isMarketplaceIndicatorMode)) && (
         <motion.div variants={itemVariants}>
           <Card
             className="rounded-xl border border-border/80 bg-surface-elevated/40 px-4 py-3 shadow-[var(--shadow-xs)]"

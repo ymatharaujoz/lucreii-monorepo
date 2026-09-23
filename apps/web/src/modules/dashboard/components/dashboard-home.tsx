@@ -26,6 +26,7 @@ import { useDashboardConnectionStatuses } from "../hooks/use-dashboard-connectio
 interface DashboardHomeProps {
   activeCompany: Company | null;
   companyName: string;
+  indicatorMode?: "dashboard" | "marketplace";
   showCompanyDefaultsEditor?: boolean;
   showMarketplaceConnections?: boolean;
   showOrders?: boolean;
@@ -128,6 +129,7 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
 export function DashboardHome({
   activeCompany,
   companyName,
+  indicatorMode = "dashboard",
   showCompanyDefaultsEditor = true,
   showMarketplaceConnections = true,
   showOrders = false,
@@ -220,6 +222,7 @@ export function DashboardHome({
             activeCompany={activeCompany}
             financialIndicators={financialIndicatorsQuery.data}
             key={`${providerFilter ?? "all"}:${referenceMonth}`}
+            indicatorMode={indicatorMode}
             onDefaultsSaved={refetchAll}
             provider={providerFilter}
             referenceMonth={referenceMonth}

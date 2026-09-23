@@ -149,6 +149,69 @@ describe("DashboardFinancialIndicators", () => {
     view.unmount();
   });
 
+  it("exibe custos operacionais separados em Marketplaces", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={indicators}
+        indicatorMode="marketplace"
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Faturamento");
+    expect(text).toContain("Devoluções");
+    expect(text).toContain("Custo & Imposto");
+    expect(text).toContain("R$\u00a011.595,62");
+    expect(text).toContain("Custo: R$\u00a010.000,00");
+    expect(text).toContain("Imposto: R$\u00a01.595,62");
+    expect(text).toContain("Tarifa de Venda");
+    expect(text).toContain("R$\u00a07.000,00");
+    expect(text).toContain("Frete Total");
+    expect(text).toContain("R$\u00a01.000,00");
+    expect(text).toContain("Margem Líquida");
+    expect(text).toContain("27,65%");
+    expect(text).not.toContain("Margem Média");
+    expect(text).not.toContain("Margem Contribuição");
+    expect(text).not.toContain("Ponto de Equilíbrio");
+    expect(text).not.toContain("Lucro Total - Custo Fixo");
+    expect(text).not.toContain("Editar");
+    expect(
+      Array.from(document.querySelectorAll("[class]")).some((element) =>
+        element.className.toString().includes("lg:grid-cols-6"),
+      ),
+    ).toBe(true);
+    view.unmount();
+  });
+
+  it("mantém os indicadores operacionais ao filtrar um Marketplace", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={indicators}
+        indicatorMode="marketplace"
+        provider="shopee"
+        referenceMonth="2026-07-01"
+        showCompanyWideIndicators={false}
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Custo & Imposto");
+    expect(text).toContain("Tarifa de Venda");
+    expect(text).toContain("Frete Total");
+    expect(text).toContain("Margem Líquida");
+    expect(text).toContain("Publicidade");
+    expect(text).not.toContain("Margem Contribuição");
+    expect(text).not.toContain("Custo Fixo");
+    expect(
+      Array.from(document.querySelectorAll("[class]")).some((element) =>
+        element.className.toString().includes("lg:grid-cols-6"),
+      ),
+    ).toBe(true);
+    view.unmount();
+  });
+
   it("calcula margem líquida usando valores exibidos no dashboard", () => {
     const view = mount(
       <DashboardFinancialIndicators

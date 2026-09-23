@@ -42,6 +42,7 @@ export default async function MarketplacesPage() {
         authState.organization?.name ??
         authState.user.name
       }
+      indicatorMode="marketplace"
       showCompanyDefaultsEditor={false}
       showMarketplaceConnections={false}
       showOrders
