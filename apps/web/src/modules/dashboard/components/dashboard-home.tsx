@@ -19,7 +19,7 @@ import { DashboardHeader } from "./dashboard-header";
 import { DashboardFinancialIndicators } from "./dashboard-financial-indicators";
 import { ChartsSection } from "./charts-section";
 import { MarketplacesSection } from "./marketplaces-section";
-import { ProductsTable } from "./products-table";
+import { ProductRankingModal } from "./product-ranking-modal";
 import { useDashboardData } from "../hooks/use-dashboard-data";
 import { useDashboardConnectionStatuses } from "../hooks/use-dashboard-connection-statuses";
 
@@ -27,6 +27,7 @@ interface DashboardHomeProps {
   activeCompany: Company | null;
   companyName: string;
   showOrders?: boolean;
+  showProductRanking?: boolean;
 }
 
 function ReferenceMonthToolbar({
@@ -125,6 +126,7 @@ export function DashboardHome({
   activeCompany,
   companyName,
   showOrders = false,
+  showProductRanking = false,
 }: DashboardHomeProps) {
   const [providerFilter, setProviderFilter] =
     useState<IntegrationProviderSlug | null>(null);
@@ -164,35 +166,41 @@ export function DashboardHome({
 
       <hr className="border-border" />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <ReferenceMonthToolbar
           onReferenceMonthChange={setReferenceMonth}
           options={referenceMonthOptions}
           referenceMonth={referenceMonth}
         />
 
-        <div className="flex w-fit rounded-xl border border-border bg-surface-strong p-1 shadow-[var(--shadow-xs)]">
-          {(
-            [
-              [null, "Todos"],
-              ["mercadolivre", "Mercado Livre"],
-              ["shopee", "Shopee"],
-              ["shein", "Shein"],
-            ] as const
-          ).map(([provider, label]) => (
-            <button
-              key={provider ?? "all"}
-              type="button"
-              onClick={() => setProviderFilter(provider)}
-              className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all duration-[var(--transition-fast)] ${
-                providerFilter === provider
-                  ? "bg-accent text-accent-foreground shadow-[var(--shadow-xs)]"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <div className="flex w-fit rounded-xl border border-border bg-surface-strong p-1 shadow-[var(--shadow-xs)]">
+            {(
+              [
+                [null, "Todos"],
+                ["mercadolivre", "Mercado Livre"],
+                ["shopee", "Shopee"],
+                ["shein", "Shein"],
+              ] as const
+            ).map(([provider, label]) => (
+              <button
+                key={provider ?? "all"}
+                type="button"
+                onClick={() => setProviderFilter(provider)}
+                className={`rounded-lg px-3 py-1 text-xs font-semibold transition-all duration-[var(--transition-fast)] ${
+                  providerFilter === provider
+                    ? "bg-accent text-accent-foreground shadow-[var(--shadow-xs)]"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {showProductRanking ? (
+            <ProductRankingModal data={profitabilityQuery.data} />
+          ) : null}
         </div>
       </div>
 
@@ -218,12 +226,6 @@ export function DashboardHome({
             syncStatusByProvider={syncStatusByProvider}
           />
         </section>
-      )}
-
-      {profitabilityQuery.data && financialState === "ready" && (
-        <motion.section variants={fadeInVariants}>
-          <ProductsTable data={profitabilityQuery.data} />
-        </motion.section>
       )}
 
       {financialState === "insufficient" && (

@@ -79,6 +79,7 @@ describe("MarketplacesPage", () => {
         activeCompany: expect.objectContaining({ id: "company_1" }),
         companyName: "Lucreii",
         showOrders: true,
+        showProductRanking: true,
       }),
       undefined,
     );

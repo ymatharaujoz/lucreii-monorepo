@@ -29,6 +29,12 @@ const ordersHomeMock = vi.hoisted(() =>
     return <div>Orders</div>;
   }),
 );
+const productRankingModalMock = vi.hoisted(() =>
+  vi.fn((_props: { data: { channels: unknown[]; products: unknown[] } }) => {
+    void _props;
+    return <div>Product Ranking</div>;
+  }),
+);
 
 vi.mock("./dashboard-header", () => ({
   DashboardHeader: () => <div>Dashboard Header</div>,
@@ -46,8 +52,8 @@ vi.mock("./charts-section", () => ({
   ChartsSection: () => <div>Charts</div>,
 }));
 
-vi.mock("./products-table", () => ({
-  ProductsTable: () => <div>Products</div>,
+vi.mock("./product-ranking-modal", () => ({
+  ProductRankingModal: productRankingModalMock,
 }));
 
 vi.mock("@/modules/orders", () => ({
@@ -137,6 +143,7 @@ afterEach(() => {
   useDashboardDataMock.mockReset();
   useDashboardConnectionStatusesMock.mockReset();
   ordersHomeMock.mockClear();
+  productRankingModalMock.mockClear();
 });
 
 describe("DashboardHome", () => {
@@ -213,6 +220,7 @@ describe("DashboardHome", () => {
     );
 
     expect(ordersHomeMock).not.toHaveBeenCalled();
+    expect(productRankingModalMock).not.toHaveBeenCalled();
 
     click(
       Array.from(document.querySelectorAll("button")).find(
@@ -268,10 +276,19 @@ describe("DashboardHome", () => {
     vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
 
     const view = mount(
-      <DashboardHome activeCompany={null} companyName="Lucreii" showOrders />,
+      <DashboardHome
+        activeCompany={null}
+        companyName="Lucreii"
+        showOrders
+        showProductRanking
+      />,
     );
 
     expect(document.body.textContent ?? "").toContain("julho de 2026");
+    expect(productRankingModalMock).toHaveBeenLastCalledWith(
+      { data: { channels: [], products: [] } },
+      undefined,
+    );
     expect(useDashboardDataMock).toHaveBeenLastCalledWith(null, "2026-07-01");
     expect(ordersHomeMock.mock.calls.at(-1)?.[0]).toMatchObject({
       provider: null,

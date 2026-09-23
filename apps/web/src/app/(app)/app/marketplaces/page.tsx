@@ -43,6 +43,7 @@ export default async function MarketplacesPage() {
         authState.user.name
       }
       showOrders
+      showProductRanking
     />
   );
 }

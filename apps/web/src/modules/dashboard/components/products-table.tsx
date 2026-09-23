@@ -20,6 +20,7 @@ import { buildDashboardProductRows } from "../calculations/product-rows";
 import { formatMoney, formatNumber, formatPercent } from "../utils/formatters";
 
 interface ProductsTableProps {
+  bare?: boolean;
   data: DashboardProfitabilityResponse;
   className?: string;
 }
@@ -207,7 +208,27 @@ function ProductsSortableHeader({
   );
 }
 
-export function ProductsTable({ data, className = "" }: ProductsTableProps) {
+function ProductsTableSurface({
+  bare,
+  children,
+  className,
+}: {
+  bare: boolean;
+  children: React.ReactNode;
+  className: string;
+}) {
+  if (bare) {
+    return <div className={className}>{children}</div>;
+  }
+
+  return <Card className={className} padding="lg">{children}</Card>;
+}
+
+export function ProductsTable({
+  bare = false,
+  data,
+  className = "",
+}: ProductsTableProps) {
   const allRows = buildDashboardProductRows(data);
   const [rankingMode, setRankingMode] = useState<ProductsRankingMode>("profit");
   const [sortConfig, setSortConfig] = useState<{
@@ -260,7 +281,7 @@ export function ProductsTable({ data, className = "" }: ProductsTableProps) {
 
   if (rows.length === 0) {
     return (
-      <Card padding="lg" className={className}>
+      <ProductsTableSurface bare={bare} className={className}>
         <div className="mb-4">
           <h3 className="text-sm font-semibold text-foreground">Produtos</h3>
           <p className="text-xs text-muted-foreground">Performance por SKU</p>
@@ -279,13 +300,13 @@ export function ProductsTable({ data, className = "" }: ProductsTableProps) {
             </Link>
           }
         />
-      </Card>
+      </ProductsTableSurface>
     );
   }
 
   return (
     <motion.div variants={slideInUpVariants}>
-      <Card padding="lg" className={className}>
+      <ProductsTableSurface bare={bare} className={className}>
         <div className="mb-5 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-semibold text-foreground">TOP 10 Produtos</h3>
@@ -480,7 +501,7 @@ export function ProductsTable({ data, className = "" }: ProductsTableProps) {
             </table>
           </div>
         </div>
-      </Card>
+      </ProductsTableSurface>
     </motion.div>
   );
 }
