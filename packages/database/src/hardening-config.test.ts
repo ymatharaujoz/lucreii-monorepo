@@ -11,7 +11,11 @@ describe("database hardening configuration", () => {
   it("keeps a unique, explicit manifest of every application table", () => {
     expect(new Set(APPLICATION_TABLE_NAMES).size).toBe(APPLICATION_TABLE_NAMES.length);
     expect(APPLICATION_TABLE_NAMES).toContain("user");
-    expect(APPLICATION_TABLE_NAMES).toContain("verification");
+    expect(APPLICATION_TABLE_NAMES).not.toContain("verification");
+    expect(APPLICATION_TABLE_NAMES).not.toContain("subscription_events");
+    expect(APPLICATION_TABLE_NAMES).not.toContain("mercado_livre_billing_movements");
+    expect(APPLICATION_TABLE_NAMES).not.toContain("daily_metrics");
+    expect(APPLICATION_TABLE_NAMES).not.toContain("product_metrics");
   });
 
   it("targets only application tables with unique online index names", () => {

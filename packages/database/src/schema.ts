@@ -51,8 +51,6 @@ export const sessions = pgTable(
     token: text("token").notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
-    ipAddress: varchar("ip_address", { length: 64 }),
-    userAgent: text("user_agent"),
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -74,14 +72,9 @@ export const authExchangeTickets = pgTable(
     sessionId: text("session_id")
       .notNull()
       .references(() => sessions.id, { onDelete: "cascade" }),
-    organizationId: uuid("organization_id").references(() => organizations.id, {
-      onDelete: "set null",
-    }),
     remoteSessionToken: text("remote_session_token").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     usedAt: timestamp("used_at", { withTimezone: true }),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
   },
   (table) => [
     uniqueIndex("auth_exchange_ticket_hash_key").on(table.ticketHash),
@@ -99,16 +92,6 @@ export const accounts = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    accessToken: text("access_token"),
-    refreshToken: text("refresh_token"),
-    idToken: text("id_token"),
-    accessTokenExpiresAt: timestamp("access_token_expires_at", {
-      withTimezone: true,
-    }),
-    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
-      withTimezone: true,
-    }),
-    scope: text("scope"),
     password: text("password"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -120,19 +103,6 @@ export const accounts = pgTable(
       table.accountId,
     ),
   ],
-);
-
-export const verifications = pgTable(
-  "verification",
-  {
-    id: authId(),
-    identifier: varchar("identifier", { length: 255 }).notNull(),
-    value: text("value").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
 export const organizations = pgTable(
@@ -760,7 +730,6 @@ export const billingTrials = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    email: varchar("email", { length: 320 }),
     organizationId: uuid("organization_id").references(
       () => organizations.id,
       { onDelete: "set null" },
@@ -774,34 +743,7 @@ export const billingTrials = pgTable(
   },
   (table) => [
     uniqueIndex("billing_trials_user_id_key").on(table.userId),
-    uniqueIndex("billing_trials_email_key").on(table.email),
     index("billing_trials_organization_id_idx").on(table.organizationId),
-  ],
-);
-
-export const subscriptionEvents = pgTable(
-  "subscription_events",
-  {
-    id: id(),
-    organizationId: organizationId().references(() => organizations.id, {
-      onDelete: "cascade",
-    }),
-    subscriptionId: uuid("subscription_id").references(() => subscriptions.id, {
-      onDelete: "cascade",
-    }),
-    provider: varchar("provider", { length: 32 }).default("stripe").notNull(),
-    eventType: varchar("event_type", { length: 128 }).notNull(),
-    payload: jsonb("payload")
-      .$type<Record<string, unknown>>()
-      .default(sql`'{}'::jsonb`)
-      .notNull(),
-    occurredAt: timestamp("occurred_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-    createdAt: createdAt(),
-  },
-  (table) => [
-    index("subscription_events_organization_id_idx").on(table.organizationId),
   ],
 );
 
@@ -938,12 +880,6 @@ export const marketplaceWebhookEvents = pgTable(
     id: id(),
     provider: varchar("provider", { length: 32 }).notNull(),
     deduplicationKey: varchar("deduplication_key", { length: 512 }).notNull(),
-    notificationId: varchar("notification_id", { length: 255 }),
-    applicationId: varchar("application_id", { length: 255 }),
-    externalAccountId: varchar("external_account_id", { length: 255 }),
-    resource: text("resource"),
-    topic: varchar("topic", { length: 128 }),
-    sent: varchar("sent", { length: 64 }),
     payload: jsonb("payload")
       .$type<Record<string, unknown>>()
       .notNull(),
@@ -966,10 +902,6 @@ export const marketplaceWebhookEvents = pgTable(
       table.status,
       table.availableAt,
       table.createdAt,
-    ),
-    index("marketplace_webhook_events_external_account_idx").on(
-      table.provider,
-      table.externalAccountId,
     ),
   ],
 );
@@ -1092,50 +1024,6 @@ export const externalOrders = pgTable(
   ],
 );
 
-export const mercadoLivreBillingMovements = pgTable(
-  "mercado_livre_billing_movements",
-  {
-    id: id(),
-    organizationId: organizationId().references(() => organizations.id, {
-      onDelete: "cascade",
-    }),
-    companyId: companyId().references(() => companies.id, {
-      onDelete: "cascade",
-    }),
-    marketplaceConnectionId: uuid("marketplace_connection_id")
-      .notNull()
-      .references(() => marketplaceConnections.id, { onDelete: "cascade" }),
-    externalOrderId: varchar("external_order_id", { length: 255 }),
-    externalPackId: varchar("external_pack_id", { length: 255 }),
-    externalPaymentId: varchar("external_payment_id", { length: 255 }),
-    externalShipmentId: varchar("external_shipment_id", { length: 255 }),
-    externalMovementId: varchar("external_movement_id", {
-      length: 255,
-    }).notNull(),
-    deduplicationKey: varchar("deduplication_key", { length: 512 }).notNull(),
-    periodKey: varchar("period_key", { length: 10 }).notNull(),
-    billingGroup: varchar("billing_group", { length: 4 }).notNull(),
-    documentType: varchar("document_type", { length: 64 }).notNull(),
-    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
-    currency: varchar("currency", { length: 8 }).default("BRL").notNull(),
-    isSellerCredit: boolean("is_seller_credit").default(false).notNull(),
-    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (table) => [
-    index("meli_billing_movements_organization_id_idx").on(
-      table.organizationId,
-    ),
-    index("meli_billing_movements_company_id_idx").on(table.companyId),
-    index("meli_billing_movements_order_id_idx").on(table.externalOrderId),
-    uniqueIndex("meli_billing_movements_connection_dedupe_key").on(
-      table.marketplaceConnectionId,
-      table.deduplicationKey,
-    ),
-  ],
-);
-
 export const externalOrderItems = pgTable(
   "external_order_items",
   {
@@ -1244,7 +1132,6 @@ export const productImages = pgTable(
     url: text("url").notNull(),
     position: integer("position").default(0).notNull(),
     source: varchar("source", { length: 32 }).notNull(),
-    externalIdentifier: varchar("external_identifier", { length: 255 }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -1373,74 +1260,6 @@ export const manualExpenses = pgTable(
   ],
 );
 
-export const dailyMetrics = pgTable(
-  "daily_metrics",
-  {
-    id: id(),
-    organizationId: organizationId().references(() => organizations.id, {
-      onDelete: "cascade",
-    }),
-    metricDate: date("metric_date").notNull(),
-    grossRevenue: numeric("gross_revenue", { precision: 14, scale: 2 })
-      .default("0")
-      .notNull(),
-    netRevenue: numeric("net_revenue", { precision: 14, scale: 2 })
-      .default("0")
-      .notNull(),
-    netProfit: numeric("net_profit", { precision: 14, scale: 2 })
-      .default("0")
-      .notNull(),
-    ordersCount: integer("orders_count").default(0).notNull(),
-    metadata: jsonb("metadata")
-      .$type<Record<string, unknown>>()
-      .default(sql`'{}'::jsonb`)
-      .notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (table) => [
-    index("daily_metrics_organization_id_idx").on(table.organizationId),
-    uniqueIndex("daily_metrics_org_date_key").on(
-      table.organizationId,
-      table.metricDate,
-    ),
-  ],
-);
-
-export const productMetrics = pgTable(
-  "product_metrics",
-  {
-    id: id(),
-    organizationId: organizationId().references(() => organizations.id, {
-      onDelete: "cascade",
-    }),
-    productId: uuid("product_id").references(() => products.id, {
-      onDelete: "cascade",
-    }),
-    metricDate: date("metric_date").notNull(),
-    unitsSold: integer("units_sold").default(0).notNull(),
-    grossRevenue: numeric("gross_revenue", { precision: 14, scale: 2 })
-      .default("0")
-      .notNull(),
-    netProfit: numeric("net_profit", { precision: 14, scale: 2 })
-      .default("0")
-      .notNull(),
-    metadata: jsonb("metadata")
-      .$type<Record<string, unknown>>()
-      .default(sql`'{}'::jsonb`)
-      .notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (table) => [
-    index("product_metrics_organization_id_idx").on(table.organizationId),
-    index("product_metrics_org_date_idx").on(
-      table.organizationId,
-      table.metricDate,
-    ),
-  ],
-);
-
 export const usersRelations = relations(users, ({ many }) => ({
   authExchangeTickets: many(authExchangeTickets),
   organizationMembers: many(organizationMembers),
@@ -1466,10 +1285,6 @@ export const sessionsRelations = relations(sessions, ({ many, one }) => ({
 export const authExchangeTicketsRelations = relations(
   authExchangeTickets,
   ({ one }) => ({
-    organization: one(organizations, {
-      fields: [authExchangeTickets.organizationId],
-      references: [organizations.id],
-    }),
     session: one(sessions, {
       fields: [authExchangeTickets.sessionId],
       references: [sessions.id],
@@ -1495,12 +1310,10 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   billingTrials: many(billingTrials),
   subscriptions: many(subscriptions),
   pendingCheckouts: many(pendingCheckouts),
-  subscriptionEvents: many(subscriptionEvents),
   marketplaceConnections: many(marketplaceConnections),
   syncRuns: many(syncRuns),
   externalProducts: many(externalProducts),
   externalOrders: many(externalOrders),
-  mercadoLivreBillingMovements: many(mercadoLivreBillingMovements),
   externalOrderItems: many(externalOrderItems),
   externalFees: many(externalFees),
   fixedCosts: many(fixedCosts),
@@ -1513,8 +1326,6 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   breakEvenRoasSimulations: many(breakEvenRoasSimulations),
   adCosts: many(adCosts),
   manualExpenses: many(manualExpenses),
-  dailyMetrics: many(dailyMetrics),
-  productMetrics: many(productMetrics),
 }));
 
 export const companiesRelations = relations(companies, ({ one, many }) => ({
@@ -1535,7 +1346,6 @@ export const companiesRelations = relations(companies, ({ one, many }) => ({
   syncRuns: many(syncRuns),
   externalProducts: many(externalProducts),
   externalOrders: many(externalOrders),
-  mercadoLivreBillingMovements: many(mercadoLivreBillingMovements),
 }));
 
 export const organizationMembersRelations = relations(
@@ -1574,7 +1384,6 @@ export const subscriptionsRelations = relations(
       fields: [subscriptions.billingCustomerId],
       references: [billingCustomers.id],
     }),
-    events: many(subscriptionEvents),
   }),
 );
 
@@ -1588,20 +1397,6 @@ export const billingTrialsRelations = relations(billingTrials, ({ one }) => ({
     references: [users.id],
   }),
 }));
-
-export const subscriptionEventsRelations = relations(
-  subscriptionEvents,
-  ({ one }) => ({
-    organization: one(organizations, {
-      fields: [subscriptionEvents.organizationId],
-      references: [organizations.id],
-    }),
-    subscription: one(subscriptions, {
-      fields: [subscriptionEvents.subscriptionId],
-      references: [subscriptions.id],
-    }),
-  }),
-);
 
 export const pendingCheckoutsRelations = relations(
   pendingCheckouts,
@@ -1631,7 +1426,6 @@ export const marketplaceConnectionsRelations = relations(
     syncRuns: many(syncRuns),
     externalProducts: many(externalProducts),
     externalOrders: many(externalOrders),
-    mercadoLivreBillingMovements: many(mercadoLivreBillingMovements),
   }),
 );
 
@@ -1650,24 +1444,6 @@ export const syncRunsRelations = relations(syncRuns, ({ one, many }) => ({
   }),
   externalOrders: many(externalOrders),
 }));
-
-export const mercadoLivreBillingMovementsRelations = relations(
-  mercadoLivreBillingMovements,
-  ({ one }) => ({
-    organization: one(organizations, {
-      fields: [mercadoLivreBillingMovements.organizationId],
-      references: [organizations.id],
-    }),
-    company: one(companies, {
-      fields: [mercadoLivreBillingMovements.companyId],
-      references: [companies.id],
-    }),
-    marketplaceConnection: one(marketplaceConnections, {
-      fields: [mercadoLivreBillingMovements.marketplaceConnectionId],
-      references: [marketplaceConnections.id],
-    }),
-  }),
-);
 
 export const externalProductsRelations = relations(
   externalProducts,
@@ -1763,7 +1539,6 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   images: many(productImages),
   adCosts: many(adCosts),
   performanceRows: many(productMonthlyPerformance),
-  productMetrics: many(productMetrics),
 }));
 
 export const productImagesRelations = relations(productImages, ({ one }) => ({
@@ -1918,21 +1693,3 @@ export const breakEvenRoasSimulationsRelations = relations(
     }),
   }),
 );
-
-export const dailyMetricsRelations = relations(dailyMetrics, ({ one }) => ({
-  organization: one(organizations, {
-    fields: [dailyMetrics.organizationId],
-    references: [organizations.id],
-  }),
-}));
-
-export const productMetricsRelations = relations(productMetrics, ({ one }) => ({
-  organization: one(organizations, {
-    fields: [productMetrics.organizationId],
-    references: [organizations.id],
-  }),
-  product: one(products, {
-    fields: [productMetrics.productId],
-    references: [products.id],
-  }),
-}));

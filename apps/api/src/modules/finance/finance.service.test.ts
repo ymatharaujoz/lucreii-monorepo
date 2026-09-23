@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { dailyMetrics, productMetrics } from "@lucreii/database";
 import {
   buildReferenceMonthRange,
   FinanceService,
@@ -8,41 +7,10 @@ import {
   toMetricDate,
 } from "./finance.service";
 
-type TransactionMock = {
-  delete: ReturnType<typeof vi.fn>;
-  insert: ReturnType<typeof vi.fn>;
-};
-
 function createFinanceServiceFixture() {
-  const deleteWhere = vi.fn().mockResolvedValue(undefined);
-  const dailyInsertValues = vi.fn().mockResolvedValue(undefined);
-  const productInsertValues = vi.fn().mockResolvedValue(undefined);
-  const tx: TransactionMock = {
-    delete: vi.fn(() => ({
-      where: deleteWhere,
-    })),
-    insert: vi.fn((table: unknown) => {
-      if (table === dailyMetrics) {
-        return {
-          values: dailyInsertValues,
-        };
-      }
-
-      if (table === productMetrics) {
-        return {
-          values: productInsertValues,
-        };
-      }
-
-      throw new Error("Unexpected insert target.");
-    }),
-  };
   const db = {
     query: {
       adCosts: {
-        findMany: vi.fn(),
-      },
-      dailyMetrics: {
         findMany: vi.fn(),
       },
       externalOrders: {
@@ -54,26 +22,16 @@ function createFinanceServiceFixture() {
       manualExpenses: {
         findMany: vi.fn(),
       },
-      productMetrics: {
-        findMany: vi.fn(),
-      },
       products: {
         findMany: vi.fn(),
       },
     },
     select: vi.fn(),
-    transaction: vi.fn(async (callback: (transaction: TransactionMock) => Promise<void>) =>
-      callback(tx),
-    ),
   };
 
   return {
-    dailyInsertValues,
     db,
-    deleteWhere,
-    productInsertValues,
     service: new FinanceService(db as never),
-    tx,
   };
 }
 

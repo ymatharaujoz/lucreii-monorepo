@@ -23,7 +23,6 @@ import {
   externalProducts,
   externalOrders,
   users,
-  verifications,
 } from "./index";
 
 describe("@lucreii/database schema", () => {
@@ -42,7 +41,7 @@ describe("@lucreii/database schema", () => {
     expect(dbSchema.users).toBe(users);
     expect(dbSchema.accounts).toBe(accounts);
     expect(dbSchema.billingTrials).toBe(billingTrials);
-    expect(dbSchema.verifications).toBe(verifications);
+    expect(dbSchema).not.toHaveProperty("verifications");
   });
 
   it("builds a typed database client without connecting", () => {
@@ -75,7 +74,7 @@ describe("@lucreii/database schema", () => {
     expect(productImages.url).toBeDefined();
     expect(productImages.position).toBeDefined();
     expect(productImages.source).toBeDefined();
-    expect(productImages.externalIdentifier).toBeDefined();
+    expect(productImages).not.toHaveProperty("externalIdentifier");
   });
 
   it("exposes inferred insert types", () => {
@@ -124,9 +123,6 @@ describe("@lucreii/database schema", () => {
       'CREATE UNIQUE INDEX IF NOT EXISTS "billing_trials_user_id_key"',
     );
     expect(billingTrialsMigration).toContain(
-      'CREATE UNIQUE INDEX IF NOT EXISTS "billing_trials_email_key"',
-    );
-    expect(billingTrialsMigration).toContain(
       'ADD COLUMN IF NOT EXISTS "trial_start"',
     );
     expect(billingTrialsMigration).toContain(
@@ -140,6 +136,32 @@ describe("@lucreii/database schema", () => {
     );
     expect(billingTrialPlanCodeMigration).toContain(
       'ADD COLUMN IF NOT EXISTS "plan_code"',
+    );
+  });
+
+  it("keeps the database contraction aligned with the current schema", () => {
+    const contractionMigration = readFileSync(
+      path.resolve(__dirname, "../drizzle/0032_remove_unused_data.sql"),
+      "utf8",
+    );
+    const migrationJournal = readFileSync(
+      path.resolve(__dirname, "../drizzle/meta/_journal.json"),
+      "utf8",
+    );
+
+    for (const tableName of [
+      "verification",
+      "subscription_events",
+      "mercado_livre_billing_movements",
+      "daily_metrics",
+      "product_metrics",
+    ]) {
+      expect(contractionMigration).toContain(`public."${tableName}"`);
+    }
+    expect(contractionMigration).toContain("SET LOCAL lock_timeout = '5s'");
+    expect(contractionMigration).toContain('DROP COLUMN IF EXISTS "external_identifier"');
+    expect(migrationJournal).toContain(
+      '"tag": "0032_remove_unused_data"',
     );
   });
 

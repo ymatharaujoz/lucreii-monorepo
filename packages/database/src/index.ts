@@ -13,8 +13,6 @@ export type Session = typeof schema.sessions.$inferSelect;
 export type NewSession = typeof schema.sessions.$inferInsert;
 export type Account = typeof schema.accounts.$inferSelect;
 export type NewAccount = typeof schema.accounts.$inferInsert;
-export type Verification = typeof schema.verifications.$inferSelect;
-export type NewVerification = typeof schema.verifications.$inferInsert;
 export type Organization = typeof schema.organizations.$inferSelect;
 export type NewOrganization = typeof schema.organizations.$inferInsert;
 export type OrganizationMember = typeof schema.organizationMembers.$inferSelect;
@@ -44,10 +42,6 @@ export type ExternalProduct = typeof schema.externalProducts.$inferSelect;
 export type NewExternalProduct = typeof schema.externalProducts.$inferInsert;
 export type ExternalOrder = typeof schema.externalOrders.$inferSelect;
 export type NewExternalOrder = typeof schema.externalOrders.$inferInsert;
-export type MercadoLivreBillingMovement =
-  typeof schema.mercadoLivreBillingMovements.$inferSelect;
-export type NewMercadoLivreBillingMovement =
-  typeof schema.mercadoLivreBillingMovements.$inferInsert;
 export type ExternalOrderItem = typeof schema.externalOrderItems.$inferSelect;
 export type NewExternalOrderItem =
   typeof schema.externalOrderItems.$inferInsert;
@@ -84,7 +78,3 @@ export type BreakEvenRoasSimulation =
   typeof schema.breakEvenRoasSimulations.$inferSelect;
 export type NewBreakEvenRoasSimulation =
   typeof schema.breakEvenRoasSimulations.$inferInsert;
-export type DailyMetric = typeof schema.dailyMetrics.$inferSelect;
-export type NewDailyMetric = typeof schema.dailyMetrics.$inferInsert;
-export type ProductMetric = typeof schema.productMetrics.$inferSelect;
-export type NewProductMetric = typeof schema.productMetrics.$inferInsert;
