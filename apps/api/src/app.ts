@@ -100,7 +100,6 @@ export async function buildApp(
       }
 
       const ticket = await authExchangeService.createTicket({
-        organizationId: authContext.organization?.id ?? null,
         remoteSessionToken: sessionToken,
         sessionId: authContext.session.id,
         userId: authContext.user.id,

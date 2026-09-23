@@ -156,15 +156,9 @@ export class MercadoLivreWebhookQueueService
     const [event] = await this.db
       .insert(marketplaceWebhookEvents)
       .values({
-        applicationId: summary.applicationId,
         deduplicationKey,
-        externalAccountId: summary.userId,
-        notificationId: summary.notificationId,
         payload: webhookPayload,
         provider: "mercadolivre",
-        resource: summary.resource,
-        sent: summary.sent,
-        topic: summary.topic,
       })
       .onConflictDoNothing({
         target: [

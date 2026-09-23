@@ -319,10 +319,6 @@ describe("ProductsService", () => {
     );
     expect(db.query.companies.findMany).toHaveBeenCalledOnce();
     expect(txInsert).toHaveBeenCalledTimes(3);
-    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledWith(
-      "org_1",
-      "company_1",
-    );
   });
 
   it("formats spreadsheet update errors with friendly messages that surface the raw cell value", async () => {
@@ -1239,10 +1235,6 @@ describe("ProductsService", () => {
     });
 
     expect(txUpdate).toHaveBeenCalledTimes(1);
-    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledWith(
-      "org_1",
-      "company_1",
-    );
   });
 
   it("ignores invalid spreadsheet update rows and reports updated vs error totals", async () => {
@@ -1372,10 +1364,6 @@ describe("ProductsService", () => {
       updated: 1,
     });
 
-    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledWith(
-      "org_1",
-      "company_1",
-    );
   });
 
   it("imports spreadsheet updates with more than 50 rows", async () => {
@@ -1482,13 +1470,6 @@ describe("ProductsService", () => {
       updated: 51,
     });
 
-    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledTimes(
-      1,
-    );
-    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledWith(
-      "org_1",
-      "company_1",
-    );
   });
 
   it("rejects product sku updates when another product already uses normalized sku", async () => {

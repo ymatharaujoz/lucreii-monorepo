@@ -3,7 +3,7 @@ builder = "nixpacks"
 buildCommand = "corepack enable && corepack prepare pnpm@latest --activate && pnpm install --frozen-lockfile && pnpm --filter @lucreii/api build"
 
 [deploy]
-preDeployCommand = "corepack enable && corepack prepare pnpm@latest --activate && corepack pnpm --filter @lucreii/database db:migrate"
+preDeployCommand = "corepack enable && corepack prepare pnpm@latest --activate && corepack pnpm --filter @lucreii/database db:preflight-hardening && corepack pnpm --filter @lucreii/database db:migrate && corepack pnpm --filter @lucreii/database db:apply-online-indexes"
 startCommand = "corepack enable && corepack prepare pnpm@latest --activate && pnpm --filter @lucreii/api start"
 healthcheckPath = "/health"
 healthcheckTimeout = 300

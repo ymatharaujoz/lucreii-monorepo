@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BadRequestException } from "@nestjs/common";
-import { FinanceService } from "@/modules/finance/finance.service";
 import { SyncPerformanceMaterializerService } from "./sync-performance-materializer.service";
 import { SyncService } from "./sync.service";
 
@@ -45,9 +44,6 @@ function createService(envOverrides: Record<string, unknown> = {}) {
     ),
     update: vi.fn(),
   };
-  const financeService = {
-    materializeOrganizationMetrics: vi.fn(),
-  } satisfies Pick<FinanceService, "materializeOrganizationMetrics">;
   const syncPerformanceMaterializer = {
     materializeForSync: vi.fn(),
   } satisfies Pick<SyncPerformanceMaterializerService, "materializeForSync">;
@@ -81,14 +77,12 @@ function createService(envOverrides: Record<string, unknown> = {}) {
       SYNC_RELAX_GUARDS: false,
       ...envOverrides,
     } as never,
-    financeService as never,
     syncPerformanceMaterializer as never,
     mercadoLivreTokenRefreshService as never,
   );
 
   return {
     db,
-    financeService,
     mercadoLivreTokenRefreshService,
     syncPerformanceMaterializer,
     service,
@@ -329,10 +323,9 @@ describe("SyncService", () => {
     expect(status.availability.currentWindowKey).toBeNull();
   });
 
-  it("runs a sync, stores imported data, and materializes finance metrics", async () => {
+  it("runs a sync and stores imported data", async () => {
     vi.setSystemTime(new Date("2026-06-22T12:30:00.000Z"));
-    const { db, financeService, service, syncPerformanceMaterializer } =
-      createService();
+    const { db, service, syncPerformanceMaterializer } = createService();
     const provider = {
       createAuthorization: vi.fn(),
       disconnect: vi.fn(),
@@ -519,10 +512,6 @@ describe("SyncService", () => {
         userId: "user_123",
       },
     );
-    expect(financeService.materializeOrganizationMetrics).toHaveBeenCalledWith(
-      "org_123",
-      "company_123",
-    );
     expect(response.run.counts.orders).toBe(1);
     expect(response.run.cursor).toBeNull();
     expect(response.run.origin).toBe("manual");
@@ -707,8 +696,7 @@ describe("SyncService", () => {
 
   it("fails the sync honestly when performance materialization cannot resolve an active company", async () => {
     vi.setSystemTime(new Date("2026-05-01T12:30:00.000Z"));
-    const { db, financeService, service, syncPerformanceMaterializer } =
-      createService();
+    const { db, service, syncPerformanceMaterializer } = createService();
     const provider = {
       createAuthorization: vi.fn(),
       disconnect: vi.fn(),
@@ -796,9 +784,6 @@ describe("SyncService", () => {
         startDate: "2026-05-10",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
-    expect(
-      financeService.materializeOrganizationMetrics,
-    ).not.toHaveBeenCalled();
   });
 
   it("ignores Mercado Livre notifications without user_id", async () => {
@@ -1390,7 +1375,7 @@ describe("SyncService", () => {
         expect.objectContaining({ feeType: "shipping_cost" }),
       ]),
     );
-    expect(db.delete).toHaveBeenCalledTimes(3);
+    expect(db.delete).toHaveBeenCalledTimes(2);
   });
 
   it("persists refund bonus financial adjustment fee metadata during upsert", async () => {

@@ -88,22 +88,16 @@ describe("AuthService", () => {
     );
     const before = Date.now();
 
-    await service.signUp(
-      {
-        email: " Owner@Lucreii.Local ",
-        name: "Owner",
-        password: "password123",
-      },
-      {},
-    );
+    await service.signUp({
+      email: " Owner@Lucreii.Local ",
+      name: "Owner",
+      password: "password123",
+    });
 
     const trialInsert = values.mock.calls
       .map(([input]) => input)
       .find((input) => "trialEndsAt" in input);
-    expect(trialInsert).toMatchObject({
-      email: "owner@lucreii.local",
-      userId: expect.any(String),
-    });
+    expect(trialInsert).toMatchObject({ userId: expect.any(String) });
     expect(trialInsert.trialEndsAt.getTime() - trialInsert.trialStartedAt.getTime()).toBe(
       7 * 24 * 60 * 60 * 1000,
     );

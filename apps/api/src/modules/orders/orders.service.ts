@@ -48,7 +48,7 @@ import type {
   OrderStatusOption,
 } from "@lucreii/types";
 import { orderExportQuerySchema } from "@lucreii/validation";
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import { utils, write } from "xlsx";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
@@ -226,6 +226,30 @@ function toIsoString(value: Date | string | null | undefined) {
 function toDateOnly(value: Date | string | null | undefined) {
   const iso = toIsoString(value);
   return iso ? iso.slice(0, 10) : null;
+}
+
+function startOfUtcDate(value: string) {
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
+function startOfFollowingUtcDate(value: string) {
+  const start = startOfUtcDate(value);
+  start.setUTCDate(start.getUTCDate() + 1);
+  return start;
+}
+
+function buildOrderedAtRangeConditions(
+  orderedFrom?: string,
+  orderedTo?: string,
+) {
+  return [
+    ...(orderedFrom
+      ? [gte(externalOrders.orderedAt, startOfUtcDate(orderedFrom))]
+      : []),
+    ...(orderedTo
+      ? [lt(externalOrders.orderedAt, startOfFollowingUtcDate(orderedTo))]
+      : []),
+  ];
 }
 
 function toNumber(value: string | number | null | undefined) {
@@ -2396,12 +2420,7 @@ export class OrdersService {
       ...(filters.provider
         ? [eq(externalOrders.provider, filters.provider)]
         : []),
-      ...(filters.orderedFrom
-        ? [sql`${externalOrders.orderedAt}::date >= ${filters.orderedFrom}`]
-        : []),
-      ...(filters.orderedTo
-        ? [sql`${externalOrders.orderedAt}::date <= ${filters.orderedTo}`]
-        : []),
+      ...buildOrderedAtRangeConditions(filters.orderedFrom, filters.orderedTo),
     ];
     const baseWhere = and(...baseWhereConditions);
     const canPageInDatabase =
@@ -3035,16 +3054,10 @@ export class OrdersService {
       ...(normalizedFilters.provider
         ? [eq(externalOrders.provider, normalizedFilters.provider)]
         : []),
-      ...(normalizedFilters.orderedFrom
-        ? [
-            sql`${externalOrders.orderedAt}::date >= ${normalizedFilters.orderedFrom}`,
-          ]
-        : []),
-      ...(normalizedFilters.orderedTo
-        ? [
-            sql`${externalOrders.orderedAt}::date <= ${normalizedFilters.orderedTo}`,
-          ]
-        : []),
+      ...buildOrderedAtRangeConditions(
+        normalizedFilters.orderedFrom,
+        normalizedFilters.orderedTo,
+      ),
     );
     const [company, rows] = await Promise.all([
       this.db.query.companies.findFirst({
@@ -3191,6 +3204,7 @@ export class OrdersService {
             : []),
           ...(filters.sku?.trim() ? [buildSkuWhere(filters.sku.trim())] : []),
           ...(filters.provider ? [eq(table.provider, filters.provider)] : []),
+          ...buildOrderedAtRangeConditions(filters.orderedFrom, filters.orderedTo),
         ),
       with: {
         fees: true,

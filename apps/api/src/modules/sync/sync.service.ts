@@ -12,7 +12,6 @@ import {
   externalOrderItems,
   externalOrders,
   externalProducts,
-  mercadoLivreBillingMovements,
   marketplaceConnections,
   syncRuns,
   type DatabaseClient,
@@ -32,7 +31,6 @@ import type {
 import { and, desc, eq } from "drizzle-orm";
 import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
-import { FinanceService } from "@/modules/finance/finance.service";
 import { createIntegrationProviders } from "@/modules/integrations/provider-registry";
 import {
   IntegrationProviderError,
@@ -241,19 +239,6 @@ function buildRefundBonusMetadata(
   } satisfies Record<string, unknown>;
 }
 
-function toBillingPeriodKey(value: string | null | undefined) {
-  if (!value) {
-    return new Date().toISOString().slice(0, 7) + "-01";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return new Date().toISOString().slice(0, 7) + "-01";
-  }
-
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-01`;
-}
-
 function normalizeRunOrigin(
   value: Record<string, unknown> | null | undefined,
 ): SyncRunOrigin {
@@ -392,8 +377,6 @@ export class SyncService {
     private readonly db: DatabaseClient,
     @Inject(API_RUNTIME_ENV)
     private readonly env: ApiRuntimeEnv,
-    @Inject(FinanceService)
-    private readonly financeService: FinanceService,
     @Inject(SyncPerformanceMaterializerService)
     private readonly syncPerformanceMaterializer: SyncPerformanceMaterializerService,
     @Inject(MercadoLivreTokenRefreshService)
@@ -448,10 +431,6 @@ export class SyncService {
     userId: string | null;
   }) {
     await this.syncPerformanceMaterializer.rematerializeProviderMetrics(input);
-    await this.financeService.materializeOrganizationMetrics(
-      input.organizationId,
-      input.companyId,
-    );
   }
 
   async recoverMercadoLivreConnection(connection: MarketplaceConnection) {
@@ -988,11 +967,6 @@ export class SyncService {
           `${input.providerSlug} manual sync diagnostics ${JSON.stringify(syncResult.metadata)}`,
         );
       }
-
-      await this.financeService.materializeOrganizationMetrics(
-        input.organizationId,
-        input.companyId,
-      );
 
       response = {
         availability: (
@@ -1707,116 +1681,6 @@ export class SyncService {
           .returning({
             id: externalOrders.id,
           });
-
-        const refundBonusMovements = Array.isArray(
-          orderMetadata.refundBonusMovements,
-        )
-          ? orderMetadata.refundBonusMovements
-          : [];
-        if (input.providerSlug === "mercadolivre") {
-          await tx
-            .delete(mercadoLivreBillingMovements)
-            .where(
-              and(
-                eq(
-                  mercadoLivreBillingMovements.marketplaceConnectionId,
-                  input.connection.id,
-                ),
-                eq(
-                  mercadoLivreBillingMovements.externalOrderId,
-                  order.externalOrderId,
-                ),
-              ),
-            );
-        }
-        for (const movement of refundBonusMovements) {
-          if (!movement || typeof movement !== "object") {
-            continue;
-          }
-
-          const movementRecord = movement as Record<string, unknown>;
-          const movementKey =
-            typeof movementRecord.key === "string"
-              ? movementRecord.key.trim()
-              : "";
-          const amount =
-            typeof movementRecord.amount === "number"
-              ? movementRecord.amount
-              : Number(movementRecord.amount);
-          const documentType =
-            movementRecord.documentType === "CREDIT_NOTE"
-              ? "CREDIT_NOTE"
-              : movementRecord.documentType === "BILL"
-                ? "BILL"
-                : null;
-
-          if (
-            !movementKey ||
-            !documentType ||
-            !Number.isFinite(amount) ||
-            amount <= 0
-          ) {
-            continue;
-          }
-
-          const deduplicationKey = `${documentType}:${movementKey}`;
-          await tx
-            .insert(mercadoLivreBillingMovements)
-            .values({
-              amountCents: Math.round(amount * 100),
-              billingGroup: "ML",
-              companyId: input.companyId,
-              currency: order.currency,
-              deduplicationKey,
-              documentType,
-              externalMovementId: movementKey,
-              externalOrderId: order.externalOrderId,
-              externalPackId:
-                typeof orderMetadata.packId === "string"
-                  ? orderMetadata.packId
-                  : null,
-              externalPaymentId:
-                typeof orderMetadata.operationId === "string"
-                  ? orderMetadata.operationId
-                  : null,
-              isSellerCredit: true,
-              marketplaceConnectionId: input.connection.id,
-              organizationId: input.organizationId,
-              payload:
-                movementRecord.payload &&
-                typeof movementRecord.payload === "object"
-                  ? (movementRecord.payload as Record<string, unknown>)
-                  : {},
-              periodKey: toBillingPeriodKey(order.orderedAt),
-            })
-            .onConflictDoUpdate({
-              set: {
-                amountCents: Math.round(amount * 100),
-                currency: order.currency,
-                documentType,
-                externalOrderId: order.externalOrderId,
-                externalPackId:
-                  typeof orderMetadata.packId === "string"
-                    ? orderMetadata.packId
-                    : null,
-                externalPaymentId:
-                  typeof orderMetadata.operationId === "string"
-                    ? orderMetadata.operationId
-                    : null,
-                isSellerCredit: true,
-                payload:
-                  movementRecord.payload &&
-                  typeof movementRecord.payload === "object"
-                    ? (movementRecord.payload as Record<string, unknown>)
-                    : {},
-                updatedAt: new Date(),
-              },
-              target: [
-                mercadoLivreBillingMovements.marketplaceConnectionId,
-                mercadoLivreBillingMovements.deduplicationKey,
-              ],
-            });
-        }
 
         await tx
           .delete(externalOrderItems)

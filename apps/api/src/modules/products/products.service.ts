@@ -1255,11 +1255,6 @@ export class ProductsService {
       }),
     );
 
-    await this.financeService.materializeOrganizationMetrics(
-      scopedContext.organizationId,
-      scopedContext.companyId,
-    );
-
     return {
       financeDefaults: this.toProductFinanceDefaultsRecord(
         result.financeDefaults,
@@ -1615,13 +1610,6 @@ export class ProductsService {
 
         throw error;
       }
-    }
-
-    if (updated > 0) {
-      await this.financeService.materializeOrganizationMetrics(
-        scopedContext.organizationId,
-        scopedContext.companyId,
-      );
     }
 
     return {
@@ -1998,13 +1986,6 @@ export class ProductsService {
       }
     });
 
-    if (scopedContext) {
-      await this.financeService.materializeOrganizationMetrics(
-        organizationId,
-        scopedContext.companyId,
-      );
-    }
-
     return { id: productId };
   }
 
@@ -2039,11 +2020,6 @@ export class ProductsService {
           );
       }
     });
-
-    await this.financeService.materializeOrganizationMetrics(
-      scopedContext.organizationId,
-      scopedContext.companyId,
-    );
 
     return {
       ids: targetProductIds,
@@ -3852,13 +3828,6 @@ export class ProductsService {
       }
     });
 
-    if (companyId) {
-      await this.financeService.materializeOrganizationMetrics(
-        organizationId,
-        companyId,
-      );
-    }
-
     return this.getCatalogProductByIdForResponse(
       organizationId,
       companyId,
@@ -3910,13 +3879,6 @@ export class ProductsService {
         tx,
       });
     });
-
-    if (existingProduct.companyId) {
-      await this.financeService.materializeOrganizationMetrics(
-        organizationId,
-        existingProduct.companyId,
-      );
-    }
 
     return groupedResponse
       ? this.getCatalogProductByIdForResponse(
@@ -4531,7 +4493,7 @@ export class ProductsService {
       .slice()
       .sort((left, right) => left.position - right.position)
       .map((image) => ({
-        externalIdentifier: image.externalIdentifier,
+        externalIdentifier: null,
         id: image.id,
         position: image.position,
         productId: image.productId,

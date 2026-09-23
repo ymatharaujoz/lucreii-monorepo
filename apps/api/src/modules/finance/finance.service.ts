@@ -9,9 +9,7 @@ import {
   type FinancialProductInput,
 } from "@lucreii/domain";
 import {
-  dailyMetrics,
   externalProducts,
-  productMetrics,
   type DatabaseClient,
   type ExternalFee,
   type ExternalOrder,
@@ -543,80 +541,6 @@ export class FinanceService {
     companyId: string,
   ): Promise<DashboardChannelProfitabilityRow[]> {
     return (await this.buildDashboardReadModel(organizationId, companyId)).channels;
-  }
-
-  async materializeOrganizationMetrics(
-    organizationId: string,
-    companyId: string,
-  ): Promise<DashboardReadModel> {
-    const readModel = await this.buildDashboardReadModel(organizationId, companyId);
-
-    await this.db.transaction(async (tx) => {
-      await tx.delete(dailyMetrics).where(eq(dailyMetrics.organizationId, organizationId));
-      await tx.delete(productMetrics).where(eq(productMetrics.organizationId, organizationId));
-
-      if (readModel.daily.length > 0) {
-        await tx.insert(dailyMetrics).values(
-          readModel.daily.map((metric) => ({
-            grossRevenue: metric.summary.grossRevenue,
-            metadata: {
-              breakEvenRevenue: metric.summary.breakEvenRevenue,
-              breakEvenUnits: metric.summary.breakEvenUnits,
-              contributionMargin: metric.summary.contributionMargin,
-              grossMarginPercent: metric.summary.grossMarginPercent,
-              totalAdCosts: metric.summary.totalAdCosts,
-              totalCogs: metric.summary.totalCogs,
-              totalFees: metric.summary.totalFees,
-              totalManualExpenses: metric.summary.totalManualExpenses,
-              unitsSold: metric.summary.unitsSold,
-            },
-            metricDate: metric.metricDate,
-            netProfit: metric.summary.netProfit,
-            netRevenue: metric.summary.netRevenue,
-            ordersCount: metric.summary.ordersCount,
-            organizationId,
-          })),
-        );
-      }
-
-      if (readModel.products.length > 0) {
-        await tx.insert(productMetrics).values(
-          readModel.products.map((metric) => ({
-            grossRevenue: metric.summary.grossRevenue,
-            metadata: {
-              contributionMargin: metric.summary.contributionMargin,
-              grossMarginPercent: metric.summary.grossMarginPercent,
-              productName: metric.productName,
-              sku: metric.sku,
-              totalAdCosts: metric.summary.totalAdCosts,
-              totalCogs: metric.summary.totalCogs,
-              totalFees: metric.summary.totalFees,
-            },
-            metricDate: metric.metricDate,
-            netProfit: metric.summary.netProfit,
-            organizationId,
-            productId: metric.productId,
-            unitsSold: metric.summary.unitsSold,
-          })) as Array<(typeof productMetrics)["$inferInsert"]>,
-        );
-      }
-    });
-
-    return readModel;
-  }
-
-  async readMaterializedDailyMetrics(organizationId: string) {
-    return this.db.query.dailyMetrics.findMany({
-      orderBy: (table) => [table.metricDate],
-      where: (table) => eq(table.organizationId, organizationId),
-    });
-  }
-
-  async readMaterializedProductMetrics(organizationId: string) {
-    return this.db.query.productMetrics.findMany({
-      orderBy: (table) => [table.metricDate],
-      where: (table) => eq(table.organizationId, organizationId),
-    });
   }
 
   private async readExternalProductsForFinance(

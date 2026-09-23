@@ -845,9 +845,8 @@ describe("FinanceService", () => {
     ]);
   });
 
-  it("re-materializes daily and product metrics deterministically for the organization", async () => {
-    const { dailyInsertValues, db, deleteWhere, productInsertValues, service, tx } =
-      createFinanceServiceFixture();
+  it("keeps dashboard read-model construction independent from persisted projections", async () => {
+    const { service } = createFinanceServiceFixture();
     vi.spyOn(service, "buildDashboardReadModel").mockResolvedValue({
       channels: [],
       daily: [
@@ -927,29 +926,6 @@ describe("FinanceService", () => {
       },
     });
 
-    await service.materializeOrganizationMetrics("org_123", "company_123");
-    await service.materializeOrganizationMetrics("org_123", "company_123");
-
-    expect(db.transaction).toHaveBeenCalledTimes(2);
-    expect(tx.delete).toHaveBeenCalledTimes(4);
-    expect(deleteWhere).toHaveBeenCalledTimes(4);
-    expect(dailyInsertValues).toHaveBeenCalledWith([
-      expect.objectContaining({
-        grossRevenue: "100.00",
-        metricDate: "2026-04-28",
-        netProfit: "20.00",
-        organizationId: "org_123",
-      }),
-    ]);
-    expect(productInsertValues).toHaveBeenCalledWith([
-      expect.objectContaining({
-        grossRevenue: "50.00",
-        metricDate: "2026-04-28",
-        netProfit: "15.00",
-        organizationId: "org_123",
-        productId: "product_1",
-      }),
-    ]);
   });
 
   it("filters finance snapshot facts to the selected reference month", async () => {

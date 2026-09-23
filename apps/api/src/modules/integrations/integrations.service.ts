@@ -956,7 +956,6 @@ export class IntegrationsService {
             if (catalogProduct.images.length > 0) {
               await tx.insert(productImages).values(
                 catalogProduct.images.map((url, position) => ({
-                  externalIdentifier: `${catalogProduct.externalProductId}:${position}`,
                   organizationId: context.organizationId,
                   position,
                   productId: product.id,
@@ -986,7 +985,6 @@ export class IntegrationsService {
         imagesByProductId.set(storedProduct.id, [
           ...preservedImages,
           ...(catalogProduct.images.map((url, position) => ({
-            externalIdentifier: `${catalogProduct.externalProductId}:${position}`,
             position,
             productId: storedProduct.id,
             source: context.providerSlug,
@@ -1257,7 +1255,6 @@ export class IntegrationsService {
             if (catalogProduct.images.length > 0) {
               await tx.insert(productImages).values(
                 catalogProduct.images.map((url, position) => ({
-                  externalIdentifier: `${catalogProduct.externalProductId}:${position}`,
                   organizationId: context.organizationId,
                   position,
                   productId: product.id,
@@ -1291,7 +1288,6 @@ export class IntegrationsService {
         imagesByProductId.set(storedProduct.id, [
           ...preservedImages,
           ...(catalogProduct.images.map((url, position) => ({
-            externalIdentifier: `${catalogProduct.externalProductId}:${position}`,
             position,
             productId: storedProduct.id,
             source: "mercadolivre",

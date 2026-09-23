@@ -17,7 +17,6 @@ import {
   billingCustomers,
   billingTrials,
   pendingCheckouts,
-  subscriptionEvents,
   subscriptions,
 } from "@lucreii/database";
 import Stripe from "stripe";
@@ -389,17 +388,11 @@ export class BillingService {
       userId,
       status: "completed",
     });
-    const localSubscriptionId = await this.syncSubscriptionByExternalId(
+    await this.syncSubscriptionByExternalId(
       externalSubscriptionId,
       organizationId,
       customerId,
     );
-
-    await this.recordSubscriptionEvent({
-      event,
-      organizationId,
-      subscriptionId: localSubscriptionId,
-    });
   }
 
   private async handleCheckoutSessionExpired(event: Stripe.Event) {
@@ -419,17 +412,11 @@ export class BillingService {
     const organizationId = await this.findOrganizationIdByCustomer(customerId);
 
     if (organizationId) {
-      const localSubscriptionId = await this.syncSubscriptionObject(
+      await this.syncSubscriptionObject(
         subscription,
         organizationId,
         customerId,
       );
-
-      await this.recordSubscriptionEvent({
-        event,
-        organizationId,
-        subscriptionId: localSubscriptionId,
-      });
       return;
     }
 
@@ -834,21 +821,6 @@ export class BillingService {
     }
 
     return null;
-  }
-
-  private async recordSubscriptionEvent(input: {
-    event: Stripe.Event;
-    organizationId: string;
-    subscriptionId: string | null;
-  }) {
-    await this.db.insert(subscriptionEvents).values({
-      eventType: input.event.type,
-      occurredAt: this.toDate(input.event.created) ?? new Date(),
-      organizationId: input.organizationId,
-      payload: input.event as unknown as Record<string, unknown>,
-      provider: "stripe",
-      subscriptionId: input.subscriptionId,
-    });
   }
 
   private async findOrganizationIdByCustomer(externalCustomerId: string) {

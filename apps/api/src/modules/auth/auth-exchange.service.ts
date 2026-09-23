@@ -56,7 +56,6 @@ export class AuthExchangeService {
   ) {}
 
   async createTicket(input: {
-    organizationId?: string | null;
     remoteSessionToken: string;
     sessionId: string;
     userId: string;
@@ -69,13 +68,11 @@ export class AuthExchangeService {
       sessionId: input.sessionId,
       ticketHash,
       userId: input.userId,
-      ...(input.organizationId ? { organizationId: input.organizationId } : {}),
     };
 
     await this.db.insert(authExchangeTickets).values(insertValues);
 
     console.info("[lucreii/api] Auth exchange ticket created.", {
-      hasOrganizationId: Boolean(input.organizationId),
       sessionId: input.sessionId,
       userId: input.userId,
     });

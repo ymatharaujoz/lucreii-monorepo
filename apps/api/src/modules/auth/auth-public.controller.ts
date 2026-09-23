@@ -22,7 +22,6 @@ import { API_RUNTIME_ENV } from "@/common/tokens";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { AuthService } from "./auth.service";
 import { AuthExchangeService } from "./auth-exchange.service";
-import { OrganizationProvisioningService } from "./organization-provisioning.service";
 
 class SignUpWithPasswordDto {
   static schema = signUpWithPasswordSchema;
@@ -48,8 +47,6 @@ export class AuthPublicController {
     private readonly authExchangeService: AuthExchangeService,
     @Inject(AuthService)
     private readonly authService: AuthService,
-    @Inject(OrganizationProvisioningService)
-    private readonly organizationProvisioningService: OrganizationProvisioningService,
   ) {}
 
   @Post("sign-up")
@@ -58,13 +55,8 @@ export class AuthPublicController {
     @Req() request: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
-    const result = await this.authService.signUp(body, {
-      ipAddress: request.ip,
-      userAgent: request.headers["user-agent"],
-    });
-    const organization = await this.organizationProvisioningService.findDefaultOrganization(result.userId);
+    const result = await this.authService.signUp(body);
     const ticket = await this.authExchangeService.createTicket({
-      organizationId: organization?.id ?? null,
       remoteSessionToken: result.sessionToken,
       sessionId: result.sessionId,
       userId: result.userId,
@@ -107,13 +99,8 @@ export class AuthPublicController {
     @Req() request: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
-    const result = await this.authService.signIn(body, {
-      ipAddress: request.ip,
-      userAgent: request.headers["user-agent"],
-    });
-    const organization = await this.organizationProvisioningService.findDefaultOrganization(result.userId);
+    const result = await this.authService.signIn(body);
     const ticket = await this.authExchangeService.createTicket({
-      organizationId: organization?.id ?? null,
       remoteSessionToken: result.sessionToken,
       sessionId: result.sessionId,
       userId: result.userId,

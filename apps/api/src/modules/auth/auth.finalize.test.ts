@@ -69,7 +69,6 @@ describe("auth finalize route", () => {
       "http://localhost:3000/auth/complete?ticket=ticket_123&next=%2Fapp",
     );
     expect(authExchangeService.createTicket).toHaveBeenCalledWith({
-      organizationId: "org_123",
       remoteSessionToken: "remote_session_token_123",
       sessionId: "session_123",
       userId: "user_123",

@@ -760,7 +760,7 @@ export const billingTrials = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    email: varchar("email", { length: 320 }).notNull(),
+    email: varchar("email", { length: 320 }),
     organizationId: uuid("organization_id").references(
       () => organizations.id,
       { onDelete: "set null" },
