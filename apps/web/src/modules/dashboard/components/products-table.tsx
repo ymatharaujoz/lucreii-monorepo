@@ -21,8 +21,11 @@ import { formatMoney, formatNumber, formatPercent } from "../utils/formatters";
 
 interface ProductsTableProps {
   bare?: boolean;
+  containerClassName?: string;
   data: DashboardProfitabilityResponse;
   className?: string;
+  stickyHeader?: boolean;
+  tableViewportClassName?: string;
 }
 
 type ProductsRankingMode = "sales" | "profit";
@@ -221,13 +224,20 @@ function ProductsTableSurface({
     return <div className={className}>{children}</div>;
   }
 
-  return <Card className={className} padding="lg">{children}</Card>;
+  return (
+    <Card className={className} padding="lg">
+      {children}
+    </Card>
+  );
 }
 
 export function ProductsTable({
   bare = false,
+  containerClassName,
   data,
   className = "",
+  stickyHeader = false,
+  tableViewportClassName,
 }: ProductsTableProps) {
   const allRows = buildDashboardProductRows(data);
   const [rankingMode, setRankingMode] = useState<ProductsRankingMode>("profit");
@@ -305,13 +315,17 @@ export function ProductsTable({
   }
 
   return (
-    <motion.div variants={slideInUpVariants}>
+    <motion.div className={containerClassName} variants={slideInUpVariants}>
       <ProductsTableSurface bare={bare} className={className}>
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">TOP 10 Produtos</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              TOP 10 Produtos
+            </h3>
             <p className="text-xs text-muted-foreground">
-              {rankingMode === "profit" ? "Maiores lucros por SKU" : "Melhores vendas por SKU"}
+              {rankingMode === "profit"
+                ? "Maiores lucros por SKU"
+                : "Melhores vendas por SKU"}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -392,10 +406,12 @@ export function ProductsTable({
           </div>
         </div>
 
-        <div className="-mx-2 overflow-x-auto px-2">
+        <div
+          className={cn("-mx-2 overflow-x-auto px-2", tableViewportClassName)}
+        >
           <div className="min-w-[960px]">
             <table className="w-full border-collapse text-sm">
-              <thead>
+              <thead className={stickyHeader ? "sticky top-0 z-10" : undefined}>
                 <tr className="border-b border-border bg-surface-strong/95">
                   <ProductsSortableHeader
                     align="center"
@@ -421,23 +437,44 @@ export function ProductsTable({
                   >
                     Saúde
                   </ProductsSortableHeader>
-                  <ProductsSortableHeader align="right" column="sales" onSort={handleSort} sortConfig={sortConfig}>
+                  <ProductsSortableHeader
+                    align="right"
+                    column="sales"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Vendas
                   </ProductsSortableHeader>
-                  <ProductsSortableHeader align="right" column="returns" onSort={handleSort} sortConfig={sortConfig}>
+                  <ProductsSortableHeader
+                    align="right"
+                    column="returns"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Devoluções
                   </ProductsSortableHeader>
-                  <ProductsSortableHeader align="right" column="revenue" onSort={handleSort} sortConfig={sortConfig}>
+                  <ProductsSortableHeader
+                    align="right"
+                    column="revenue"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Receita
                   </ProductsSortableHeader>
-                  <ProductsSortableHeader align="right" column="profit" onSort={handleSort} sortConfig={sortConfig}>
+                  <ProductsSortableHeader
+                    align="right"
+                    column="profit"
+                    onSort={handleSort}
+                    sortConfig={sortConfig}
+                  >
                     Lucro
                   </ProductsSortableHeader>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((row, index) => {
-                  const returnRate = row.sales > 0 ? row.returns / row.sales : 0;
+                  const returnRate =
+                    row.sales > 0 ? row.returns / row.sales : 0;
                   const healthBadge = healthBadgeConfig[row.health];
 
                   return (
@@ -448,11 +485,19 @@ export function ProductsTable({
                       transition={{ delay: index * 0.03, duration: 0.3 }}
                       className="transition-colors duration-150 hover:bg-foreground/[0.015]"
                     >
-                      <td className="px-3 py-3 text-center">{getChannelBadge(row.channelLabel)}</td>
+                      <td className="px-3 py-3 text-center">
+                        {getChannelBadge(row.channelLabel)}
+                      </td>
 
-                      <td className="px-3 py-3 align-top" style={{ width: 420, maxWidth: 420 }}>
+                      <td
+                        className="px-3 py-3 align-top"
+                        style={{ width: 420, maxWidth: 420 }}
+                      >
                         <div className="flex items-start gap-2 min-w-0">
-                          <ProductImagePreview alt={row.name} url={row.coverImageUrl} />
+                          <ProductImagePreview
+                            alt={row.name}
+                            url={row.coverImageUrl}
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium leading-snug text-foreground whitespace-normal break-words line-clamp-2">
                               {row.name}
@@ -465,16 +510,23 @@ export function ProductsTable({
                       </td>
 
                       <td className="px-3 py-3 text-center">
-                        <StatusBadge status={healthBadge.status} label={healthBadge.label} />
+                        <StatusBadge
+                          status={healthBadge.status}
+                          label={healthBadge.label}
+                        />
                       </td>
 
                       <td className="px-3 py-3 text-right">
-                        <span className="text-sm text-foreground">{formatNumber(row.sales)}</span>
+                        <span className="text-sm text-foreground">
+                          {formatNumber(row.sales)}
+                        </span>
                       </td>
 
                       <td className="px-3 py-3 text-right">
                         <div className="flex flex-col items-end">
-                          <span className={`text-sm ${returnRate > 0.15 ? "text-error" : "text-foreground"}`}>
+                          <span
+                            className={`text-sm ${returnRate > 0.15 ? "text-error" : "text-foreground"}`}
+                          >
                             {formatNumber(row.returns)}
                           </span>
                           {returnRate > 0.05 && (
@@ -486,11 +538,15 @@ export function ProductsTable({
                       </td>
 
                       <td className="px-3 py-3 text-right">
-                        <span className="text-sm font-medium text-foreground">{formatMoney(row.revenue)}</span>
+                        <span className="text-sm font-medium text-foreground">
+                          {formatMoney(row.revenue)}
+                        </span>
                       </td>
 
                       <td className="px-3 py-3 text-right">
-                        <span className={`text-sm font-semibold ${row.profit >= 0 ? "text-success" : "text-error"}`}>
+                        <span
+                          className={`text-sm font-semibold ${row.profit >= 0 ? "text-success" : "text-error"}`}
+                        >
                           {formatMoney(row.profit)}
                         </span>
                       </td>

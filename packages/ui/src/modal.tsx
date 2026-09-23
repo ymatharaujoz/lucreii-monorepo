@@ -7,12 +7,20 @@ import { cn } from "./utils";
 export type ModalProps = {
   children: ReactNode;
   className?: string;
+  contentClassName?: string;
   onClose: () => void;
   open: boolean;
   title?: ReactNode;
 };
 
-export function Modal({ children, className, onClose, open, title }: ModalProps) {
+export function Modal({
+  children,
+  className,
+  contentClassName,
+  onClose,
+  open,
+  title,
+}: ModalProps) {
   useEffect(() => {
     if (!open) return;
 
@@ -38,20 +46,22 @@ export function Modal({ children, className, onClose, open, title }: ModalProps)
         onClick={onClose}
         aria-hidden
       />
-        <div
-          className={cn(
-            "relative z-10 flex w-full max-w-lg max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-surface-strong shadow-[var(--shadow-xl)] animate-rise-in",
-            className,
-          )}
-          role="dialog"
-          aria-modal="true"
-          aria-label={typeof title === "string" ? title : undefined}
-        >
+      <div
+        className={cn(
+          "relative z-10 flex w-full max-w-lg max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-[var(--radius-xl)] border border-border bg-surface-strong shadow-[var(--shadow-xl)] animate-rise-in",
+          className,
+        )}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === "string" ? title : undefined}
+      >
         {title && (
           <div className="flex shrink-0 items-start justify-between border-b border-border/50 px-8 py-6">
             <div className="flex flex-col gap-1">
               {typeof title === "string" ? (
-                <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+                <h2 className="text-lg font-semibold text-foreground">
+                  {title}
+                </h2>
               ) : (
                 title
               )}
@@ -63,12 +73,22 @@ export function Modal({ children, className, onClose, open, title }: ModalProps)
               type="button"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path
+                  d="M12 4L4 12M4 4l8 8"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               </svg>
             </button>
           </div>
         )}
-        <div className={cn("overflow-y-auto mf-scrollbar min-h-0", title ? "px-8 py-10" : "px-8 py-10")}>
+        <div
+          className={cn(
+            "min-h-0 overflow-y-auto px-8 py-10 mf-scrollbar",
+            contentClassName,
+          )}
+        >
           {children}
         </div>
       </div>

@@ -16,8 +16,17 @@ vi.mock("next/link", () => ({
     React.createElement("a", { href }, children),
 }));
 
+type ProductsTableMockProps = {
+  bare?: boolean;
+  className?: string;
+  containerClassName?: string;
+  data: DashboardProfitabilityResponse;
+  stickyHeader?: boolean;
+  tableViewportClassName?: string;
+};
+
 const productsTableMock = vi.hoisted(() =>
-  vi.fn(({ data }: { data: DashboardProfitabilityResponse }) => (
+  vi.fn(({ data }: ProductsTableMockProps) => (
     <div>Produtos:{data.products.length}</div>
   )),
 );
@@ -71,9 +80,22 @@ describe("ProductRankingModal", () => {
 
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
     expect(productsTableMock).toHaveBeenLastCalledWith(
-      { bare: true, data },
+      expect.objectContaining({
+        bare: true,
+        className: "flex min-h-0 flex-1 flex-col px-5 py-5 sm:px-8",
+        containerClassName: "flex min-h-0 flex-1 flex-col",
+        data,
+        stickyHeader: true,
+        tableViewportClassName: "min-h-0 flex-1 overflow-auto",
+      }),
       undefined,
     );
+    expect(document.querySelector('[role="dialog"]')?.className).toContain(
+      "!h-[min(78dvh,44rem)]",
+    );
+    expect(
+      document.querySelector('[role="dialog"]')?.lastElementChild?.className,
+    ).toContain("!overflow-hidden");
 
     act(() => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));

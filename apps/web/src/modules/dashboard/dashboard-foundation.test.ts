@@ -185,4 +185,19 @@ describe("dashboard foundation helpers", () => {
     expect(markup).toContain("TOP 10 Produtos");
     expect(markup).toContain("Maiores lucros por SKU");
   });
+
+  it("supports a scrollable ranking viewport inside a modal", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ProductsTable, {
+        containerClassName: "ranking-container",
+        data: profitability,
+        stickyHeader: true,
+        tableViewportClassName: "ranking-viewport",
+      }),
+    );
+
+    expect(markup).toContain("ranking-container");
+    expect(markup).toContain("ranking-viewport");
+    expect(markup).toContain("sticky top-0 z-10");
+  });
 });

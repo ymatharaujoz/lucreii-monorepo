@@ -42,13 +42,21 @@ export function ProductRankingModal({ data }: ProductRankingModalProps) {
       </Button>
 
       <Modal
-        className="!max-w-6xl"
+        className="!h-[min(78dvh,44rem)] !w-full !max-w-6xl"
+        contentClassName="flex min-h-0 flex-1 !overflow-hidden !p-0"
         onClose={() => setOpen(false)}
         open={open}
         title="Ranking de Produtos"
       >
         {data ? (
-          <ProductsTable bare data={data} />
+          <ProductsTable
+            bare
+            className="flex min-h-0 flex-1 flex-col px-5 py-5 sm:px-8"
+            containerClassName="flex min-h-0 flex-1 flex-col"
+            data={data}
+            stickyHeader
+            tableViewportClassName="min-h-0 flex-1 overflow-auto"
+          />
         ) : (
           <ProductRankingEmptyState />
         )}

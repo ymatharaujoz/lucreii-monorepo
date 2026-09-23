@@ -41,7 +41,7 @@ interface DashboardFinancialIndicatorsProps {
 interface IndicatorCardProps {
   icon: React.ReactNode;
   label: string;
-  subValue?: string;
+  subValue?: React.ReactNode;
   trend?: {
     direction: "up" | "down" | "neutral";
     value: string;
@@ -370,33 +370,6 @@ export function DashboardFinancialIndicators({
               variant="error"
             />
             <IndicatorCard
-              icon={<DollarSign className="h-4 w-4" />}
-              label="Custo & Imposto"
-              subValue={`Custo: ${formatMoney(displayedCost, { maximumFractionDigits: 2, minimumFractionDigits: 2 })} · Imposto: ${formatMoney(displayedTax, { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`}
-              value={formatMoney(displayedCostAndTax, {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2,
-              })}
-            />
-            <IndicatorCard
-              icon={<DollarSign className="h-4 w-4" />}
-              label="Tarifa de Venda"
-              subValue="Comissões de marketplace"
-              value={formatMoney(displayedMarketplaceCommission, {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2,
-              })}
-            />
-            <IndicatorCard
-              icon={<TrendingDown className="h-4 w-4" />}
-              label="Frete Total"
-              subValue="Frete dos pedidos"
-              value={formatMoney(displayedShipping, {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2,
-              })}
-            />
-            <IndicatorCard
               icon={<Percent className="h-4 w-4" />}
               label="Margem Líquida"
               subValue="Lucro Líquido / Faturamento"
@@ -422,6 +395,47 @@ export function DashboardFinancialIndicators({
                     ? "error"
                     : "warning"
               }
+            />
+            <IndicatorCard
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Custo & Imposto"
+              subValue={
+                <>
+                  Custo:{" "}
+                  {formatMoney(displayedCost, {
+                    maximumFractionDigits: 2,
+                    minimumFractionDigits: 2,
+                  })}
+                  <br />
+                  Imposto:{" "}
+                  {formatMoney(displayedTax, {
+                    maximumFractionDigits: 2,
+                    minimumFractionDigits: 2,
+                  })}
+                </>
+              }
+              value={formatMoney(displayedCostAndTax, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              })}
+            />
+            <IndicatorCard
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Tarifa de Venda"
+              subValue="Comissões de marketplace"
+              value={formatMoney(displayedMarketplaceCommission, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              })}
+            />
+            <IndicatorCard
+              icon={<TrendingDown className="h-4 w-4" />}
+              label="Frete Total"
+              subValue="Frete dos pedidos"
+              value={formatMoney(displayedShipping, {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2,
+              })}
             />
           </>
         ) : (

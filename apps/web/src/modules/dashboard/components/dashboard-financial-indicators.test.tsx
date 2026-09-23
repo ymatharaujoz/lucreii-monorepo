@@ -171,6 +171,27 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("R$\u00a01.000,00");
     expect(text).toContain("Margem Líquida");
     expect(text).toContain("27,65%");
+    const indicatorIndexes = [
+      "Faturamento",
+      "Devoluções",
+      "Margem Líquida",
+      "Custo & Imposto",
+      "Tarifa de Venda",
+      "Frete Total",
+    ].map((label) => text.indexOf(label));
+    expect(
+      indicatorIndexes.every(
+        (index, position) =>
+          index >= 0 &&
+          (position === 0 || index > (indicatorIndexes[position - 1] ?? -1)),
+      ),
+    ).toBe(true);
+    const costAndTaxDetail = Array.from(document.querySelectorAll("p")).find(
+      (element) =>
+        element.textContent?.includes("Custo: R$\u00a010.000,00") &&
+        element.textContent?.includes("Imposto: R$\u00a01.595,62"),
+    );
+    expect(costAndTaxDetail?.querySelectorAll("br")).toHaveLength(1);
     expect(text).not.toContain("Margem Média");
     expect(text).not.toContain("Margem Contribuição");
     expect(text).not.toContain("Ponto de Equilíbrio");
