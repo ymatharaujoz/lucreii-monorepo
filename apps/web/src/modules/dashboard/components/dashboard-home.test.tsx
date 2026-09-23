@@ -212,6 +212,8 @@ describe("DashboardHome", () => {
       <DashboardHome activeCompany={null} companyName="Lucreii" />,
     );
 
+    expect(ordersHomeMock).not.toHaveBeenCalled();
+
     click(
       Array.from(document.querySelectorAll("button")).find(
         (button) => button.textContent?.trim() === "Shopee",
@@ -266,7 +268,7 @@ describe("DashboardHome", () => {
     vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
 
     const view = mount(
-      <DashboardHome activeCompany={null} companyName="Lucreii" />,
+      <DashboardHome activeCompany={null} companyName="Lucreii" showOrders />,
     );
 
     expect(document.body.textContent ?? "").toContain("julho de 2026");

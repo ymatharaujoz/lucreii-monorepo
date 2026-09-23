@@ -26,6 +26,7 @@ import { useDashboardConnectionStatuses } from "../hooks/use-dashboard-connectio
 interface DashboardHomeProps {
   activeCompany: Company | null;
   companyName: string;
+  showOrders?: boolean;
 }
 
 function ReferenceMonthToolbar({
@@ -123,6 +124,7 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
 export function DashboardHome({
   activeCompany,
   companyName,
+  showOrders = false,
 }: DashboardHomeProps) {
   const [providerFilter, setProviderFilter] =
     useState<IntegrationProviderSlug | null>(null);
@@ -242,9 +244,14 @@ export function DashboardHome({
         </motion.div>
       )}
 
-      <motion.section variants={fadeInVariants}>
-        <OrdersHome provider={providerFilter} referenceMonth={referenceMonth} />
-      </motion.section>
+      {showOrders ? (
+        <motion.section variants={fadeInVariants}>
+          <OrdersHome
+            provider={providerFilter}
+            referenceMonth={referenceMonth}
+          />
+        </motion.section>
+      ) : null}
     </motion.div>
   );
 }

@@ -22,10 +22,30 @@ const DashboardIcon = () => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    <rect x="3" y="3" width="7" height="7" rx="1.5" />
-    <rect x="14" y="3" width="7" height="7" rx="1.5" />
-    <rect x="14" y="14" width="7" height="7" rx="1.5" />
-    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+    <path d="M5 18a7 7 0 1 1 14 0" />
+    <path d="m12 12 3.5-3.5" />
+    <path d="M8 18h8" />
+    <path d="M12 5v1" />
+    <path d="m7.05 8.05.7.7" />
+    <path d="m16.25 8.05-.7.7" />
+  </svg>
+);
+
+const MarketplacesIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="m4 9 2-5h12l2 5" />
+    <path d="M5 9h14v10a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1Z" />
+    <path d="M9 20v-6h6v6" />
+    <path d="M3 9h18" />
   </svg>
 );
 
@@ -112,8 +132,13 @@ type NavItem = NavNode & {
 const navLinks: NavItem[] = [
   {
     href: "/app",
-    label: "Painel",
+    label: "Dashboard",
     icon: DashboardIcon,
+  },
+  {
+    href: "/app/marketplaces",
+    label: "Marketplaces",
+    icon: MarketplacesIcon,
   },
   {
     href: "/app/products",

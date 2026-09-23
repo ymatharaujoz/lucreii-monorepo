@@ -80,20 +80,34 @@ function sidebarProps() {
   };
 }
 
-describe("AppSidebar pricing navigation", () => {
+describe("AppSidebar navigation", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     vi.clearAllMocks();
     usePathnameMock.mockReturnValue("/app");
   });
 
-  it("renders Calculadora without a Pedidos navigation item and expands its nested pricing tools", () => {
+  it("renders Dashboard and Marketplaces without a Pedidos navigation item", () => {
+    const view = mount(<AppSidebar {...sidebarProps()} />);
+
+    expect(document.body.textContent).not.toContain("Pedidos");
+    expect(document.body.textContent).not.toContain("Painel");
+    expect(document.body.textContent).toContain("Dashboard");
+    expect(document.body.textContent).toContain("Marketplaces");
+    expect(document.querySelector('button[data-href="/app"]')).toBeTruthy();
+    expect(
+      document.querySelector('button[data-href="/app/marketplaces"]'),
+    ).toBeTruthy();
+
+    view.unmount();
+  });
+
+  it("expands Calculadora nested pricing tools", () => {
     const view = mount(<AppSidebar {...sidebarProps()} />);
     const calculatorLink = document.querySelector(
       'button[data-href="/app/pricing"]',
     );
 
-    expect(document.body.textContent).not.toContain("Pedidos");
     expect(document.body.textContent).toContain("Calculadora");
     expect(document.body.textContent).not.toContain("Lucro Desejado");
 
