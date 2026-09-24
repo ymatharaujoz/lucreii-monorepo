@@ -13,7 +13,7 @@
 ## Arquivos
 
 - Modificar `apps/web/src/modules/dashboard/components/dashboard-financial-indicators.test.tsx` para cobrir percentual, valor em reais, rótulo, faturamento zero, margem negativa e filtro por canal.
-- Modificar `apps/web/src/modules/dashboard/components/dashboard-financial-indicators.tsx` para apresentar percentual e valor de contribuição na variante Marketplaces, sem exibir fórmula textual.
+- Modificar `apps/web/src/modules/dashboard/components/dashboard-financial-indicators.tsx` para apresentar percentual e valor monetário sem rótulo textual ou fórmula na variante Marketplaces.
 - Nenhuma alteração de API, domínio, banco ou tipos necessária: `variableCosts` já representa produto, embalagem, imposto, comissão, frete e bônus de devolução.
 
 ### Task 1: Fixar comportamento em testes
@@ -23,11 +23,11 @@
 
 - [x] **Passo 1: Atualizar expectativa do card consolidado**
 
-No teste `exibe custos operacionais separados em Marketplaces`, substituir as expectativas de `Margem Líquida` e `27,65%` por `Margem Contribuição`, `Valor: R$ 7.764,15` e `28,38%`. Confirmar ausência da fórmula textual. Trocar também o rótulo correspondente no array que valida a ordem dos seis indicadores. A fixture usa `revenue: "27359.77"` e `variableCosts: "19595.62"`; a diferença é `R$ 7.764,15` e o percentual arredonda para `28,38%`.
+No teste `exibe custos operacionais separados em Marketplaces`, substituir as expectativas de `Margem Líquida` e `27,65%` por `Margem Contribuição`, `R$ 7.764,15` e `28,38%`. Confirmar ausência da fórmula textual e do rótulo `Valor:`. Trocar também o rótulo correspondente no array que valida a ordem dos seis indicadores. A fixture usa `revenue: "27359.77"` e `variableCosts: "19595.62"`; a diferença é `R$ 7.764,15` e o percentual arredonda para `28,38%`.
 
 - [x] **Passo 2: Cobrir canal selecionado**
 
-No teste `mantém os indicadores operacionais ao filtrar um Marketplace`, exigir `Margem Contribuição`, `Valor: R$ 7.764,15` e `28,38%`, e remover a expectativa de `Margem Líquida`.
+No teste `mantém os indicadores operacionais ao filtrar um Marketplace`, exigir `Margem Contribuição`, `R$ 7.764,15` e `28,38%`, e remover a expectativa de `Margem Líquida`.
 
 - [x] **Passo 3: Cobrir faturamento zero e margem negativa**
 
@@ -50,7 +50,7 @@ it("exibe margem de contribuição zero quando faturamento é zero", () => {
   const text = document.body.textContent ?? "";
   expect(text).toContain("Margem Contribuição");
   expect(text).toContain("0,00%");
-  expect(text).toContain("Valor: -R$ 100,00");
+  expect(text).toContain("-R$ 100,00");
   expect(text).not.toMatch(/NaN|Infinity/);
   view.unmount();
 });
@@ -72,7 +72,7 @@ it("preserva margem de contribuição negativa sem subtrair custo fixo", () => {
 
   const text = document.body.textContent ?? "";
   expect(text).toContain("-50,00%");
-  expect(text).toContain("Valor: -R$ 50,00");
+  expect(text).toContain("-R$ 50,00");
   view.unmount();
 });
 ```
@@ -96,10 +96,10 @@ No ramo `isMarketplaceIndicatorMode`, atualizar o `IndicatorCard` da margem para
 <IndicatorCard
   icon={<Percent className="h-4 w-4" />}
   label="Margem Contribuição"
-  subValue={`Valor: ${formatMoney(contributionProfit, {
+  subValue={formatMoney(contributionProfit, {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
-  })}`}
+  })}
   trend={{
     direction:
       contributionProfit > 0
@@ -125,7 +125,7 @@ No ramo `isMarketplaceIndicatorMode`, atualizar o `IndicatorCard` da margem para
 />
 ```
 
-`contributionMarginPercent` divide `(displayedRevenue - displayedVariableCosts)` por `displayedRevenue` e retorna zero quando faturamento é zero. `contributionProfit` é exibido como valor em reais no detalhe do card; `formatMoney` recebe duas casas decimais. `formatNetMarginPercent` garante percentual com duas casas no padrão `pt-BR`.
+`contributionMarginPercent` divide `(displayedRevenue - displayedVariableCosts)` por `displayedRevenue` e retorna zero quando faturamento é zero. `contributionProfit` é exibido como valor em reais no detalhe do card, sem rótulo textual; `formatMoney` recebe duas casas decimais. `formatNetMarginPercent` garante percentual com duas casas no padrão `pt-BR`.
 
 - [x] **Passo 2: Reexecutar teste de componente**
 

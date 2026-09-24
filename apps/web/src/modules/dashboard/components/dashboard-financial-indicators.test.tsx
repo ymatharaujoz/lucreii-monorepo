@@ -171,7 +171,8 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("Frete Total");
     expect(text).toContain("R$\u00a01.000,00");
     expect(text).toContain("Margem Contribuição");
-    expect(text).toContain("Valor: R$\u00a07.764,15");
+    expect(text).toContain("R$\u00a07.764,15");
+    expect(text).not.toContain("Valor:");
     expect(text).not.toContain("(Faturamento - Custos Variáveis) / Faturamento");
     expect(text).toContain("28,38%");
     const indicatorIndexes = [
@@ -226,7 +227,7 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("Frete Total");
     expect(text).toContain("Margem Contribuição");
     expect(text).toContain("28,38%");
-    expect(text).toContain("Valor: R$\u00a07.764,15");
+    expect(text).toContain("R$\u00a07.764,15");
     expect(text).toContain("Publicidade");
     expect(text).not.toContain("Margem Líquida");
     expect(text).not.toContain("Custo Fixo");
@@ -254,7 +255,7 @@ describe("DashboardFinancialIndicators", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("Margem Contribuição");
     expect(text).toContain("0,00%");
-    expect(text).toContain("Valor: -R$\u00a0100,00");
+    expect(text).toContain("-R$\u00a0100,00");
     expect(text).not.toMatch(/NaN|Infinity/);
     view.unmount();
   });
@@ -276,7 +277,7 @@ describe("DashboardFinancialIndicators", () => {
 
     const text = document.body.textContent ?? "";
     expect(text).toContain("-50,00%");
-    expect(text).toContain("Valor: -R$\u00a050,00");
+    expect(text).toContain("-R$\u00a050,00");
     view.unmount();
   });
 

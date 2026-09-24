@@ -11,7 +11,7 @@ Na página `/app/marketplaces`, substituir o indicador `Margem Líquida` por `Ma
 - Custo fixo e publicidade não entram em `variableCosts` nem no cálculo deste indicador.
 - A fórmula é `(revenue - variableCosts) / revenue * 100`.
 - Exibir percentual com duas casas decimais e formatação `pt-BR`; faturamento zero resulta em `0,00%`, e margens negativas permanecem negativas.
-- Exibir também o valor de contribuição `revenue - variableCosts` em reais, com duas casas decimais, abaixo do percentual e sem mostrar a fórmula no card.
+- Exibir também somente o valor de contribuição `revenue - variableCosts` em reais, com duas casas decimais, abaixo do percentual; não mostrar fórmula ou rótulo textual no valor.
 - O cálculo vale para a visão consolidada e para cada marketplace selecionado.
 
 ## Arquitetura

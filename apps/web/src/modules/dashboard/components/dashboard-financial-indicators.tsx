@@ -389,10 +389,10 @@ export function DashboardFinancialIndicators({
             <IndicatorCard
               icon={<Percent className="h-4 w-4" />}
               label="Margem Contribuição"
-              subValue={`Valor: ${formatMoney(contributionProfit, {
+              subValue={formatMoney(contributionProfit, {
                 maximumFractionDigits: 2,
                 minimumFractionDigits: 2,
-              })}`}
+              })}
               trend={{
                 direction:
                   contributionProfit > 0
