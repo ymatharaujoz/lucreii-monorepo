@@ -11,6 +11,7 @@ Na página `/app/marketplaces`, substituir o indicador `Margem Líquida` por `Ma
 - Custo fixo e publicidade não entram em `variableCosts` nem no cálculo deste indicador.
 - A fórmula é `(revenue - variableCosts) / revenue * 100`.
 - Exibir percentual com duas casas decimais e formatação `pt-BR`; faturamento zero resulta em `0,00%`, e margens negativas permanecem negativas.
+- Exibir também o valor de contribuição `revenue - variableCosts` em reais, com duas casas decimais, abaixo do percentual e sem mostrar a fórmula no card.
 - O cálculo vale para a visão consolidada e para cada marketplace selecionado.
 
 ## Arquitetura
@@ -23,6 +24,7 @@ Na página `/app/marketplaces`, substituir o indicador `Margem Líquida` por `Ma
 
 - O card em `/app/marketplaces` chama-se `Margem Contribuição`.
 - O percentual corresponde a `(faturamento líquido - custos variáveis) / faturamento líquido`, exibido com duas casas decimais.
+- O card exibe o valor monetário `faturamento líquido - custos variáveis` em `R$`, com duas casas decimais, junto do percentual.
 - Faturamento zero exibe `0,00%`; margem negativa mantém sinal negativo.
 - A tela continua usando a mesma regra com todos os marketplaces ou um canal específico.
 - Indicadores do Dashboard `/app` e os demais cards permanecem inalterados.
