@@ -163,13 +163,13 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("Faturamento");
     expect(text).toContain("Devoluções");
     expect(text).toContain("Custo & Imposto");
-    expect(text).toContain("R$\u00a011.595,62");
-    expect(text).toContain("Custo: R$\u00a010.000,00");
-    expect(text).toContain("Imposto: R$\u00a01.595,62");
+    expect(text).toContain("-R$\u00a011.595,62");
+    expect(text).toContain("Custo: -R$\u00a010.000,00");
+    expect(text).toContain("Imposto: -R$\u00a01.595,62");
     expect(text).toContain("Tarifa de Venda");
-    expect(text).toContain("R$\u00a07.000,00");
+    expect(text).toContain("-R$\u00a07.000,00");
     expect(text).toContain("Frete Total");
-    expect(text).toContain("R$\u00a01.000,00");
+    expect(text).toContain("-R$\u00a01.000,00");
     expect(text).toContain("Margem Contribuição");
     expect(text).toContain("R$\u00a07.764,15");
     expect(text).not.toContain("Valor:");
@@ -192,10 +192,30 @@ describe("DashboardFinancialIndicators", () => {
     ).toBe(true);
     const costAndTaxDetail = Array.from(document.querySelectorAll("p")).find(
       (element) =>
-        element.textContent?.includes("Custo: R$\u00a010.000,00") &&
-        element.textContent?.includes("Imposto: R$\u00a01.595,62"),
+        element.textContent?.includes("Custo: -R$\u00a010.000,00") &&
+        element.textContent?.includes("Imposto: -R$\u00a01.595,62"),
     );
     expect(costAndTaxDetail?.querySelectorAll("br")).toHaveLength(1);
+    const redIndicatorCards = Array.from(
+      document.querySelectorAll("[class]"),
+    ).filter((element) => {
+      const className = element.className.toString();
+      return (
+        className.includes("border-error/20") &&
+        className.includes("bg-error-soft/30")
+      );
+    });
+    for (const label of [
+      "Devoluções",
+      "Custo & Imposto",
+      "Tarifa de Venda",
+      "Frete Total",
+    ]) {
+      expect(
+        redIndicatorCards.some((card) => card.textContent?.includes(label)),
+      ).toBe(true);
+    }
+    expect(redIndicatorCards).toHaveLength(4);
     expect(text).not.toContain("Margem Média");
     expect(text).not.toContain("Margem Líquida");
     expect(text).not.toContain("Ponto de Equilíbrio");
@@ -223,8 +243,11 @@ describe("DashboardFinancialIndicators", () => {
 
     const text = document.body.textContent ?? "";
     expect(text).toContain("Custo & Imposto");
+    expect(text).toContain("-R$\u00a011.595,62");
     expect(text).toContain("Tarifa de Venda");
+    expect(text).toContain("-R$\u00a07.000,00");
     expect(text).toContain("Frete Total");
+    expect(text).toContain("-R$\u00a01.000,00");
     expect(text).toContain("Margem Contribuição");
     expect(text).toContain("28,38%");
     expect(text).toContain("R$\u00a07.764,15");
@@ -236,6 +259,29 @@ describe("DashboardFinancialIndicators", () => {
         element.className.toString().includes("lg:grid-cols-6"),
       ),
     ).toBe(true);
+    view.unmount();
+  });
+
+  it("não exibe sinal negativo quando valores de custo são zero", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={{
+          ...indicators,
+          marketplaceCommission: "0.00",
+          packagingCost: "0.00",
+          productCost: "0.00",
+          shippingCost: "0.00",
+          taxAmount: "0.00",
+        }}
+        indicatorMode="marketplace"
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Custo & Imposto");
+    expect(text).toContain("R$\u00a00,00");
+    expect(text).not.toContain("-R$");
     view.unmount();
   });
 

@@ -12,8 +12,8 @@
 
 ## Arquivos
 
-- Modificar `apps/web/src/modules/dashboard/components/dashboard-financial-indicators.test.tsx` para cobrir percentual, valor em reais, rótulo, faturamento zero, margem negativa e filtro por canal.
-- Modificar `apps/web/src/modules/dashboard/components/dashboard-financial-indicators.tsx` para apresentar percentual e valor monetário sem rótulo textual ou fórmula na variante Marketplaces.
+- Modificar `apps/web/src/modules/dashboard/components/dashboard-financial-indicators.test.tsx` para cobrir margem percentual/monetária, sinais negativos, estilo vermelho, faturamento zero, margem negativa e filtro por canal.
+- Modificar `apps/web/src/modules/dashboard/components/dashboard-financial-indicators.tsx` para apresentar margem e custos no modo Marketplaces, sem alterar `/app`.
 - Nenhuma alteração de API, domínio, banco ou tipos necessária: `variableCosts` já representa produto, embalagem, imposto, comissão, frete e bônus de devolução.
 
 ### Task 1: Fixar comportamento em testes
@@ -23,11 +23,11 @@
 
 - [x] **Passo 1: Atualizar expectativa do card consolidado**
 
-No teste `exibe custos operacionais separados em Marketplaces`, substituir as expectativas de `Margem Líquida` e `27,65%` por `Margem Contribuição`, `R$ 7.764,15` e `28,38%`. Confirmar ausência da fórmula textual e do rótulo `Valor:`. Trocar também o rótulo correspondente no array que valida a ordem dos seis indicadores. A fixture usa `revenue: "27359.77"` e `variableCosts: "19595.62"`; a diferença é `R$ 7.764,15` e o percentual arredonda para `28,38%`.
+No teste `exibe custos operacionais separados em Marketplaces`, substituir as expectativas de `Margem Líquida` e `27,65%` por `Margem Contribuição`, `R$ 7.764,15` e `28,38%`. Confirmar ausência da fórmula textual e do rótulo `Valor:`. Trocar também o rótulo correspondente no array que valida a ordem dos seis indicadores. Esperar valores negativos para total, custo, imposto, tarifa e frete, além dos quatro cards em vermelho (Devoluções e os três cards de custo). A fixture usa `revenue: "27359.77"` e `variableCosts: "19595.62"`; a diferença é `R$ 7.764,15` e o percentual arredonda para `28,38%`.
 
 - [x] **Passo 2: Cobrir canal selecionado**
 
-No teste `mantém os indicadores operacionais ao filtrar um Marketplace`, exigir `Margem Contribuição`, `R$ 7.764,15` e `28,38%`, e remover a expectativa de `Margem Líquida`.
+No teste `mantém os indicadores operacionais ao filtrar um Marketplace`, exigir `Margem Contribuição`, `R$ 7.764,15`, `28,38%` e os valores negativos nos três cards de custo, e remover a expectativa de `Margem Líquida`. Adicionar caso com custos zerados (`marketplaceCommission`, `packagingCost`, `productCost`, `shippingCost`, `taxAmount` iguais a `"0.00"`); esperar `R$ 0,00` e ausência de `-R$`.
 
 - [x] **Passo 3: Cobrir faturamento zero e margem negativa**
 
@@ -83,7 +83,7 @@ Executar `corepack pnpm --filter @lucreii/web test src/modules/dashboard/compone
 
 Esperado: falha nas expectativas do card Marketplaces, pois o componente ainda mostra margem líquida e usa lucro após custo fixo.
 
-### Task 2: Exibir fórmula de contribuição no card Marketplaces
+### Task 2: Exibir margem e custos no modo Marketplaces
 
 **Arquivos:**
 - Modificar `apps/web/src/modules/dashboard/components/dashboard-financial-indicators.tsx`
@@ -127,6 +127,19 @@ No ramo `isMarketplaceIndicatorMode`, atualizar o `IndicatorCard` da margem para
 
 `contributionMarginPercent` divide `(displayedRevenue - displayedVariableCosts)` por `displayedRevenue` e retorna zero quando faturamento é zero. `contributionProfit` é exibido como valor em reais no detalhe do card, sem rótulo textual; `formatMoney` recebe duas casas decimais. `formatNetMarginPercent` garante percentual com duas casas no padrão `pt-BR`.
 
+Para os cards `Custo & Imposto`, `Tarifa de Venda` e `Frete Total`, usar um formatador de despesa compartilhado que aplique `-Math.abs(value)` quando o valor for diferente de zero e preserve zero como `R$ 0,00`:
+
+```tsx
+function formatExpenseMoney(value: number) {
+  return formatMoney(value === 0 ? 0 : -Math.abs(value), {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+}
+```
+
+Aplicar o formatador nos totais e nos detalhes de Custo e Imposto; definir `variant="error"` nos três cards.
+
 - [x] **Passo 2: Reexecutar teste de componente**
 
 Executar `corepack pnpm --filter @lucreii/web test src/modules/dashboard/components/dashboard-financial-indicators.test.tsx`.
@@ -147,7 +160,7 @@ Esperado: os três comandos terminam com código zero.
 
 - [x] **Passo 4: Revisar diff e critérios de aceite**
 
-Executar `git diff --check` e revisar `git diff`. Confirmar que só o card Marketplaces e seus testes mudaram; `/app`, os demais cards e os contratos permanecem intactos.
+Executar `git diff --check` e revisar `git diff`. Confirmar que só os cards solicitados em Marketplaces e seus testes mudaram; `/app`, API, banco e contratos permanecem intactos.
 
 ## Revisão do plano
 

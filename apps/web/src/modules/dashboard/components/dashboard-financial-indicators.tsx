@@ -86,6 +86,13 @@ function formatNetMarginPercent(value: number) {
   }).format(value)}%`;
 }
 
+function formatExpenseMoney(value: number) {
+  return formatMoney(value === 0 ? 0 : -Math.abs(value), {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+}
+
 function roundToCents(value: number) {
   return Number(value.toFixed(2));
 }
@@ -422,40 +429,28 @@ export function DashboardFinancialIndicators({
               subValue={
                 <>
                   Custo:{" "}
-                  {formatMoney(displayedCost, {
-                    maximumFractionDigits: 2,
-                    minimumFractionDigits: 2,
-                  })}
+                  {formatExpenseMoney(displayedCost)}
                   <br />
                   Imposto:{" "}
-                  {formatMoney(displayedTax, {
-                    maximumFractionDigits: 2,
-                    minimumFractionDigits: 2,
-                  })}
+                  {formatExpenseMoney(displayedTax)}
                 </>
               }
-              value={formatMoney(displayedCostAndTax, {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2,
-              })}
+              value={formatExpenseMoney(displayedCostAndTax)}
+              variant="error"
             />
             <IndicatorCard
               icon={<DollarSign className="h-4 w-4" />}
               label="Tarifa de Venda"
               subValue="Comissões de marketplace"
-              value={formatMoney(displayedMarketplaceCommission, {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2,
-              })}
+              value={formatExpenseMoney(displayedMarketplaceCommission)}
+              variant="error"
             />
             <IndicatorCard
               icon={<TrendingDown className="h-4 w-4" />}
               label="Frete Total"
               subValue="Frete dos pedidos"
-              value={formatMoney(displayedShipping, {
-                maximumFractionDigits: 2,
-                minimumFractionDigits: 2,
-              })}
+              value={formatExpenseMoney(displayedShipping)}
+              variant="error"
             />
           </>
         ) : (
