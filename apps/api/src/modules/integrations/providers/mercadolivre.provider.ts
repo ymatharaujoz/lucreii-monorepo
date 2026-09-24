@@ -1523,27 +1523,21 @@ function toTimestamp(value: string | null | undefined) {
 function extractMercadoLivreOrderIdFromNotification(
   notification: IntegrationSyncNotification | null | undefined,
 ) {
-  if (!notification || typeof notification !== "object") {
+  if (
+    !notification ||
+    typeof notification !== "object" ||
+    typeof notification.resource !== "string"
+  ) {
     return null;
   }
 
-  const candidate =
-    "notificationId" in notification &&
-    typeof notification.notificationId === "string" &&
-    notification.notificationId.trim().length > 0
-      ? notification.notificationId.trim()
-      : "resource" in notification &&
-          typeof notification.resource === "string" &&
-          notification.resource.trim().length > 0
-        ? notification.resource.trim()
-        : null;
-
-  if (!candidate) {
+  const resource = notification.resource.trim();
+  if (!resource) {
     return null;
   }
 
-  const match = candidate.match(/\/orders\/([^/?]+)/i);
-  return match?.[1] ? decodeURIComponent(match[1]) : candidate;
+  const match = resource.match(/\/orders\/([^/?]+)/i);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 function resolveMercadoLivreReturnQuantity(
@@ -2093,18 +2087,23 @@ export class MercadoLivreProvider implements IntegrationProvider {
       const detail = await this.fetchOrderDetails({
         accessToken: input.connection.accessToken,
         orderId: notificationOrderId,
+        required: true,
       });
-      const order = detail
-        ? await this.normalizeOrder(
-            detail,
-            {
-              accessToken: input.connection.accessToken,
-              sellerAccountId: accountId,
-            },
-            detail,
-          )
-        : null;
-      const orders = order ? [order] : [];
+      if (!detail) {
+        throw new IntegrationProviderError(
+          `Mercado Livre notified order ${notificationOrderId} is not available yet.`,
+          "remote_request_failed",
+        );
+      }
+      const order = await this.normalizeOrder(
+        detail,
+        {
+          accessToken: input.connection.accessToken,
+          sellerAccountId: accountId,
+        },
+        detail,
+      );
+      const orders = [order];
       const products = dedupeProducts(
         orders.flatMap((entry) =>
           entry.items
@@ -3747,6 +3746,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
   private async fetchOrderDetails(input: {
     accessToken: string;
     orderId: string;
+    required?: boolean;
   }) {
     const url = new URL(
       `https://api.mercadolibre.com/orders/${encodeURIComponent(input.orderId)}`,
@@ -3764,7 +3764,21 @@ export class MercadoLivreProvider implements IntegrationProvider {
       | MercadoLivreOrderDetailResponse
       | string;
 
-    if (!response.ok || typeof payload === "string") {
+    const hasOrderId =
+      typeof payload === "object" &&
+      payload !== null &&
+      payload.id !== undefined &&
+      payload.id !== null &&
+      String(payload.id).trim().length > 0;
+
+    if (!response.ok || typeof payload === "string" || !hasOrderId) {
+      if (input.required) {
+        throw new IntegrationProviderError(
+          `Mercado Livre notified order ${input.orderId} is not available yet.`,
+          "remote_request_failed",
+        );
+      }
+
       return null;
     }
 

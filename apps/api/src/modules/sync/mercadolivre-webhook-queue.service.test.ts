@@ -130,13 +130,13 @@ describe("MercadoLivreWebhookQueueService", () => {
     );
   });
 
-  it("reschedules failed processing with a retry delay", async () => {
+  it("reschedules unavailable notified orders with a retry delay", async () => {
     const { db, findFirst, service, syncService } = createService();
     const candidate = createEvent({ status: "pending", attempts: 0 });
     const claimed = createEvent({ attempts: 1 });
     findFirst.mockResolvedValueOnce(candidate).mockResolvedValueOnce(null);
     syncService.handleMercadoLivreNotification.mockRejectedValue(
-      new Error("MELI unavailable"),
+      new Error("Mercado Livre notified order 2000015157267735 is not available yet."),
     );
 
     const claimWhere = vi.fn().mockReturnValue({
@@ -153,7 +153,8 @@ describe("MercadoLivreWebhookQueueService", () => {
 
     expect(retrySet).toHaveBeenCalledWith(
       expect.objectContaining({
-        lastError: "MELI unavailable",
+        lastError:
+          "Mercado Livre notified order 2000015157267735 is not available yet.",
         status: "pending",
       }),
     );

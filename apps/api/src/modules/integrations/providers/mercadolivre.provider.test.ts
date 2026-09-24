@@ -4335,8 +4335,10 @@ describe("MercadoLivreProvider", () => {
     expect(result.cursor).toBeNull();
   });
 
-  it("fetches only the notified order during automatic sync without cursor history", async () => {
+  it("uses notification resource instead of notification id during automatic sync", async () => {
     const provider = createProvider();
+    const orderId = "2000015157267735";
+    const packId = "2000015157267735";
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -4345,7 +4347,7 @@ describe("MercadoLivreProvider", () => {
             currency_id: "BRL",
             date_closed: "2026-05-15T10:00:00.000Z",
             date_created: "2026-05-15T09:00:00.000Z",
-            id: 123,
+            id: orderId,
             order_items: [
               {
                 item: {
@@ -4358,6 +4360,7 @@ describe("MercadoLivreProvider", () => {
                 unit_price: 100,
               },
             ],
+            pack_id: packId,
             payments: [{ fee_amount: 3, shipping_cost: 5 }],
             total_amount: 100,
           }),
@@ -4390,23 +4393,86 @@ describe("MercadoLivreProvider", () => {
       connection: createSyncConnection(),
       cursor: null,
       notification: {
-        notificationId: "123",
-        resource: "/orders/123",
+        notificationId: "180371319768",
+        resource: `/orders/${orderId}`,
         topic: "orders_v2",
       },
       organizationId: "org_1",
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/orders/123");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      `/orders/${orderId}`,
+    );
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain(
+      "/orders/180371319768",
+    );
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
       "/billing/integration/group/ML/order/details",
     );
     expect(result.orders).toHaveLength(1);
-    expect(result.orders[0]?.externalOrderId).toBe("123");
+    expect(result.orders[0]?.externalOrderId).toBe(orderId);
+    expect(result.orders[0]?.metadata).toMatchObject({ packId });
     expect(result.cursor).toEqual({
       orderedAfter: "2026-05-15T10:00:00.000Z",
     });
+  });
+
+  it("fails automatic sync when notified order is not available yet", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: "not found" }), {
+        headers: { "content-type": "application/json" },
+        status: 404,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      provider.syncOrders({
+        connection: createSyncConnection(),
+        cursor: null,
+        notification: {
+          notificationId: "180371319768",
+          resource: "/orders/2000015157267735",
+          topic: "orders_v2",
+        },
+        organizationId: "org_1",
+      }),
+    ).rejects.toMatchObject({ code: "remote_request_failed" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/orders/2000015157267735",
+    );
+  });
+
+  it("does not use notification id as an order id when resource is not an order", async () => {
+    const provider = createProvider();
+    const fetchMock = vi.fn().mockResolvedValue(
+      createJsonResponse({
+        paging: { limit: 50, offset: 0, total: 0 },
+        results: [],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: null,
+      notification: {
+        notificationId: "180371319768",
+        resource: "/shipments/123",
+        topic: "orders_v2",
+      },
+      organizationId: "org_1",
+    });
+
+    expect(result.orders).toEqual([]);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/orders/search");
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain(
+      "/orders/180371319768",
+    );
   });
 
   it("hydrates order details when the search response omits fee fields", async () => {
