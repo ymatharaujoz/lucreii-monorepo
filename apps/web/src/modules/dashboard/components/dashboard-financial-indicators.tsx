@@ -388,27 +388,27 @@ export function DashboardFinancialIndicators({
             />
             <IndicatorCard
               icon={<Percent className="h-4 w-4" />}
-              label="Margem Líquida"
-              subValue="Lucro Líquido / Faturamento"
+              label="Margem Contribuição"
+              subValue="(Faturamento - Custos Variáveis) / Faturamento"
               trend={{
                 direction:
-                  liquidProfit > 0
+                  contributionProfit > 0
                     ? "up"
-                    : liquidProfit < 0
+                    : contributionProfit < 0
                       ? "down"
                       : "neutral",
                 value:
-                  liquidProfit > 0
-                    ? "Margem positiva"
-                    : liquidProfit < 0
-                      ? "Margem negativa"
-                      : "Margem neutra",
+                  contributionProfit > 0
+                    ? "Contribuição positiva"
+                    : contributionProfit < 0
+                      ? "Contribuição negativa"
+                      : "Contribuição neutra",
               }}
-              value={formatNetMarginPercent(netMarginPercent)}
+              value={formatNetMarginPercent(contributionMarginPercent)}
               variant={
-                liquidProfit > 0
+                contributionProfit > 0
                   ? "success"
-                  : liquidProfit < 0
+                  : contributionProfit < 0
                     ? "error"
                     : "warning"
               }

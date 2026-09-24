@@ -170,12 +170,13 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("R$\u00a07.000,00");
     expect(text).toContain("Frete Total");
     expect(text).toContain("R$\u00a01.000,00");
-    expect(text).toContain("Margem Líquida");
-    expect(text).toContain("27,65%");
+    expect(text).toContain("Margem Contribuição");
+    expect(text).toContain("(Faturamento - Custos Variáveis) / Faturamento");
+    expect(text).toContain("28,38%");
     const indicatorIndexes = [
       "Faturamento",
       "Devoluções",
-      "Margem Líquida",
+      "Margem Contribuição",
       "Custo & Imposto",
       "Tarifa de Venda",
       "Frete Total",
@@ -194,7 +195,7 @@ describe("DashboardFinancialIndicators", () => {
     );
     expect(costAndTaxDetail?.querySelectorAll("br")).toHaveLength(1);
     expect(text).not.toContain("Margem Média");
-    expect(text).not.toContain("Margem Contribuição");
+    expect(text).not.toContain("Margem Líquida");
     expect(text).not.toContain("Ponto de Equilíbrio");
     expect(text).not.toContain("Lucro Total - Custo Fixo");
     expect(text).not.toContain("Editar");
@@ -222,15 +223,56 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("Custo & Imposto");
     expect(text).toContain("Tarifa de Venda");
     expect(text).toContain("Frete Total");
-    expect(text).toContain("Margem Líquida");
+    expect(text).toContain("Margem Contribuição");
+    expect(text).toContain("28,38%");
     expect(text).toContain("Publicidade");
-    expect(text).not.toContain("Margem Contribuição");
+    expect(text).not.toContain("Margem Líquida");
     expect(text).not.toContain("Custo Fixo");
     expect(
       Array.from(document.querySelectorAll("[class]")).some((element) =>
         element.className.toString().includes("lg:grid-cols-6"),
       ),
     ).toBe(true);
+    view.unmount();
+  });
+
+  it("exibe margem de contribuição zero quando faturamento é zero", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={{
+          ...indicators,
+          revenue: "0.00",
+          variableCosts: "100.00",
+        }}
+        indicatorMode="marketplace"
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Margem Contribuição");
+    expect(text).toContain("0,00%");
+    expect(text).not.toMatch(/NaN|Infinity/);
+    view.unmount();
+  });
+
+  it("preserva margem de contribuição negativa sem subtrair custo fixo", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        financialIndicators={{
+          ...indicators,
+          fixedCost: "25.00",
+          revenue: "100.00",
+          totalProfit: "-50.00",
+          variableCosts: "150.00",
+        }}
+        indicatorMode="marketplace"
+      />,
+    );
+
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("-50,00%");
     view.unmount();
   });
 
