@@ -837,7 +837,26 @@ describe("OrdersHome", () => {
     view.unmount();
   });
 
-  it("renders negative margin and profit values in red", () => {
+  it("colors margin and profit values according to their sign", () => {
+    const baseOrder = {
+      createdAt: "2026-06-20T12:00:00.000Z",
+      currency: "BRL",
+      fixedCostAmount: "3.00",
+      itemsSold: 2,
+      orderDate: "2026-06-20",
+      orderId: "MLB-1001",
+      orderedAt: "2026-06-20T10:15:00.000Z",
+      provider: "mercadolivre",
+      shippingAmount: "20.00",
+      sourceStatus: "paid",
+      status: "paid",
+      statusLabel: "Pagamento aprovado",
+      tariffAmount: "10.00",
+      totalFees: "33.00",
+      totalWithFees: "200.00",
+      totalWithoutFees: "167.00",
+    };
+
     useOrdersListMock.mockReturnValue({
       data: {
         summary: {
@@ -850,31 +869,37 @@ describe("OrdersHome", () => {
         availableStatuses: [{ label: "Pagamento aprovado", value: "paid" }],
         items: [
           {
+            ...baseOrder,
             contributionMarginPercent: "-10.50",
-            createdAt: "2026-06-20T12:00:00.000Z",
-            currency: "BRL",
-            displayOrderId: "MLB-SALE-9001",
-            fixedCostAmount: "3.00",
-            id: "order_row_1",
-            itemsSold: 2,
-            orderDate: "2026-06-20",
-            orderId: "MLB-1001",
-            orderedAt: "2026-06-20T10:15:00.000Z",
-            provider: "mercadolivre",
-            shippingAmount: "20.00",
-            sourceStatus: "paid",
-            status: "paid",
-            statusLabel: "Pagamento aprovado",
-            tariffAmount: "10.00",
-            totalFees: "33.00",
+            displayOrderId: "MLB-SALE-NEG",
+            id: "order_row_negative",
             totalProfitAmount: "-3.14",
-            totalWithFees: "200.00",
-            totalWithoutFees: "167.00",
+          },
+          {
+            ...baseOrder,
+            contributionMarginPercent: "10.50",
+            displayOrderId: "MLB-SALE-POS",
+            id: "order_row_positive",
+            totalProfitAmount: "3.14",
+          },
+          {
+            ...baseOrder,
+            contributionMarginPercent: "0.00",
+            displayOrderId: "MLB-SALE-ZERO",
+            id: "order_row_zero",
+            totalProfitAmount: "0.00",
+          },
+          {
+            ...baseOrder,
+            contributionMarginPercent: null,
+            displayOrderId: "MLB-SALE-EMPTY",
+            id: "order_row_empty",
+            totalProfitAmount: null,
           },
         ],
         page: 1,
         pageSize: 20,
-        totalItems: 1,
+        totalItems: 4,
         totalPages: 1,
       },
       error: null,
@@ -882,15 +907,30 @@ describe("OrdersHome", () => {
     });
 
     const view = mount(<OrdersHome />);
-    const negativeMargin = Array.from(document.querySelectorAll("td")).find(
-      (cell) => cell.textContent?.includes("-10,50%"),
-    );
-    const negativeProfit = Array.from(document.querySelectorAll("td")).find(
-      (cell) => cell.textContent?.includes("3,14"),
-    );
+    const cellsFor = (marker: string) => {
+      const row = Array.from(
+        document.querySelectorAll("tbody tr[role='button']"),
+      ).find((candidate) => candidate.textContent?.includes(marker));
+      const cells = row?.querySelectorAll("td");
 
-    expect(negativeMargin?.className).toContain("text-red");
-    expect(negativeProfit?.className).toContain("text-red");
+      return { margin: cells?.[6], profit: cells?.[7] };
+    };
+
+    const negativeCells = cellsFor("MLB-SALE-NEG");
+    const positiveCells = cellsFor("MLB-SALE-POS");
+    const zeroCells = cellsFor("MLB-SALE-ZERO");
+    const emptyCells = cellsFor("MLB-SALE-EMPTY");
+
+    expect(negativeCells.margin?.className).toContain("text-error");
+    expect(negativeCells.profit?.className).toContain("text-error");
+    expect(positiveCells.margin?.className).toContain("text-success");
+    expect(positiveCells.profit?.className).toContain("text-success");
+    expect(zeroCells.margin?.className).toContain("text-foreground");
+    expect(zeroCells.profit?.className).toContain("text-foreground");
+    expect(emptyCells.margin?.textContent).toBe("—");
+    expect(emptyCells.profit?.textContent).toBe("—");
+    expect(emptyCells.margin?.className).toContain("text-foreground");
+    expect(emptyCells.profit?.className).toContain("text-foreground");
 
     view.unmount();
   });

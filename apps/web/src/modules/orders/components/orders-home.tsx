@@ -194,12 +194,14 @@ function formatPercent(value: string | null) {
   }).format(Number(value))}%`;
 }
 
-function isNegativeNumber(value: string | null | undefined) {
-  if (value === null || value === undefined || value === "") {
-    return false;
+function getFinancialValueColorClass(value: string | null | undefined) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed === 0) {
+    return "text-foreground";
   }
 
-  return Number(value) < 0;
+  return parsed > 0 ? "text-success" : "text-error";
 }
 
 function getOrderStatusType(status: OrderCanonicalStatus): StatusType {
@@ -1767,9 +1769,9 @@ function OrdersHomeContent({
                       <td
                         className={cn(
                           "px-3 py-3 text-right text-sm font-semibold tabular-nums",
-                          isNegativeNumber(row.contributionMarginPercent)
-                            ? "text-red-600"
-                            : "text-foreground",
+                          getFinancialValueColorClass(
+                            row.contributionMarginPercent,
+                          ),
                         )}
                       >
                         {formatPercent(row.contributionMarginPercent)}
@@ -1777,9 +1779,7 @@ function OrdersHomeContent({
                       <td
                         className={cn(
                           "px-3 py-3 text-right text-sm font-semibold tabular-nums",
-                          isNegativeNumber(row.totalProfitAmount)
-                            ? "text-red-600"
-                            : "text-foreground",
+                          getFinancialValueColorClass(row.totalProfitAmount),
                         )}
                       >
                         {row.totalProfitAmount === null
