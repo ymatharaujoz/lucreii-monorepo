@@ -582,4 +582,30 @@ describe("DashboardFinancialIndicators", () => {
 
     view.unmount();
   });
+
+  it("mantém o rótulo Custo Fixo em intervalo parcial e durante edição", () => {
+    const view = mount(
+      <DashboardFinancialIndicators
+        activeCompany={company}
+        dateRange={{ dateFrom: "2026-07-01", dateTo: "2026-07-10" }}
+        financialIndicators={indicators}
+        referenceMonth="2026-07-01"
+      />,
+    );
+
+    expect(document.body.textContent ?? "").toContain("Custo Fixo");
+    expect(document.body.textContent ?? "").not.toContain("Custo Fixo rateado");
+
+    const editButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Editar"),
+    );
+    act(() =>
+      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+    );
+
+    expect(document.body.textContent ?? "").toContain("Custo Fixo");
+    expect(document.body.textContent ?? "").not.toContain("Custo Fixo mensal");
+
+    view.unmount();
+  });
 });

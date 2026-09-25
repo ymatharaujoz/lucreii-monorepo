@@ -139,10 +139,10 @@ function formatTaxRate(value: string | null | undefined) {
   return formatPercentage(parsed);
 }
 
-function formatPercentage(value: number) {
+function formatPercentage(value: number, fractionDigits = 2) {
   return `${new Intl.NumberFormat("pt-BR", {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: fractionDigits,
   }).format(value)}%`;
 }
 
@@ -169,7 +169,7 @@ function formatCommissionRate(
     return null;
   }
 
-  return formatPercentage(rate);
+  return formatPercentage(Math.ceil(rate), 0);
 }
 
 function formatDateTime(value: string | null) {

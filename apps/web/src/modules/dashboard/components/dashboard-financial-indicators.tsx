@@ -643,9 +643,7 @@ export function DashboardFinancialIndicators({
                     <>
                       <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          {isPartialDateRange
-                            ? "Custo Fixo mensal"
-                            : "Custo Fixo"}
+                          Custo Fixo
                         </span>
                         <Input
                           className="h-9 flex-1 text-right text-xs"
@@ -738,9 +736,7 @@ export function DashboardFinancialIndicators({
                       <div className="flex items-center gap-2">
                         <DollarSign className="h-4 w-4 text-accent" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          {isPartialDateRange
-                            ? "Custo Fixo rateado"
-                            : "Custo Fixo"}
+                          Custo Fixo
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
                           {formatMoney(fixedCostResolved)}

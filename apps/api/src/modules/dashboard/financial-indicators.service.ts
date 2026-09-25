@@ -168,11 +168,6 @@ export class FinancialIndicatorsService {
       referenceMonth,
       dateRange,
     );
-    const proratedFixedCost = prorateMonthlyAmount(
-      fixedCost,
-      referenceMonth,
-      dateRange,
-    );
     const ordersSummary = await this.ordersService.readExportedFinancialSummary(
       {
         organizationId,
@@ -187,7 +182,7 @@ export class FinancialIndicatorsService {
     );
     const result = calculateFinancialIndicatorsFromTotals({
       advertising,
-      fixedCost: proratedFixedCost,
+      fixedCost,
       marketplaceCommission: ordersSummary.marketplaceCommission,
       netSales: ordersSummary.netSales,
       packagingCost: ordersSummary.packagingCost,

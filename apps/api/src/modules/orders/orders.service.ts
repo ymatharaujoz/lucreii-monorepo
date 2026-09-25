@@ -2704,19 +2704,70 @@ export class OrdersService {
     filters: OrderExportFilters = {},
   ): Promise<Buffer> {
     const mapped = await this.readLogicalOrdersForExport(authContext, filters);
+    const exportRows = mapped.map(({ composition, order: item }) => {
+      const pendingFinancialFields = composition.pendingFinancialFields ?? [];
 
-    const worksheet = utils.json_to_sheet(
-      mapped.map(({ order: item }) => ({
+      return {
         Canal: item.provider,
         "Data do Pedido": item.orderDate ?? "",
-        Faturamento: item.totalWithFees,
+        Faturamento: toNumber(item.totalWithFees),
         "ID da Venda": item.displayOrderId,
-        "Lucro Total": item.totalProfitAmount ?? "",
+        "Lucro Total":
+          item.totalProfitAmount === null
+            ? ""
+            : toNumber(item.totalProfitAmount),
         "Margem de Contribuição": item.contributionMarginPercent ?? "",
         SKUs: item.skus.join("\n"),
         Status: item.statusLabel,
-      })),
-    );
+        "Estornos/Bônus": toNumber(composition.refundBonusAmount),
+        "Custo Produto":
+          composition.missingCostItemsCount > 0
+            ? ""
+            : toNumber(composition.productCostAmount),
+        "Comissão em R$": toNumber(composition.marketplaceCommissionAmount),
+        "Frete/Taxa Fixa": pendingFinancialFields.includes(
+          "shippingOrFixedFeeAmount",
+        )
+          ? ""
+          : toNumber(composition.shippingOrFixedFeeAmount),
+        Embalagem: toNumber(composition.packagingCostAmount),
+        "Imposto em R$": pendingFinancialFields.includes("taxAmount")
+          ? ""
+          : toNumber(composition.taxAmount),
+      };
+    });
+    const worksheet = utils.json_to_sheet(exportRows);
+    const headers = Object.keys(exportRows[0] ?? {});
+    const currencyHeaders = [
+      "Faturamento",
+      "Lucro Total",
+      "Estornos/Bônus",
+      "Custo Produto",
+      "Comissão em R$",
+      "Frete/Taxa Fixa",
+      "Embalagem",
+      "Imposto em R$",
+    ];
+    const currencyNumberFormat = '"R$" #,##0.00;-"R$" #,##0.00;"R$" 0.00';
+
+    for (const header of currencyHeaders) {
+      const columnIndex = headers.indexOf(header);
+      if (columnIndex < 0) {
+        continue;
+      }
+
+      for (let rowIndex = 0; rowIndex < exportRows.length; rowIndex += 1) {
+        const cellAddress = utils.encode_cell({
+          c: columnIndex,
+          r: rowIndex + 1,
+        });
+        const cell = worksheet[cellAddress];
+        if (cell && cell.t === "n") {
+          cell.z = currencyNumberFormat;
+        }
+      }
+    }
+
     const workbook = utils.book_new();
     utils.book_append_sheet(workbook, worksheet, "Pedidos");
 

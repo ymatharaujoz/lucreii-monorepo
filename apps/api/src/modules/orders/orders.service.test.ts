@@ -6777,4 +6777,110 @@ describe("OrdersService", () => {
       provider: "mercadolivre",
     });
   });
+
+  it("exports order composition as numeric BRL columns and blanks incomplete values", async () => {
+    const service = new OrdersService({} as never);
+    const logicalOrders = [
+      {
+        composition: {
+          hasIncompleteCostData: false,
+          marketplaceCommissionAmount: "2.59",
+          missingCostItemsCount: 0,
+          missingLinkedItemsCount: 0,
+          netRevenueAmount: "12.69",
+          packagingCostAmount: "0.50",
+          productCostAmount: "2.00",
+          refundBonusAmount: "0.50",
+          revenueAmount: "19.95",
+          shippingOrFixedFeeAmount: "3.37",
+          taxAmount: "0.80",
+        },
+        items: [],
+        order: {
+          contributionMarginPercent: "5.02",
+          displayOrderId: "ORDER-1",
+          orderDate: "2026-06-20",
+          provider: "mercadolivre",
+          skus: ["SKU-1"],
+          statusLabel: "Pagamento aprovado",
+          totalProfitAmount: "1.00",
+          totalWithFees: "19.95",
+        },
+      },
+      {
+        composition: {
+          hasIncompleteCostData: true,
+          marketplaceCommissionAmount: "0.00",
+          missingCostItemsCount: 1,
+          missingLinkedItemsCount: 1,
+          netRevenueAmount: "0.00",
+          packagingCostAmount: "0.00",
+          pendingFinancialFields: [
+            "shippingOrFixedFeeAmount",
+            "taxAmount",
+          ],
+          productCostAmount: "0.00",
+          refundBonusAmount: "0.00",
+          revenueAmount: "0.00",
+          shippingOrFixedFeeAmount: "0.00",
+          taxAmount: "0.00",
+        },
+        items: [],
+        order: {
+          contributionMarginPercent: null,
+          displayOrderId: "ORDER-2",
+          orderDate: "2026-06-21",
+          provider: "mercadolivre",
+          skus: ["SKU-2"],
+          statusLabel: "Pagamento aprovado",
+          totalProfitAmount: null,
+          totalWithFees: "10.00",
+        },
+      },
+    ] as never[];
+    vi.spyOn(
+      service as unknown as {
+        readLogicalOrdersForExport: () => Promise<unknown>;
+      },
+      "readLogicalOrdersForExport",
+    ).mockResolvedValue(logicalOrders);
+
+    const fileBuffer = await service.exportOrdersSpreadsheet(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {},
+    );
+    const workbook = read(fileBuffer, { type: "buffer", cellNF: true });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]!]!;
+    const rows = utils.sheet_to_json<Record<string, unknown>>(worksheet);
+    const headers = utils.sheet_to_json<string[]>(worksheet, { header: 1 })[0]!;
+    const cell = (header: string, rowIndex: number) =>
+      worksheet[
+        utils.encode_cell({ c: headers.indexOf(header), r: rowIndex })
+      ];
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      Faturamento: 19.95,
+      "Lucro Total": 1,
+      "Estornos/Bônus": 0.5,
+      "Custo Produto": 2,
+      "Comissão em R$": 2.59,
+      "Frete/Taxa Fixa": 3.37,
+      Embalagem: 0.5,
+      "Imposto em R$": 0.8,
+    });
+    expect(rows[1]?.["Custo Produto"]).toBe("");
+    expect(rows[1]?.["Frete/Taxa Fixa"]).toBe("");
+    expect(rows[1]?.["Imposto em R$"]).toBe("");
+    expect(cell("Faturamento", 1)).toMatchObject({
+      t: "n",
+      v: 19.95,
+      z: '"R$" #,##0.00;-"R$" #,##0.00;"R$" 0.00',
+    });
+    expect(cell("Comissão em R$", 1)?.t).toBe("n");
+  });
 });

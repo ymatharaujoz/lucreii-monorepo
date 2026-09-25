@@ -272,7 +272,7 @@ describe("OrdersHome", () => {
     expect(content).not.toContain("Composição do pedido");
     expect(content).not.toContain("Totais agregados do pedido");
     expect(content).toContain("R$ 200,00");
-    expect(content).toContain("5,00%");
+    expect(content).toContain("5%");
     expect(content).toContain("R$ 24,00");
     expect(content).toContain("Imposto");
     expect(content).toContain("12,00%");
@@ -476,6 +476,52 @@ describe("OrdersHome", () => {
       view.unmount();
     },
   );
+
+  it("arredonda para cima a porcentagem da comissão", () => {
+    useOrderDetailsMock.mockReturnValue({
+      data: {
+        composition: {
+          hasIncompleteCostData: false,
+          marketplaceCommissionAmount: "2.59",
+          missingCostItemsCount: 0,
+          missingLinkedItemsCount: 0,
+          netRevenueAmount: "17.36",
+          packagingCostAmount: "0.00",
+          productCostAmount: "0.00",
+          refundBonusAmount: "0.00",
+          revenueAmount: "19.95",
+          shippingOrFixedFeeAmount: "0.00",
+          taxAmount: "0.80",
+          taxRateDefault: "0.040000",
+        },
+        items: [],
+        order: {
+          displayOrderId: "MLB-SALE-9001",
+          provider: "mercadolivre",
+          sourceStatus: "paid",
+          status: "paid",
+          statusLabel: "Pagamento aprovado",
+        },
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const view = mount(<OrdersHome />);
+
+    click(document.querySelector('tr[role="button"]')!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Compos"),
+      )!,
+    );
+
+    expect(text()).toContain("13%");
+    expect(text()).not.toContain("12,98%");
+    expect(text()).toContain("4,00%");
+
+    view.unmount();
+  });
 
   it("shows Mercado Livre shipping payment breakdown in composition tab", () => {
     useOrderDetailsMock.mockReturnValue({

@@ -293,7 +293,7 @@ describe("FinancialIndicatorsService", () => {
     expect(db.query.marketplaceAdvertising.findFirst).toHaveBeenCalledOnce();
   });
 
-  it("prorates monthly fixed cost and advertising for a partial date range", async () => {
+  it("keeps monthly fixed cost intact and prorates advertising for a partial date range", async () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);
     db.query.fixedCosts.findMany.mockResolvedValue([]);
@@ -320,7 +320,7 @@ describe("FinancialIndicatorsService", () => {
     });
 
     expect(result.advertising).toBe("10.00");
-    expect(result.fixedCost).toBe("32.26");
+    expect(result.fixedCost).toBe("100.00");
     expect(result.monthlyAdvertising).toBe("31.00");
     expect(ordersService.readExportedFinancialSummary).toHaveBeenCalledWith(
       {
