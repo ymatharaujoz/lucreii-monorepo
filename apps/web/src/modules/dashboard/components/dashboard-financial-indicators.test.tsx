@@ -554,7 +554,7 @@ describe("DashboardFinancialIndicators", () => {
     view.unmount();
   });
 
-  it("mostra a publicidade rateada e edita o valor mensal no intervalo parcial", () => {
+  it("mantém o rótulo Publicidade e o rateio em intervalo parcial durante edição", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
@@ -566,7 +566,14 @@ describe("DashboardFinancialIndicators", () => {
       />,
     );
 
-    expect(document.body.textContent ?? "").toContain("Publicidade rateada");
+    expect(document.body.textContent ?? "").toContain("Publicidade");
+    expect(document.body.textContent ?? "").not.toContain(
+      "Publicidade rateada",
+    );
+    expect(document.body.textContent ?? "").not.toContain(
+      "Publicidade mensal",
+    );
+    expect(document.body.textContent ?? "").toMatch(/PublicidadeR\$\s*478/);
 
     const editButton = Array.from(document.querySelectorAll("button")).find(
       (button) => button.textContent?.includes("Editar"),
@@ -575,7 +582,10 @@ describe("DashboardFinancialIndicators", () => {
       editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
     );
 
-    expect(document.body.textContent ?? "").toContain("Publicidade mensal");
+    expect(document.body.textContent ?? "").toContain("Publicidade");
+    expect(document.body.textContent ?? "").not.toContain(
+      "Publicidade mensal",
+    );
     expect(document.querySelector<HTMLInputElement>("input")?.value).toBe(
       "1.481,33",
     );

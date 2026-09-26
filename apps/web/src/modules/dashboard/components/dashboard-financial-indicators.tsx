@@ -203,7 +203,6 @@ export function DashboardFinancialIndicators({
     referenceMonth && dateRange
       ? getReferenceMonthDateRangeProration(referenceMonth, dateRange)
       : 1;
-  const isPartialDateRange = dateRangeProration < 1;
   const marketplaceAdvertisingKey = `${activeCompany?.id ?? ""}:${provider ?? ""}:${referenceMonth ?? ""}`;
   const resolvedMonthlyAdvertising =
     isMarketplaceView &&
@@ -625,9 +624,7 @@ export function DashboardFinancialIndicators({
                   {isMarketplaceView ? (
                     <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        {isPartialDateRange
-                          ? "Publicidade mensal"
-                          : "Publicidade"}
+                        Publicidade
                       </span>
                       <Input
                         className="h-9 flex-1 text-right text-xs"
@@ -713,9 +710,7 @@ export function DashboardFinancialIndicators({
                       <div className="flex items-center gap-2">
                         <DollarSign className="h-4 w-4 text-accent" />
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          {isPartialDateRange
-                            ? "Publicidade rateada"
-                            : "Publicidade"}
+                          Publicidade
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
                           {formatMoney(displayedAdvertising)}

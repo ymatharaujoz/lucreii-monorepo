@@ -2535,10 +2535,16 @@ export class OrdersService {
           companyId,
           operationBackfilledRows,
         );
+      const shippingRatioBackfilledRows =
+        await this.backfillMercadoLivreShippingRatios(
+          authContext,
+          companyId,
+          shippingBillingBackfilledRows,
+        );
       const hydratedRows = await this.hydrateLinkedProducts(
         authContext,
         companyId,
-        shippingBillingBackfilledRows,
+        shippingRatioBackfilledRows,
       );
       const hydratedLogicalOrdersById = new Map(
         buildLogicalOrders(hydratedRows, company?.taxRateDefault).map(
@@ -2598,10 +2604,16 @@ export class OrdersService {
         companyId,
         operationBackfilledRows,
       );
+    const shippingRatioBackfilledRows =
+      await this.backfillMercadoLivreShippingRatios(
+        authContext,
+        companyId,
+        shippingBillingBackfilledRows,
+      );
     const hydratedRows = await this.hydrateLinkedProducts(
       authContext,
       companyId,
-      shippingBillingBackfilledRows,
+      shippingRatioBackfilledRows,
     );
     const mapped = buildLogicalOrders(
       hydratedRows,

@@ -169,7 +169,11 @@ function formatCommissionRate(
     return null;
   }
 
-  return formatPercentage(Math.ceil(rate), 0);
+  const wholeRate = Math.floor(rate);
+  const fraction = rate - wholeRate;
+  const roundedRate = fraction > 0.5 ? wholeRate + 1 : wholeRate;
+
+  return formatPercentage(roundedRate, 0);
 }
 
 function formatDateTime(value: string | null) {
