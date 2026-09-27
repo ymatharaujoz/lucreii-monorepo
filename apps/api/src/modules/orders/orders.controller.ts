@@ -7,6 +7,7 @@ import {
   InternalServerErrorException,
   Param,
   Patch,
+  Post,
   Query,
   Res,
   UseGuards,
@@ -111,6 +112,25 @@ export class OrdersController {
   ) {
     return {
       data: await this.ordersService.getOrderDetails(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        id,
+      ),
+      error: null,
+    };
+  }
+
+  @Post(":id/sync")
+  @HttpCode(200)
+  async syncOrderFromMercadoLivre(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Param("id") id: string,
+  ) {
+    return {
+      data: await this.ordersService.syncOrderFromMercadoLivre(
         {
           organizationId: authContext.organization!.id,
           selectedCompanyId: authContext.selectedCompanyId ?? null,

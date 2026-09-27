@@ -12,6 +12,7 @@ import { OrdersHome } from "./orders-home";
 
 const useOrdersListMock = vi.hoisted(() => vi.fn());
 const useOrderDetailsMock = vi.hoisted(() => vi.fn());
+const useSyncOrderMock = vi.hoisted(() => vi.fn());
 const useUpdateOrderCompositionMock = vi.hoisted(() => vi.fn());
 const useUpdateOrderProductCostBulkMock = vi.hoisted(() => vi.fn());
 const downloadOrdersExportMock = vi.hoisted(() => vi.fn());
@@ -20,6 +21,7 @@ vi.mock("../hooks/use-orders-data", () => ({
   downloadOrdersExport: downloadOrdersExportMock,
   useOrderDetails: useOrderDetailsMock,
   useOrdersList: useOrdersListMock,
+  useSyncOrder: useSyncOrderMock,
   useUpdateOrderComposition: useUpdateOrderCompositionMock,
   useUpdateOrderProductCostBulk: useUpdateOrderProductCostBulkMock,
 }));
@@ -103,6 +105,11 @@ function metricText(label: string) {
 
 describe("OrdersHome", () => {
   beforeEach(() => {
+    useSyncOrderMock.mockReset();
+    useSyncOrderMock.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn().mockResolvedValue({}),
+    });
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-20T12:00:00.000Z"));
     useOrdersListMock.mockReturnValue({
@@ -907,6 +914,102 @@ describe("OrdersHome", () => {
 
     expect(text()).toContain("Venda #MLB-SALE-9001");
     expect(text()).not.toContain("Pedido #MLB-SALE-9001");
+
+    view.unmount();
+  });
+
+  it("shows the order sync control for Mercado Livre details", () => {
+    const view = mount(<OrdersHome />);
+
+    click(document.querySelector('tr[role="button"]')!);
+
+    const syncButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Sincronizar"),
+    );
+    expect(syncButton).toBeTruthy();
+
+    view.unmount();
+  });
+
+  it("hides the order sync control for other marketplace providers", () => {
+    const view = mount(<OrdersHome />);
+    const orderDetailsResult = useOrderDetailsMock.mock.results.at(-1)
+      ?.value as { data: { order: { provider: string } } };
+    orderDetailsResult.data.order.provider = "shopee";
+
+    click(document.querySelector('tr[role="button"]')!);
+
+    expect(
+      Array.from(document.querySelectorAll("button")).some((button) =>
+        button.textContent?.includes("Sincronizar"),
+      ),
+    ).toBe(false);
+
+    view.unmount();
+  });
+
+  it("disables the sync button and shows progress while syncing", () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    useSyncOrderMock.mockReturnValue({ isPending: true, mutateAsync });
+    const view = mount(<OrdersHome />);
+
+    click(document.querySelector('tr[role="button"]')!);
+
+    const pendingButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Sincronizando..."),
+    );
+    expect(pendingButton?.hasAttribute("disabled")).toBe(true);
+
+    view.unmount();
+  });
+
+  it("shows success feedback after synchronizing the open order", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    useSyncOrderMock.mockReturnValue({ isPending: false, mutateAsync });
+    const view = mount(<OrdersHome />);
+    click(document.querySelector('tr[role="button"]')!);
+
+    const syncButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Sincronizar"),
+    )!;
+    await act(async () => {
+      syncButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(mutateAsync).toHaveBeenCalledWith("order_row_1");
+    expect(text()).toContain("Pedido sincronizado com sucesso.");
+
+    view.unmount();
+  });
+
+  it("shows an accessible error and allows retry after failed sync", async () => {
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("MELI unavailable"))
+      .mockResolvedValueOnce({});
+    useSyncOrderMock.mockReturnValue({ isPending: false, mutateAsync });
+    const view = mount(<OrdersHome />);
+    click(document.querySelector('tr[role="button"]')!);
+
+    const syncButton = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Sincronizar"),
+    )!;
+    await act(async () => {
+      syncButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const error = document.querySelector('[role="alert"]');
+    expect(error?.textContent).toContain(
+      "Não foi possível sincronizar o pedido. Tente novamente.",
+    );
+
+    await act(async () => {
+      syncButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(text()).toContain("Pedido sincronizado com sucesso.");
+    expect(mutateAsync).toHaveBeenCalledTimes(2);
 
     view.unmount();
   });

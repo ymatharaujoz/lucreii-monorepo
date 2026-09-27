@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   Optional,
@@ -52,6 +53,7 @@ import { and, asc, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import { utils, write } from "xlsx";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
+import { SyncService } from "@/modules/sync/sync.service";
 import {
   MercadoLivreProvider,
   readMercadoLivreBillingOrderShippingCost,
@@ -2397,6 +2399,9 @@ export class OrdersService {
     @Optional()
     @Inject(forwardRef(() => ProductsService))
     private readonly productsService?: ProductsService,
+    @Optional()
+    @Inject(SyncService)
+    private readonly syncService?: SyncService,
   ) {}
 
   async listOrders(
@@ -2888,6 +2893,68 @@ export class OrdersService {
         logicalOrder.composition.pendingFinancialFields ?? [],
       tags: logicalOrder.order.tags ?? [],
     };
+  }
+
+  async syncOrderFromMercadoLivre(
+    authContext: TenantContext,
+    orderRecordId: string,
+  ): Promise<OrderDetails> {
+    const companyId = this.requireSelectedCompanyId(authContext);
+    const groupedDisplayOrderId =
+      readMercadoLivreGroupedDisplayOrderId(orderRecordId);
+    let rows: Array<{ externalOrderId: string; provider: string }>;
+    if (groupedDisplayOrderId) {
+      rows = await this.db.query.externalOrders.findMany({
+        columns: { externalOrderId: true, provider: true },
+        where: (table) =>
+          and(
+            eq(table.organizationId, authContext.organizationId),
+            eq(table.companyId, companyId),
+            eq(table.provider, "mercadolivre"),
+            buildExactMercadoLivreGroupedOrderWhere(groupedDisplayOrderId),
+          ),
+      });
+    } else {
+      const row = await this.db.query.externalOrders.findFirst({
+        columns: { externalOrderId: true, provider: true },
+        where: (table) =>
+          and(
+            eq(table.id, orderRecordId),
+            eq(table.organizationId, authContext.organizationId),
+            eq(table.companyId, companyId),
+          ),
+      });
+      rows = row ? [row] : [];
+    }
+
+    if (rows.length === 0) {
+      throw new NotFoundException("Order not found.");
+    }
+
+    if (rows.some((row) => row.provider !== "mercadolivre")) {
+      throw new BadRequestException(
+        "Only Mercado Livre orders can be synchronized individually.",
+      );
+    }
+
+    if (!this.syncService) {
+      throw new InternalServerErrorException(
+        "Order synchronization is unavailable.",
+      );
+    }
+
+    const externalOrderIds = Array.from(
+      new Set(rows.map((row) => row.externalOrderId)),
+    );
+
+    await this.syncService.runOrderSync({
+      companyId,
+      externalOrderIds,
+      organizationId: authContext.organizationId,
+      userId: authContext.userId,
+    });
+
+    return this.getOrderDetails(authContext, orderRecordId);
   }
 
   async updateOrderComposition(

@@ -7049,4 +7049,97 @@ describe("OrdersService", () => {
     });
     expect(cell("Comissão em R$", 1)?.t).toBe("n");
   });
+
+  it("syncs every internal order in the selected Mercado Livre group", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      { externalOrderId: "MLB-ORDER-1", provider: "mercadolivre" },
+      { externalOrderId: "MLB-ORDER-2", provider: "mercadolivre" },
+      { externalOrderId: "MLB-ORDER-1", provider: "mercadolivre" },
+    ]);
+    const syncService = { runOrderSync: vi.fn().mockResolvedValue({}) };
+    const service = new OrdersService(
+      { query: { externalOrders: { findMany } } } as never,
+      undefined,
+      undefined,
+      syncService as never,
+    );
+    const details = { order: { id: "group__mercadolivre__sale_1" } };
+    vi.spyOn(service, "getOrderDetails").mockResolvedValue(details as never);
+    const authContext = {
+      organizationId: "org_123",
+      selectedCompanyId: "company_123",
+      userId: "user_123",
+    };
+
+    await expect(
+      service.syncOrderFromMercadoLivre(
+        authContext,
+        "group__mercadolivre__sale_1",
+      ),
+    ).resolves.toBe(details);
+
+    expect(syncService.runOrderSync).toHaveBeenCalledWith({
+      companyId: "company_123",
+      externalOrderIds: ["MLB-ORDER-1", "MLB-ORDER-2"],
+      organizationId: "org_123",
+      userId: "user_123",
+    });
+    expect(service.getOrderDetails).toHaveBeenCalledWith(
+      authContext,
+      "group__mercadolivre__sale_1",
+    );
+  });
+
+  it("rejects individual sync for non-Mercado Livre orders", async () => {
+    const findFirst = vi.fn().mockResolvedValue({
+      externalOrderId: "SHP-ORDER-1",
+      provider: "shopee",
+    });
+    const syncService = { runOrderSync: vi.fn() };
+    const service = new OrdersService(
+      { query: { externalOrders: { findFirst } } } as never,
+      undefined,
+      undefined,
+      syncService as never,
+    );
+
+    await expect(
+      service.syncOrderFromMercadoLivre(
+        {
+          organizationId: "org_123",
+          selectedCompanyId: "company_123",
+          userId: "user_123",
+        },
+        "shopee_row_1",
+      ),
+    ).rejects.toThrow(
+      "Only Mercado Livre orders can be synchronized individually.",
+    );
+    expect(syncService.runOrderSync).not.toHaveBeenCalled();
+  });
+
+  it("rejects orders outside the active company scope", async () => {
+    const findFirst = vi.fn().mockResolvedValue(undefined);
+    const syncService = { runOrderSync: vi.fn() };
+    const service = new OrdersService(
+      { query: { externalOrders: { findFirst } } } as never,
+      undefined,
+      undefined,
+      syncService as never,
+    );
+
+    await expect(
+      service.syncOrderFromMercadoLivre(
+        {
+          organizationId: "org_123",
+          selectedCompanyId: "company_123",
+          userId: "user_123",
+        },
+        "order_from_another_company",
+      ),
+    ).rejects.toThrow("Order not found.");
+
+    expect(findFirst).toHaveBeenCalled();
+    expect(syncService.runOrderSync).not.toHaveBeenCalled();
+  });
 });

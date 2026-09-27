@@ -4,6 +4,7 @@ const apiClientMock = vi.hoisted(() => ({
   download: vi.fn(),
   getValidatedData: vi.fn(),
   patch: vi.fn(),
+  post: vi.fn(),
 }));
 const useQueryMock = vi.hoisted(() => vi.fn());
 const useMutationMock = vi.hoisted(() => vi.fn());
@@ -34,10 +35,12 @@ import {
   downloadOrdersExport,
   fetchOrderDetails,
   fetchOrders,
+  syncOrder,
   updateOrderComposition,
   updateOrderProductCostBulk,
   useUpdateOrderComposition,
   useUpdateOrderProductCostBulk,
+  useSyncOrder,
   useOrderDetails,
   useOrdersList,
 } from "./use-orders-data";
@@ -47,6 +50,7 @@ describe("orders protected fetchers", () => {
     apiClientMock.download.mockReset();
     apiClientMock.getValidatedData.mockReset();
     apiClientMock.patch.mockReset();
+    apiClientMock.post.mockReset();
     useQueryMock.mockReset();
     useMutationMock.mockReset();
     invalidateQueriesMock.mockReset();
@@ -335,6 +339,15 @@ describe("orders protected fetchers", () => {
     );
   });
 
+  it("syncs one protected order and returns updated details", async () => {
+    const updatedDetails = { order: { id: "order_row_1" } };
+    apiClientMock.post.mockResolvedValue({ data: updatedDetails, error: null });
+
+    await expect(syncOrder("order_row_1")).resolves.toEqual(updatedDetails);
+
+    expect(apiClientMock.post).toHaveBeenCalledWith("/orders/order_row_1/sync");
+  });
+
   it("updates product cost for selected orders through batch endpoint", async () => {
     apiClientMock.patch.mockResolvedValue({
       data: { updatedCount: 2 },
@@ -369,6 +382,30 @@ describe("orders protected fetchers", () => {
     useUpdateOrderProductCostBulk();
 
     expect(useMutationMock).toHaveBeenCalled();
+  });
+
+  it("updates order details and invalidates order lists after syncing", async () => {
+    const updatedDetails = { composition: { productCostAmount: "80.00" } };
+    useMutationMock.mockImplementation(({ onSuccess }) => ({
+      mutateAsync: async (orderId: string) => {
+        await onSuccess(updatedDetails, orderId);
+        return updatedDetails;
+      },
+    }));
+
+    const mutation = useSyncOrder();
+    await mutation.mutateAsync("order_row_1");
+
+    expect(setQueryDataMock).toHaveBeenCalledWith(
+      ["orders", null, "detail", "order_row_1"],
+      updatedDetails,
+    );
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: ["orders"],
+    });
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: ["orders", null, "detail", "order_row_1"],
+    });
   });
 
   it("updates the detail cache with the response before invalidating queries", async () => {

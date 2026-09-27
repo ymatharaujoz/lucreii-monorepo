@@ -31,6 +31,10 @@ function createService(envOverrides: Record<string, unknown> = {}) {
     }),
     insert: vi.fn(),
     query: {
+      externalOrders: {
+        findMany: vi.fn(),
+        findFirst: vi.fn().mockResolvedValue(undefined),
+      },
       marketplaceConnections: {
         findFirst: vi.fn(),
       },
@@ -145,6 +149,145 @@ describe("SyncService", () => {
     expect(status.availability.canRun).toBe(true);
     expect(status.availability.reason).toBe("available");
     expect(status.availability.currentWindowKey).toBeNull();
+  });
+
+  it("runs targeted sync only for order IDs owned by the selected company", async () => {
+    const { db, service } = createService();
+    const connection = {
+      accessToken: "token",
+      createdAt: new Date("2026-05-01T11:00:00.000Z"),
+      externalAccountId: "seller_123",
+      id: "conn_123",
+      lastSyncedAt: null,
+      metadata: {},
+      companyId: "company_123",
+      organizationId: "org_123",
+      provider: "mercadolivre" as const,
+      refreshToken: "refresh",
+      status: "connected" as const,
+      tokenExpiresAt: new Date("2026-07-03T11:00:00.000Z"),
+      updatedAt: new Date("2026-05-01T11:00:00.000Z"),
+    };
+    db.query.externalOrders.findMany.mockResolvedValue([
+      { externalOrderId: "order_1" },
+      { externalOrderId: "order_2" },
+    ]);
+    db.query.marketplaceConnections.findFirst.mockResolvedValue(connection);
+    db.query.syncRuns.findFirst.mockResolvedValue(null);
+    const executeSync = vi.fn().mockResolvedValue({});
+    (service as unknown as { executeSync: typeof executeSync }).executeSync =
+      executeSync;
+
+    await service.runOrderSync({
+      companyId: "company_123",
+      externalOrderIds: ["order_1", "order_2"],
+      organizationId: "org_123",
+      userId: "user_123",
+    });
+
+    expect(db.query.externalOrders.findMany).toHaveBeenCalled();
+    expect(executeSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyId: "company_123",
+        connection,
+        organizationId: "org_123",
+        providerSlug: "mercadolivre",
+        targetOrderIds: ["order_1", "order_2"],
+        skipAutomaticRerun: true,
+        triggerMetadata: { orderIds: ["order_1", "order_2"], scope: "order" },
+      }),
+    );
+  });
+
+  it("rejects targeted IDs that are missing from the selected company", async () => {
+    const { db, service } = createService();
+    db.query.externalOrders.findMany.mockResolvedValue([
+      { externalOrderId: "order_1" },
+    ]);
+    const executeSync = vi.fn();
+    (service as unknown as { executeSync: typeof executeSync }).executeSync =
+      executeSync;
+
+    await expect(
+      service.runOrderSync({
+        companyId: "company_123",
+        externalOrderIds: ["order_1", "order_2"],
+        organizationId: "org_123",
+        userId: "user_123",
+      }),
+    ).rejects.toThrow("Order not found.");
+
+    expect(executeSync).not.toHaveBeenCalled();
+  });
+
+  it("fetches only requested Mercado Livre orders through order notifications", async () => {
+    const { service } = createService();
+    const syncOrders = vi.fn().mockImplementation(
+      async (input: {
+        notification: { notificationId: string | null } | null;
+      }) => {
+        const orderId = input.notification?.notificationId ?? "";
+        return {
+          cursor: null,
+          orders: [
+            {
+              currency: "BRL",
+              externalOrderId: orderId,
+              fees: [],
+              items: [],
+              metadata: {},
+              orderedAt: "2026-05-01T11:45:00.000Z",
+              status: "paid",
+              totalAmount: "200.00",
+            },
+          ],
+          products: [
+            {
+              externalProductId: `product_${orderId}`,
+              metadata: {},
+              sku: null,
+              title: null,
+            },
+          ],
+        };
+      },
+    );
+    const cursor = { orderedAfter: "2026-06-01T00:00:00.000Z" };
+
+    const result = await (
+      service as unknown as {
+        syncTargetedOrders: (input: unknown) => Promise<{
+          cursor: unknown;
+          orders: Array<{ externalOrderId: string }>;
+          products: Array<{ externalProductId: string }>;
+        }>;
+      }
+    ).syncTargetedOrders({
+      connection: { id: "conn_123" },
+      cursor,
+      orderIds: ["order_1", "order_2"],
+      organizationId: "org_123",
+      provider: { syncOrders } as never,
+    });
+
+    expect(syncOrders).toHaveBeenCalledTimes(2);
+    expect(syncOrders.mock.calls.map(([input]) => input.notification)).toEqual([
+      {
+        notificationId: "order_1",
+        resource: "/orders/order_1",
+        topic: "orders_v2",
+      },
+      {
+        notificationId: "order_2",
+        resource: "/orders/order_2",
+        topic: "orders_v2",
+      },
+    ]);
+    expect(result.orders.map((order) => order.externalOrderId)).toEqual([
+      "order_1",
+      "order_2",
+    ]);
+    expect(result.cursor).toBe(cursor);
   });
 
   it("allows the current window again for non-Mercado Livre providers when SYNC_RELAX_GUARDS is enabled outside production", async () => {

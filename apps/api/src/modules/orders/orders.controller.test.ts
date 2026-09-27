@@ -202,6 +202,47 @@ describe("orders controller", () => {
     );
   });
 
+  it("syncs one selected order and returns refreshed details", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: { id: "org_123", name: "Org", role: "owner", slug: "org" },
+      selectedCompanyId: "company_123",
+      session: { expiresAt: new Date("2026-06-20T00:00:00.000Z"), id: "session_123" },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(entitlementsService, "requireActiveEntitlement").mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    const updatedDetails = { order: { id: "order_row_1" } };
+    vi.spyOn(ordersService, "syncOrderFromMercadoLivre").mockResolvedValueOnce(
+      updatedDetails as never,
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/orders/order_row_1/sync",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: updatedDetails, error: null });
+    expect(ordersService.syncOrderFromMercadoLivre).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      }),
+      "order_row_1",
+    );
+  });
+
   it("updates order composition for authenticated entitled requests", async () => {
     vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
       organization: { id: "org_123", name: "Org", role: "owner", slug: "org" },

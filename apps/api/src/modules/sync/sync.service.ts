@@ -5,6 +5,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import {
@@ -28,7 +29,7 @@ import type {
   SyncRunRecord,
   SyncStatusResponse,
 } from "@lucreii/types";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { createIntegrationProviders } from "@/modules/integrations/provider-registry";
@@ -37,6 +38,7 @@ import {
   type IntegrationProvider,
   type IntegrationSyncNotification,
   type IntegrationSyncCursor,
+  type IntegrationSyncProduct,
   type IntegrationSyncResult,
 } from "@/modules/integrations/integrations.types";
 import {
@@ -321,6 +323,8 @@ type ExecuteSyncInput = {
   companyId: string;
   manualRange: ManualSyncRange | null;
   notification: IntegrationSyncNotification | null;
+  targetOrderIds?: string[];
+  skipAutomaticRerun?: boolean;
   organizationId: string;
   providerSlug: IntegrationProviderSlug;
   triggerMetadata: Record<string, unknown>;
@@ -517,6 +521,85 @@ export class SyncService {
       },
       triggerOrigin: "manual",
       userId,
+    });
+  }
+
+  async runOrderSync(input: {
+    companyId: string;
+    externalOrderIds: string[];
+    organizationId: string;
+    userId: string;
+  }): Promise<RunSyncResponse> {
+    const externalOrderIds = Array.from(
+      new Set(input.externalOrderIds.map((orderId) => orderId.trim())),
+    ).filter(Boolean);
+
+    if (externalOrderIds.length === 0) {
+      throw new BadRequestException(
+        "At least one Mercado Livre order is required.",
+      );
+    }
+
+    const storedOrders = await this.db.query.externalOrders.findMany({
+      columns: { externalOrderId: true },
+      where: and(
+        eq(externalOrders.organizationId, input.organizationId),
+        eq(externalOrders.companyId, input.companyId),
+        eq(externalOrders.provider, "mercadolivre"),
+        inArray(externalOrders.externalOrderId, externalOrderIds),
+      ),
+    });
+    const storedOrderIds = new Set(
+      storedOrders.map((order) => order.externalOrderId),
+    );
+
+    if (externalOrderIds.some((orderId) => !storedOrderIds.has(orderId))) {
+      throw new NotFoundException("Order not found.");
+    }
+
+    const provider = this.getProvider("mercadolivre");
+    const [connection, activeRun, lastCompletedRun] = await Promise.all([
+      this.findConnection(
+        input.organizationId,
+        input.companyId,
+        "mercadolivre",
+      ),
+      this.findLatestRun(
+        input.organizationId,
+        input.companyId,
+        "mercadolivre",
+        "processing",
+      ),
+      this.findLatestRun(
+        input.organizationId,
+        input.companyId,
+        "mercadolivre",
+        "completed",
+      ),
+    ]);
+    const availability = this.buildAvailability(
+      provider,
+      connection,
+      activeRun,
+      lastCompletedRun,
+    );
+
+    if (!availability.canRun || !connection) {
+      throw this.toAvailabilityException(availability);
+    }
+
+    return this.executeSync({
+      companyId: input.companyId,
+      connection,
+      manualRange: null,
+      notification: null,
+      targetOrderIds: externalOrderIds,
+      skipAutomaticRerun: true,
+      organizationId: input.organizationId,
+      providerSlug: "mercadolivre",
+      triggerMetadata: { orderIds: externalOrderIds, scope: "order" },
+      triggerOrigin: "manual",
+      userId: input.userId,
     });
   }
 
@@ -901,22 +984,31 @@ export class SyncService {
     let response: RunSyncResponse | null = null;
 
     try {
-      const syncResult = await provider.syncOrders(
-        input.manualRange
-          ? {
-              connection,
-              mode: "manual_range",
-              organizationId: input.organizationId,
-              range: input.manualRange,
-            }
-          : {
+      const syncResult =
+        input.targetOrderIds !== undefined
+          ? await this.syncTargetedOrders({
               connection,
               cursor: requestedCursor,
-              mode: "incremental",
-              notification: input.notification,
+              orderIds: input.targetOrderIds,
               organizationId: input.organizationId,
-            },
-      );
+              provider,
+            })
+          : await provider.syncOrders(
+              input.manualRange
+                ? {
+                    connection,
+                    mode: "manual_range",
+                    organizationId: input.organizationId,
+                    range: input.manualRange,
+                  }
+                : {
+                    connection,
+                    cursor: requestedCursor,
+                    mode: "incremental",
+                    notification: input.notification,
+                    organizationId: input.organizationId,
+                  },
+            );
       const counts = await this.persistSyncResult({
         companyId: input.companyId,
         connection,
@@ -1001,7 +1093,10 @@ export class SyncService {
         .where(eq(syncRuns.id, processingRun.id));
     }
 
-    if (this.isRealtimeProvider(input.providerSlug)) {
+    if (
+      this.isRealtimeProvider(input.providerSlug) &&
+      !input.skipAutomaticRerun
+    ) {
       try {
         await this.flushAutomaticRerunIfNeeded(
           connection.id,
@@ -1022,6 +1117,52 @@ export class SyncService {
     }
 
     return response!;
+  }
+
+  private async syncTargetedOrders(input: {
+    connection: MarketplaceConnection;
+    cursor: IntegrationSyncCursor;
+    orderIds: string[];
+    organizationId: string;
+    provider: IntegrationProvider;
+  }): Promise<IntegrationSyncResult> {
+    const orders: IntegrationSyncResult["orders"] = [];
+    const products = new Map<string, IntegrationSyncProduct>();
+
+    for (const orderId of input.orderIds) {
+      const result = await input.provider.syncOrders({
+        connection: input.connection,
+        cursor: input.cursor,
+        mode: "incremental",
+        notification: {
+          notificationId: orderId,
+          resource: `/orders/${encodeURIComponent(orderId)}`,
+          topic: "orders_v2",
+        },
+        organizationId: input.organizationId,
+      });
+      const matchingOrders = result.orders.filter(
+        (order) => order.externalOrderId === orderId,
+      );
+
+      if (result.orders.length !== 1 || matchingOrders.length !== 1) {
+        throw new IntegrationProviderError(
+          "Mercado Livre returned unexpected order data during targeted sync.",
+          "remote_request_failed",
+        );
+      }
+
+      orders.push(matchingOrders[0]!);
+      for (const product of result.products) {
+        products.set(product.externalProductId, product);
+      }
+    }
+
+    return {
+      cursor: input.cursor,
+      orders,
+      products: Array.from(products.values()),
+    };
   }
 
   private summarizeMercadoLivreNotification(

@@ -15,6 +15,7 @@ import {
   Package,
   Percent,
   Pencil,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -51,6 +52,7 @@ import {
   downloadOrdersExport,
   useOrderDetails,
   useOrdersList,
+  useSyncOrder,
   useUpdateOrderComposition,
   useUpdateOrderProductCostBulk,
 } from "../hooks/use-orders-data";
@@ -972,6 +974,10 @@ function OrdersHomeContent({
   const [productCostDraft, setProductCostDraft] = useState("");
   const [productCostError, setProductCostError] = useState<string | null>(null);
   const [productCostSaved, setProductCostSaved] = useState(false);
+  const [syncOrderFeedback, setSyncOrderFeedback] = useState<{
+    message: string;
+    type: "error" | "success";
+  } | null>(null);
   const [bulkProductCostModalOpen, setBulkProductCostModalOpen] =
     useState(false);
   const [bulkProductCostDraft, setBulkProductCostDraft] = useState("");
@@ -998,6 +1004,7 @@ function OrdersHomeContent({
   });
 
   const detailQuery = useOrderDetails(selectedOrderId, modalOpen);
+  const syncOrderMutation = useSyncOrder();
   const updateOrderCompositionMutation = useUpdateOrderComposition();
   const updateOrderProductCostBulkMutation = useUpdateOrderProductCostBulk();
 
@@ -1050,9 +1057,33 @@ function OrdersHomeContent({
     }
   };
 
+  const handleSyncOrder = async () => {
+    if (
+      !selectedOrderId ||
+      detailQuery.data?.order.provider !== "mercadolivre"
+    ) {
+      return;
+    }
+
+    setSyncOrderFeedback(null);
+    try {
+      await syncOrderMutation.mutateAsync(selectedOrderId);
+      setSyncOrderFeedback({
+        message: "Pedido sincronizado com sucesso.",
+        type: "success",
+      });
+    } catch {
+      setSyncOrderFeedback({
+        message: "Não foi possível sincronizar o pedido. Tente novamente.",
+        type: "error",
+      });
+    }
+  };
+
   const handleCloseOrderModal = () => {
     setModalOpen(false);
     setSelectedOrderId(null);
+    setSyncOrderFeedback(null);
     setDetailTab("items");
     setIsEditingProductCost(false);
     setProductCostError(null);
@@ -1706,6 +1737,7 @@ function OrdersHomeContent({
                       className="cursor-pointer border-b border-border/50 outline-none transition-colors hover:bg-surface-strong/30 focus-visible:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/30"
                       onClick={() => {
                         setSelectedOrderId(row.id);
+                        setSyncOrderFeedback(null);
                         setItemSortConfig(null);
                         setDetailTab("items");
                         setModalOpen(true);
@@ -1716,6 +1748,7 @@ function OrdersHomeContent({
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
                           setSelectedOrderId(row.id);
+                          setSyncOrderFeedback(null);
                           setItemSortConfig(null);
                           setDetailTab("items");
                           setModalOpen(true);
@@ -1844,6 +1877,43 @@ function OrdersHomeContent({
           </div>
         ) : (
           <div className="space-y-4">
+            {detailQuery.data.order.provider === "mercadolivre" ? (
+              <div className="flex justify-end">
+                <Button
+                  className="shrink-0"
+                  loading={syncOrderMutation.isPending}
+                  onClick={() => void handleSyncOrder()}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  {syncOrderMutation.isPending ? (
+                    "Sincronizando..."
+                  ) : (
+                    <>
+                      <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                      Sincronizar
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : null}
+            {syncOrderFeedback ? (
+              <div
+                aria-live={
+                  syncOrderFeedback.type === "error" ? "assertive" : "polite"
+                }
+                className={cn(
+                  "rounded-xl border px-4 py-3 text-sm",
+                  syncOrderFeedback.type === "error"
+                    ? "border-error/25 bg-error/5 text-error"
+                    : "border-accent/20 bg-accent/5 text-foreground",
+                )}
+                role={syncOrderFeedback.type === "error" ? "alert" : "status"}
+              >
+                {syncOrderFeedback.message}
+              </div>
+            ) : null}
             {(() => {
               const tags = detailQuery.data.tags ?? [];
               const pendingFinancialFields =

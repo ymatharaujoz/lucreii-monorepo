@@ -91,6 +91,14 @@ export async function fetchOrderDetails(orderId: string): Promise<OrderDetails> 
   return apiClient.getValidatedData(`/orders/${orderId}`, orderDetailsApiResponseSchema);
 }
 
+export async function syncOrder(orderId: string): Promise<OrderDetails> {
+  const response = await apiClient.post<{ data: OrderDetails; error: null }>(
+    `/orders/${orderId}/sync`,
+  );
+
+  return response.data;
+}
+
 export async function downloadOrdersExport(
   filters: OrderExportFilters &
     Partial<Pick<OrderListFilters, "includeSummary" | "page" | "pageSize">> = {},
@@ -228,6 +236,27 @@ export function useUpdateOrderProductCostBulk() {
     mutationFn: updateOrderProductCostBulk,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
+    },
+  });
+}
+
+export function useSyncOrder() {
+  const queryClient = useQueryClient();
+  const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
+
+  return useMutation({
+    mutationFn: syncOrder,
+    onSuccess: async (data, orderId) => {
+      queryClient.setQueryData(
+        [...ordersQueryKey, selectedCompanyId, "detail", orderId],
+        data,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ordersQueryKey }),
+        queryClient.invalidateQueries({
+          queryKey: [...ordersQueryKey, selectedCompanyId, "detail", orderId],
+        }),
+      ]);
     },
   });
 }
