@@ -84,7 +84,7 @@ type PreparedMarketplaceConnection = {
 
 const HEADER_ALIASES: Record<HeaderKey, string[]> = {
   commission: ["TARIFA DE VENDA E IMPOSTOS BRL"],
-  date: ["DATA DA VENDA"],
+  date: ["DATA DA VENDA", "DATA DE VENDA"],
   discount: ["DESCONTOS E BONUS", "DESCONTOS E BÔNUS"],
   productRevenue: ["RECEITA POR PRODUTOS BRL"],
   revenueShipping: ["RECEITA POR ENVIO BRL"],

@@ -28,7 +28,7 @@ const statuses = [
   "Pacote de 2 produtos",
 ];
 
-function makeWorkbookBuffer(rows: unknown[][]) {
+function makeWorkbookBuffer(rows: unknown[][], dateHeader = "Data da venda") {
   const sheet = utils.aoa_to_sheet([
     ["Relatório de vendas exportado pelo marketplace"],
     ["Período: histórico completo"],
@@ -38,7 +38,7 @@ function makeWorkbookBuffer(rows: unknown[][]) {
     [
       "N.º de venda",
       "Estado",
-      "Data da venda",
+      dateHeader,
       "Total (BRL)",
       "Título do anúncio",
       "SKU",
@@ -161,6 +161,34 @@ describe("Mercado Livre spreadsheet order import", () => {
     expect(new Set(result.orders.map((order) => order.status))).toEqual(
       new Set(statuses),
     );
+  });
+
+  it("detects the Mercado Livre 'Data de venda' header variant", () => {
+    const result = parseMercadoLivreSpreadsheet(
+      makeWorkbookBuffer(
+        [
+          [
+            "sale-1",
+            "Entregue",
+            "18 de julho de 2026 13:24",
+            "R$ 100,00",
+            "Produto",
+            "SKU-1",
+            "R$ 100,00",
+            1,
+          ],
+        ],
+        "Data de venda",
+      ),
+    );
+
+    expect(result.errors).toEqual([]);
+    expect(result.totalRows).toBe(1);
+    expect(result.orders).toHaveLength(1);
+    expect(result.orders[0]).toMatchObject({
+      orderedAt: new Date("2026-07-18T13:24:00.000Z"),
+      saleId: "sale-1",
+    });
   });
 
   it("classifies physical returns without classifying refund-only statuses", () => {
