@@ -106,6 +106,27 @@ describe("calculateFinancialIndicators", () => {
     });
   });
 
+  it("uses known order profit when some cost components are incomplete", () => {
+    const result = calculateFinancialIndicatorsFromTotals({
+      advertising: "0.00",
+      fixedCost: "0.00",
+      marketplaceCommission: "2.00",
+      netSales: 1,
+      packagingCost: "1.00",
+      productCost: "5.00",
+      revenue: "20.00",
+      shippingCost: "4.00",
+      taxAmount: "1.00",
+      totalProfit: "6.50",
+    });
+
+    expect(result).toMatchObject({
+      averageMarginPercent: "32.50",
+      totalProfit: "6.50",
+      variableCosts: "13.50",
+    });
+  });
+
   it("calculates average margin as total profit divided by revenue", () => {
     const result = calculateFinancialIndicatorsFromTotals({
       advertising: "0.00",

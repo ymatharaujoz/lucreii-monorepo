@@ -191,6 +191,7 @@ export class FinancialIndicatorsService {
       revenue: ordersSummary.revenue,
       shippingCost: ordersSummary.shippingCost,
       taxAmount: ordersSummary.taxAmount,
+      totalProfit: ordersSummary.totalProfit,
     });
 
     return {

@@ -61,6 +61,31 @@ describe("order financial eligibility", () => {
   });
 
   it.each([
+    "Mediação finalizada com reembolso para o comprador",
+    "Pacote não entregue",
+  ])("excludes %s from financial indicators", (sourceStatus) => {
+    expect(
+      isFinanciallyEligibleOrder(
+        buildOrder({ metadata: { sourceStatus }, status: "paid" }),
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps seller-retained refund outcomes financially eligible", () => {
+    expect(
+      isFinanciallyEligibleOrder(
+        buildOrder({
+          metadata: {
+            sourceStatus:
+              "Liberamos o dinheiro da venda para você e reembolsamos o comprador",
+          },
+          status: "partially_refunded",
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
     { metadata: { returned: true }, status: "paid" },
     { metadata: { returnQuantityBySku: { "SKU-1": 1 } }, status: "paid" },
     { metadata: { sourceStatus: "Devolução concluída" }, status: "paid" },

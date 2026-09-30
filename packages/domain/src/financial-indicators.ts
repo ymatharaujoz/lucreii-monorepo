@@ -45,6 +45,7 @@ export type FinancialIndicatorTotalsInput = {
   revenue: string | number | null | undefined;
   shippingCost: string | number | null | undefined;
   taxAmount: string | number | null | undefined;
+  totalProfit?: string | number | null | undefined;
 };
 
 const CENT_SCALE = 100n;
@@ -213,14 +214,18 @@ export function calculateFinancialIndicatorsFromTotals(
   const revenue = parseDecimalCents(input.revenue);
   const shippingCost = parseDecimalCents(input.shippingCost);
   const taxAmount = parseDecimalCents(input.taxAmount);
-  const variableCosts =
+  const componentVariableCosts =
     marketplaceCommission +
     shippingCost +
     taxAmount +
     packagingCost +
     productCost -
     refundBonus;
-  const totalProfit = revenue - variableCosts;
+  const totalProfit =
+    input.totalProfit === null || input.totalProfit === undefined
+      ? revenue - componentVariableCosts
+      : parseDecimalCents(input.totalProfit);
+  const variableCosts = revenue - totalProfit;
   const realProfit = totalProfit - fixedCost;
   const netProfit = realProfit - advertising;
   const averageMarginPercent = formatPercent(totalProfit, revenue);

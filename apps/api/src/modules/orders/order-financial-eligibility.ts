@@ -12,6 +12,11 @@ const CANONICAL_STATUS_SET = new Set<OrderCanonicalStatus>([
   "cancelled",
 ]);
 
+const EXCLUDED_FINANCIAL_STATUS_SIGNALS = new Set([
+  "mediacao finalizada com reembolso para o comprador",
+  "pacote nao entregue",
+]);
+
 export type FinancialEligibilityOrder = Pick<
   ExternalOrder,
   "metadata" | "provider" | "status"
@@ -49,6 +54,12 @@ function readStatusSignals(order: FinancialEligibilityOrder) {
   return signals
     .filter((signal): signal is string => typeof signal === "string")
     .map(normalizeStatusSignal);
+}
+
+function hasFinanciallyExcludedStatusMarker(order: FinancialEligibilityOrder) {
+  return readStatusSignals(order).some((signal) =>
+    EXCLUDED_FINANCIAL_STATUS_SIGNALS.has(signal),
+  );
 }
 
 function hasPositiveReturnQuantity(value: unknown) {
@@ -212,6 +223,7 @@ export function isFinanciallyEligibleOrder(order: FinancialEligibilityOrder) {
 
   if (
     metadata.paid === false ||
+    hasFinanciallyExcludedStatusMarker(order) ||
     hasOrderCancellationMarker(order) ||
     hasOrderReturnMarker(order)
   ) {

@@ -318,10 +318,6 @@ function summarizeExportedOrderFinancials(
   let totalProfit = 0n;
 
   for (const logicalOrder of logicalOrders) {
-    if (logicalOrder.order.totalProfitAmount === null) {
-      continue;
-    }
-
     const composition = logicalOrder.composition;
     marketplaceCommission += parseMoneyToCents(
       composition.marketplaceCommissionAmount,
@@ -333,7 +329,9 @@ function summarizeExportedOrderFinancials(
     revenue += parseMoneyToCents(logicalOrder.order.totalWithFees);
     shippingCost += parseMoneyToCents(composition.shippingOrFixedFeeAmount);
     taxAmount += parseMoneyToCents(composition.taxAmount);
-    totalProfit += parseMoneyToCents(logicalOrder.order.totalProfitAmount);
+    if (logicalOrder.order.totalProfitAmount !== null) {
+      totalProfit += parseMoneyToCents(logicalOrder.order.totalProfitAmount);
+    }
   }
 
   return {
@@ -3147,6 +3145,28 @@ export class OrdersService {
             field === "productCostAmount" && groupedProductCostAllocations
               ? formatCents(groupedProductCostAllocations[index] ?? 0n)
               : value;
+        }
+
+        if (
+          providedFields.some(
+            ([field]) => field === "marketplaceCommissionAmount",
+          )
+        ) {
+          const importOwnedFields = Array.isArray(
+            metadata.spreadsheetImportOwnedCompositionOverrides,
+          )
+            ? metadata.spreadsheetImportOwnedCompositionOverrides.filter(
+                (field): field is string =>
+                  typeof field === "string" &&
+                  field !== "marketplaceCommissionAmount",
+              )
+            : [];
+          if (importOwnedFields.length > 0) {
+            metadata.spreadsheetImportOwnedCompositionOverrides =
+              importOwnedFields;
+          } else {
+            delete metadata.spreadsheetImportOwnedCompositionOverrides;
+          }
         }
 
         metadata.compositionOverrides = compositionOverrides;

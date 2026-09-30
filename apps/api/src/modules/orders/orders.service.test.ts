@@ -6875,6 +6875,30 @@ describe("OrdersService", () => {
           },
         ],
       },
+      {
+        composition: {
+          marketplaceCommissionAmount: "1.00",
+          packagingCostAmount: "0.00",
+          productCostAmount: "0.00",
+          refundBonusAmount: "0.00",
+          shippingOrFixedFeeAmount: "2.00",
+          taxAmount: "1.00",
+        },
+        items: [],
+        order: {
+          ...exportOrderFields,
+          itemsSold: 1,
+          totalProfitAmount: null,
+          totalWithFees: "10.00",
+        },
+        rows: [
+          {
+            metadata: {},
+            provider: "mercadolivre",
+            status: "paid",
+          },
+        ],
+      },
     ] as never[];
     const readLogicalOrdersForExport = vi
       .spyOn(
@@ -6911,17 +6935,17 @@ describe("OrdersService", () => {
     expect(summary).toEqual({
       excludedRevenue: "90.00",
       excludedSales: 2,
-      grossSales: 4,
-      marketplaceCommission: "15.00",
-      netSales: 3,
+      grossSales: 5,
+      marketplaceCommission: "16.00",
+      netSales: 4,
       packagingCost: "8.00",
       productCost: "53.00",
       refundBonus: "0.00",
-      revenue: "120.00",
-      shippingCost: "7.00",
-      taxAmount: "12.00",
+      revenue: "130.00",
+      shippingCost: "9.00",
+      taxAmount: "13.00",
       totalProfit: "25.00",
-      variableCosts: "95.00",
+      variableCosts: "105.00",
     });
     expect(exportedProfit).toBe(95);
     expect(readLogicalOrdersForExport).toHaveBeenNthCalledWith(1, context, {

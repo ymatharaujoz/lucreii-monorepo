@@ -38,6 +38,7 @@ function buildOrdersService(
     revenue: string;
     shippingCost: string;
     taxAmount: string;
+    totalProfit: string;
   }> = {},
 ) {
   return {
@@ -109,6 +110,43 @@ describe("FinancialIndicatorsService", () => {
       },
       { provider: undefined, referenceMonth: "2026-04-01" },
     );
+  });
+
+  it("uses the reconciled August totals with incomplete product cost data", async () => {
+    const db = buildDb();
+    db.query.companies.findFirst.mockResolvedValue(company);
+    db.query.fixedCosts.findMany.mockResolvedValue([]);
+    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
+    const ordersService = buildOrdersService({
+      grossSales: 516,
+      marketplaceCommission: "2272.31",
+      netSales: 486,
+      packagingCost: "256.50",
+      productCost: "3943.68",
+      refundBonus: "533.60",
+      revenue: "17706.98",
+      shippingCost: "3725.30",
+      taxAmount: "708.67",
+      totalProfit: "7323.86",
+    });
+
+    const result = await new FinancialIndicatorsService(
+      db as never,
+      buildProductsService() as never,
+      ordersService as never,
+    ).read("org-1", "user-1", "company-1", "mercadolivre", "2026-08-01");
+
+    expect(result).toMatchObject({
+      averageMarginPercent: "41.36",
+      marketplaceCommission: "2272.31",
+      packagingCost: "256.50",
+      productCost: "3943.68",
+      revenue: "17706.98",
+      shippingCost: "3725.30",
+      taxAmount: "708.67",
+      totalProfit: "7323.86",
+      variableCosts: "10383.12",
+    });
   });
 
   it("sums only the selected month's fixed costs and forwards the marketplace filter", async () => {

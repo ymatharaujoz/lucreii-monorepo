@@ -140,6 +140,18 @@ function hasCellValue(value: SpreadsheetCell) {
   );
 }
 
+function readMetadataRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : {};
+}
+
+function readMetadataStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
 function parseMoney(value: SpreadsheetCell): number | null {
   if (typeof value === "number") {
     return Number.isFinite(value) ? Math.round(value * 100) / 100 : null;
@@ -825,16 +837,115 @@ export class OrderSpreadsheetImportService {
             eq(table.externalOrderId, input.order.saleId),
           ),
       });
+      const existingMetadata = readMetadataRecord(existing?.metadata);
+      const existingCompositionOverrides = readMetadataRecord(
+        existingMetadata.compositionOverrides,
+      );
+      const ownershipWasTracked = Array.isArray(
+        existingMetadata.spreadsheetImportOwnedCompositionOverrides,
+      );
+      const ownedCompositionOverrides = readMetadataStringArray(
+        existingMetadata.spreadsheetImportOwnedCompositionOverrides,
+      );
+      const hasCommissionOverride =
+        typeof existingCompositionOverrides.marketplaceCommissionAmount ===
+        "string";
+      const isLegacyImportedFlexOverride =
+        Boolean(existing) &&
+        !ownershipWasTracked &&
+        existingMetadata.importSource === "spreadsheet" &&
+        typeof existingMetadata.fixedCostAmount === "string" &&
+        hasCommissionOverride;
+      if (existing && isLegacyImportedFlexOverride) {
+        const existingFees = await tx.query.externalFees.findMany({
+          columns: { amount: true, feeType: true },
+          where: and(
+            eq(externalFees.organizationId, input.organizationId),
+            eq(externalFees.externalOrderId, existing.id),
+          ),
+        });
+        const priorCommissionCents = existingFees
+          .filter((fee) => fee.feeType === "marketplace_commission")
+          .reduce(
+            (total, fee) =>
+              total + Math.round((parseMoney(fee.amount) ?? 0) * 100),
+            0,
+          );
+        const priorFixedCostCents = existingFees
+          .filter((fee) => fee.feeType === "fixed_fee")
+          .reduce(
+            (total, fee) =>
+              total + Math.round((parseMoney(fee.amount) ?? 0) * 100),
+            0,
+          );
+        const priorOverrideCents = Math.round(
+          (parseMoney(
+            existingCompositionOverrides.marketplaceCommissionAmount as SpreadsheetCell,
+          ) ?? 0) * 100,
+        );
+        if (priorCommissionCents - priorFixedCostCents === priorOverrideCents) {
+          ownedCompositionOverrides.push("marketplaceCommissionAmount");
+        }
+      }
+
+      const compositionOverrides = { ...existingCompositionOverrides };
+      for (const field of ownedCompositionOverrides) {
+        delete compositionOverrides[field];
+      }
+      const nextOwnedCompositionOverrides: string[] = [];
+      if (
+        input.fixedCost !== null &&
+        !Object.hasOwn(compositionOverrides, "marketplaceCommissionAmount")
+      ) {
+        compositionOverrides.marketplaceCommissionAmount = (
+          input.order.commissionAmount - input.fixedCost
+        ).toFixed(2);
+        nextOwnedCompositionOverrides.push("marketplaceCommissionAmount");
+      }
+
+      const preservedMetadata = { ...existingMetadata };
+      for (const key of [
+        "compositionOverrides",
+        "fixedCostAmount",
+        "flexResolution",
+        "importSource",
+        "mercadoLivreOrderIds",
+        "package",
+        "pendingFinancialFields",
+        "returnQuantityBySku",
+        "source",
+        "sourceStatus",
+        "spreadsheetImport",
+        "spreadsheetImportOwnedCompositionOverrides",
+        "spreadsheetProductRevenueAmount",
+        "tags",
+      ]) {
+        delete preservedMetadata[key];
+      }
+      const tags = readMetadataStringArray(existingMetadata.tags).filter(
+        (tag) =>
+          tag
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase() !== "envio flex",
+      );
+      if (input.order.flex) {
+        tags.push("ENVIO FLEX");
+      }
       const pendingFinancialFields =
         input.order.flex && input.flexResolution === "pending"
           ? ["shippingOrFixedFeeAmount", "taxAmount"]
           : [];
       const metadata: Record<string, unknown> = {
+        ...preservedMetadata,
+        compositionOverrides,
         importSource: "spreadsheet",
         source: "spreadsheet",
         sourceStatus: input.order.status,
         spreadsheetImport: true,
-        tags: input.order.flex ? ["ENVIO FLEX"] : [],
+        spreadsheetImportOwnedCompositionOverrides:
+          nextOwnedCompositionOverrides,
+        tags,
         pendingFinancialFields,
         ...(input.order.isPhysicalReturn
           ? {
@@ -852,14 +963,7 @@ export class OrderSpreadsheetImportService {
             }
           : null,
         ...(input.fixedCost !== null
-          ? {
-              compositionOverrides: {
-                marketplaceCommissionAmount: (
-                  input.order.commissionAmount - input.fixedCost
-                ).toFixed(2),
-              },
-              fixedCostAmount: input.fixedCost.toFixed(2),
-            }
+          ? { fixedCostAmount: input.fixedCost.toFixed(2) }
           : {}),
         spreadsheetProductRevenueAmount:
           input.order.productRevenueAmount.toFixed(2),
