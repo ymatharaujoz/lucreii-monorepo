@@ -1006,29 +1006,39 @@ function CatalogSelectionActionBar({
 }
 
 /**
- * A synthetic (listing-level) parent with a single variation is just one
- * product: show the variation's own data (id, SKU, costs) under the listing
- * name, without an expandable row.
+ * A listing parent with a single variation is just one product, so it is shown
+ * without an expandable row.
+ * - Synthetic (listing-level) parents have no data of their own: show the
+ *   variation (id, SKU, costs) under the listing name.
+ * - Real parents keep their identity (they stay editable/deletable) and only
+ *   take the variation's SKU.
  */
 function collapseSingleVariationParent(product: ProductListItem): ProductListItem {
   const [onlyChild] = product.children;
 
   if (
     product.catalogRole !== "parent" ||
-    !product.isSyntheticParent ||
     product.children.length !== 1 ||
     !onlyChild
   ) {
     return product;
   }
 
+  if (product.isSyntheticParent) {
+    return {
+      ...onlyChild,
+      catalogRole: "standalone",
+      children: [],
+      name: product.name,
+      parentProductId: null,
+      variationLabel: null,
+    };
+  }
+
   return {
-    ...onlyChild,
-    catalogRole: "standalone",
+    ...product,
     children: [],
-    name: product.name,
-    parentProductId: null,
-    variationLabel: null,
+    sku: onlyChild.sku ?? product.sku,
   };
 }
 

@@ -114,7 +114,27 @@ useProductDataMock.mockReturnValue({
             updatedAt: "2026-06-17T10:00:00.000Z",
             variationLabel: "Cor: Azul",
           },
-        ], 
+          {
+            catalogGroupKey: "meli:MLB123",
+            catalogRole: "child",
+            coverImageUrl: null,
+            createdAt: "2026-06-17T10:00:00.000Z",
+            children: [],
+            derivedFromProvider: "mercadolivre",
+            financeDefaults: null,
+            id: "product_3",
+            images: [],
+            isActive: true,
+            latestCost: null,
+            name: "Kit Mercado Livre - Vermelho",
+            organizationId: "org_1",
+            parentProductId: "product_1",
+            sellingPrice: "149.90",
+            sku: "ML-001-VM",
+            updatedAt: "2026-06-17T10:00:00.000Z",
+            variationLabel: "Cor: Vermelho",
+          },
+        ],
         derivedFromProvider: "mercadolivre", 
         financeDefaults: {
           advertisingCost: "0.00",
@@ -776,6 +796,87 @@ describe("ProductsHome catalog modal", () => {
         button.getAttribute("aria-label")?.includes("Expandir"),
       ),
     ).toBe(false);
+    expect(document.querySelectorAll("tbody tr")).toHaveLength(1);
+
+    view.unmount();
+  });
+
+  it("shows a real parent with a single variation as one non-expandable product with the variation SKU", async () => {
+    const baseProduct = {
+      catalogGroupKey: "mercadolivre:MLB555",
+      companyId: "company_1",
+      coverImageUrl: null,
+      createdAt: "2026-06-17T10:00:00.000Z",
+      derivedFromProvider: "mercadolivre",
+      financeDefaults: null,
+      images: [],
+      isActive: true,
+      isSyntheticParent: false,
+      latestCost: null,
+      organizationId: "org_1",
+      sellingPrice: "44.68",
+      updatedAt: "2026-06-17T10:00:00.000Z",
+    };
+    const useProductData = await import("../hooks/use-product-data");
+    vi.mocked(useProductData.useProductData).mockReturnValue({
+      data: {
+        products: [
+          {
+            ...baseProduct,
+            catalogRole: "parent",
+            children: [
+              {
+                ...baseProduct,
+                catalogRole: "child",
+                children: [],
+                id: "product_child",
+                name: "MLBU5141093889",
+                parentProductId: "product_parent",
+                sku: "PlacaHumorBanheiro",
+                variationLabel: "MLBU5141093889",
+              },
+            ],
+            id: "product_parent",
+            name: "Placa De Banheiro Engracada",
+            parentProductId: null,
+            sku: "ML-MLB555",
+            variationLabel: null,
+          },
+        ],
+        scope: { companyId: null },
+      },
+      error: null,
+      financialState: "no-costs",
+      goToPage: vi.fn(),
+      isLoading: false,
+      isUnauthorized: false,
+      pagination: { currentPage: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+      referenceMonth: "2026-06-01",
+      referenceMonthSelectOptions: ["2026-06-01"],
+      refetch: refetchMock,
+      refresh: refreshMock,
+      rows: [],
+      setReferenceMonth: vi.fn(),
+      stats: {
+        activeProducts: 1,
+        archivedProducts: 0,
+        pendingSyncProducts: 0,
+        productsWithCost: 0,
+        productsWithoutCost: 1,
+        syncedProductsTotal: 0,
+        totalAdCosts: 0,
+        totalManualExpenses: 0,
+        totalProductCosts: 0,
+        totalProducts: 1,
+      },
+    } as never);
+
+    const view = renderProductsHome();
+
+    expect(document.body.textContent).toContain("Placa De Banheiro Engracada");
+    expect(document.body.textContent).toContain("PlacaHumorBanheiro");
+    expect(document.body.textContent).not.toContain("ML-MLB555");
+    expect(document.body.textContent).not.toMatch(/\d+ varia/);
     expect(document.querySelectorAll("tbody tr")).toHaveLength(1);
 
     view.unmount();
