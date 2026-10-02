@@ -247,6 +247,9 @@ export function DashboardFinancialIndicators({
   const advertisingProfit = displayedTotalProfit - displayedAdvertising;
   const advertisingMarginPercent =
     displayedRevenue === 0 ? 0 : (advertisingProfit / displayedRevenue) * 100;
+  const advertisingProfitValue = roundToCents(
+    (advertisingMarginPercent / 100) * displayedRevenue,
+  );
   const netMarginPercent =
     displayedRevenue === 0
       ? 0
@@ -529,7 +532,18 @@ export function DashboardFinancialIndicators({
                 <IndicatorCard
                   icon={<Scale className="h-4 w-4" />}
                   label="Ponto de Equilíbrio"
-                  subValue={`Custo Fixo: ${formatMoney(financialIndicators.fixedCost, { maximumFractionDigits: 2 })}`}
+                  subValue={
+                    <>
+                      Custo Fixo:{" "}
+                      {formatMoney(financialIndicators.fixedCost, {
+                        maximumFractionDigits: 2,
+                      })}
+                      <br />
+                      Publicidade: {formatMoney(displayedMonthlyAdvertising, {
+                        maximumFractionDigits: 2,
+                      })}
+                    </>
+                  }
                   trend={{
                     direction:
                       revenue >= breakEven && breakEven > 0 ? "up" : "down",
@@ -668,13 +682,32 @@ export function DashboardFinancialIndicators({
                       </label>
                     </>
                   )}
-                  {isMarketplaceView && (
+                  {isMarketplaceView ? (
+                    <>
+                      <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Margem Após Publicidade
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          {formatNetMarginPercent(advertisingMarginPercent)}
+                        </span>
+                      </div>
+                      <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Lucro Após Publicidade
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          {formatMoney(advertisingProfitValue)}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
                     <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Margem Após Publicidade
+                        Publicidade
                       </span>
                       <span className="text-sm font-semibold tabular-nums text-foreground">
-                        {formatNetMarginPercent(advertisingMarginPercent)}
+                        {formatMoney(displayedAdvertising)}
                       </span>
                     </div>
                   )}
@@ -725,6 +758,15 @@ export function DashboardFinancialIndicators({
                           {formatNetMarginPercent(advertisingMarginPercent)}
                         </span>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-accent" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Lucro Após Publicidade
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          {formatMoney(advertisingProfitValue)}
+                        </span>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -744,6 +786,15 @@ export function DashboardFinancialIndicators({
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
                           {formatCurrencyInput(companyDefaults.taxPercent)}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4 text-accent" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Publicidade
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          {formatMoney(displayedAdvertising)}
                         </span>
                       </div>
                     </>

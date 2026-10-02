@@ -132,7 +132,10 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("Lucro Líquido / Faturamento");
     expect(text).not.toContain("Total Variáveis");
     expect(text).not.toContain("Lucro Real");
-    expect(text).not.toContain("Publicidade");
+    expect(text).toMatch(/Custo Fixo: R\$\s200,00/);
+    expect(text).toMatch(/Publicidade: R\$\s1\.481,33/);
+    expect(text).toMatch(/Imposto10,00%PublicidadeR\$\s*1\.481/);
+    expect(text).not.toContain("Lucro Após Publicidade");
 
     expect(document.querySelectorAll("[class*=grid]").length).toBeGreaterThan(
       0,
@@ -365,6 +368,7 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("22,96%");
     expect(text).toContain("Publicidade");
     expect(text).toContain("Margem Após Publicidade");
+    expect(text).toContain("Lucro Após Publicidade");
     expect(text).not.toContain("Custo Fixo");
     expect(text).not.toContain("Imposto");
     expect(text).not.toContain("Margem Média");

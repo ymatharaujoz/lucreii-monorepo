@@ -7,21 +7,8 @@ function buildDb() {
     query: {
       companies: { findFirst: vi.fn() },
       fixedCosts: { findMany: vi.fn() },
-      marketplaceAdvertising: { findFirst: vi.fn() },
-      productMonthlyPerformance: { findMany: vi.fn() },
+      marketplaceAdvertising: { findMany: vi.fn() },
     },
-  };
-}
-
-function buildProductsService(items: unknown[] = [], totalPages = 1) {
-  return {
-    listPerformanceRows: vi.fn().mockResolvedValue({
-      items,
-      page: 1,
-      pageSize: 100,
-      totalItems: items.length,
-      totalPages,
-    }),
   };
 }
 
@@ -69,24 +56,11 @@ describe("FinancialIndicatorsService", () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);
     db.query.fixedCosts.findMany.mockResolvedValue([]);
-    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
-    const productsService = buildProductsService([
-      {
-        advertisingCost: "3.00",
-        commissionPct: 10,
-        packagingCost: "2.00",
-        returns: 0,
-        sellingPrice: 100,
-        sales: 1,
-        shipping: 5,
-        unitCost: "20.00",
-      },
-    ]);
+    db.query.marketplaceAdvertising.findMany.mockResolvedValue([]);
     const ordersService = buildOrdersService({ productCost: "19.00" });
 
     const result = await new FinancialIndicatorsService(
       db as never,
-      productsService as never,
       ordersService as never,
     ).read("org-1", "user-1", "company-1", undefined, "2026-04-01");
 
@@ -97,7 +71,7 @@ describe("FinancialIndicatorsService", () => {
       fixedCost: "100.00",
       fixedCostSource: "company_default",
       grossSales: 1,
-      netProfit: "-49.00",
+      netProfit: "-46.00",
       revenue: "100.00",
       totalProfit: "54.00",
       variableCosts: "46.00",
@@ -116,7 +90,7 @@ describe("FinancialIndicatorsService", () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);
     db.query.fixedCosts.findMany.mockResolvedValue([]);
-    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
+    db.query.marketplaceAdvertising.findMany.mockResolvedValue([]);
     const ordersService = buildOrdersService({
       grossSales: 516,
       marketplaceCommission: "2272.31",
@@ -132,7 +106,6 @@ describe("FinancialIndicatorsService", () => {
 
     const result = await new FinancialIndicatorsService(
       db as never,
-      buildProductsService() as never,
       ordersService as never,
     ).read("org-1", "user-1", "company-1", "mercadolivre", "2026-08-01");
 
@@ -156,8 +129,7 @@ describe("FinancialIndicatorsService", () => {
       { amount: "10.00" },
       { amount: "5.50" },
     ]);
-    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
-    const productsService = buildProductsService();
+    db.query.marketplaceAdvertising.findMany.mockResolvedValue([]);
     const ordersService = buildOrdersService({
       grossSales: 31,
       marketplaceCommission: "0.00",
@@ -171,7 +143,6 @@ describe("FinancialIndicatorsService", () => {
 
     const result = await new FinancialIndicatorsService(
       db as never,
-      productsService as never,
       ordersService as never,
     ).read("org-1", "user-1", "company-1", "shopee", "2026-05-01");
 
@@ -181,136 +152,23 @@ describe("FinancialIndicatorsService", () => {
     expect(result.excludedRevenue).toBe("0.00");
     expect(result.excludedSales).toBe(0);
     expect(db.query.fixedCosts.findMany).toHaveBeenCalledOnce();
-    expect(productsService.listPerformanceRows).toHaveBeenCalledWith(
+    expect(ordersService.readExportedFinancialSummary).toHaveBeenCalledWith(
       {
         organizationId: "org-1",
         selectedCompanyId: "company-1",
         userId: "user-1",
       },
-      {
-        marketplaces: ["shopee"],
-        page: 1,
-        pageSize: 100,
-        referenceMonth: "2026-05-01",
-      },
+      { provider: "shopee", referenceMonth: "2026-05-01" },
     );
-  });
-
-  it("uses the same visible performance sales as the products page", async () => {
-    const db = buildDb();
-    db.query.companies.findFirst.mockResolvedValue({
-      fixedCostDefault: "0.00",
-      taxRateDefault: "0.00",
-    });
-    db.query.fixedCosts.findMany.mockResolvedValue([]);
-    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
-    const productsService = buildProductsService([
-      {
-        advertisingCost: "0.00",
-        commissionPct: 0,
-        packagingCost: "0.00",
-        returns: 0,
-        sales: 28,
-        sellingPrice: 10,
-        shipping: 0,
-        unitCost: "0.00",
-      },
-    ]);
-    const ordersService = buildOrdersService({
-      marketplaceCommission: "0.00",
-      netSales: 28,
-      packagingCost: "0.00",
-      productCost: "0.00",
-      revenue: "280.00",
-      shippingCost: "0.00",
-      taxAmount: "0.00",
-    });
-
-    const result = await new FinancialIndicatorsService(
-      db as never,
-      productsService as never,
-      ordersService as never,
-    ).read("org-1", "user-1", "company-1", "shopee", "2026-04-01");
-
-    expect(result.netSales).toBe(28);
-    expect(result.grossSales).toBe(1);
-    expect(result.revenue).toBe("280.00");
-    expect(productsService.listPerformanceRows).toHaveBeenCalledWith(
-      {
-        organizationId: "org-1",
-        selectedCompanyId: "company-1",
-        userId: "user-1",
-      },
-      {
-        marketplaces: ["shopee"],
-        page: 1,
-        pageSize: 100,
-        referenceMonth: "2026-04-01",
-      },
-    );
-  });
-
-  it("accumulates all performance pages", async () => {
-    const db = buildDb();
-    db.query.companies.findFirst.mockResolvedValue({
-      fixedCostDefault: "0.00",
-      taxRateDefault: "0.00",
-    });
-    db.query.fixedCosts.findMany.mockResolvedValue([]);
-    db.query.marketplaceAdvertising.findFirst.mockResolvedValue(undefined);
-    const productsService = {
-      listPerformanceRows: vi
-        .fn()
-        .mockImplementation(({}, { page }: { page: number }) =>
-          Promise.resolve({
-            items: [
-              {
-                advertisingCost: "0.00",
-                commissionPct: 0,
-                packagingCost: "0.00",
-                returns: 0,
-                sales: page === 1 ? 28 : 4,
-                sellingPrice: 10,
-                shipping: 0,
-                unitCost: "0.00",
-              },
-            ],
-            page,
-            pageSize: 100,
-            totalItems: 2,
-            totalPages: 2,
-          }),
-        ),
-    };
-    const ordersService = buildOrdersService({
-      marketplaceCommission: "0.00",
-      netSales: 32,
-      packagingCost: "0.00",
-      productCost: "0.00",
-      revenue: "320.00",
-      shippingCost: "0.00",
-      taxAmount: "0.00",
-    });
-
-    const result = await new FinancialIndicatorsService(
-      db as never,
-      productsService as never,
-      ordersService as never,
-    ).read("org-1", "user-1", "company-1", undefined, "2026-04-01");
-
-    expect(result.netSales).toBe(32);
-    expect(result.revenue).toBe("320.00");
-    expect(productsService.listPerformanceRows).toHaveBeenCalledTimes(2);
   });
 
   it("uses the persisted marketplace advertising for the selected provider", async () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);
     db.query.fixedCosts.findMany.mockResolvedValue([]);
-    db.query.marketplaceAdvertising.findFirst.mockResolvedValue({
-      amount: "25.00",
-    });
-    const productsService = buildProductsService();
+    db.query.marketplaceAdvertising.findMany.mockResolvedValue([
+      { amount: "25.00" },
+    ]);
     const ordersService = buildOrdersService({
       marketplaceCommission: "0.00",
       packagingCost: "0.00",
@@ -322,23 +180,43 @@ describe("FinancialIndicatorsService", () => {
 
     const result = await new FinancialIndicatorsService(
       db as never,
-      productsService as never,
       ordersService as never,
     ).read("org-1", "user-1", "company-1", "shopee", "2026-05-01");
 
     expect(result.advertising).toBe("25.00");
     expect(result.netProfit).toBe("-25.00");
-    expect(db.query.marketplaceAdvertising.findFirst).toHaveBeenCalledOnce();
+    expect(db.query.marketplaceAdvertising.findMany).toHaveBeenCalledOnce();
+  });
+
+  it("sums advertising across all marketplaces and adds it to the break-even without a provider", async () => {
+    const db = buildDb();
+    db.query.companies.findFirst.mockResolvedValue(company);
+    db.query.fixedCosts.findMany.mockResolvedValue([]);
+    db.query.marketplaceAdvertising.findMany.mockResolvedValue([
+      { amount: "25.00" },
+      { amount: "10.00" },
+      { amount: "5.00" },
+    ]);
+    const ordersService = buildOrdersService({ productCost: "19.00" });
+
+    const result = await new FinancialIndicatorsService(
+      db as never,
+      ordersService as never,
+    ).read("org-1", "user-1", "company-1", undefined, "2026-04-01");
+
+    expect(result.monthlyAdvertising).toBe("40.00");
+    expect(result.advertising).toBe("40.00");
+    // (100.00 fixed cost + 40.00 advertising) / 54% average margin
+    expect(result.breakEvenRevenue).toBe("259.26");
   });
 
   it("keeps monthly fixed cost intact and prorates advertising for a partial date range", async () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);
     db.query.fixedCosts.findMany.mockResolvedValue([]);
-    db.query.marketplaceAdvertising.findFirst.mockResolvedValue({
-      amount: "31.00",
-    });
-    const productsService = buildProductsService();
+    db.query.marketplaceAdvertising.findMany.mockResolvedValue([
+      { amount: "31.00" },
+    ]);
     const ordersService = buildOrdersService({
       marketplaceCommission: "0.00",
       packagingCost: "0.00",
@@ -350,7 +228,6 @@ describe("FinancialIndicatorsService", () => {
 
     const result = await new FinancialIndicatorsService(
       db as never,
-      productsService as never,
       ordersService as never,
     ).read("org-1", "user-1", "company-1", "shopee", "2026-07-01", {
       dateFrom: "2026-07-01",
@@ -391,7 +268,6 @@ describe("FinancialIndicatorsService", () => {
 
     const result = await new FinancialIndicatorsService(
       db as never,
-      buildProductsService() as never,
       buildOrdersService() as never,
     ).updateMarketplaceAdvertising("org-1", "user-1", "company-1", {
       amount: "125.50",

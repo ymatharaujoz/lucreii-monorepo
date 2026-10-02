@@ -145,6 +145,26 @@ describe("calculateFinancialIndicators", () => {
     expect(result.breakEvenRevenue).toBe("596.13");
   });
 
+  it("adds monthly advertising to the fixed cost in the break-even", () => {
+    const result = calculateFinancialIndicatorsFromTotals({
+      advertising: "5.00",
+      fixedCost: "30.00",
+      marketplaceCommission: "0.00",
+      monthlyAdvertising: "20.00",
+      netSales: 1,
+      packagingCost: "0.00",
+      productCost: "0.00",
+      revenue: "100.00",
+      shippingCost: "0.00",
+      taxAmount: "0.00",
+      totalProfit: "50.00",
+    });
+
+    expect(result.averageMarginPercent).toBe("50.00");
+    // (30.00 + 20.00) / 50%
+    expect(result.breakEvenRevenue).toBe("100.00");
+  });
+
   it("returns zero break-even for a non-positive average margin", () => {
     const result = calculateFinancialIndicatorsFromTotals({
       advertising: "0.00",

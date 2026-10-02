@@ -38,6 +38,7 @@ export type FinancialIndicatorTotalsInput = {
   advertising: string | number | null | undefined;
   fixedCost: string | number | null | undefined;
   marketplaceCommission: string | number | null | undefined;
+  monthlyAdvertising?: string | number | null | undefined;
   netSales: number;
   packagingCost: string | number | null | undefined;
   productCost: string | number | null | undefined;
@@ -208,6 +209,7 @@ export function calculateFinancialIndicatorsFromTotals(
   const advertising = parseDecimalCents(input.advertising);
   const fixedCost = parseDecimalCents(input.fixedCost);
   const marketplaceCommission = parseDecimalCents(input.marketplaceCommission);
+  const monthlyAdvertising = parseDecimalCents(input.monthlyAdvertising);
   const packagingCost = parseDecimalCents(input.packagingCost);
   const productCost = parseDecimalCents(input.productCost);
   const refundBonus = parseDecimalCents(input.refundBonus);
@@ -232,7 +234,10 @@ export function calculateFinancialIndicatorsFromTotals(
   const averageMarginPercentCents = parseDecimalCents(averageMarginPercent);
   const breakEvenRevenue =
     averageMarginPercentCents > 0n
-      ? roundDivision(fixedCost * 10_000n, averageMarginPercentCents)
+      ? roundDivision(
+          (fixedCost + monthlyAdvertising) * 10_000n,
+          averageMarginPercentCents,
+        )
       : 0n;
 
   return {
