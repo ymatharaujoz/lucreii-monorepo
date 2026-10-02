@@ -6479,7 +6479,7 @@ describe("ProductsService", () => {
         sellingPrice: 0,
         unitCost: 0,
         ...overrides,
-      }) as ProductPerformanceListItem;
+      }) as unknown as ProductPerformanceListItem;
     const rows = [
       buildRow({
         id: "p1-channel-a",
@@ -6612,7 +6612,7 @@ describe("ProductsService", () => {
           sellingPrice: 649.58,
           unitCost: 20,
         },
-      ] as ProductPerformanceListItem[],
+      ] as unknown as ProductPerformanceListItem[],
       page: 1,
       pageSize: Number.MAX_SAFE_INTEGER,
       totalItems: 2,
