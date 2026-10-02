@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import {
@@ -18,6 +18,7 @@ import { Badge, Card, EmptyState, cn } from "@lucreii/ui";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { slideInUpVariants } from "@/lib/animations";
 import { ProductDetailsModal } from "./product-details-modal";
+import { TreeConnector, VariationToggle } from "./variation-tree";
 import type { PaginationState, ProductTableRow } from "../types/products";
 import { formatMoney, formatNumber, formatPercent } from "../utils/formatters";
 
@@ -64,6 +65,7 @@ type DisplayRow = {
   variationName: string | null;
   totalProfit: number | null;
   hasCostsConfigured: boolean;
+  childRows: DisplayRow[];
 };
 
 function compareSortValues(
@@ -278,37 +280,44 @@ function buildDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
         totalProfit:
           sourceRow.unitProfit === null ? null : sourceRow.unitProfit * sourceRow.netLiquidSales,
         variationName,
+        childRows: [],
       };
     });
   });
 }
 
-function buildServerDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
-  return rows.map((row) => {
-    const { parentName, variationName } = resolveProductLabels(row);
-    const displayedSales = Math.max(0, row.sales);
-    const displayedRevenue = row.sellingPrice * displayedSales;
-    const displayedTotalProfit =
-      displayedSales > 0 && Number.isFinite(row.totalProfit)
-        ? row.totalProfit
-        : 0;
+function toServerDisplayRow(
+  row: ProductTableRow,
+  parentRow: ProductTableRow | null = null,
+): DisplayRow {
+  const { parentName, variationName } = resolveProductLabels(row, parentRow);
+  const displayedSales = Math.max(0, row.sales);
+  const displayedRevenue = row.sellingPrice * displayedSales;
+  const displayedTotalProfit =
+    displayedSales > 0 && Number.isFinite(row.totalProfit)
+      ? row.totalProfit
+      : 0;
 
-    return {
-      channelLabel: row.channelLabel,
-      contributionMarginRatio:
-        displayedRevenue > 0
-          ? (displayedTotalProfit / displayedRevenue) * 100
-          : null,
-      displayTitle: buildDisplayTitle(parentName, variationName),
-      hasCostsConfigured: row.unitCost > 0 && row.packagingCost > 0,
-      parentName,
-      row,
-      sales: displayedSales,
-      sellingPrice: displayedRevenue,
-      totalProfit: displayedTotalProfit,
-      variationName,
-    };
-  });
+  return {
+    channelLabel: row.channelLabel,
+    childRows: row.children.map((child) => toServerDisplayRow(child, row)),
+    contributionMarginRatio:
+      displayedRevenue > 0
+        ? (displayedTotalProfit / displayedRevenue) * 100
+        : null,
+    displayTitle: buildDisplayTitle(parentName, variationName),
+    hasCostsConfigured: row.unitCost > 0 && row.packagingCost > 0,
+    parentName,
+    row,
+    sales: displayedSales,
+    sellingPrice: displayedRevenue,
+    totalProfit: displayedTotalProfit,
+    variationName,
+  };
+}
+
+function buildServerDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
+  return rows.map((row) => toServerDisplayRow(row));
 }
 
 export function ProductTable({
@@ -334,6 +343,7 @@ export function ProductTable({
   const [uncontrolledSelectedMarketplaces, setUncontrolledSelectedMarketplaces] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ProductTableRow | null>(null);
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
 
   const sortConfig = controlledSortConfig ?? uncontrolledSortConfig;
   const searchFilter = controlledSearchFilter ?? uncontrolledSearchFilter;
@@ -450,6 +460,107 @@ export function ProductTable({
   const closeDetails = () => {
     setSelectedRow(null);
   };
+
+  const toggleGroup = (groupKey: string) => {
+    setExpandedGroupKeys((current) =>
+      current.includes(groupKey)
+        ? current.filter((value) => value !== groupKey)
+        : [...current, groupKey],
+    );
+  };
+
+  const renderRowCells = (
+    {
+      contributionMarginRatio,
+      displayTitle,
+      hasCostsConfigured,
+      parentName,
+      row,
+      sellingPrice,
+      totalProfit,
+      variationName,
+    }: DisplayRow,
+    options: {
+      childCount?: number;
+      isChild: boolean;
+      isExpanded?: boolean;
+      isLastChild?: boolean;
+    },
+  ) => (
+    <>
+      <td className="px-3 py-3 text-left">{getChannelBadge(row.channelLabel)}</td>
+      <td className="px-3 py-3 text-left">
+        <div className="flex items-center gap-3">
+          {options.isChild ? <TreeConnector isLast={Boolean(options.isLastChild)} /> : null}
+          <ProductImagePreview alt={parentName} url={row.coverImageUrl} />
+          <span
+            aria-label={hasCostsConfigured ? "Precificado" : "Não precificado"}
+            className={cn(
+              "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+              hasCostsConfigured
+                ? "border-success/30 bg-success/10"
+                : "border-warning/30 bg-warning/10",
+            )}
+            data-testid={`cost-status-${getPerformanceRowKey(row)}`}
+            title={hasCostsConfigured ? "Precificado" : "Não precificado"}
+          >
+            <DollarSign
+              aria-hidden="true"
+              className="h-3.5 w-3.5"
+              style={{ color: hasCostsConfigured ? "#0e7a6f" : "#f59e0b" }}
+            />
+          </span>
+          <div className="flex flex-col gap-0.5">
+            {options.isChild && variationName ? (
+              <>
+                <span className="text-sm font-medium text-foreground">{variationName}</span>
+                <span className="text-xs text-muted-foreground">{parentName}</span>
+              </>
+            ) : (
+              <span className="text-sm font-medium text-foreground">{displayTitle}</span>
+            )}
+            {options.childCount ? (
+              <VariationToggle
+                count={options.childCount}
+                expanded={Boolean(options.isExpanded)}
+                onToggle={() => toggleGroup(getPerformanceRowKey(row))}
+              />
+            ) : null}
+          </div>
+        </div>
+      </td>
+      <td className="px-3 py-3 text-left">
+        <span className="text-xs font-mono text-muted-foreground">{row.sku || "\u2014"}</span>
+      </td>
+      <td className="px-2 py-3 text-right">
+        <span className="text-sm text-foreground">{formatNumber(row.sales)}</span>
+      </td>
+      <td className="px-2 py-3 text-right">
+        <span className="text-sm text-foreground">{formatNumber(row.returns)}</span>
+      </td>
+      <td className="px-3 py-3 text-right">
+        <span className="text-sm text-foreground">{formatMoney(sellingPrice)}</span>
+      </td>
+      <td className="px-3 py-3 text-right">
+        <span className="text-sm text-foreground">{formatPercent(contributionMarginRatio, { digits: 2 })}</span>
+      </td>
+      <td className="px-3 py-3 text-right">
+        <span className="text-sm text-foreground">{formatMoney(totalProfit)}</span>
+      </td>
+    </>
+  );
+
+  const rowInteractionProps = (row: ProductTableRow) => ({
+    onClick: () => openDetails(row),
+    onKeyDown: (event: React.KeyboardEvent) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openDetails(row);
+      }
+    },
+    role: "button" as const,
+    tabIndex: 0,
+  });
 
   const SortIcon = ({ column }: { column: SortKey }) => {
     if (sortConfig?.key !== column) {
@@ -663,69 +774,44 @@ export function ProductTable({
                     Nao foi possivel carregar os produtos.
                   </td>
                 </tr>
-              ) : visibleRows.map(({ contributionMarginRatio, displayTitle, hasCostsConfigured, parentName, row, sellingPrice, totalProfit }, index) => (
-                <MotionTableRow
-                  key={getPerformanceRowKey(row)}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.03 }}
-                  className="cursor-pointer border-b border-border/50 outline-none transition-colors hover:bg-surface-strong/30 focus-visible:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/30"
-                  onClick={() => openDetails(row)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      openDetails(row);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <td className="px-3 py-3 text-left">{getChannelBadge(row.channelLabel)}</td>
-                  <td className="px-3 py-3 text-left">
-                    <div className="flex items-center gap-3">
-                      <ProductImagePreview alt={parentName} url={row.coverImageUrl} />
-                      <span
-                        aria-label={hasCostsConfigured ? "Precificado" : "Não precificado"}
-                        className={cn(
-                          "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                          hasCostsConfigured
-                            ? "border-success/30 bg-success/10"
-                            : "border-warning/30 bg-warning/10",
-                        )}
-                        data-testid={`cost-status-${getPerformanceRowKey(row)}`}
-                        title={hasCostsConfigured ? "Precificado" : "Não precificado"}
-                      >
-                        <DollarSign
-                          aria-hidden="true"
-                          className="h-3.5 w-3.5"
-                          style={{ color: hasCostsConfigured ? "#0e7a6f" : "#f59e0b" }}
-                        />
-                      </span>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-sm font-medium text-foreground">{displayTitle}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-left">
-                    <span className="text-xs font-mono text-muted-foreground">{row.sku || "â€”"}</span>
-                  </td>
-                  <td className="px-2 py-3 text-right">
-                    <span className="text-sm text-foreground">{formatNumber(row.sales)}</span>
-                  </td>
-                  <td className="px-2 py-3 text-right">
-                    <span className="text-sm text-foreground">{formatNumber(row.returns)}</span>
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <span className="text-sm text-foreground">{formatMoney(sellingPrice)}</span>
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <span className="text-sm text-foreground">{formatPercent(contributionMarginRatio, { digits: 2 })}</span>
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <span className="text-sm text-foreground">{formatMoney(totalProfit)}</span>
-                  </td>
-                </MotionTableRow>
-              ))}
+              ) : visibleRows.map((displayRow, index) => {
+                const { childRows, row } = displayRow;
+                const groupKey = getPerformanceRowKey(row);
+                const isExpanded = childRows.length > 0 && expandedGroupKeys.includes(groupKey);
+
+                return (
+                  <React.Fragment key={groupKey}>
+                    <MotionTableRow
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.03 }}
+                      className="cursor-pointer border-b border-border/50 outline-none transition-colors hover:bg-surface-strong/30 focus-visible:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/30"
+                      {...rowInteractionProps(row)}
+                    >
+                      {renderRowCells(displayRow, {
+                        childCount: childRows.length,
+                        isChild: false,
+                        isExpanded,
+                      })}
+                    </MotionTableRow>
+                    {isExpanded
+                      ? childRows.map((childRow, childIndex) => (
+                          <tr
+                            key={getPerformanceRowKey(childRow.row)}
+                            className="cursor-pointer border-b border-border/30 outline-none transition-colors hover:bg-surface-strong/20 focus-visible:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/30"
+                            data-testid="child-product-row"
+                            {...rowInteractionProps(childRow.row)}
+                          >
+                            {renderRowCells(childRow, {
+                              isChild: true,
+                              isLastChild: childIndex === childRows.length - 1,
+                            })}
+                          </tr>
+                        ))
+                      : null}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

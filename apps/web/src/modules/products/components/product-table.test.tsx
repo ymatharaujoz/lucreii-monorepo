@@ -405,6 +405,74 @@ describe("ProductTable", () => {
     view.unmount();
   });
 
+  it("renders grouped variations as one parent row that expands into variation rows in server mode", () => {
+    const white = buildRow(1, {
+      catalogRole: "child",
+      displayName: "Suporte Teclado",
+      name: "Suporte Teclado",
+      performanceId: "perf_white",
+      sales: 25,
+      sellingPrice: 20,
+      sku: "Suporte 02 Branco",
+      totalProfit: 200,
+      variationLabel: "Cor de teclado: Branco",
+    });
+    const black = buildRow(2, {
+      catalogRole: "child",
+      displayName: "Suporte Teclado",
+      name: "Suporte Teclado",
+      performanceId: "perf_black",
+      sales: 52,
+      sellingPrice: 20,
+      sku: "Suporte 02 Preto",
+      totalProfit: 350,
+      variationLabel: "Cor de teclado: Preto",
+    });
+    const parent = buildRow(3, {
+      catalogRole: "parent",
+      children: [white, black],
+      displayName: "Suporte Teclado",
+      name: "Suporte Teclado",
+      performanceId: "group_1",
+      sales: 77,
+      sellingPrice: 20,
+      sku: "ML-MLB1",
+      totalProfit: 550,
+    });
+
+    const view = renderWithClient(
+      <ProductTable
+        onPageChange={() => {}}
+        pagination={{ currentPage: 1, pageSize: 10, totalItems: 1, totalPages: 1 }}
+        rows={[parent]}
+        serverMode
+      />,
+    );
+
+    expect(document.querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(document.body.textContent).toContain("Suporte Teclado");
+    expect(document.body.textContent).toContain("2 variações");
+    expect(document.body.textContent).not.toContain("Cor de teclado: Branco");
+    const parentCells = document.querySelectorAll("tbody tr td");
+    expect(parentCells[3]?.textContent).toContain("77");
+    expect(parentCells[5]?.textContent?.replace(/ /g, " ")).toContain("R$ 1.540,00");
+    expect(parentCells[7]?.textContent?.replace(/ /g, " ")).toContain("R$ 550,00");
+
+    click(document.querySelector('[aria-label="Expandir variações"]')!);
+
+    const childRows = document.querySelectorAll('[data-testid="child-product-row"]');
+    expect(childRows).toHaveLength(2);
+    expect(childRows[0]?.textContent).toContain("Cor de teclado: Branco");
+    expect(childRows[0]?.textContent).toContain("Suporte 02 Branco");
+    expect(childRows[1]?.textContent).toContain("Cor de teclado: Preto");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+    click(document.querySelector('[aria-label="Recolher variações"]')!);
+    expect(document.querySelectorAll('[data-testid="child-product-row"]')).toHaveLength(0);
+
+    view.unmount();
+  });
+
   it("keeps original row values in the performance details modal", () => {
     const rows = [
       buildRow(1, {

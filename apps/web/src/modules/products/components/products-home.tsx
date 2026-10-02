@@ -46,6 +46,7 @@ import { Pagination } from "@/components/ui-premium/pagination";
 import { ProductHeader } from "./product-header";
 
 import { ProductTable } from "./product-table";
+import { TreeConnector, VariationToggle } from "./variation-tree";
 import { useProductData } from "../hooks/use-product-data";
 import { useProductPerformancePage } from "../hooks/use-product-performance-data";
 import { buildMarketplaceSyncNotice } from "../calculations/product-insights";
@@ -1511,26 +1512,17 @@ function CatalogProductsHierarchyTable({
                               <span>{product.name}</span>
                             </span>
                             {product.catalogRole === "parent" && product.children.length > 0 ? (
-                              <button
-                                aria-label={`${isExpanded ? "Recolher" : "Expandir"} variações`}
-                                className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground transition-colors hover:text-foreground"
-                                onClick={(event) => {
-                                  event.stopPropagation();
+                              <VariationToggle
+                                count={product.children.length}
+                                expanded={isExpanded}
+                                onToggle={() =>
                                   setExpandedParentIds((current) =>
                                     current.includes(product.id)
                                       ? current.filter((value) => value !== product.id)
                                       : [...current, product.id],
-                                  );
-                                }}
-                                type="button"
-                              >
-                                <span>
-                                  {product.children.length} {product.children.length === 1 ? "variação" : "variações"}
-                                </span>
-                                <ChevronDown
-                                  className={`h-3.5 w-3.5 transition-transform duration-[var(--transition-fast)] ${isExpanded ? "rotate-180" : ""}`}
-                                />
-                              </button>
+                                  )
+                                }
+                              />
                             ) : null}
                           </span>
                         </div>
@@ -1593,19 +1585,7 @@ function CatalogProductsHierarchyTable({
                               </td> 
                               <td className="px-3 py-3 text-sm font-medium text-foreground">
                                 <div className="flex items-center gap-3">
-                                  {/* Tree connector — GitHub worktree style */}
-                                  <div className="relative flex h-10 w-8 shrink-0 items-center justify-center">
-                                    <div
-                                      className={cn(
-                                        "absolute left-[11px] top-0 w-px bg-muted-foreground/25",
-                                        isLastChild ? "h-1/2" : "h-full",
-                                      )}
-                                    />
-                                    <div className="absolute left-[11px] top-1/2 flex -translate-y-1/2 items-center">
-                                      <div className="h-px w-3 bg-muted-foreground/25" />
-                                      <div className="h-2 w-2 rounded-full border border-muted-foreground/40 bg-muted-foreground/20" />
-                                    </div>
-                                  </div>
+                                  <TreeConnector isLast={isLastChild} />
                                   <ProductImagePreview
                                     alt={child.name}
                                     className="h-10 w-10 shrink-0 rounded-[var(--radius-md)]"

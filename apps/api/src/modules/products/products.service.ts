@@ -85,6 +85,7 @@ import {
   isPerformanceEligibleOrder,
 } from "@/modules/orders/order-financial-eligibility";
 import { SyncService } from "@/modules/sync/sync.service";
+import { groupPerformanceRows } from "./performance-grouping";
 
 type ProductUpdateInput = Partial<ProductFormValues>;
 type ProductCostUpdateInput = Partial<ProductCostFormValues>;
@@ -2808,7 +2809,10 @@ export class ProductsService {
     });
     const sortBy = query.sortBy ?? "channelLabel";
     const sortDirection = query.sortDirection ?? "asc";
-    const sortedRows = [...filteredRows].sort((left, right) =>
+    const sortedRows = groupPerformanceRows(
+      filteredRows,
+      catalogProducts,
+    ).sort((left, right) =>
       this.compareVisiblePerformanceRows(left, right, sortBy, sortDirection),
     );
     // Query parameters can still arrive as strings when the service is called
@@ -2862,7 +2866,13 @@ export class ProductsService {
     let eligiblePerformanceRows = 0;
     const lines: MonthlyPerformanceMarginLine[] = [];
 
-    for (const row of response.items) {
+    // Grouped parent rows only aggregate their children; the rollup works on
+    // the individual variation rows.
+    const performanceRows = response.items.flatMap((item) =>
+      item.children.length > 0 ? item.children : [item],
+    );
+
+    for (const row of performanceRows) {
       const displayedSales = Number.isFinite(row.sales)
         ? Math.trunc(row.sales)
         : 0;
@@ -2898,7 +2908,7 @@ export class ProductsService {
       packagingTotal: formatCents(packagingTotalCents),
       pdvTotal: formatCents(pdvTotalCents),
       productCostTotal: formatCents(productCostTotalCents),
-      totalPerformanceRows: response.items.length,
+      totalPerformanceRows: performanceRows.length,
       unitPdvTotal: formatCents(unitPdvTotalCents),
     };
   }

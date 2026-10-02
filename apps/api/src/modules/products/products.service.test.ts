@@ -6469,6 +6469,7 @@ describe("ProductsService", () => {
       >,
     ) =>
       ({
+        children: [],
         id: "performance-row",
         netLiquidSales: 0,
         packagingCost: 0,
@@ -6590,6 +6591,7 @@ describe("ProductsService", () => {
     vi.spyOn(service, "listPerformanceRows").mockResolvedValue({
       items: [
         {
+          children: [],
           id: "performance-a",
           netLiquidSales: 0,
           packagingCost: 0,
@@ -6600,6 +6602,7 @@ describe("ProductsService", () => {
           unitCost: 20,
         },
         {
+          children: [],
           id: "performance-b",
           netLiquidSales: 0,
           packagingCost: 0,
