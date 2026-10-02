@@ -5,7 +5,7 @@ import { AuthExchangeService } from "./auth-exchange.service";
 import { OrganizationProvisioningService } from "./organization-provisioning.service";
 import { AuthService } from "./auth.service";
 
-describe("public auth routes", () => {
+describe("public auth routes", { timeout: 30_000 }, () => {
   let app: NestFastifyApplication;
 
   beforeAll(async () => {

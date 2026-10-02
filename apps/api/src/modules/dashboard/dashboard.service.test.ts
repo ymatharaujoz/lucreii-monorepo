@@ -161,12 +161,14 @@ describe("DashboardService", () => {
       "company_123",
       undefined,
       "2026-07-01",
+      undefined,
     );
     expect(financeService.buildDashboardReadModel).toHaveBeenCalledWith(
       "org_123",
       "company_123",
       undefined,
       "2026-07-01",
+      undefined,
     );
     expect(syncService.getStatus).toHaveBeenCalledWith(
       "org_123",

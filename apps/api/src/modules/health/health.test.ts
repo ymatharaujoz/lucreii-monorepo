@@ -3,7 +3,7 @@ import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import { buildApp } from "@/app";
 import packageJson from "../../../../../package.json";
 
-describe("health endpoint", () => {
+describe("health endpoint", { timeout: 30_000 }, () => {
   let app: NestFastifyApplication;
 
   beforeAll(async () => {

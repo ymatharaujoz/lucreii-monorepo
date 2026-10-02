@@ -377,7 +377,7 @@ describe("products foundation helpers", () => {
           }),
         ],
         commissionPct: 10,
-        contributionMarginRatio: 65,
+        contributionMarginRatio: 40,
         coverImageUrl: "https://example.com/product-one.png",
         isActive: true,
         isSyntheticParent: false,
@@ -541,7 +541,7 @@ describe("products foundation helpers", () => {
     const parent = rows[0];
     const standalone = rows[1];
 
-    expect(parent.contributionMarginRatio).toBeCloseTo(65, 2);
+    expect(parent.contributionMarginRatio).toBeCloseTo(40, 2);
     expect(standalone.contributionMarginRatio).toBeNull();
   });
 

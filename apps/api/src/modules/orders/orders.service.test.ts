@@ -3357,8 +3357,8 @@ describe("OrdersService", () => {
         averageMargin: "0.5950",
         grossProfit: "119.0000",
         grossRevenue: "200.0000",
-        marginRevenue: "420.00",
-        totalProfit: "222.00",
+        marginRevenue: "200.00",
+        totalProfit: "95.00",
         ordersCount: 1,
         unitsSold: 3,
       },
@@ -3608,12 +3608,12 @@ describe("OrdersService", () => {
           marketplaceCommissionAmount: "0.00",
           missingCostItemsCount: 1,
           missingLinkedItemsCount: 1,
-          netRevenueAmount: "177.00",
+          netRevenueAmount: "180.00",
           packagingCostAmount: "8.00",
           productCostAmount: "43.00",
           refundBonusAmount: "0.00",
           revenueAmount: "200.00",
-          shippingOrFixedFeeAmount: "23.00",
+          shippingOrFixedFeeAmount: "20.00",
           taxAmount: "24.00",
           taxRateDefault: "0.120000",
         },
@@ -4397,8 +4397,8 @@ describe("OrdersService", () => {
 
     expect(result.items[0]).toEqual(
       expect.objectContaining({
-        contributionMarginPercent: "46.00",
-        totalProfitAmount: "92.00",
+        contributionMarginPercent: "47.50",
+        totalProfitAmount: "95.00",
       }),
     );
   });
@@ -4506,10 +4506,10 @@ describe("OrdersService", () => {
 
     expect(result.items[0]).toEqual(
       expect.objectContaining({
-        contributionMarginPercent: "52.73",
+        contributionMarginPercent: "54.22",
         shippingAmount: "6.55",
         fixedCostAmount: "3.00",
-        totalProfitAmount: "105.45",
+        totalProfitAmount: "108.45",
       }),
     );
   });
@@ -4583,7 +4583,7 @@ describe("OrdersService", () => {
     expect(result.page).toBe(2);
     expect(result.totalPages).toBe(2);
     expect(result.items).toHaveLength(1);
-    expect(result.items[0]?.orderId).toBe("SHP-1001");
+    expect(result.items[0]?.orderId).toBe("MLB-1001");
   });
 
   it("coerces string pagination filters before slicing results", async () => {

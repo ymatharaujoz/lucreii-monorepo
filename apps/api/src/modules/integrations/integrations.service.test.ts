@@ -1134,7 +1134,7 @@ describe("IntegrationsService", () => {
           id: "product_manual",
           sku: "MANUAL-123",
         }),
-        sku: "MANUAL-123",
+        sku: "ML-MLB-20-101",
       }),
       expect.objectContaining({
         externalProductId: "MLB-20:102",

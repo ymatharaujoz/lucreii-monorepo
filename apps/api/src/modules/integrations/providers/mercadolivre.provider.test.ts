@@ -2488,65 +2488,63 @@ describe("MercadoLivreProvider", () => {
           },
         ),
       )
-      .mockResolvedValueOnce(
-        createJsonResponse({
-          details: [],
-        }),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            currency_id: "BRL",
-            date_closed: "2026-05-14T10:00:00.000-03:00",
-            id: 123,
-            order_items: [
-              {
-                item: {
-                  id: "MLB123",
-                  seller_sku: "SKU-1",
-                  title: "Produto",
+      .mockImplementation((input: string | URL) => {
+        const url = String(input);
+
+        if (url.includes("/orders/123")) {
+          return Promise.resolve(
+            createJsonResponse({
+              currency_id: "BRL",
+              date_closed: "2026-05-14T10:00:00.000-03:00",
+              id: 123,
+              order_items: [
+                {
+                  item: {
+                    id: "MLB123",
+                    seller_sku: "SKU-1",
+                    title: "Produto",
+                  },
+                  quantity: 1,
+                  sale_fee: 12,
+                  variation_id: 456,
+                  unit_price: 100,
                 },
-                quantity: 1,
-                sale_fee: 12,
-                variation_id: 456,
-                unit_price: 100,
-              },
-            ],
-            payments: [],
-            total_amount: 100,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            limit: 1000,
-            offset: 0,
-            results: [
-              {
-                order_id: 123,
-                sale_fee: {
-                  gross: 31.62,
-                  net: 11.67,
-                  rebate: 19.95,
-                  discount: 0,
-                  discount_reason: null,
+              ],
+              payments: [],
+              total_amount: 100,
+            }),
+          );
+        }
+
+        if (url.includes("/billing/integration/group/ML/order/details")) {
+          return Promise.resolve(createJsonResponse({ details: [] }));
+        }
+
+        if (url.includes("/billing/integration/periods")) {
+          return Promise.resolve(
+            createJsonResponse({
+              limit: 1000,
+              offset: 0,
+              results: [
+                {
+                  order_id: 123,
+                  sale_fee: {
+                    gross: 31.62,
+                    net: 11.67,
+                    rebate: 19.95,
+                    discount: 0,
+                    discount_reason: null,
+                  },
+                  fixed_fee: 19.95,
                 },
-                fixed_fee: 19.95,
-              },
-            ],
-            total: 1,
-          }),
-          {
-            headers: { "content-type": "application/json" },
-            status: 200,
-          },
-        ),
-      );
+              ],
+              total: 1,
+            }),
+          );
+        }
+
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -6597,12 +6595,12 @@ describe("MercadoLivreProvider", () => {
 
       if (
         url.includes("/users/seller-1/items/search?") &&
-        url.includes("status=active")
+        url.includes("scroll_id=active-next")
       ) {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              results: ["MLB777"],
+              results: [],
               scroll_id: "active-next",
             }),
             { status: 200, headers: { "content-type": "application/json" } },
@@ -6612,12 +6610,12 @@ describe("MercadoLivreProvider", () => {
 
       if (
         url.includes("/users/seller-1/items/search?") &&
-        url.includes("scroll_id=active-next")
+        url.includes("status=active")
       ) {
         return Promise.resolve(
           new Response(
             JSON.stringify({
-              results: [],
+              results: ["MLB777"],
               scroll_id: "active-next",
             }),
             { status: 200, headers: { "content-type": "application/json" } },
@@ -6747,7 +6745,9 @@ describe("MercadoLivreProvider", () => {
       },
     ]);
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.mercadolibre.com/items/MLB777/variations/204781877543",
+      expect.objectContaining({
+        href: "https://api.mercadolibre.com/items/MLB777/variations/204781877543",
+      }),
       expect.objectContaining({
         headers: { Authorization: "Bearer access-token" },
       }),
@@ -7020,7 +7020,7 @@ describe("MercadoLivreProvider", () => {
       expect.objectContaining({ method: "GET" }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ pathname: "/shipments/47299177413" }),
+      expect.stringContaining("/shipments/47299177413"),
       expect.objectContaining({
         headers: expect.objectContaining({ "x-format-new": "true" }),
       }),

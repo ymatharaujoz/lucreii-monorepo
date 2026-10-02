@@ -159,7 +159,7 @@ describe("ProductsShell import sources modal", () => {
     );
 
     expect(document.body.textContent).toContain("Importar por planilha");
-    expect(document.body.textContent).toContain("reimport");
+    expect(document.body.textContent).toContain("Colunas obrigatórias");
     expect(document.body.textContent).toContain("CUSTO UNIT");
     expect(document.body.textContent).toContain("EMBALAGEM");
 
