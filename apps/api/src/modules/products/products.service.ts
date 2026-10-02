@@ -246,17 +246,24 @@ const SPREADSHEET_EXTERNAL_PRODUCT_PREFIX = "spreadsheet:";
  * must never take part in listing/variation grouping (the `:` would otherwise
  * make every one of them a "variation" of a bogus `spreadsheet` listing).
  */
+function readSyncedProductSource(
+  syncedProduct: Pick<SyncedProductRecord, "metadata">,
+) {
+  const metadata = syncedProduct.metadata;
+
+  return metadata &&
+    typeof metadata === "object" &&
+    "source" in metadata &&
+    typeof metadata.source === "string"
+    ? metadata.source
+    : null;
+}
+
 function isSpreadsheetSyncedProduct(
   syncedProduct: Pick<SyncedProductRecord, "externalProductId" | "metadata">,
 ) {
-  const metadata = syncedProduct.metadata;
-  const source =
-    metadata && typeof metadata === "object" && "source" in metadata
-      ? metadata.source
-      : null;
-
   return (
-    source === "spreadsheet" ||
+    readSyncedProductSource(syncedProduct) === "spreadsheet" ||
     syncedProduct.externalProductId.startsWith(SPREADSHEET_EXTERNAL_PRODUCT_PREFIX)
   );
 }
@@ -2971,16 +2978,24 @@ export class ProductsService {
         (row.productId ? (byId.get(row.productId) ?? null) : null) ??
         bySku.get(normalizeComparableSku(row.sku) ?? "") ??
         null;
-      const displayName =
-        overrides?.displayName ??
-        product?.name?.trim() ??
-        row.productName.trim();
-      const name = overrides?.name ?? displayName;
       const variationLabel =
         overrides?.variationLabel ??
         product?.variationLabel ??
         row.variationLabel ??
         null;
+      // Variation products are often named after their label alone
+      // ("Cor: Branco"); show them as "<listing name> | <variation>" instead.
+      const parentName =
+        variationLabel && product?.catalogRole === "child"
+          ? product.parentProductId
+            ? byId.get(product.parentProductId)?.name?.trim()
+            : undefined
+          : undefined;
+      const displayName =
+        overrides?.displayName ??
+        (parentName || product?.name?.trim()) ??
+        row.productName.trim();
+      const name = overrides?.name ?? displayName;
       const normalizedSku = normalizeComparableSku(row.sku);
       const salesCountByProductId = row.productId
         ? salesLookup.byProductId.get(
@@ -4109,6 +4124,28 @@ export class ProductsService {
       groupedEntries.set(itemId, entries);
     }
 
+    // User-product (family) entries are titled with the variation label only
+    // (e.g. "Cor: Branco"). Order and spreadsheet entries carry the real
+    // listing title, so use them to name parents that have no parent entry.
+    const listingTitleByProductId = new Map<string, string>();
+    for (const syncedProduct of syncedProducts) {
+      const productId = syncedProduct.linkedProduct?.id ?? null;
+      const title = syncedProduct.title?.trim();
+      if (
+        syncedProduct.provider !== "mercadolivre" ||
+        !productId ||
+        !title ||
+        listingTitleByProductId.has(productId)
+      ) {
+        continue;
+      }
+
+      const source = readSyncedProductSource(syncedProduct);
+      if (source === "mercadolivre-order-item" || source === "spreadsheet") {
+        listingTitleByProductId.set(productId, title);
+      }
+    }
+
     const groups = new Map<string, MercadoLivreCatalogGroup>();
 
     for (const [itemId, entries] of groupedEntries.entries()) {
@@ -4170,7 +4207,17 @@ export class ProductsService {
         parentSyntheticId: explicitParent
           ? null
           : buildSyntheticCatalogParentId(groupKey),
-        parentTitle: parentEntry?.title ?? explicitParent?.title ?? null,
+        parentTitle:
+          parentEntry?.title ??
+          explicitParent?.title ??
+          childEntries
+            .map((entry) =>
+              entry.productId
+                ? listingTitleByProductId.get(entry.productId)
+                : undefined,
+            )
+            .find((title) => title !== undefined) ??
+          null,
         representativeProductId:
           explicitParent?.productId ?? childEntries[0]?.productId ?? null,
         skuByProductId,

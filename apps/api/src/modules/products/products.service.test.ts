@@ -2605,6 +2605,120 @@ describe("ProductsService", () => {
     ]);
   });
 
+  it("names a parent without parent entry after the listing title, not the variation label", async () => {
+    const { db, financeService, service, syncService } = createService();
+    const productRows = [
+      {
+        createdAt: new Date("2026-06-17T10:00:00.000Z"),
+        financeDefaults: null,
+        id: "product_carimbo",
+        images: [],
+        isActive: true,
+        name: "Cor: Branco",
+        organizationId: "org_1",
+        sellingPrice: "50.00",
+        sku: "Kit6Carimbo",
+        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+      },
+    ];
+    const buildEntry = (
+      id: string,
+      externalProductId: string,
+      title: string,
+      metadata: Record<string, unknown>,
+    ) => ({
+      externalProductId,
+      fixedFee: "0.00",
+      grossRevenue: "0.00",
+      id,
+      lastOrderedAt: null,
+      latestUnitPrice: null,
+      linkedProduct: {
+        id: "product_carimbo",
+        isActive: true,
+        name: "Cor: Branco",
+        sku: "Kit6Carimbo",
+      },
+      marketplaceCommission: "0.00",
+      metadata,
+      netMarketplaceTake: "0.00",
+      orderCount: 0,
+      provider: "mercadolivre" as const,
+      reviewStatus: "linked_to_existing_product" as const,
+      shippingCost: "0.00",
+      sku: "Kit6Carimbo",
+      suggestedMatches: [],
+      title,
+      unitsSold: 0,
+    });
+
+    db.query.companies.findMany.mockResolvedValue([
+      { id: "company_1", isActive: true, taxRateDefault: "0.120000" },
+    ]);
+    db.query.products.findMany
+      .mockResolvedValueOnce(productRows)
+      .mockResolvedValueOnce(
+        productRows.map(({ images, financeDefaults, ...product }) => product),
+      );
+    db.query.productCosts.findMany.mockResolvedValue([]);
+    db.query.adCosts.findMany.mockResolvedValue([]);
+    db.query.manualExpenses.findMany.mockResolvedValue([]);
+    db.query.productMonthlyPerformance.findMany.mockResolvedValue([]);
+    financeService.buildFinanceSnapshot.mockResolvedValue({
+      adCosts: [],
+      manualExpenses: [],
+      monthlyPerformance: [],
+      orders: [],
+      products: [],
+    });
+    syncService.getStatus.mockResolvedValue({
+      activeRun: null,
+      availability: {
+        canRun: true,
+        currentWindowKey: "2026-06-17-morning",
+        currentWindowLabel: "Manha",
+        currentWindowSlot: "morning",
+        lastSuccessfulSyncAt: null,
+        message: "Sync is available for the current daily window.",
+        nextAvailableAt: "2026-06-17T09:00:00.000Z",
+        provider: "mercadolivre",
+        reason: "available",
+      },
+      lastCompletedRun: null,
+    });
+
+    const { listSyncedProductsReadModel } =
+      await import("@/modules/integrations/synced-products.read-model");
+    vi.mocked(listSyncedProductsReadModel).mockImplementation(async () => [
+      buildEntry("up_entry", "MLBU4615130979", "Cor: Branco", {
+        itemId: "2908828832990865",
+        source: "mercadolivre-user-product",
+        variationId: "MLBU4615130979",
+      }),
+      buildEntry(
+        "order_entry",
+        "MLB7358401104",
+        "Carimbo Para Docinhos Kit 6 Pecas",
+        { source: "mercadolivre-order-item", variationId: null },
+      ),
+    ]);
+
+    const { products } = await service.getAnalyticsSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+
+    expect(products).toHaveLength(1);
+    expect(products[0]).toMatchObject({
+      catalogRole: "parent",
+      isSyntheticParent: true,
+      name: "Carimbo Para Docinhos Kit 6 Pecas",
+    });
+    expect(products[0]!.children[0]).toMatchObject({
+      variationLabel: "Cor: Branco",
+    });
+  });
+
   it("does not group spreadsheet-imported products as variations of a fake listing", async () => {
     const { db, financeService, service, syncService } = createService();
     const buildProductRow = (id: string, name: string, sku: string) => ({

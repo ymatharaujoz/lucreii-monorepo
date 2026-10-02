@@ -289,7 +289,7 @@ function DashboardSidebar({ showFooter = false }: { showFooter?: boolean }) {
 
       {showFooter && (
         <div className="mt-auto border-t border-white/15 pt-3">
-          <p className="text-center text-[9px] text-white/45">2.0.7</p>
+          <p className="text-center text-[9px] text-white/45">2.0.8</p>
           <div className="mt-4 flex items-center gap-2 px-1">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-[9px] font-bold">
               ER

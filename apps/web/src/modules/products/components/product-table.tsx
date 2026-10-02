@@ -478,7 +478,6 @@ export function ProductTable({
       row,
       sellingPrice,
       totalProfit,
-      variationName,
     }: DisplayRow,
     options: {
       childCount?: number;
@@ -511,14 +510,7 @@ export function ProductTable({
             />
           </span>
           <div className="flex flex-col gap-0.5">
-            {options.isChild && variationName ? (
-              <>
-                <span className="text-sm font-medium text-foreground">{variationName}</span>
-                <span className="text-xs text-muted-foreground">{parentName}</span>
-              </>
-            ) : (
-              <span className="text-sm font-medium text-foreground">{displayTitle}</span>
-            )}
+            <span className="text-sm font-medium text-foreground">{displayTitle}</span>
             {options.childCount ? (
               <VariationToggle
                 count={options.childCount}
