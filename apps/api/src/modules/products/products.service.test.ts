@@ -2605,6 +2605,116 @@ describe("ProductsService", () => {
     ]);
   });
 
+  it("does not group spreadsheet-imported products as variations of a fake listing", async () => {
+    const { db, financeService, service, syncService } = createService();
+    const buildProductRow = (id: string, name: string, sku: string) => ({
+      createdAt: new Date("2026-06-17T10:00:00.000Z"),
+      financeDefaults: null,
+      id,
+      images: [],
+      isActive: true,
+      name,
+      organizationId: "org_1",
+      sellingPrice: "50.00",
+      sku,
+      updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+    });
+    const productRows = [
+      buildProductRow("product_chinelo", "Chinelo Plataforma", "3302Branco36"),
+      buildProductRow("product_carimbo", "Carimbo Docinhos", "Kit6Carimbo"),
+    ];
+    const buildSpreadsheetEntry = (
+      id: string,
+      productId: string,
+      name: string,
+      sku: string,
+    ) => ({
+      externalProductId: `spreadsheet:mercadolivre:${id}`,
+      fixedFee: "0.00",
+      grossRevenue: "0.00",
+      id,
+      lastOrderedAt: null,
+      latestUnitPrice: null,
+      linkedProduct: { id: productId, isActive: true, name, sku },
+      marketplaceCommission: "0.00",
+      metadata: { source: "spreadsheet" },
+      netMarketplaceTake: "0.00",
+      orderCount: 0,
+      provider: "mercadolivre" as const,
+      reviewStatus: "linked_to_existing_product" as const,
+      shippingCost: "0.00",
+      sku,
+      suggestedMatches: [],
+      title: name,
+      unitsSold: 0,
+    });
+
+    db.query.companies.findMany.mockResolvedValue([
+      { id: "company_1", isActive: true, taxRateDefault: "0.120000" },
+    ]);
+    db.query.products.findMany
+      .mockResolvedValueOnce(productRows)
+      .mockResolvedValueOnce(
+        productRows.map(({ images, financeDefaults, ...product }) => product),
+      );
+    db.query.productCosts.findMany.mockResolvedValue([]);
+    db.query.adCosts.findMany.mockResolvedValue([]);
+    db.query.manualExpenses.findMany.mockResolvedValue([]);
+    db.query.productMonthlyPerformance.findMany.mockResolvedValue([]);
+    financeService.buildFinanceSnapshot.mockResolvedValue({
+      adCosts: [],
+      manualExpenses: [],
+      monthlyPerformance: [],
+      orders: [],
+      products: [],
+    });
+    syncService.getStatus.mockResolvedValue({
+      activeRun: null,
+      availability: {
+        canRun: true,
+        currentWindowKey: "2026-06-17-morning",
+        currentWindowLabel: "Manha",
+        currentWindowSlot: "morning",
+        lastSuccessfulSyncAt: null,
+        message: "Sync is available for the current daily window.",
+        nextAvailableAt: "2026-06-17T09:00:00.000Z",
+        provider: "mercadolivre",
+        reason: "available",
+      },
+      lastCompletedRun: null,
+    });
+
+    const { listSyncedProductsReadModel } =
+      await import("@/modules/integrations/synced-products.read-model");
+    vi.mocked(listSyncedProductsReadModel).mockImplementation(async () => [
+      buildSpreadsheetEntry(
+        "884bb128553a3dee695455f0",
+        "product_chinelo",
+        "Chinelo Plataforma",
+        "3302Branco36",
+      ),
+      buildSpreadsheetEntry(
+        "cfe6df9a529b8a2b1edab97f",
+        "product_carimbo",
+        "Carimbo Docinhos",
+        "Kit6Carimbo",
+      ),
+    ]);
+
+    const { products } = await service.getAnalyticsSnapshot({
+      organizationId: "org_1",
+      userId: "user_1",
+    });
+
+    expect(products.map((product) => product.catalogRole)).toEqual([
+      "standalone",
+      "standalone",
+    ]);
+    expect(products.every((product) => product.children.length === 0)).toBe(
+      true,
+    );
+  });
+
   it("groups Mercado Livre footwear variations by metadata when external ids are not colon-delimited", async () => {
     const { db, financeService, service, syncService } = createService();
 

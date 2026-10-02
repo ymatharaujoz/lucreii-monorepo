@@ -179,6 +179,11 @@ function toCatalogGroupKey(itemId: string) {
 }
 
 function extractMercadoLivreItemId(externalProductId: string) {
+  // Spreadsheet imports (`spreadsheet:mercadolivre:<hash>`) are not listings.
+  if (externalProductId.startsWith("spreadsheet:")) {
+    return null;
+  }
+
   const [itemId] = externalProductId.split(":");
   return itemId?.trim() ? itemId.trim() : null;
 }

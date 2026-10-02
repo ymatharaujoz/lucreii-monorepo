@@ -238,7 +238,34 @@ function buildSyntheticCatalogParentId(groupKey: string) {
   return `synthetic-parent:${groupKey}`;
 }
 
+const SPREADSHEET_EXTERNAL_PRODUCT_PREFIX = "spreadsheet:";
+
+/**
+ * Products imported from spreadsheets are stored with ids such as
+ * `spreadsheet:mercadolivre:<hash>`. They are not marketplace listings, so they
+ * must never take part in listing/variation grouping (the `:` would otherwise
+ * make every one of them a "variation" of a bogus `spreadsheet` listing).
+ */
+function isSpreadsheetSyncedProduct(
+  syncedProduct: Pick<SyncedProductRecord, "externalProductId" | "metadata">,
+) {
+  const metadata = syncedProduct.metadata;
+  const source =
+    metadata && typeof metadata === "object" && "source" in metadata
+      ? metadata.source
+      : null;
+
+  return (
+    source === "spreadsheet" ||
+    syncedProduct.externalProductId.startsWith(SPREADSHEET_EXTERNAL_PRODUCT_PREFIX)
+  );
+}
+
 function extractMercadoLivreItemId(externalProductId: string) {
+  if (externalProductId.startsWith(SPREADSHEET_EXTERNAL_PRODUCT_PREFIX)) {
+    return null;
+  }
+
   const [itemId] = externalProductId.split(":");
   return itemId?.trim() ? itemId.trim() : null;
 }
@@ -4050,7 +4077,10 @@ export class ProductsService {
 
     for (const syncedProduct of syncedProducts) {
       const productId = syncedProduct.linkedProduct?.id ?? null;
-      if (syncedProduct.provider !== "mercadolivre") {
+      if (
+        syncedProduct.provider !== "mercadolivre" ||
+        isSpreadsheetSyncedProduct(syncedProduct)
+      ) {
         continue;
       }
 
