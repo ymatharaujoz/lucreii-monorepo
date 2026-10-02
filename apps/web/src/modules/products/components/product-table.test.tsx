@@ -345,7 +345,7 @@ describe("ProductTable", () => {
     expect(document.body.textContent).toContain("Vendas");
     expect(document.body.textContent).toContain("DEVOLUÇÕES");
     expect(document.body.textContent).toContain("FATURAMENTO");
-    expect(document.body.textContent).toContain("Margem Contribuição");
+    expect(document.body.textContent).toContain("Margem de Contribuição");
     expect(document.body.textContent).toContain("Lucro Total");
     expect(document.body.textContent).toContain("18.45%");
     expect(document.body.textContent?.replace(/\u00a0/g, " ")).toContain("R$ 78,03");

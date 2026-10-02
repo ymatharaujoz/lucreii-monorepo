@@ -735,7 +735,7 @@ export function ProductTable({
         ) : null}
 
         <div className="flex-1 min-h-0 overflow-auto">
-          <table className="w-full min-w-[1700px] border-separate border-spacing-0">
+          <table className="w-full min-w-[2000px] border-separate border-spacing-0">
             <thead>
               <tr className="border-b border-border bg-surface-strong/95">
                 <th
@@ -749,7 +749,7 @@ export function ProductTable({
                 </th>
                 <th
                   onClick={() => handleSort("parentName")}
-                  className="sticky top-0 z-10 w-[360px] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
+                  className="sticky top-0 z-10 w-[520px] min-w-[520px] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95"
                 >
                   <div className="flex items-center gap-1">
                     Produto
@@ -782,10 +782,10 @@ export function ProductTable({
                 </th>
                 <th
                   onClick={() => handleSort("contributionMarginRatio")}
-                  className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[160px]"
+                  className="sticky top-0 z-10 px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer select-none hover:text-foreground bg-surface-strong/95 min-w-[250px] whitespace-nowrap"
                 >
                   <div className="flex items-center justify-end gap-1">
-                    Margem Contribuição
+                    Margem de Contribuição
                     <SortIcon column="contributionMarginRatio" />
                   </div>
                 </th>
