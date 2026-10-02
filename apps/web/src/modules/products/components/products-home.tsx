@@ -1005,6 +1005,33 @@ function CatalogSelectionActionBar({
   );
 }
 
+/**
+ * A synthetic (listing-level) parent with a single variation is just one
+ * product: show the variation's own data (id, SKU, costs) under the listing
+ * name, without an expandable row.
+ */
+function collapseSingleVariationParent(product: ProductListItem): ProductListItem {
+  const [onlyChild] = product.children;
+
+  if (
+    product.catalogRole !== "parent" ||
+    !product.isSyntheticParent ||
+    product.children.length !== 1 ||
+    !onlyChild
+  ) {
+    return product;
+  }
+
+  return {
+    ...onlyChild,
+    catalogRole: "standalone",
+    children: [],
+    name: product.name,
+    parentProductId: null,
+    variationLabel: null,
+  };
+}
+
 function CatalogProductsHierarchyTable({ 
   onRefresh, 
   products, 
@@ -1053,7 +1080,7 @@ function CatalogProductsHierarchyTable({
   };
 
   const filteredParents = useMemo(() => {
-    let result = [...products];
+    let result = products.map(collapseSingleVariationParent);
 
     if (searchFilter.trim()) {
       const search = searchFilter.toLowerCase().trim();
