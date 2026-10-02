@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
   Info,
+  Megaphone,
   Package,
   Percent,
   ShoppingCart,
@@ -17,6 +18,7 @@ import { Badge, Modal, Tooltip, cn } from "@lucreii/ui";
 import { formatReferenceMonthPtBr } from "../hooks/use-product-data";
 import { computeProductRoi, computeRowNetRevenue } from "../calculations/product-insights";
 import type { ProductTableRow } from "../types/products";
+import { ProductAdvertisingField } from "./product-advertising-field";
 import {
   formatMoney,
   formatNumber,
@@ -26,6 +28,11 @@ import {
 
 type ProductDetailsModalProps = {
   onClose: () => void;
+  /**
+   * Saves the advertising of the listing shown in the modal. When omitted the
+   * advertising card is read-only.
+   */
+  onSaveAdvertising?: (row: ProductTableRow, amount: string) => Promise<void>;
   open: boolean;
   row: ProductTableRow | null;
 };
@@ -68,6 +75,8 @@ type MetricVariant = "default" | "negative" | "highlight";
 type MetricCardProps = {
   label: React.ReactNode;
   value: string;
+  /** Replaces the plain value, e.g. with an input. */
+  control?: React.ReactNode;
   icon?: React.ReactNode;
   variant?: MetricVariant;
   className?: string;
@@ -76,6 +85,7 @@ type MetricCardProps = {
 function MetricCard({
   label,
   value,
+  control,
   icon,
   variant = "default",
   className,
@@ -102,7 +112,7 @@ function MetricCard({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="space-y-1.5">
+        <div className={cn("space-y-1.5", control ? "min-w-0 flex-1" : undefined)}>
           <div className="flex items-center gap-1.5">
             {icon && (
               <span
@@ -119,18 +129,20 @@ function MetricCard({
               {label}
             </p>
           </div>
-          <p
-            className={cn(
-              "text-xl font-bold tracking-tight tabular-nums",
-              variant === "negative"
-                ? "text-error"
-                : variant === "highlight"
-                  ? "text-accent"
-                  : "text-foreground",
-            )}
-          >
-            {value}
-          </p>
+          {control ?? (
+            <p
+              className={cn(
+                "text-xl font-bold tracking-tight tabular-nums",
+                variant === "negative"
+                  ? "text-error"
+                  : variant === "highlight"
+                    ? "text-accent"
+                    : "text-foreground",
+              )}
+            >
+              {value}
+            </p>
+          )}
         </div>
         {variant === "negative" && (
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-error/70" />
@@ -272,6 +284,7 @@ function ProductHero({ row }: { row: ProductTableRow }) {
 
 export function ProductDetailsModal({
   onClose,
+  onSaveAdvertising,
   open,
   row,
 }: ProductDetailsModalProps) {
@@ -288,6 +301,12 @@ export function ProductDetailsModal({
 
   const netRevenue = computeRowNetRevenue(row);
   const roiRatio = computeProductRoi(row.totalProfit, row.unitCost, row.sales);
+  // Advertising belongs to the listing: variation rows nested under a grouped
+  // listing carry no value of their own, so they are shown read-only as "--".
+  const canEditAdvertising =
+    onSaveAdvertising !== undefined &&
+    row.advertising !== null &&
+    row.advertisingKey !== null;
 
   return (
     <Modal
@@ -356,29 +375,57 @@ export function ProductDetailsModal({
                   title="Visão Geral de Vendas"
                   icon={<ShoppingCart className="h-4 w-4 text-accent" />}
                 >
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {/*
+                    Five cards: 1 column on phones, 2 on tablets (advertising
+                    spans the last row), and a 6-column grid on desktop with
+                    three cards on the first row and two wider ones below.
+                  */}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
                     <MetricCard
+                      className="lg:col-span-2"
                       label="Faturamento"
                       value={formatMoney(row.revenue)}
                       icon={<Wallet className="h-3 w-3" />}
                       variant="highlight"
                     />
                     <MetricCard
+                      className="lg:col-span-2"
                       label="Receita Líquida"
                       value={formatMoney(netRevenue)}
                       icon={<TrendingUp className="h-3 w-3" />}
                       variant={netRevenue < 0 ? "negative" : "default"}
                     />
                     <MetricCard
+                      className="lg:col-span-2"
                       label="Vendas"
                       value={formatNumber(row.sales)}
                       icon={<ShoppingCart className="h-3 w-3" />}
                     />
                     <MetricCard
+                      className="lg:col-span-3"
                       label="Devoluções"
                       value={formatNumber(row.returns)}
                       icon={<Package className="h-3 w-3" />}
                       variant={row.returns > 0 ? "negative" : "default"}
+                    />
+                    <MetricCard
+                      className="sm:col-span-2 lg:col-span-3"
+                      control={
+                        canEditAdvertising ? (
+                          <ProductAdvertisingField
+                            key={`${row.performanceId}:${row.referenceMonth}`}
+                            onSave={(amount) => onSaveAdvertising(row, amount)}
+                            value={row.advertising ?? 0}
+                          />
+                        ) : undefined
+                      }
+                      label="Publicidade"
+                      value={
+                        row.advertising === null
+                          ? "--"
+                          : formatMoney(row.advertising)
+                      }
+                      icon={<Megaphone className="h-3 w-3" />}
                     />
                   </div>
                 </SectionCard>

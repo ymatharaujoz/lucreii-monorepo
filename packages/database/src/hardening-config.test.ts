@@ -7,6 +7,10 @@ import {
   ONLINE_INDEXES,
 } from "./hardening-config";
 
+const TABLES_HARDENED_AFTER_BACKEND_ONLY_RLS: readonly string[] = [
+  "product_listing_advertising",
+];
+
 describe("database hardening configuration", () => {
   it("keeps a unique, explicit manifest of every application table", () => {
     expect(new Set(APPLICATION_TABLE_NAMES).size).toBe(APPLICATION_TABLE_NAMES.length);
@@ -53,7 +57,25 @@ describe("database hardening configuration", () => {
     expect(migration).not.toContain("auth.uid()");
 
     for (const tableName of APPLICATION_TABLE_NAMES) {
+      if (TABLES_HARDENED_AFTER_BACKEND_ONLY_RLS.includes(tableName)) {
+        continue;
+      }
+
       expect(migration).toContain(`'${tableName}'`);
     }
+  });
+
+  it("hardens tables created after the backend-only RLS migration in their own migration", () => {
+    const migration = readFileSync(
+      path.resolve(
+        __dirname,
+        "../drizzle/0033_product_listing_advertising.sql",
+      ),
+      "utf8",
+    );
+
+    expect(migration).toContain("FORCE ROW LEVEL SECURITY");
+    expect(migration).not.toContain("CREATE POLICY");
+    expect(migration).toContain("product_listing_advertising");
   });
 });

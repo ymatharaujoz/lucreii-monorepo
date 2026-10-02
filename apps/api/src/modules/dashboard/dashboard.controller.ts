@@ -1,11 +1,10 @@
-import { Body, Controller, Get, Inject, Patch, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Query, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { CurrentAuthContext } from "@/modules/auth/current-auth-context";
 import { requireSelectedCompanyId } from "@/modules/auth/selected-company";
 import type { AuthenticatedRequestContext } from "@/modules/auth/auth.types";
 import { EntitlementGuard } from "@/modules/billing/entitlement.guard";
 import { DashboardService } from "./dashboard.service";
-import { UpdateDashboardMarketplaceAdvertisingRequestDto } from "./dashboard.dto";
 
 const referenceMonthSchema = z
   .string()
@@ -221,23 +220,6 @@ export class DashboardController {
         query.provider,
         query.referenceMonth,
         getDashboardDateRange(query),
-      ),
-      error: null,
-    };
-  }
-
-  @Patch("marketplace-advertising")
-  async updateMarketplaceAdvertising(
-    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
-    @Body() body: UpdateDashboardMarketplaceAdvertisingRequestDto,
-  ) {
-    const companyId = requireSelectedCompanyId(authContext);
-    return {
-      data: await this.dashboardService.updateMarketplaceAdvertising(
-        authContext.organization!.id,
-        authContext.user.id,
-        companyId,
-        body,
       ),
       error: null,
     };

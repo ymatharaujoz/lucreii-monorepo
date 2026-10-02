@@ -435,6 +435,62 @@ export const marketplaceAdvertising = pgTable(
   ],
 );
 
+/**
+ * Monthly advertising entered per marketplace listing (a grouped listing or a
+ * standalone product) from the products performance screen. `listingKey`
+ * identifies the listing: its catalog group key, or `product:<id>` /
+ * `sku:<sku>` for standalone products.
+ */
+export const productListingAdvertising = pgTable(
+  "product_listing_advertising",
+  {
+    id: id(),
+    organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    companyId: companyId().references(() => companies.id, {
+      onDelete: "cascade",
+    }),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    referenceMonth: date("reference_month").notNull(),
+    listingKey: varchar("listing_key", { length: 255 }).notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 })
+      .default("0")
+      .notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check(
+      "product_listing_advertising_provider_valid",
+      sql`${table.provider} in ('mercadolivre', 'shopee', 'shein')`,
+    ),
+    check(
+      "product_listing_advertising_reference_month_first_day",
+      sql`${table.referenceMonth} = date_trunc('month', ${table.referenceMonth})::date`,
+    ),
+    check(
+      "product_listing_advertising_amount_non_negative",
+      sql`${table.amount} >= 0`,
+    ),
+    index("product_listing_advertising_organization_id_idx").on(
+      table.organizationId,
+    ),
+    index("product_listing_advertising_user_id_idx").on(table.userId),
+    index("product_listing_advertising_company_id_idx").on(table.companyId),
+    uniqueIndex("product_listing_advertising_company_listing_month_key").on(
+      table.organizationId,
+      table.companyId,
+      table.provider,
+      table.referenceMonth,
+      table.listingKey,
+    ),
+  ],
+);
+
 export const pricingSimulations = pgTable(
   "pricing_simulations",
   {
@@ -1653,6 +1709,24 @@ export const marketplaceAdvertisingRelations = relations(
     }),
     company: one(companies, {
       fields: [marketplaceAdvertising.companyId],
+      references: [companies.id],
+    }),
+  }),
+);
+
+export const productListingAdvertisingRelations = relations(
+  productListingAdvertising,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [productListingAdvertising.organizationId],
+      references: [organizations.id],
+    }),
+    user: one(users, {
+      fields: [productListingAdvertising.userId],
+      references: [users.id],
+    }),
+    company: one(companies, {
+      fields: [productListingAdvertising.companyId],
       references: [companies.id],
     }),
   }),

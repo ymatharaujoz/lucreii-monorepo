@@ -38,6 +38,7 @@ interface ProductTableProps {
     key: SortKey;
     direction: SortDirection;
   } | null;
+  onSaveAdvertising?: (row: ProductTableRow, amount: string) => Promise<void>;
   onSearchFilterChange?: (value: string) => void;
   onSelectedMarketplacesChange?: (value: string[]) => void;
   onSortChange?: (value: { key: SortKey; direction: SortDirection } | null) => void;
@@ -258,6 +259,25 @@ function getPerformanceRowKey(row: ProductTableRow) {
   );
 }
 
+function findRowByKey(
+  rows: ProductTableRow[],
+  key: string,
+): ProductTableRow | null {
+  for (const row of rows) {
+    if (getPerformanceRowKey(row) === key) {
+      return row;
+    }
+
+    const child = findRowByKey(row.children, key);
+
+    if (child) {
+      return child;
+    }
+  }
+
+  return null;
+}
+
 function buildDisplayRows(rows: ProductTableRow[]): DisplayRow[] {
   return rows.flatMap((row) => {
     const sourceRows =
@@ -331,6 +351,7 @@ export function ProductTable({
   selectedMarketplaces: controlledSelectedMarketplaces,
   serverMode = false,
   sortConfig: controlledSortConfig,
+  onSaveAdvertising,
   onSearchFilterChange,
   onSelectedMarketplacesChange,
   onSortChange,
@@ -344,6 +365,16 @@ export function ProductTable({
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ProductTableRow | null>(null);
   const [expandedGroupKeys, setExpandedGroupKeys] = useState<string[]>([]);
+
+  // After saving, the list is refetched: follow the row by key so the open
+  // details modal shows the fresh values instead of the clicked snapshot.
+  const openRow = useMemo(
+    () =>
+      selectedRow
+        ? (findRowByKey(rows, getPerformanceRowKey(selectedRow)) ?? selectedRow)
+        : null,
+    [rows, selectedRow],
+  );
 
   const sortConfig = controlledSortConfig ?? uncontrolledSortConfig;
   const searchFilter = controlledSearchFilter ?? uncontrolledSearchFilter;
@@ -539,6 +570,23 @@ export function ProductTable({
       <td className="px-3 py-3 text-right">
         <span className="text-sm text-foreground">{formatMoney(totalProfit)}</span>
       </td>
+      {/* Advertising lives on the listing: variation rows show "--". */}
+      <td className="px-3 py-3 text-right">
+        <span className="text-sm text-foreground">
+          {row.advertising === null ? "--" : formatMoney(row.advertising)}
+        </span>
+      </td>
+      {/* Placeholders until the after-advertising formulas are defined. */}
+      <td className="px-3 py-3 text-right">
+        <span className="text-sm text-foreground">
+          {row.advertising === null ? "--" : formatPercent(0, { digits: 2 })}
+        </span>
+      </td>
+      <td className="px-3 py-3 text-right">
+        <span className="text-sm text-foreground">
+          {row.advertising === null ? "--" : formatMoney(0)}
+        </span>
+      </td>
     </>
   );
 
@@ -687,7 +735,7 @@ export function ProductTable({
         ) : null}
 
         <div className="flex-1 min-h-0 overflow-auto">
-          <table className="w-full min-w-[1200px] border-separate border-spacing-0">
+          <table className="w-full min-w-[1700px] border-separate border-spacing-0">
             <thead>
               <tr className="border-b border-border bg-surface-strong/95">
                 <th
@@ -750,19 +798,28 @@ export function ProductTable({
                     <SortIcon column="totalProfit" />
                   </div>
                 </th>
+                <th className="sticky top-0 z-10 whitespace-nowrap px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-surface-strong/95 min-w-[140px]">
+                  Publicidade
+                </th>
+                <th className="sticky top-0 z-10 whitespace-nowrap px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-surface-strong/95 min-w-[210px]">
+                  Margem Após Publicidade
+                </th>
+                <th className="sticky top-0 z-10 whitespace-nowrap px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-surface-strong/95 min-w-[190px]">
+                  Lucro Após Publicidade
+                </th>
               </tr>
             </thead>
 
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={11} className="px-3 py-10 text-center text-sm text-muted-foreground">
                     Carregando produtos...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-10 text-center text-sm text-muted-foreground">
+                  <td colSpan={11} className="px-3 py-10 text-center text-sm text-muted-foreground">
                     Nao foi possivel carregar os produtos.
                   </td>
                 </tr>
@@ -827,7 +884,12 @@ export function ProductTable({
           </div>
         ) : null}
       </Card>
-      <ProductDetailsModal onClose={closeDetails} open={selectedRow !== null} row={selectedRow} />
+      <ProductDetailsModal
+        onClose={closeDetails}
+        onSaveAdvertising={onSaveAdvertising}
+        open={selectedRow !== null}
+        row={openRow}
+      />
     </motion.div>
   );
 }

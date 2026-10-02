@@ -28,6 +28,7 @@ import {
   ProductAnalyticsQueryDto,
   ProductPerformanceListQueryDto,
   UpdateProductCatalogFinanceRequestDto,
+  UpdateProductListingAdvertisingRequestDto,
   UpdateProductRequestDto,
 } from "./products.dto";
 
@@ -82,6 +83,24 @@ export class ProductsController {
           userId: authContext.user.id,
         },
         query,
+      ),
+      error: null,
+    };
+  }
+
+  @Patch("performance/advertising")
+  async updateListingAdvertising(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Body() body: UpdateProductListingAdvertisingRequestDto,
+  ) {
+    return {
+      data: await this.productsService.updateListingAdvertising(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        body,
       ),
       error: null,
     };

@@ -238,8 +238,6 @@ describe("DashboardFinancialIndicators", () => {
         activeCompany={company}
         financialIndicators={indicators}
         indicatorMode="marketplace"
-        provider="shopee"
-        referenceMonth="2026-07-01"
         showCompanyWideIndicators={false}
       />,
     );
@@ -357,8 +355,6 @@ describe("DashboardFinancialIndicators", () => {
       <DashboardFinancialIndicators
         activeCompany={company}
         financialIndicators={indicators}
-        provider="shopee"
-        referenceMonth="2026-07-01"
         showCompanyWideIndicators={false}
       />,
     );
@@ -417,8 +413,6 @@ describe("DashboardFinancialIndicators", () => {
           totalProfit: "-1676.47",
           variableCosts: "6029.50",
         }}
-        provider="shopee"
-        referenceMonth="2026-07-01"
         showCompanyWideIndicators={false}
       />,
     );
@@ -463,8 +457,6 @@ describe("DashboardFinancialIndicators", () => {
           revenue: "0.00",
           totalProfit: "100.00",
         }}
-        provider="shopee"
-        referenceMonth="2026-07-01"
         showCompanyWideIndicators={false}
       />,
     );
@@ -509,105 +501,50 @@ describe("DashboardFinancialIndicators", () => {
     view.unmount();
   });
 
-  it("salva publicidade no marketplace e mantém margem após publicidade somente leitura", async () => {
-    vi.mocked(apiClient.patch).mockResolvedValue({
-      data: {
-        amount: "1481.33",
-        provider: "shopee",
-        referenceMonth: "2026-07-01",
-      },
-      error: null,
-    });
+  it("exibe a publicidade do marketplace somente leitura, sem botão Editar", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
         financialIndicators={indicators}
-        provider="shopee"
-        referenceMonth="2026-07-01"
         showCompanyWideIndicators={false}
       />,
     );
 
-    const editButton = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("Editar"),
-    );
-    act(() =>
-      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
-    );
-
-    expect(document.querySelectorAll("input")).toHaveLength(1);
-    expect(document.body.textContent ?? "").toContain(
-      "Margem Após Publicidade",
-    );
-    expect(document.body.textContent ?? "").not.toContain("Custo Fixo");
-
-    const saveButton = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("Salvar"),
-    );
-    await act(async () => {
-      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(apiClient.patch).toHaveBeenCalledWith(
-      "/dashboard/marketplace-advertising",
-      {
-        body: {
-          amount: "1481.33",
-          provider: "shopee",
-          referenceMonth: "2026-07-01",
-        },
-      },
-    );
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Publicidade");
+    expect(text).toContain("Margem Após Publicidade");
+    expect(text).toContain("Lucro Após Publicidade");
+    expect(text).not.toContain("Editar");
+    expect(
+      Array.from(document.querySelectorAll("button")).some((button) =>
+        button.textContent?.includes("Editar"),
+      ),
+    ).toBe(false);
+    expect(document.querySelectorAll("input")).toHaveLength(0);
+    expect(apiClient.patch).not.toHaveBeenCalled();
     view.unmount();
   });
 
-  it("mantém o rótulo Publicidade e o rateio em intervalo parcial durante edição", () => {
+  it("usa a publicidade do mês cheio nos cálculos do marketplace", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
-        dateRange={{ dateFrom: "2026-07-01", dateTo: "2026-07-10" }}
         financialIndicators={indicators}
-        provider="shopee"
-        referenceMonth="2026-07-01"
         showCompanyWideIndicators={false}
       />,
     );
 
-    expect(document.body.textContent ?? "").toContain("Publicidade");
-    expect(document.body.textContent ?? "").not.toContain(
-      "Publicidade rateada",
-    );
-    expect(document.body.textContent ?? "").not.toContain(
-      "Publicidade mensal",
-    );
-    expect(document.body.textContent ?? "").toMatch(/PublicidadeR\$\s*478/);
-
-    const editButton = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("Editar"),
-    );
-    act(() =>
-      editButton?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
-    );
-
-    expect(document.body.textContent ?? "").toContain("Publicidade");
-    expect(document.body.textContent ?? "").not.toContain(
-      "Publicidade mensal",
-    );
-    expect(document.querySelector<HTMLInputElement>("input")?.value).toBe(
-      "1.481,33",
-    );
-
+    const text = document.body.textContent ?? "";
+    expect(text).not.toContain("Publicidade rateada");
+    expect(text).toMatch(/PublicidadeR\$\s*1\.481(?!,)/);
     view.unmount();
   });
 
-  it("mantém o rótulo Custo Fixo em intervalo parcial e durante edição", () => {
+  it("mantém o rótulo Custo Fixo durante a edição", () => {
     const view = mount(
       <DashboardFinancialIndicators
         activeCompany={company}
-        dateRange={{ dateFrom: "2026-07-01", dateTo: "2026-07-10" }}
         financialIndicators={indicators}
-        referenceMonth="2026-07-01"
       />,
     );
 

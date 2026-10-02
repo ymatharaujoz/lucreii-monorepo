@@ -414,6 +414,125 @@ describe("products controller", () => {
     });
   });
 
+  it("saves the advertising of a listing for the selected company", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: {
+        id: "org_123",
+        name: "Org",
+        role: "owner",
+        slug: "org",
+      },
+      selectedCompanyId: "company_123",
+      session: {
+        expiresAt: new Date("2026-04-22T00:00:00.000Z"),
+        id: "session_123",
+      },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(
+      entitlementsService,
+      "requireActiveEntitlement",
+    ).mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+    const updateListingAdvertising = vi
+      .spyOn(productsService, "updateListingAdvertising")
+      .mockResolvedValueOnce({
+        advertisingKey: "mercadolivre:MLB1",
+        amount: "125.50",
+        channel: "mercadolivre",
+        referenceMonth: "2026-07-01",
+      });
+
+    const response = await app.inject({
+      method: "PATCH",
+      payload: {
+        advertisingKey: "mercadolivre:MLB1",
+        amount: "125.50",
+        channel: "mercadolivre",
+        referenceMonth: "2026-07-01",
+      },
+      url: "/products/performance/advertising",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updateListingAdvertising).toHaveBeenCalledWith(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {
+        advertisingKey: "mercadolivre:MLB1",
+        amount: "125.50",
+        channel: "mercadolivre",
+        referenceMonth: "2026-07-01",
+      },
+    );
+    expect(response.json()).toEqual({
+      data: {
+        advertisingKey: "mercadolivre:MLB1",
+        amount: "125.50",
+        channel: "mercadolivre",
+        referenceMonth: "2026-07-01",
+      },
+      error: null,
+    });
+  });
+
+  it("rejects a negative listing advertising amount", async () => {
+    vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
+      organization: {
+        id: "org_123",
+        name: "Org",
+        role: "owner",
+        slug: "org",
+      },
+      session: {
+        expiresAt: new Date("2026-04-22T00:00:00.000Z"),
+        id: "session_123",
+      },
+      user: {
+        email: "owner@lucreii.local",
+        emailVerified: true,
+        id: "user_123",
+        image: null,
+        name: "Mateus",
+      },
+    });
+    vi.spyOn(
+      entitlementsService,
+      "requireActiveEntitlement",
+    ).mockResolvedValueOnce({
+      customer: null,
+      entitled: true,
+      organizationId: "org_123",
+      subscription: null,
+    });
+
+    const response = await app.inject({
+      method: "PATCH",
+      payload: {
+        advertisingKey: "mercadolivre:MLB1",
+        amount: "-5",
+        channel: "mercadolivre",
+        referenceMonth: "2026-07-01",
+      },
+      url: "/products/performance/advertising",
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
   it("updates catalog finance inputs for an existing product", async () => {
     vi.spyOn(authService, "requireRequestContext").mockResolvedValueOnce({
       organization: {

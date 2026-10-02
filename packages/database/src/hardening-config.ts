@@ -25,6 +25,7 @@ export const APPLICATION_TABLE_NAMES = [
   "product_costs",
   "product_finance_defaults",
   "product_images",
+  "product_listing_advertising",
   "product_monthly_performance",
   "products",
   "pricing_simulations",

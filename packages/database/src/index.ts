@@ -53,6 +53,10 @@ export type MarketplaceAdvertising =
   typeof schema.marketplaceAdvertising.$inferSelect;
 export type NewMarketplaceAdvertising =
   typeof schema.marketplaceAdvertising.$inferInsert;
+export type ProductListingAdvertising =
+  typeof schema.productListingAdvertising.$inferSelect;
+export type NewProductListingAdvertising =
+  typeof schema.productListingAdvertising.$inferInsert;
 export type Product = typeof schema.products.$inferSelect;
 export type NewProduct = typeof schema.products.$inferInsert;
 export type ProductImage = typeof schema.productImages.$inferSelect;

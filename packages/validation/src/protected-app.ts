@@ -3,7 +3,6 @@ import { z } from "zod";
 const decimalPattern = /^-?\d+(?:\.\d{1,4})?$/;
 const decimalRatePattern = /^-?\d+(?:\.\d{1,6})?$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-const nonNegativeMoneyPattern = /^\d+(?:\.\d{1,2})?$/;
 
 function decimalField(label: string) {
   return z
@@ -331,30 +330,6 @@ export const dashboardFinancialIndicatorsResponseSchema = z.object({
   variableCosts: decimalField("Variable costs"),
 });
 
-export const dashboardMarketplaceAdvertisingUpdateSchema = z.object({
-  amount: z
-    .string()
-    .trim()
-    .regex(
-      nonNegativeMoneyPattern,
-      "Advertising amount must be a non-negative decimal amount with up to 2 places.",
-    ),
-  provider: integrationProviderSchema,
-  referenceMonth: z
-    .string()
-    .trim()
-    .regex(
-      /^\d{4}-\d{2}-01$/,
-      "Reference month must be the first day of the month.",
-    ),
-});
-
-export const dashboardMarketplaceAdvertisingResponseSchema = z.object({
-  amount: decimalField("Advertising amount"),
-  provider: integrationProviderSchema,
-  referenceMonth: isoDateField("Reference month"),
-});
-
 export const productCostRecordSchema = z.object({
   id: z.string().trim().min(1),
   companyId: z.string().trim().min(1),
@@ -648,8 +623,6 @@ export const dashboardProfitabilityApiResponseSchema =
   createApiSuccessResponseSchema(dashboardProfitabilityResponseSchema);
 export const dashboardFinancialIndicatorsApiResponseSchema =
   createApiSuccessResponseSchema(dashboardFinancialIndicatorsResponseSchema);
-export const dashboardMarketplaceAdvertisingApiResponseSchema =
-  createApiSuccessResponseSchema(dashboardMarketplaceAdvertisingResponseSchema);
 export const productAnalyticsSnapshotApiResponseSchema =
   createApiSuccessResponseSchema(productAnalyticsSnapshotSchema);
 export const completeOnboardingApiResponseSchema =
@@ -677,12 +650,6 @@ export type DashboardProfitabilityResponseInput = z.infer<
 >;
 export type DashboardFinancialIndicatorsResponseInput = z.infer<
   typeof dashboardFinancialIndicatorsResponseSchema
->;
-export type DashboardMarketplaceAdvertisingUpdateInput = z.infer<
-  typeof dashboardMarketplaceAdvertisingUpdateSchema
->;
-export type DashboardMarketplaceAdvertisingResponseInput = z.infer<
-  typeof dashboardMarketplaceAdvertisingResponseSchema
 >;
 export type ProductAnalyticsSnapshotInput = z.infer<
   typeof productAnalyticsSnapshotSchema

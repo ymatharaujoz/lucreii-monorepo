@@ -9,6 +9,7 @@ import {
   productCostUpdateSchema,
   productCatalogExportQuerySchema,
   productFormSchema,
+  productListingAdvertisingUpdateSchema,
   productAnalyticsQuerySchema,
   productPerformanceListQuerySchema,
   productManualCreateSchema,
@@ -25,6 +26,7 @@ import type {
   ProductCostUpdateInput,
   ProductCatalogExportQueryInput,
   ProductAnalyticsQueryInput,
+  ProductListingAdvertisingUpdateInput,
   ProductPerformanceListQueryInput,
   ProductFormInput,
   ProductManualCreateInput,
@@ -91,6 +93,17 @@ export class ProductPerformanceListQueryDto
     | "contributionMarginRatio"
     | "totalProfit";
   sortDirection?: "asc" | "desc";
+}
+
+export class UpdateProductListingAdvertisingRequestDto
+  implements ProductListingAdvertisingUpdateInput
+{
+  static schema = productListingAdvertisingUpdateSchema;
+
+  advertisingKey!: string;
+  amount!: string;
+  channel!: "mercadolivre" | "shopee" | "shein";
+  referenceMonth!: string;
 }
 
 export class ProductCatalogExportQueryDto

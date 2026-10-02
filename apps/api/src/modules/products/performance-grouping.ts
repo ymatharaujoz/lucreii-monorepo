@@ -35,6 +35,38 @@ function sumPerformanceRows(
   return rows.reduce((sum, row) => sum + pick(row), 0);
 }
 
+/**
+ * Stable identifier of the listing a performance row belongs to, used to store
+ * the advertising entered for it. A grouped marketplace listing is identified
+ * by its catalog group key (so it survives variations appearing or vanishing);
+ * standalone products fall back to their product id, then their SKU.
+ */
+export function buildListingAdvertisingKey(
+  row: Pick<ProductPerformanceListItem, "catalogGroupKey" | "productId" | "sku">,
+) {
+  const groupKey = row.catalogGroupKey?.trim();
+
+  if (groupKey) {
+    return groupKey;
+  }
+
+  if (row.productId) {
+    return `product:${row.productId}`;
+  }
+
+  const sku = row.sku?.trim().toUpperCase();
+
+  return sku ? `sku:${sku}` : null;
+}
+
+export function buildListingAdvertisingLookupKey(input: {
+  advertisingKey: string;
+  channel: string;
+  referenceMonth: string;
+}) {
+  return [input.referenceMonth, input.channel, input.advertisingKey].join("::");
+}
+
 function buildPerformanceGroupKey(
   catalogGroupKey: string,
   row: Pick<ProductPerformanceListItem, "channelLabel" | "referenceMonth">,
@@ -90,11 +122,19 @@ export function groupPerformanceRows(
 
     emittedGroups.add(key);
 
-    const children = [...members].sort((left, right) =>
+    const sortedMembers = [...members].sort((left, right) =>
       (left.variationLabel ?? left.name).localeCompare(
         right.variationLabel ?? right.name,
       ),
     );
+    // Advertising belongs to the listing, so every member carries the same
+    // value; only the parent row exposes it and variation rows stay read-only.
+    const listingAdvertising = sortedMembers[0]!.advertising;
+    const children = sortedMembers.map((member) => ({
+      ...member,
+      advertising: null,
+      advertisingKey: null,
+    }));
     const first = children[0]!;
     const parentProduct =
       children
@@ -135,7 +175,9 @@ export function groupPerformanceRows(
       {
         actualRoas: advertisingCost > 0 ? revenue / advertisingCost : null,
         adSpend: advertisingCost,
+        advertising: listingAdvertising,
         advertisingCost,
+        advertisingKey: row.catalogGroupKey,
         catalogGroupKey: row.catalogGroupKey,
         catalogRole: "parent" as const,
         channelLabel: row.channelLabel,

@@ -486,7 +486,9 @@ function buildSyntheticParentRow(
   return {
     actualRoas: totals.adSpend > 0 ? totals.revenue / totals.adSpend : null,
     adSpend: totals.adSpend,
+    advertising: null,
     advertisingCost: totals.adSpend,
+    advertisingKey: null,
     catalogGroupKey: parent.catalogGroupKey,
     catalogRole: "parent",
     channelLabel: children[0]?.channelLabel ?? "mercadolivre",
@@ -678,7 +680,9 @@ export function buildProductTableRows(data: ProductCatalogData): ProductTableRow
     return {
       ...financials,
       adSpend: toNumber(row.advertisingCost),
+      advertising: null,
       advertisingCost: toNumber(row.advertisingCost),
+      advertisingKey: null,
       catalogGroupKey: product?.catalogGroupKey ?? null,
       catalogRole: product?.catalogRole ?? "standalone",
       channelLabel: row.channel,

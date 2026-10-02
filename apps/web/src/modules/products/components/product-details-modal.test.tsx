@@ -3,7 +3,7 @@
 import React, { act } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProductDetailsModal } from "./product-details-modal";
 import type { ProductTableRow } from "../types/products";
 
@@ -15,7 +15,9 @@ function buildRow(overrides: Partial<ProductTableRow> = {}): ProductTableRow {
   return {
     actualRoas: 3.12,
     adSpend: 0,
+    advertising: 150,
     advertisingCost: 0,
+    advertisingKey: "product:acc-1",
     catalogGroupKey: null,
     catalogRole: "standalone",
     channelLabel: "mercadolivre",
@@ -92,6 +94,23 @@ function click(element: Element) {
   });
 }
 
+function changeInputValue(element: HTMLInputElement, value: string) {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  );
+  descriptor?.set?.call(element, value);
+  act(() => {
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function findButton(label: string) {
+  return Array.from(document.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === label,
+  );
+}
+
 function normalizedTextContent() {
   return document.body.textContent?.replace(/\u00a0/g, " ") ?? "";
 }
@@ -111,6 +130,116 @@ describe("ProductDetailsModal", () => {
         (button) => button.textContent?.trim() === "Faturamento",
       ),
     ).toBe(false);
+
+    view.unmount();
+  });
+
+  it("shows the five overview cards with an editable advertising amount", () => {
+    const view = renderWithClient(
+      <ProductDetailsModal
+        onClose={() => {}}
+        onSaveAdvertising={async () => {}}
+        open
+        row={buildRow({ advertising: 1234.5 })}
+      />,
+    );
+
+    const text = normalizedTextContent();
+
+    for (const label of [
+      "Faturamento",
+      "Receita Líquida",
+      "Vendas",
+      "Devoluções",
+      "Publicidade",
+    ]) {
+      expect(text).toContain(label);
+    }
+    expect(
+      document.querySelector<HTMLInputElement>(
+        'input[aria-label="Publicidade em reais"]',
+      )?.value,
+    ).toBe("1.234,50");
+
+    view.unmount();
+  });
+
+  it("saves the typed advertising amount for the opened row", async () => {
+    const onSaveAdvertising = vi.fn().mockResolvedValue(undefined);
+    const row = buildRow({ advertising: 0 });
+    const view = renderWithClient(
+      <ProductDetailsModal
+        onClose={() => {}}
+        onSaveAdvertising={onSaveAdvertising}
+        open
+        row={row}
+      />,
+    );
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Publicidade em reais"]',
+    )!;
+
+    expect(findButton("Salvar")).toBeUndefined();
+
+    changeInputValue(input, "20000");
+
+    expect(input.value).toBe("200,00");
+
+    await act(async () => {
+      findButton("Salvar")!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+
+    expect(onSaveAdvertising).toHaveBeenCalledWith(row, "200.00");
+
+    view.unmount();
+  });
+
+  it("shows an error and keeps the draft when saving advertising fails", async () => {
+    const onSaveAdvertising = vi.fn().mockRejectedValue(new Error("boom"));
+    const view = renderWithClient(
+      <ProductDetailsModal
+        onClose={() => {}}
+        onSaveAdvertising={onSaveAdvertising}
+        open
+        row={buildRow({ advertising: 0 })}
+      />,
+    );
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Publicidade em reais"]',
+    )!;
+
+    changeInputValue(input, "500");
+    await act(async () => {
+      findButton("Salvar")!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+      "Não foi possível salvar a publicidade.",
+    );
+    expect(input.value).toBe("5,00");
+
+    view.unmount();
+  });
+
+  it("keeps advertising read-only for variation rows", () => {
+    const view = renderWithClient(
+      <ProductDetailsModal
+        onClose={() => {}}
+        onSaveAdvertising={async () => {}}
+        open
+        row={buildRow({ advertising: null, advertisingKey: null })}
+      />,
+    );
+
+    expect(normalizedTextContent()).toContain("Publicidade");
+    expect(normalizedTextContent()).toContain("--");
+    expect(
+      document.querySelector('input[aria-label="Publicidade em reais"]'),
+    ).toBeNull();
 
     view.unmount();
   });

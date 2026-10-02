@@ -48,7 +48,10 @@ import { ProductHeader } from "./product-header";
 import { ProductTable } from "./product-table";
 import { TreeConnector, VariationToggle } from "./variation-tree";
 import { useProductData } from "../hooks/use-product-data";
-import { useProductPerformancePage } from "../hooks/use-product-performance-data";
+import {
+  useProductPerformancePage,
+  useUpdateListingAdvertising,
+} from "../hooks/use-product-performance-data";
 import { buildMarketplaceSyncNotice } from "../calculations/product-insights";
 import { formatMoney } from "../utils/formatters";
 import type { ProductMarketplaceNotice } from "../types/products";
@@ -1756,6 +1759,7 @@ export function ProductsHome({
     },
     view === "performance",
   );
+  const updateListingAdvertising = useUpdateListingAdvertising();
   const marketplaceNotice = data ? buildMarketplaceSyncNotice(data) : null;
   const handleAddProduct = () =>
     onAddProduct?.({
@@ -1856,6 +1860,18 @@ export function ProductsHome({
             error={Boolean(performanceQuery.error)}
             loading={performanceQuery.isLoading}
             onPageChange={setPerformancePage}
+            onSaveAdvertising={async (row, amount) => {
+              if (!row.advertisingKey) {
+                return;
+              }
+
+              await updateListingAdvertising.mutateAsync({
+                advertisingKey: row.advertisingKey,
+                amount,
+                channel: row.channelLabel as "mercadolivre" | "shopee" | "shein",
+                referenceMonth: row.referenceMonth,
+              });
+            }}
             onSearchFilterChange={(value) => {
               setPerformanceSearch(value);
               setPerformancePage(1);

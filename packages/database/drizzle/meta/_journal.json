@@ -232,6 +232,13 @@
       "when": 1790035200000,
       "tag": "0032_remove_unused_data",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790121600000,
+      "tag": "0033_product_listing_advertising",
+      "breakpoints": true
     }
   ]
 }

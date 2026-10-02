@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCompanyDefaultsPatch,
-  buildMarketplaceAdvertisingPatch,
   formatTaxPercentInput,
   getActiveCompany,
 } from "./company-finance-defaults";
@@ -21,12 +20,6 @@ describe("company finance defaults helpers", () => {
 
   it("formats stored tax rates as percent input values", () => {
     expect(formatTaxPercentInput("0.120000")).toBe("12,00");
-  });
-
-  it("normalizes marketplace advertising amounts from localized input", () => {
-    expect(buildMarketplaceAdvertisingPatch("1.250,50")).toEqual({
-      amount: "1250.50",
-    });
   });
 
   it("returns selected company before first active fallback", () => {

@@ -353,6 +353,14 @@ export type ProductPerformanceListItem = {
   totalPackagingCost: number;
   adSpend: number;
   advertisingCost: number;
+  /**
+   * Monthly advertising entered for the listing this row represents. `null`
+   * for variation rows nested under a grouped listing, which carry no value
+   * of their own (the parent row does).
+   */
+  advertising: number | null;
+  /** Identifies the listing when saving `advertising`; `null` when not editable. */
+  advertisingKey: string | null;
   revenue: number;
   totalCommission: number;
   totalProfit: number;
@@ -362,6 +370,13 @@ export type ProductPerformanceListItem = {
   roiRatio: number | null;
   minimumRoas: number | null;
   actualRoas: number | null;
+  referenceMonth: string;
+};
+
+export type ProductListingAdvertising = {
+  advertisingKey: string;
+  amount: string;
+  channel: string;
   referenceMonth: string;
 };
 

@@ -1,11 +1,20 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type {
+  ProductListingAdvertising,
   ProductPerformanceListQuery,
   ProductPerformanceListResponse,
 } from "@lucreii/types";
-import { productPerformanceListApiResponseSchema } from "@lucreii/validation";
+import {
+  productPerformanceListApiResponseSchema,
+  type ProductListingAdvertisingUpdateInput,
+} from "@lucreii/validation";
 import { apiClient } from "@/lib/api/client";
 
 export const productPerformanceQueryKey = ["product-performance-module"] as const;
@@ -82,5 +91,26 @@ export function useProductPerformancePage(
       filters.sortBy ?? "",
       filters.sortDirection ?? "",
     ],
+  });
+}
+
+export async function updateListingAdvertising(
+  input: ProductListingAdvertisingUpdateInput,
+): Promise<ProductListingAdvertising> {
+  const response = await apiClient.patch<{
+    data: ProductListingAdvertising;
+    error: null;
+  }>("/products/performance/advertising", { body: input });
+
+  return response.data;
+}
+
+export function useUpdateListingAdvertising() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateListingAdvertising,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: productPerformanceQueryKey }),
   });
 }

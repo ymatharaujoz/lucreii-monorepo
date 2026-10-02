@@ -18,6 +18,7 @@ import {
   products,
   marketplaceConnections,
   marketplaceAdvertising,
+  productListingAdvertising,
   marketplaceWebhookEvents,
   syncRuns,
   externalProducts,
@@ -31,6 +32,7 @@ describe("@lucreii/database schema", () => {
     expect(dbSchema.companies).toBe(companies);
     expect(dbSchema.fixedCosts).toBe(fixedCosts);
     expect(dbSchema.marketplaceAdvertising).toBe(marketplaceAdvertising);
+    expect(dbSchema.productListingAdvertising).toBe(productListingAdvertising);
     expect(dbSchema.productFinanceDefaults).toBe(productFinanceDefaults);
     expect(dbSchema.productImages).toBe(productImages);
     expect(dbSchema.productMonthlyPerformance).toBe(productMonthlyPerformance);
@@ -54,6 +56,7 @@ describe("@lucreii/database schema", () => {
     expect(db.query.products).toBeDefined();
     expect(db.query.marketplaceConnections).toBeDefined();
     expect(db.query.marketplaceAdvertising).toBeDefined();
+    expect(db.query.productListingAdvertising).toBeDefined();
     expect(db.query.marketplaceWebhookEvents).toBeDefined();
     expect(db.query.syncRuns).toBeDefined();
     expect(db.query.externalProducts).toBeDefined();

@@ -3,7 +3,10 @@ import type {
   ProductPerformanceListItem,
 } from "@lucreii/types";
 import { describe, expect, it } from "vitest";
-import { groupPerformanceRows } from "./performance-grouping";
+import {
+  buildListingAdvertisingKey,
+  groupPerformanceRows,
+} from "./performance-grouping";
 
 function buildRow(
   overrides: Partial<ProductPerformanceListItem> = {},
@@ -11,7 +14,9 @@ function buildRow(
   return {
     actualRoas: null,
     adSpend: 0,
+    advertising: 0,
     advertisingCost: 0,
+    advertisingKey: null,
     catalogGroupKey: null,
     catalogRole: "standalone",
     channelLabel: "mercadolivre",
@@ -72,6 +77,8 @@ const white = buildRow({
   sales: 25,
   sellingPrice: 20,
   sku: "Suporte 02 Branco",
+  advertising: 120,
+  advertisingKey: "mercadolivre:MLB1",
   totalCommission: 50,
   totalProductCost: 250,
   totalProfit: 200,
@@ -90,10 +97,45 @@ const black = buildRow({
   sales: 52,
   sellingPrice: 20,
   sku: "Suporte 02 Preto",
+  advertising: 120,
+  advertisingKey: "mercadolivre:MLB1",
   totalCommission: 100,
   totalProductCost: 500,
   totalProfit: 350,
   variationLabel: "Cor: Preto",
+});
+
+describe("buildListingAdvertisingKey", () => {
+  it("prefers the catalog group, then the product id, then the SKU", () => {
+    expect(
+      buildListingAdvertisingKey({
+        catalogGroupKey: "mercadolivre:MLB1",
+        productId: "product_1",
+        sku: "sku-1",
+      }),
+    ).toBe("mercadolivre:MLB1");
+    expect(
+      buildListingAdvertisingKey({
+        catalogGroupKey: null,
+        productId: "product_1",
+        sku: "sku-1",
+      }),
+    ).toBe("product:product_1");
+    expect(
+      buildListingAdvertisingKey({
+        catalogGroupKey: null,
+        productId: null,
+        sku: " sku-1 ",
+      }),
+    ).toBe("sku:SKU-1");
+    expect(
+      buildListingAdvertisingKey({
+        catalogGroupKey: null,
+        productId: null,
+        sku: "  ",
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("groupPerformanceRows", () => {
@@ -128,6 +170,22 @@ describe("groupPerformanceRows", () => {
     expect(parent!.sellingPrice * parent!.sales).toBeCloseTo(
       20 * 25 + 20 * 52,
     );
+  });
+
+  it("exposes the listing advertising only on the parent row", () => {
+    const [parent] = groupPerformanceRows([black, white], [syntheticParent]);
+
+    // the value belongs to the listing: it is not summed across variations
+    expect(parent).toMatchObject({
+      advertising: 120,
+      advertisingKey: "mercadolivre:MLB1",
+    });
+    expect(
+      parent!.children.map((child) => [child.advertising, child.advertisingKey]),
+    ).toEqual([
+      [null, null],
+      [null, null],
+    ]);
   });
 
   it("keeps standalone rows and single-variation groups untouched", () => {

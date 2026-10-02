@@ -3,6 +3,7 @@ import {
   productPerformanceListQuerySchema,
   productCatalogExportQuerySchema,
   productImportRowSchema,
+  productListingAdvertisingUpdateSchema,
   productManualCreateSchema,
   productPerformanceListResponseSchema,
   productSpreadsheetUpdateRowSchema,
@@ -94,7 +95,9 @@ describe("@lucreii/validation product schemas", () => {
         {
           actualRoas: 2.5,
           adSpend: 10,
+          advertising: 150,
           advertisingCost: 10,
+          advertisingKey: "product:550e8400-e29b-41d4-a716-446655440000",
           catalogGroupKey: null,
           catalogRole: "standalone",
           channelLabel: "mercadolivre",
@@ -143,6 +146,101 @@ describe("@lucreii/validation product schemas", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("accepts variation rows without advertising in performance list responses", () => {
+    const result = productPerformanceListResponseSchema.safeParse({
+      items: [
+        {
+          actualRoas: null,
+          adSpend: 0,
+          advertising: null,
+          advertisingCost: 0,
+          advertisingKey: null,
+          catalogGroupKey: "mercadolivre:MLB1",
+          catalogRole: "child",
+          channelLabel: "mercadolivre",
+          children: [],
+          commissionPct: 0,
+          contributionMarginRatio: null,
+          coverImageUrl: null,
+          displayName: "Kit",
+          id: "perf_1",
+          isActive: true,
+          isSyntheticParent: false,
+          minimumRoas: null,
+          name: "Kit",
+          netLiquidSales: 0,
+          packagingCost: 0,
+          parentProductId: null,
+          performanceId: "perf_1",
+          productId: null,
+          referenceMonth: "2026-06-01",
+          returns: 0,
+          revenue: 0,
+          roiRatio: null,
+          sales: 0,
+          sellingPrice: 0,
+          shipping: 0,
+          sku: "KIT-1",
+          taxPct: 0,
+          totalCommission: 0,
+          totalPackagingCost: 0,
+          totalProductCost: 0,
+          totalProfit: 0,
+          unitCost: 0,
+          unitProfit: null,
+          variationLabel: "Cor: Preto",
+        },
+      ],
+      page: 1,
+      pageSize: 10,
+      totalItems: 1,
+      totalPages: 1,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("validates listing advertising updates", () => {
+    const valid = {
+      advertisingKey: "mercadolivre:MLB1",
+      amount: "125.50",
+      channel: "mercadolivre",
+      referenceMonth: "2026-07-01",
+    };
+
+    expect(productListingAdvertisingUpdateSchema.safeParse(valid).success).toBe(
+      true,
+    );
+    expect(
+      productListingAdvertisingUpdateSchema.safeParse({ ...valid, amount: "-1" })
+        .success,
+    ).toBe(false);
+    expect(
+      productListingAdvertisingUpdateSchema.safeParse({
+        ...valid,
+        amount: "1.234",
+      }).success,
+    ).toBe(false);
+    expect(
+      productListingAdvertisingUpdateSchema.safeParse({
+        ...valid,
+        channel: "amazon",
+      }).success,
+    ).toBe(false);
+    expect(
+      productListingAdvertisingUpdateSchema.safeParse({
+        ...valid,
+        referenceMonth: "2026-07-15",
+      }).success,
+    ).toBe(false);
+    expect(
+      productListingAdvertisingUpdateSchema.safeParse({
+        ...valid,
+        advertisingKey: " ",
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects spreadsheet update rows with non-numeric EMBALAGEM using a friendly message", () => {

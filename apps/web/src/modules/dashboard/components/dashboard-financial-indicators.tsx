@@ -14,18 +14,11 @@ import {
 import type {
   Company,
   DashboardFinancialIndicators as DashboardFinancialIndicatorsData,
-  DashboardMarketplaceAdvertising,
-  IntegrationProviderSlug,
 } from "@lucreii/types";
 import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, itemVariants } from "@/lib/animations";
-import {
-  getReferenceMonthDateRangeProration,
-  type ReferenceMonthDateRange,
-} from "@/lib/reference-month";
 import { Button, Card, Input } from "@lucreii/ui";
 import {
-  buildMarketplaceAdvertisingPatch,
   buildCompanyDefaultsPatch,
   formatCurrencyInput,
 } from "./company-finance-defaults";
@@ -33,12 +26,9 @@ import { formatMoney } from "../utils/formatters";
 
 interface DashboardFinancialIndicatorsProps {
   activeCompany: Company | null;
-  dateRange?: ReferenceMonthDateRange;
   financialIndicators: DashboardFinancialIndicatorsData;
   indicatorMode?: "dashboard" | "marketplace";
   onDefaultsSaved?: () => void;
-  provider?: IntegrationProviderSlug | null;
-  referenceMonth?: string;
   showCompanyDefaultsEditor?: boolean;
   showCompanyWideIndicators?: boolean;
 }
@@ -159,12 +149,9 @@ function IndicatorCard({
 
 export function DashboardFinancialIndicators({
   activeCompany,
-  dateRange,
   financialIndicators,
   indicatorMode = "dashboard",
   onDefaultsSaved,
-  provider = null,
-  referenceMonth,
   showCompanyDefaultsEditor = true,
   showCompanyWideIndicators = true,
 }: DashboardFinancialIndicatorsProps) {
@@ -175,12 +162,6 @@ export function DashboardFinancialIndicators({
   } | null>(null);
   const [fixedCostInput, setFixedCostInput] = useState("0,00");
   const [taxPercentInput, setTaxPercentInput] = useState("0,00");
-  const [advertisingInput, setAdvertisingInput] = useState("0,00");
-  const [savedMarketplaceAdvertising, setSavedMarketplaceAdvertising] =
-    useState<{
-      key: string;
-      amount: number;
-    } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
@@ -199,36 +180,22 @@ export function DashboardFinancialIndicators({
 
   const isMarketplaceView = !showCompanyWideIndicators;
   const isMarketplaceIndicatorMode = indicatorMode === "marketplace";
-  const dateRangeProration =
-    referenceMonth && dateRange
-      ? getReferenceMonthDateRangeProration(referenceMonth, dateRange)
-      : 1;
-  const marketplaceAdvertisingKey = `${activeCompany?.id ?? ""}:${provider ?? ""}:${referenceMonth ?? ""}`;
-  const resolvedMonthlyAdvertising =
-    isMarketplaceView &&
-    savedMarketplaceAdvertising?.key === marketplaceAdvertisingKey
-      ? savedMarketplaceAdvertising.amount
-      : normalizeNumber(
-          financialIndicators.monthlyAdvertising ??
-            financialIndicators.advertising,
-        );
+  // Advertising is the sum of the per-listing values entered on the products
+  // performance screen for the month, so it ignores the selected date range.
+  const resolvedMonthlyAdvertising = normalizeNumber(
+    financialIndicators.monthlyAdvertising ?? financialIndicators.advertising,
+  );
   const totalProfit = normalizeNumber(financialIndicators.totalProfit);
   const revenue = normalizeNumber(financialIndicators.revenue);
   const breakEven = normalizeNumber(financialIndicators.breakEvenRevenue);
   const fixedCostResolved = normalizeNumber(financialIndicators.fixedCost);
-  const liquidProfit =
-    totalProfit -
-    fixedCostResolved -
-    roundToCents(resolvedMonthlyAdvertising * dateRangeProration);
+  const displayedAdvertising = roundToCents(resolvedMonthlyAdvertising);
+  const liquidProfit = totalProfit - fixedCostResolved - displayedAdvertising;
   const displayedTotalProfit = roundToCents(totalProfit);
   const displayedLiquidProfit = roundToCents(liquidProfit);
   const displayedRevenue = roundToCents(revenue);
   const displayedVariableCosts = roundToCents(
     normalizeNumber(financialIndicators.variableCosts),
-  );
-  const displayedMonthlyAdvertising = roundToCents(resolvedMonthlyAdvertising);
-  const displayedAdvertising = roundToCents(
-    resolvedMonthlyAdvertising * dateRangeProration,
   );
   const displayedCost = roundToCents(
     normalizeNumber(financialIndicators.productCost) +
@@ -265,20 +232,11 @@ export function DashboardFinancialIndicators({
   });
 
   const cancelEditing = useCallback(() => {
-    if (isMarketplaceView) {
-      setAdvertisingInput(formatCurrencyInput(displayedMonthlyAdvertising));
-    } else {
-      setFixedCostInput(formatCurrencyInput(companyDefaults.fixedCost));
-      setTaxPercentInput(formatCurrencyInput(companyDefaults.taxPercent));
-    }
+    setFixedCostInput(formatCurrencyInput(companyDefaults.fixedCost));
+    setTaxPercentInput(formatCurrencyInput(companyDefaults.taxPercent));
     setFeedbackMessage(null);
     setIsEditing(false);
-  }, [
-    companyDefaults.fixedCost,
-    companyDefaults.taxPercent,
-    displayedMonthlyAdvertising,
-    isMarketplaceView,
-  ]);
+  }, [companyDefaults.fixedCost, companyDefaults.taxPercent]);
 
   const saveFinancialInputs = useCallback(async () => {
     if (!activeCompany) {
@@ -287,43 +245,10 @@ export function DashboardFinancialIndicators({
       return;
     }
 
-    if (isMarketplaceView && (!provider || !referenceMonth)) {
-      setFeedbackMessage(
-        "Marketplace e mês de referência são necessários para salvar",
-      );
-      setIsEditing(false);
-      return;
-    }
-
     setIsSaving(true);
     setFeedbackMessage(null);
 
     try {
-      if (isMarketplaceView) {
-        const patch = buildMarketplaceAdvertisingPatch(advertisingInput);
-        const response = await apiClient.patch<{
-          data: DashboardMarketplaceAdvertising;
-          error: null;
-        }>("/dashboard/marketplace-advertising", {
-          body: {
-            ...patch,
-            provider,
-            referenceMonth,
-          },
-        });
-        const nextAdvertising = Number.parseFloat(response.data.amount) || 0;
-
-        setSavedMarketplaceAdvertising({
-          amount: nextAdvertising,
-          key: marketplaceAdvertisingKey,
-        });
-        setAdvertisingInput(formatCurrencyInput(nextAdvertising));
-        setFeedbackMessage("Publicidade salva.");
-        setIsEditing(false);
-        onDefaultsSaved?.();
-        return;
-      }
-
       const patch = buildCompanyDefaultsPatch({
         fixedCostInput,
         taxPercentInput,
@@ -358,17 +283,7 @@ export function DashboardFinancialIndicators({
     } finally {
       setIsSaving(false);
     }
-  }, [
-    activeCompany,
-    advertisingInput,
-    fixedCostInput,
-    isMarketplaceView,
-    marketplaceAdvertisingKey,
-    onDefaultsSaved,
-    taxPercentInput,
-    provider,
-    referenceMonth,
-  ]);
+  }, [activeCompany, fixedCostInput, onDefaultsSaved, taxPercentInput]);
 
   return (
     <motion.div
@@ -542,7 +457,7 @@ export function DashboardFinancialIndicators({
                         maximumFractionDigits: 2,
                       })}
                       <br />
-                      Publicidade: {formatMoney(displayedMonthlyAdvertising, {
+                      Publicidade: {formatMoney(displayedAdvertising, {
                         maximumFractionDigits: 2,
                       })}
                     </>
@@ -638,82 +553,42 @@ export function DashboardFinancialIndicators({
             {isEditing ? (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-                  {isMarketplaceView ? (
-                    <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Publicidade
-                      </span>
-                      <Input
-                        className="h-9 flex-1 text-right text-xs"
-                        inputMode="decimal"
-                        onChange={(event) =>
-                          setAdvertisingInput(event.target.value)
-                        }
-                        type="text"
-                        value={advertisingInput}
-                      />
-                    </label>
-                  ) : (
-                    <>
-                      <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Custo Fixo
-                        </span>
-                        <Input
-                          className="h-9 flex-1 text-right text-xs"
-                          inputMode="decimal"
-                          onChange={(event) =>
-                            setFixedCostInput(event.target.value)
-                          }
-                          type="text"
-                          value={fixedCostInput}
-                        />
-                      </label>
-                      <label className="flex flex-1 items-center gap-2 sm:max-w-[180px]">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Imposto
-                        </span>
-                        <Input
-                          className="h-9 flex-1 text-right text-xs"
-                          inputMode="decimal"
-                          onChange={(event) =>
-                            setTaxPercentInput(event.target.value)
-                          }
-                          type="text"
-                          value={taxPercentInput}
-                        />
-                      </label>
-                    </>
-                  )}
-                  {isMarketplaceView ? (
-                    <>
-                      <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Margem Após Publicidade
-                        </span>
-                        <span className="text-sm font-semibold tabular-nums text-foreground">
-                          {formatNetMarginPercent(advertisingMarginPercent)}
-                        </span>
-                      </div>
-                      <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                          Lucro Após Publicidade
-                        </span>
-                        <span className="text-sm font-semibold tabular-nums text-foreground">
-                          {formatMoney(advertisingProfitValue)}
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Publicidade
-                      </span>
-                      <span className="text-sm font-semibold tabular-nums text-foreground">
-                        {formatMoney(displayedAdvertising)}
-                      </span>
-                    </div>
-                  )}
+                  <label className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Custo Fixo
+                    </span>
+                    <Input
+                      className="h-9 flex-1 text-right text-xs"
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        setFixedCostInput(event.target.value)
+                      }
+                      type="text"
+                      value={fixedCostInput}
+                    />
+                  </label>
+                  <label className="flex flex-1 items-center gap-2 sm:max-w-[180px]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Imposto
+                    </span>
+                    <Input
+                      className="h-9 flex-1 text-right text-xs"
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        setTaxPercentInput(event.target.value)
+                      }
+                      type="text"
+                      value={taxPercentInput}
+                    />
+                  </label>
+                  <div className="flex flex-1 items-center gap-2 sm:max-w-[220px]">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Publicidade
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums text-foreground">
+                      {formatMoney(displayedAdvertising)}
+                    </span>
+                  </div>
                 </div>
                 {feedbackMessage && (
                   <p className="text-xs font-medium text-muted-foreground">
@@ -803,30 +678,26 @@ export function DashboardFinancialIndicators({
                     </>
                   )}
                 </div>
-                <Button
-                  disabled={!activeCompany}
-                  onClick={() => {
-                    setFeedbackMessage(null);
-                    if (isMarketplaceView) {
-                      setAdvertisingInput(
-                        formatCurrencyInput(displayedMonthlyAdvertising),
-                      );
-                    } else {
+                {!isMarketplaceView && (
+                  <Button
+                    disabled={!activeCompany}
+                    onClick={() => {
+                      setFeedbackMessage(null);
                       setFixedCostInput(
                         formatCurrencyInput(companyDefaults.fixedCost),
                       );
                       setTaxPercentInput(
                         formatCurrencyInput(companyDefaults.taxPercent),
                       );
-                    }
-                    setIsEditing(true);
-                  }}
-                  size="sm"
-                  variant="secondary"
-                >
-                  <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                  Editar
-                </Button>
+                      setIsEditing(true);
+                    }}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                    Editar
+                  </Button>
+                )}
               </div>
             )}
           </Card>

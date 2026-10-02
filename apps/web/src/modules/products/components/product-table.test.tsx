@@ -34,7 +34,9 @@ function buildRow(index: number, overrides: Partial<ProductTableRow> = {}): Prod
   return {
     actualRoas: 2.4,
     adSpend: 120,
+    advertising: 75,
     advertisingCost: 120,
+    advertisingKey: `product:sku-${index}`,
     catalogRole: "standalone",
     channelLabel: "mercadolivre",
     children: [],
@@ -469,6 +471,99 @@ describe("ProductTable", () => {
 
     click(document.querySelector('[aria-label="Recolher variações"]')!);
     expect(document.querySelectorAll('[data-testid="child-product-row"]')).toHaveLength(0);
+
+    view.unmount();
+  });
+
+  it("shows advertising columns after total profit, with dashes on variation rows", () => {
+    const white = buildRow(1, {
+      advertising: null,
+      advertisingKey: null,
+      catalogRole: "child",
+      performanceId: "perf_white",
+      variationLabel: "Cor: Branco",
+    });
+    const parent = buildRow(2, {
+      advertising: 300,
+      advertisingKey: "mercadolivre:MLB1",
+      catalogRole: "parent",
+      children: [white],
+      performanceId: "group_1",
+    });
+    const standalone = buildRow(3, { advertising: 0, performanceId: "perf_alone" });
+
+    const view = renderWithClient(
+      <ProductTable
+        onPageChange={() => {}}
+        pagination={{ currentPage: 1, pageSize: 10, totalItems: 2, totalPages: 1 }}
+        rows={[parent, standalone]}
+        serverMode
+      />,
+    );
+
+    const headers = Array.from(document.querySelectorAll("thead th")).map(
+      (header) => header.textContent?.trim(),
+    );
+    expect(headers.slice(7)).toEqual([
+      "Lucro Total",
+      "Publicidade",
+      "Margem Após Publicidade",
+      "Lucro Após Publicidade",
+    ]);
+
+    const parentCells = Array.from(
+      document.querySelectorAll("tbody tr")[0]!.querySelectorAll("td"),
+    ).map((cell) => cell.textContent?.replace(/ /g, " "));
+    expect(parentCells[8]).toBe("R$ 300,00");
+    expect(parentCells[9]).toBe("0.00%");
+    expect(parentCells[10]).toBe("R$ 0,00");
+
+    const standaloneCells = Array.from(
+      document.querySelectorAll("tbody tr")[1]!.querySelectorAll("td"),
+    ).map((cell) => cell.textContent?.replace(/ /g, " "));
+    expect(standaloneCells[8]).toBe("R$ 0,00");
+
+    click(document.querySelector('[aria-label="Expandir variações"]')!);
+
+    const childCells = Array.from(
+      document
+        .querySelector('[data-testid="child-product-row"]')!
+        .querySelectorAll("td"),
+    ).map((cell) => cell.textContent);
+    expect(childCells.slice(8)).toEqual(["--", "--", "--"]);
+
+    view.unmount();
+  });
+
+  it("saves advertising from the details modal of a row", async () => {
+    const onSaveAdvertising = vi.fn().mockResolvedValue(undefined);
+    const row = buildRow(1, { advertising: 75, advertisingKey: "product:sku-1" });
+
+    const view = renderWithClient(
+      <ProductTable
+        onPageChange={() => {}}
+        onSaveAdvertising={onSaveAdvertising}
+        pagination={{ currentPage: 1, pageSize: 10, totalItems: 1, totalPages: 1 }}
+        rows={[row]}
+        serverMode
+      />,
+    );
+
+    click(document.querySelector("tbody tr")!);
+
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Publicidade em reais"]',
+    )!;
+    expect(input.value).toBe("75,00");
+
+    changeInputValue(input, "9000");
+    await act(async () => {
+      Array.from(document.querySelectorAll("button"))
+        .find((button) => button.textContent?.trim() === "Salvar")!
+        .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSaveAdvertising).toHaveBeenCalledWith(row, "90.00");
 
     view.unmount();
   });

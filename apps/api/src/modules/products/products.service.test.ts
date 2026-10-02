@@ -69,6 +69,9 @@ function createService() {
       productMonthlyPerformance: {
         findMany: vi.fn(),
       },
+      productListingAdvertising: {
+        findMany: vi.fn().mockResolvedValue([]),
+      },
     },
     update: vi.fn(),
   };
@@ -5744,6 +5747,190 @@ describe("ProductsService", () => {
         sku: "CALCAPRETA39",
       }),
     ]);
+  });
+
+  it("exposes the saved listing advertising on performance rows", async () => {
+    const { db, financeService, service, syncService } = createService();
+
+    vi.mocked(listSyncedProductsReadModel).mockResolvedValue([]);
+    db.query.productListingAdvertising.findMany.mockResolvedValue([
+      {
+        amount: "150.00",
+        listingKey: "product:product_1",
+        provider: "mercadolivre",
+        referenceMonth: "2026-05-01",
+      },
+      {
+        amount: "999.00",
+        listingKey: "product:product_1",
+        provider: "mercadolivre",
+        referenceMonth: "2026-04-01",
+      },
+    ]);
+
+    db.query.companies.findMany.mockResolvedValue([
+      {
+        id: "company_1",
+        isActive: true,
+        taxRateDefault: "0.000000",
+      },
+    ]);
+    db.query.products.findMany
+      .mockResolvedValueOnce([
+        buildCatalogProductRow({
+          companyId: "company_1",
+          id: "product_1",
+          name: "Calcado Preto",
+          sku: "CALCAPRETA39",
+        }),
+      ])
+      .mockResolvedValueOnce([
+        {
+          companyId: "company_1",
+          createdAt: new Date("2026-05-01T10:00:00.000Z"),
+          id: "product_1",
+          images: [],
+          isActive: true,
+          name: "Calcado Preto",
+          organizationId: "org_1",
+          sellingPrice: "120.00",
+          sku: "CALCAPRETA39",
+          updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+        },
+      ]);
+    db.query.productCosts.findMany.mockResolvedValue([]);
+    db.query.adCosts.findMany.mockResolvedValue([]);
+    db.query.manualExpenses.findMany.mockResolvedValue([]);
+    db.query.productMonthlyPerformance.findMany.mockResolvedValue([
+      {
+        advertisingCost: "0.00",
+        channel: "mercadolivre",
+        commissionRate: "0.100000",
+        companyId: "company_1",
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        id: "perf_1",
+        notes: null,
+        organizationId: "org_1",
+        packagingCost: "0.00",
+        productId: "product_1",
+        productName: "Calcado Preto",
+        referenceMonth: "2026-05-01",
+        returnsQuantity: 0,
+        salePrice: "120.00",
+        salesQuantity: 1,
+        shippingFee: "0.00",
+        sku: "ML-9238238958323",
+        unitCost: "0.00",
+        updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+        userId: "user_1",
+      },
+    ]);
+    db.query.externalOrders.findMany.mockResolvedValue([]);
+    financeService.buildFinanceSnapshot.mockResolvedValue({
+      adCosts: [],
+      manualExpenses: [],
+      orders: [],
+      products: [],
+    });
+    syncService.getStatus.mockResolvedValue({
+      activeRun: null,
+      availability: {
+        canRun: true,
+        currentWindowKey: "2026-05-13-morning",
+        currentWindowLabel: "Manha",
+        currentWindowSlot: "morning",
+        lastSuccessfulSyncAt: null,
+        message: "Sync is available for the current daily window.",
+        nextAvailableAt: "2026-05-13T09:00:00.000Z",
+        provider: "mercadolivre",
+        reason: "available",
+      },
+      lastCompletedRun: null,
+    });
+
+    const response = await service.listPerformanceRows(
+      {
+        organizationId: "org_1",
+        userId: "user_1",
+      },
+      {
+        page: 1,
+        pageSize: 10,
+        referenceMonth: "2026-05-01",
+      },
+    );
+
+    expect(response.items).toEqual([
+      expect.objectContaining({
+        advertising: 150,
+        advertisingKey: "product:product_1",
+        productId: "product_1",
+      }),
+    ]);
+  });
+
+  it("upserts the listing advertising scoped to company, channel and month", async () => {
+    const { db, service } = createService();
+    const returning = vi.fn().mockResolvedValue([
+      {
+        amount: "125.50",
+        listingKey: "mercadolivre:MLB1",
+        provider: "mercadolivre",
+        referenceMonth: "2026-05-01",
+      },
+    ]);
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    db.insert.mockReturnValue({ values });
+    db.query.companies.findMany.mockResolvedValue([
+      { id: "company_1", isActive: true, taxRateDefault: "0.000000" },
+    ]);
+
+    const result = await service.updateListingAdvertising(
+      { organizationId: "org_1", selectedCompanyId: "company_1", userId: "user_1" },
+      {
+        advertisingKey: "mercadolivre:MLB1",
+        amount: "125.50",
+        channel: "mercadolivre",
+        referenceMonth: "2026-05-01",
+      },
+    );
+
+    expect(result).toEqual({
+      advertisingKey: "mercadolivre:MLB1",
+      amount: "125.50",
+      channel: "mercadolivre",
+      referenceMonth: "2026-05-01",
+    });
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: "125.50",
+        companyId: "company_1",
+        listingKey: "mercadolivre:MLB1",
+        organizationId: "org_1",
+        provider: "mercadolivre",
+        referenceMonth: "2026-05-01",
+        userId: "user_1",
+      }),
+    );
+    expect(onConflictDoUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("rejects listing advertising updates when no active company exists", async () => {
+    const { db, service } = createService();
+    db.query.companies.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.updateListingAdvertising(
+        { organizationId: "org_1", userId: "user_1" },
+        {
+          advertisingKey: "mercadolivre:MLB1",
+          amount: "10.00",
+          channel: "mercadolivre",
+          referenceMonth: "2026-05-01",
+        },
+      ),
+    ).rejects.toThrow("Company not found.");
   });
 
   it("calculates contribution margin using the resolved fixed fee and global tax rate", async () => {

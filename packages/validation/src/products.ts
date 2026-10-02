@@ -106,6 +106,25 @@ export const productCatalogFinanceUpdateSchema = z.object({
   unitCost: decimalField("Unit cost"),
 });
 
+const listingAdvertisingChannelSchema = z.enum([
+  "mercadolivre",
+  "shopee",
+  "shein",
+]);
+
+export const productListingAdvertisingUpdateSchema = z.object({
+  advertisingKey: z.string().trim().min(1).max(255),
+  amount: decimalField("Advertising amount"),
+  channel: listingAdvertisingChannelSchema,
+  referenceMonth: z
+    .string()
+    .trim()
+    .regex(
+      /^\d{4}-\d{2}-01$/,
+      "Reference month must be the first day of the month.",
+    ),
+});
+
 export const productCostFormSchema = z.object({
   amount: decimalField("Product cost"),
   costType: z.string().trim().min(1).max(32),
@@ -247,6 +266,8 @@ export const productPerformanceListItemSchema: z.ZodType<any> = z.lazy(() =>
     actualRoas: z.number().nullable(),
     adSpend: z.number(),
     advertisingCost: z.number(),
+    advertising: z.number().nullable(),
+    advertisingKey: z.string().trim().min(1).nullable(),
     catalogGroupKey: z.string().trim().min(1).nullable(),
     catalogRole: z.enum(["parent", "child", "standalone"]),
     channelLabel: z.string().trim().min(1),
@@ -361,6 +382,9 @@ export type ProductUpdateInput = z.infer<typeof productUpdateSchema>;
 export type ProductManualCreateInput = z.infer<typeof productManualCreateSchema>;
 export type ProductCatalogFinanceUpdateInput = z.infer<
   typeof productCatalogFinanceUpdateSchema
+>;
+export type ProductListingAdvertisingUpdateInput = z.infer<
+  typeof productListingAdvertisingUpdateSchema
 >;
 export type ProductCostFormInput = z.infer<typeof productCostFormSchema>;
 export type ProductCostUpdateInput = z.infer<typeof productCostUpdateSchema>;

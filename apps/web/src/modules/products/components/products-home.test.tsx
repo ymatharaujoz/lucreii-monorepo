@@ -55,6 +55,7 @@ vi.mock("../hooks/use-product-data", () => ({
 
 vi.mock("../hooks/use-product-performance-data", () => ({
   useProductPerformancePage: performanceQueryMock,
+  useUpdateListingAdvertising: () => ({ mutateAsync: vi.fn() }),
 }));
 
 useProductDataMock.mockReturnValue({
@@ -224,7 +225,9 @@ function buildPerformanceRow(suffix: string): ProductPerformanceListItem {
   return {
     actualRoas: null,
     adSpend: 0,
+    advertising: 0,
     advertisingCost: 0,
+    advertisingKey: `product:${suffix}`,
     catalogGroupKey: null,
     catalogRole: "standalone",
     children: [],

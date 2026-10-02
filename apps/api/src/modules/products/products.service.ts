@@ -15,6 +15,7 @@ import { read, utils, write } from "xlsx";
 import type {
   ProductCatalogExportQueryInput,
   ProductCatalogFinanceUpdateInput,
+  ProductListingAdvertisingUpdateInput,
   ProductSpreadsheetUpdateRowInput,
 } from "@lucreii/validation";
 import {
@@ -42,6 +43,7 @@ import {
   manualExpenses,
   productCosts,
   productFinanceDefaults,
+  productListingAdvertising,
   products,
 } from "@lucreii/database";
 import type {
@@ -63,6 +65,7 @@ import type {
   ProductManualCreateFormValues,
   ProductManualCreateResult,
   ProductListItem,
+  ProductListingAdvertising,
   ProductMonthlyPerformanceDisplayRow,
   ProductPerformanceRow,
   ProductSpreadsheetImportResult,
@@ -85,7 +88,11 @@ import {
   isPerformanceEligibleOrder,
 } from "@/modules/orders/order-financial-eligibility";
 import { SyncService } from "@/modules/sync/sync.service";
-import { groupPerformanceRows } from "./performance-grouping";
+import {
+  buildListingAdvertisingKey,
+  buildListingAdvertisingLookupKey,
+  groupPerformanceRows,
+} from "./performance-grouping";
 
 type ProductUpdateInput = Partial<ProductFormValues>;
 type ProductCostUpdateInput = Partial<ProductCostFormValues>;
@@ -2734,6 +2741,7 @@ export class ProductsService {
       syncedProducts,
       financeSnapshot,
       externalOrderRows,
+      listingAdvertisingRows,
     ] = await Promise.all([
       this.listProducts(scopedContext ?? context.organizationId),
       this.readMonthlyPerformanceForAnalytics(context, scope),
@@ -2771,7 +2779,26 @@ export class ProductsService {
             },
           })
         : Promise.resolve([]),
+      scopedContext
+        ? this.db.query.productListingAdvertising.findMany({
+            where: (table) =>
+              and(
+                eq(table.organizationId, context.organizationId),
+                eq(table.companyId, scopedContext.companyId),
+              ),
+          })
+        : Promise.resolve([]),
     ]);
+    const listingAdvertisingLookup = new Map(
+      listingAdvertisingRows.map((row) => [
+        buildListingAdvertisingLookupKey({
+          advertisingKey: row.listingKey,
+          channel: row.provider,
+          referenceMonth: row.referenceMonth,
+        }),
+        toNumber(row.amount),
+      ]),
+    );
     const performanceCatalogLookup =
       buildPerformanceCatalogLookup(productsList);
     const syncedProductUnitLookup =
@@ -2819,6 +2846,7 @@ export class ProductsService {
       scope.taxRateDefault,
       salesLookup,
       profitLookup,
+      listingAdvertisingLookup,
     );
     const marketplaces = new Set(query.marketplaces ?? []);
     const searchNeedle = normalizePerformanceSortText(query.search);
@@ -2875,6 +2903,57 @@ export class ProductsService {
       pageSize,
       totalItems,
       totalPages,
+    };
+  }
+
+  /**
+   * Stores the monthly advertising of one listing (a grouped marketplace
+   * listing or a standalone product), as entered on the performance screen.
+   */
+  async updateListingAdvertising(
+    context: TenantContext,
+    input: ProductListingAdvertisingUpdateInput,
+  ): Promise<ProductListingAdvertising> {
+    const scope = await this.resolveAnalyticsScope(context, {
+      referenceMonth: input.referenceMonth,
+    });
+
+    if (!scope.companyId) {
+      throw new NotFoundException("Company not found.");
+    }
+
+    const [row] = await this.db
+      .insert(productListingAdvertising)
+      .values({
+        amount: input.amount,
+        companyId: scope.companyId,
+        listingKey: input.advertisingKey,
+        organizationId: context.organizationId,
+        provider: input.channel,
+        referenceMonth: input.referenceMonth,
+        userId: context.userId,
+      })
+      .onConflictDoUpdate({
+        target: [
+          productListingAdvertising.organizationId,
+          productListingAdvertising.companyId,
+          productListingAdvertising.provider,
+          productListingAdvertising.referenceMonth,
+          productListingAdvertising.listingKey,
+        ],
+        set: {
+          amount: input.amount,
+          updatedAt: new Date(),
+          userId: context.userId,
+        },
+      })
+      .returning();
+
+    return {
+      advertisingKey: row.listingKey,
+      amount: String(row.amount),
+      channel: row.provider,
+      referenceMonth: row.referenceMonth,
     };
   }
 
@@ -2961,6 +3040,7 @@ export class ProductsService {
     taxRateDefault: string,
     salesLookup: PerformanceSalesLookup,
     profitLookup: PerformanceProfitLookup,
+    listingAdvertisingLookup: ReadonlyMap<string, number> = new Map(),
   ): ProductPerformanceListItem[] {
     const { byId, bySku } = buildPerformanceCatalogLookup(catalogProducts);
     const taxPct = toNumber(taxRateDefault) * 100;
@@ -3090,12 +3170,30 @@ export class ProductsService {
         financialSales,
       );
 
+      const catalogGroupKey =
+        product?.catalogGroupKey ?? row.catalogGroupKey ?? null;
+      const advertisingKey = buildListingAdvertisingKey({
+        catalogGroupKey,
+        productId: row.productId ?? product?.id ?? null,
+        sku: row.sku,
+      });
+      const advertising = advertisingKey
+        ? (listingAdvertisingLookup.get(
+            buildListingAdvertisingLookupKey({
+              advertisingKey,
+              channel: row.channel,
+              referenceMonth: row.referenceMonth,
+            }),
+          ) ?? 0)
+        : null;
+
       return {
         ...financials,
         adSpend: toNumber(row.advertisingCost),
+        advertising,
         advertisingCost: toNumber(row.advertisingCost),
-        catalogGroupKey:
-          product?.catalogGroupKey ?? row.catalogGroupKey ?? null,
+        advertisingKey,
+        catalogGroupKey,
         catalogRole: row.catalogRole,
         channelLabel: row.channel,
         children: [],
