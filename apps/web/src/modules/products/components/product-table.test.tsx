@@ -514,14 +514,18 @@ describe("ProductTable", () => {
     const parentCells = Array.from(
       document.querySelectorAll("tbody tr")[0]!.querySelectorAll("td"),
     ).map((cell) => cell.textContent?.replace(/ /g, " "));
+    // Lucro Total R$ 160 - Publicidade R$ 300 = -R$ 140; Faturamento R$ 1.200
+    expect(parentCells[7]).toBe("R$ 160,00");
     expect(parentCells[8]).toBe("R$ 300,00");
-    expect(parentCells[9]).toBe("0.00%");
-    expect(parentCells[10]).toBe("R$ 0,00");
+    expect(parentCells[9]).toBe("-11,67%");
+    expect(parentCells[10]).toBe("-R$ 140,00");
 
     const standaloneCells = Array.from(
       document.querySelectorAll("tbody tr")[1]!.querySelectorAll("td"),
     ).map((cell) => cell.textContent?.replace(/ /g, " "));
     expect(standaloneCells[8]).toBe("R$ 0,00");
+    expect(standaloneCells[9]).toBe("13,33%");
+    expect(standaloneCells[10]).toBe("R$ 160,00");
 
     click(document.querySelector('[aria-label="Expandir variações"]')!);
 

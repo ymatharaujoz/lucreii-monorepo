@@ -20,7 +20,12 @@ import { slideInUpVariants } from "@/lib/animations";
 import { ProductDetailsModal } from "./product-details-modal";
 import { TreeConnector, VariationToggle } from "./variation-tree";
 import type { PaginationState, ProductTableRow } from "../types/products";
-import { formatMoney, formatNumber, formatPercent } from "../utils/formatters";
+import {
+  formatMoney,
+  formatNumber,
+  formatPercent,
+  formatPercentPtBr,
+} from "../utils/formatters";
 
 const MotionTableRow = motion.tr;
 
@@ -241,6 +246,32 @@ function resolveProductLabels(
   }
 
   return { parentName: rowDisplayName || rowName || "Produto", variationName: null };
+}
+
+/**
+ * Profit and margin after advertising, derived from the values shown in the
+ * LUCRO TOTAL, PUBLICIDADE and FATURAMENTO columns. Returns `null` for rows
+ * without an advertising value of their own (variation rows).
+ */
+function computeAdvertisingResult(input: {
+  advertising: number | null;
+  revenue: number;
+  totalProfit: number | null;
+}) {
+  if (input.advertising === null) {
+    return null;
+  }
+
+  if (input.totalProfit === null) {
+    return { marginPercent: null, profit: null };
+  }
+
+  const profit = Number((input.totalProfit - input.advertising).toFixed(2));
+
+  return {
+    marginPercent: input.revenue > 0 ? (profit / input.revenue) * 100 : null,
+    profit,
+  };
 }
 
 function buildDisplayTitle(parentName: string, variationName: string | null) {
@@ -516,79 +547,88 @@ export function ProductTable({
       isExpanded?: boolean;
       isLastChild?: boolean;
     },
-  ) => (
-    <>
-      <td className="px-3 py-3 text-left">{getChannelBadge(row.channelLabel)}</td>
-      <td className="px-3 py-3 text-left">
-        <div className="flex items-center gap-3">
-          {options.isChild ? <TreeConnector isLast={Boolean(options.isLastChild)} /> : null}
-          <ProductImagePreview alt={parentName} url={row.coverImageUrl} />
-          <span
-            aria-label={hasCostsConfigured ? "Precificado" : "Não precificado"}
-            className={cn(
-              "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-              hasCostsConfigured
-                ? "border-success/30 bg-success/10"
-                : "border-warning/30 bg-warning/10",
-            )}
-            data-testid={`cost-status-${getPerformanceRowKey(row)}`}
-            title={hasCostsConfigured ? "Precificado" : "Não precificado"}
-          >
-            <DollarSign
-              aria-hidden="true"
-              className="h-3.5 w-3.5"
-              style={{ color: hasCostsConfigured ? "#0e7a6f" : "#f59e0b" }}
-            />
-          </span>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium text-foreground">{displayTitle}</span>
-            {options.childCount ? (
-              <VariationToggle
-                count={options.childCount}
-                expanded={Boolean(options.isExpanded)}
-                onToggle={() => toggleGroup(getPerformanceRowKey(row))}
+  ) => {
+    const advertisingResult = computeAdvertisingResult({
+      advertising: row.advertising,
+      revenue: sellingPrice,
+      totalProfit,
+    });
+
+    return (
+      <>
+        <td className="px-3 py-3 text-left">{getChannelBadge(row.channelLabel)}</td>
+        <td className="px-3 py-3 text-left">
+          <div className="flex items-center gap-3">
+            {options.isChild ? <TreeConnector isLast={Boolean(options.isLastChild)} /> : null}
+            <ProductImagePreview alt={parentName} url={row.coverImageUrl} />
+            <span
+              aria-label={hasCostsConfigured ? "Precificado" : "Não precificado"}
+              className={cn(
+                "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                hasCostsConfigured
+                  ? "border-success/30 bg-success/10"
+                  : "border-warning/30 bg-warning/10",
+              )}
+              data-testid={`cost-status-${getPerformanceRowKey(row)}`}
+              title={hasCostsConfigured ? "Precificado" : "Não precificado"}
+            >
+              <DollarSign
+                aria-hidden="true"
+                className="h-3.5 w-3.5"
+                style={{ color: hasCostsConfigured ? "#0e7a6f" : "#f59e0b" }}
               />
-            ) : null}
+            </span>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium text-foreground">{displayTitle}</span>
+              {options.childCount ? (
+                <VariationToggle
+                  count={options.childCount}
+                  expanded={Boolean(options.isExpanded)}
+                  onToggle={() => toggleGroup(getPerformanceRowKey(row))}
+                />
+              ) : null}
+            </div>
           </div>
-        </div>
-      </td>
-      <td className="px-3 py-3 text-left">
-        <span className="text-xs font-mono text-muted-foreground">{row.sku || "\u2014"}</span>
-      </td>
-      <td className="px-2 py-3 text-right">
-        <span className="text-sm text-foreground">{formatNumber(row.sales)}</span>
-      </td>
-      <td className="px-2 py-3 text-right">
-        <span className="text-sm text-foreground">{formatNumber(row.returns)}</span>
-      </td>
-      <td className="px-3 py-3 text-right">
-        <span className="text-sm text-foreground">{formatMoney(sellingPrice)}</span>
-      </td>
-      <td className="px-3 py-3 text-right">
-        <span className="text-sm text-foreground">{formatPercent(contributionMarginRatio, { digits: 2 })}</span>
-      </td>
-      <td className="px-3 py-3 text-right">
-        <span className="text-sm text-foreground">{formatMoney(totalProfit)}</span>
-      </td>
-      {/* Advertising lives on the listing: variation rows show "--". */}
-      <td className="px-3 py-3 text-right">
-        <span className="text-sm text-foreground">
-          {row.advertising === null ? "--" : formatMoney(row.advertising)}
-        </span>
-      </td>
-      {/* Placeholders until the after-advertising formulas are defined. */}
-      <td className="px-3 py-3 text-right">
-        <span className="text-sm text-foreground">
-          {row.advertising === null ? "--" : formatPercent(0, { digits: 2 })}
-        </span>
-      </td>
-      <td className="px-3 py-3 text-right">
-        <span className="text-sm text-foreground">
-          {row.advertising === null ? "--" : formatMoney(0)}
-        </span>
-      </td>
-    </>
-  );
+        </td>
+        <td className="px-3 py-3 text-left">
+          <span className="text-xs font-mono text-muted-foreground">{row.sku || "\u2014"}</span>
+        </td>
+        <td className="px-2 py-3 text-right">
+          <span className="text-sm text-foreground">{formatNumber(row.sales)}</span>
+        </td>
+        <td className="px-2 py-3 text-right">
+          <span className="text-sm text-foreground">{formatNumber(row.returns)}</span>
+        </td>
+        <td className="px-3 py-3 text-right">
+          <span className="text-sm text-foreground">{formatMoney(sellingPrice)}</span>
+        </td>
+        <td className="px-3 py-3 text-right">
+          <span className="text-sm text-foreground">{formatPercent(contributionMarginRatio, { digits: 2 })}</span>
+        </td>
+        <td className="px-3 py-3 text-right">
+          <span className="text-sm text-foreground">{formatMoney(totalProfit)}</span>
+        </td>
+        {/* Advertising lives on the listing: variation rows show "--". */}
+        <td className="px-3 py-3 text-right">
+          <span className="text-sm text-foreground">
+            {row.advertising === null ? "--" : formatMoney(row.advertising)}
+          </span>
+        </td>
+        <td className="px-3 py-3 text-right">
+          <span className="text-sm text-foreground">
+            {advertisingResult === null
+              ? "--"
+              : formatPercentPtBr(advertisingResult.marginPercent, { digits: 2 })}
+          </span>
+        </td>
+        <td className="px-3 py-3 text-right">
+          <span className="text-sm text-foreground">
+            {advertisingResult === null ? "--" : formatMoney(advertisingResult.profit)}
+          </span>
+        </td>
+      </>
+    );
+  };
 
   const rowInteractionProps = (row: ProductTableRow) => ({
     onClick: () => openDetails(row),

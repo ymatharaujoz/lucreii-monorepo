@@ -6,7 +6,17 @@
       "Bash(rtk git *)",
       "Bash(rtk ls *)",
       "Bash(rtk vitest *)",
-      "Bash(rtk read *)"
+      "Bash(rtk read *)",
+      "Bash(rtk prettier *)",
+      "Bash(rtk tsc *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "WebSearch",
+      "Bash(python -)",
+      "Bash(npx prettier *)",
+      "Bash(npx tsc *)",
+      "Bash(npx vitest *)"
     ]
   }
 }
