@@ -2339,10 +2339,15 @@ export class MercadoLivreProvider implements IntegrationProvider {
     return null;
   }
 
+  /**
+   * Returns null when the user product is not retrievable for this seller
+   * (400/403/404), so callers can fall back to the legacy item data instead of
+   * aborting the whole import. Other failures (401, 429, 5xx) still throw.
+   */
   private async fetchUserProduct(input: {
     accessToken: string;
     userProductId: string;
-  }) {
+  }): Promise<MercadoLivreUserProductResponse | null> {
     const response = await this.fetchWithRetry(
       `https://api.mercadolibre.com/user-products/${encodeURIComponent(input.userProductId)}`,
       {
@@ -2353,9 +2358,24 @@ export class MercadoLivreProvider implements IntegrationProvider {
       | MercadoLivreUserProductResponse
       | string;
 
+    if (
+      !response.ok &&
+      (response.status === 400 ||
+        response.status === 403 ||
+        response.status === 404)
+    ) {
+      return null;
+    }
+
     if (!response.ok || typeof payload === "string" || !payload.id) {
+      const detail =
+        typeof payload === "string"
+          ? payload
+          : (toOptionalString(
+              (payload as { message?: string | null } | null)?.message,
+            ) ?? "");
       throw new IntegrationProviderError(
-        `Mercado Livre user product lookup failed.${typeof payload === "string" ? ` ${payload}` : ""}`,
+        `Mercado Livre user product lookup failed (${input.userProductId}, HTTP ${response.status}).${detail ? ` ${detail}` : ""}`,
         "remote_request_failed",
       );
     }
@@ -2398,6 +2418,9 @@ export class MercadoLivreProvider implements IntegrationProvider {
           accessToken: input.accessToken,
           userProductId,
         });
+        if (!userProduct) {
+          continue;
+        }
         const familyId = toOptionalString(userProduct.family_id);
         const resolvedUserProductId = toOptionalString(userProduct.id);
 
@@ -2427,10 +2450,12 @@ export class MercadoLivreProvider implements IntegrationProvider {
         accessToken: input.accessToken,
         userProductId,
       });
-      return this.normalizeMercadoLivreUserProductFamily({
-        item: input.item,
-        userProduct,
-      });
+      if (userProduct) {
+        return this.normalizeMercadoLivreUserProductFamily({
+          item: input.item,
+          userProduct,
+        });
+      }
     }
 
     const variationDetailsById = await this.fetchVariationDetails({
@@ -2585,7 +2610,9 @@ export class MercadoLivreProvider implements IntegrationProvider {
         accessToken: input.accessToken,
         userProductId,
       });
-      return this.resolveUserProductOrderSku(userProduct);
+      if (userProduct) {
+        return this.resolveUserProductOrderSku(userProduct);
+      }
     }
 
     if (input.variationId) {
