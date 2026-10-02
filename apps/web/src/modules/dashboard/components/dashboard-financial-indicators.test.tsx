@@ -119,16 +119,16 @@ describe("DashboardFinancialIndicators", () => {
     expect(text).toContain("Margem Média");
     expect(text).not.toContain("28,38%");
     expect(text).toContain("R$\u00a0596,13");
-    expect(text).toContain("R$\u00a07.564,15");
-    expect(text).toContain("27,65%");
-    expect(text).not.toContain("R$\u00a07.564,15 (27,65%)");
+    expect(text).toContain("R$\u00a06.082,82");
+    expect(text).toContain("22,23%");
+    expect(text).not.toContain("R$\u00a06.082,82 (22,23%)");
     expect(text).toContain("Faturamento");
     expect(text).not.toContain("Margem Contribuição");
     expect(text).not.toContain("Faturamento - Custos Variáveis");
     expect(text).toContain("Ponto de Equilíbrio");
     expect(text).toContain("Lucro Líquido");
     expect(text).toContain("Margem Líquida");
-    expect(text).toContain("Lucro Total - Custo Fixo");
+    expect(text).toContain("Lucro Total - Custo Fixo - Publicidade");
     expect(text).toContain("Lucro Líquido / Faturamento");
     expect(text).not.toContain("Total Variáveis");
     expect(text).not.toContain("Lucro Real");
@@ -336,7 +336,9 @@ describe("DashboardFinancialIndicators", () => {
         activeCompany={company}
         financialIndicators={{
           ...indicators,
+          advertising: "0.00",
           fixedCost: "0.00",
+          monthlyAdvertising: "0.00",
           revenue: "20762.92",
           totalProfit: "6087.99",
         }}
@@ -436,7 +438,9 @@ describe("DashboardFinancialIndicators", () => {
         activeCompany={company}
         financialIndicators={{
           ...indicators,
+          advertising: "0.00",
           fixedCost: "7764.15",
+          monthlyAdvertising: "0.00",
           totalProfit: "7764.15",
         }}
       />,

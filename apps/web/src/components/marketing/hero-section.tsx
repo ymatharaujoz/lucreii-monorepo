@@ -639,7 +639,7 @@ export function DashboardPreview({ wide = false }: { wide?: boolean }) {
     {
       label: "Lucro líquido",
       value: "R$ 5.202,67",
-      detail: "Lucro Total - Custo Fixo",
+      detail: "Lucro Total - Custo Fixo - Publicidade",
       status: "Resultado positivo",
       icon: BarChart3,
       tone: "mint" as const,

@@ -216,7 +216,10 @@ export function DashboardFinancialIndicators({
   const revenue = normalizeNumber(financialIndicators.revenue);
   const breakEven = normalizeNumber(financialIndicators.breakEvenRevenue);
   const fixedCostResolved = normalizeNumber(financialIndicators.fixedCost);
-  const liquidProfit = totalProfit - fixedCostResolved;
+  const liquidProfit =
+    totalProfit -
+    fixedCostResolved -
+    roundToCents(resolvedMonthlyAdvertising * dateRangeProration);
   const displayedTotalProfit = roundToCents(totalProfit);
   const displayedLiquidProfit = roundToCents(liquidProfit);
   const displayedRevenue = roundToCents(revenue);
@@ -565,7 +568,7 @@ export function DashboardFinancialIndicators({
                 <IndicatorCard
                   icon={<DollarSign className="h-4 w-4" />}
                   label="Lucro Líquido"
-                  subValue="Lucro Total - Custo Fixo"
+                  subValue="Lucro Total - Custo Fixo - Publicidade"
                   trend={{
                     direction:
                       liquidProfit > 0
