@@ -1895,9 +1895,7 @@ export function ProductsShell({
                   transition={{ delay: 0.25, duration: 0.3 }}
                   className="mt-1.5 text-sm text-muted-foreground"
                 >
-                  {marketplaceImportResult.found} produto
-                  {marketplaceImportResult.found !== 1 ? "s" : ""} do {selectedMarketplaceMeta?.catalogLabel ?? "marketplace"}
-                   processado{marketplaceImportResult.found !== 1 ? "s" : ""}
+                  {`${marketplaceImportResult.found} produto${marketplaceImportResult.found !== 1 ? "s" : ""} do ${selectedMarketplaceMeta?.catalogLabel ?? "marketplace"} processado${marketplaceImportResult.found !== 1 ? "s" : ""}`}
                 </motion.p>
               </motion.div>
 
