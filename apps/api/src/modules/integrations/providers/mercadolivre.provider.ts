@@ -501,6 +501,32 @@ function dedupeProducts(products: IntegrationSyncProduct[]) {
   return Array.from(unique.values());
 }
 
+const MERCADOLIVRE_MAX_RATE_LIMIT_RETRIES = 6;
+const MERCADOLIVRE_RATE_LIMIT_BASE_DELAY_MS = 500;
+const MERCADOLIVRE_RATE_LIMIT_MAX_DELAY_MS = 15_000;
+const MERCADOLIVRE_USER_PRODUCT_MIN_INTERVAL_MS = 150;
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveRateLimitDelayMs(
+  retryAfterHeader: string | null,
+  retryIndex: number,
+) {
+  const retryAfterSeconds = Number(retryAfterHeader);
+  if (retryAfterHeader && Number.isFinite(retryAfterSeconds)) {
+    return Math.min(
+      Math.max(retryAfterSeconds * 1000, 0),
+      MERCADOLIVRE_RATE_LIMIT_MAX_DELAY_MS,
+    );
+  }
+
+  const exponential = MERCADOLIVRE_RATE_LIMIT_BASE_DELAY_MS * 2 ** retryIndex;
+  const jitter = Math.random() * MERCADOLIVRE_RATE_LIMIT_BASE_DELAY_MS;
+  return Math.min(exponential + jitter, MERCADOLIVRE_RATE_LIMIT_MAX_DELAY_MS);
+}
+
 async function parseProviderResponse(response: Response) {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -1566,6 +1592,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
   readonly displayName = "Mercado Livre";
   readonly provider = "mercadolivre" as const;
   private readonly logger = new Logger(MercadoLivreProvider.name);
+  private userProductRequestQueue: Promise<void> = Promise.resolve();
   private readonly billingDetailCache = new Map<
     string,
     Promise<{
@@ -2339,6 +2366,15 @@ export class MercadoLivreProvider implements IntegrationProvider {
     return null;
   }
 
+  /** Spaces /user-products calls to stay under Mercado Livre rate limits. */
+  private async waitForUserProductRequestSlot() {
+    const previous = this.userProductRequestQueue;
+    this.userProductRequestQueue = previous.then(() =>
+      sleep(MERCADOLIVRE_USER_PRODUCT_MIN_INTERVAL_MS),
+    );
+    await previous;
+  }
+
   /**
    * Returns null when the user product is not retrievable for this seller
    * (400/403/404), so callers can fall back to the legacy item data instead of
@@ -2348,6 +2384,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
     accessToken: string;
     userProductId: string;
   }): Promise<MercadoLivreUserProductResponse | null> {
+    await this.waitForUserProductRequestSlot();
     const response = await this.fetchWithRetry(
       `https://api.mercadolibre.com/user-products/${encodeURIComponent(input.userProductId)}`,
       {
@@ -2823,35 +2860,50 @@ export class MercadoLivreProvider implements IntegrationProvider {
     );
   }
 
+  /**
+   * 5xx/network errors are retried immediately (3 attempts). 429 responses
+   * (Mercado Livre rate limit) are retried with Retry-After / exponential
+   * backoff, for up to MERCADOLIVRE_MAX_RATE_LIMIT_RETRIES times.
+   */
   private async fetchWithRetry(
     input: string | URL,
     init?: RequestInit,
   ): Promise<Response> {
-    let response: Response | null = null;
+    let transientAttempts = 0;
+    let rateLimitRetries = 0;
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (;;) {
+      let response: Response | null = null;
       try {
-        response = await fetch(input, init);
+        response = (await fetch(input, init)) ?? null;
       } catch {
-        if (attempt === 2) {
-          return new Response(null, { status: 503 });
+        response = null;
+      }
+
+      if (response?.status === 429) {
+        if (rateLimitRetries >= MERCADOLIVRE_MAX_RATE_LIMIT_RETRIES) {
+          return response;
         }
 
+        await sleep(
+          resolveRateLimitDelayMs(
+            response.headers.get("retry-after"),
+            rateLimitRetries,
+          ),
+        );
+        rateLimitRetries += 1;
         continue;
       }
-      if (!response) {
-        if (attempt === 2) {
-          return new Response(null, { status: 503 });
-        }
 
-        continue;
-      }
-      if (response.status !== 429 && response.status < 500) {
+      if (response && response.status < 500) {
         return response;
       }
-    }
 
-    return response!;
+      transientAttempts += 1;
+      if (transientAttempts >= 3) {
+        return response ?? new Response(null, { status: 503 });
+      }
+    }
   }
 
   private resolveSaleTimestamp(input: {

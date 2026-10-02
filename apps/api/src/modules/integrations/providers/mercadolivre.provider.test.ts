@@ -6256,6 +6256,85 @@ describe("MercadoLivreProvider", () => {
     ).rejects.toThrow(/MLBU999, HTTP 500\)\. boom/);
   });
 
+  it("retries rate-limited (429) user-product lookups instead of failing the import", async () => {
+    const provider = new MercadoLivreProvider({
+      API_PUBLIC_BASE_URL: "http://localhost:4000",
+      AUTH_SESSION_SECRET: "secret",
+      BETTER_AUTH_SECRET: "secret",
+      BETTER_AUTH_URL: "http://localhost:4000",
+      MERCADOLIVRE_CLIENT_ID: "client-id",
+      MERCADOLIVRE_CLIENT_SECRET: "client-secret",
+      MERCADOLIVRE_REDIRECT_URI:
+        "http://localhost:4000/integrations/mercadolivre/callback",
+      MERCADOLIVRE_USE_PKCE: false,
+      NODE_ENV: "test",
+      WEB_APP_ORIGIN: "http://localhost:3000",
+    } as never);
+    let userProductCalls = 0;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL) => {
+        const url = String(input);
+
+        if (url.includes("/items?ids=")) {
+          return Promise.resolve(
+            createJsonResponse([
+              {
+                code: 200,
+                body: {
+                  id: "MLBNEW1",
+                  status: "active",
+                  title: "Produto",
+                  user_product_id: "MLBU999",
+                },
+              },
+            ]),
+          );
+        }
+
+        if (url.includes("/user-products/MLBU999")) {
+          userProductCalls += 1;
+          if (userProductCalls < 3) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ message: "too many requests" }), {
+                headers: {
+                  "content-type": "application/json",
+                  "retry-after": "0",
+                },
+                status: 429,
+              }),
+            );
+          }
+
+          return Promise.resolve(
+            createJsonResponse({
+              family_id: "FAM1",
+              family_name: "Familia",
+              id: "MLBU999",
+            }),
+          );
+        }
+
+        throw new Error(`Unexpected URL ${url}`);
+      }),
+    );
+
+    const result = await provider.importCatalogByExternalProductId({
+      connection: {
+        accessToken: "access-token",
+        externalAccountId: "seller-1",
+      } as never,
+      externalProductId: "MLBNEW1",
+      organizationId: "org-1",
+    } as never);
+
+    expect(userProductCalls).toBe(3);
+    expect(result[0]).toEqual(
+      expect.objectContaining({ externalProductId: "FAM1" }),
+    );
+  });
+
   it("imports new Mercado Livre user-product families even when item variations are empty", async () => {
     const provider = new MercadoLivreProvider({
       API_PUBLIC_BASE_URL: "http://localhost:4000",
