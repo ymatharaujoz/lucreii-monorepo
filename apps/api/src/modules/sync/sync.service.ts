@@ -1739,6 +1739,16 @@ export class SyncService {
               : {}),
           };
         }
+        const existingPackId =
+          existingOrder?.metadata &&
+          typeof existingOrder.metadata === "object" &&
+          typeof existingOrder.metadata.packId === "string" &&
+          existingOrder.metadata.packId.trim().length > 0
+            ? existingOrder.metadata.packId
+            : null;
+        if (existingPackId && !orderMetadata.packId) {
+          orderMetadata = { ...orderMetadata, packId: existingPackId };
+        }
         const preserveConfirmedValue =
           existingOrder !== undefined &&
           (refundBonusStatus === "PENDING" || refundBonusStatus === "ERROR");

@@ -2854,6 +2854,63 @@ describe("OrdersService", () => {
     );
   });
 
+  it("falls back to externalOrderId when Mercado Livre operationId is a MercadoPago payment id without packId", async () => {
+    const db = {
+      query: {
+        companies: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: "company_123",
+            taxRateDefault: "0.100000",
+          }),
+        },
+        externalOrders: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: "order_row_1",
+              companyId: "company_123",
+              createdAt: new Date("2026-09-27T14:24:00.000Z"),
+              currency: "BRL",
+              externalOrderId: "2000015246389329",
+              marketplaceConnectionId: "conn_1",
+              metadata: {
+                operationId: "180143884367",
+              },
+              orderedAt: new Date("2026-09-27T14:24:00.000Z"),
+              organizationId: "org_123",
+              provider: "mercadolivre",
+              status: "paid",
+              syncRunId: null,
+              updatedAt: new Date("2026-09-27T14:24:00.000Z"),
+              totalAmount: "75.90",
+              items: [],
+              fees: [],
+            },
+          ]),
+        },
+        products: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      },
+    };
+
+    const service = new OrdersService(db as never);
+    const result = await service.listOrders(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      {},
+    );
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        displayOrderId: "2000015246389329",
+        orderId: "2000015246389329",
+      }),
+    );
+  });
+
   it("ignores authoritative Mercado Livre overrides and recalculates derived metrics", async () => {
     const updateSetMock = vi.fn().mockReturnValue({
       where: vi.fn().mockReturnValue({
@@ -4895,7 +4952,7 @@ describe("OrdersService", () => {
     expect(selectMock).toHaveBeenCalledTimes(2);
     expect(pageOffsetMock).toHaveBeenCalledWith(0);
     expect(String(findManyMock.mock.calls[0]?.[0]?.where ?? "")).toContain(
-      "operationId",
+      "buildSaleOperationIdSql",
     );
     expect(result.totalItems).toBe(2);
     expect(result.items).toHaveLength(1);

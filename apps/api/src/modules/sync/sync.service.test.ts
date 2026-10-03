@@ -1521,6 +1521,90 @@ describe("SyncService", () => {
     expect(db.delete).toHaveBeenCalledTimes(2);
   });
 
+  it("preserves a previously resolved Mercado Livre packId when re-sync metadata omits it", async () => {
+    const { db, service } = createService();
+    let externalOrderConflictSet: Record<string, unknown> | null = null;
+
+    Object.assign(db.query, {
+      externalOrders: {
+        findFirst: vi.fn().mockResolvedValue({
+          metadata: { packId: "2000013607301987" },
+          refundBonusAmount: "0.00",
+          refundBonusAttempts: 0,
+          refundBonusMetadata: {},
+          refundBonusResolvedAt: null,
+          refundBonusSource: null,
+        }),
+      },
+    });
+
+    db.insert = vi.fn().mockImplementation(() => ({
+      values: vi.fn().mockImplementation((value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "externalOrderId" in value &&
+          !("feeType" in value) &&
+          "totalAmount" in value
+        ) {
+          return {
+            onConflictDoUpdate: vi.fn().mockImplementation((payload) => {
+              externalOrderConflictSet = (
+                payload as { set: Record<string, unknown> }
+              ).set;
+              return {
+                returning: vi.fn().mockResolvedValue([{ id: "ext_order_1" }]),
+              };
+            }),
+          };
+        }
+
+        return {
+          onConflictDoUpdate: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+          returning: vi.fn().mockResolvedValue([]),
+        };
+      }),
+    }));
+
+    await (
+      service as unknown as {
+        persistSyncResult: (input: unknown) => Promise<unknown>;
+      }
+    ).persistSyncResult({
+      companyId: "company_1",
+      connection: { id: "conn_1" },
+      organizationId: "org_1",
+      providerSlug: "mercadolivre",
+      syncResult: {
+        orders: [
+          {
+            currency: "BRL",
+            externalOrderId: "2000017022360746",
+            fees: [],
+            items: [],
+            metadata: { operationId: "180143884367" },
+            orderedAt: "2026-06-19T20:35:00.000Z",
+            status: "paid",
+            totalAmount: "59.80",
+          },
+        ],
+        products: [],
+      },
+      syncRunId: "sync_3",
+    });
+
+    expect(externalOrderConflictSet).toEqual(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          operationId: "180143884367",
+          packId: "2000013607301987",
+        }),
+      }),
+    );
+  });
+
   it("persists refund bonus financial adjustment fee metadata during upsert", async () => {
     const { db, service } = createService();
     const insertedFees: Array<Record<string, unknown>> = [];

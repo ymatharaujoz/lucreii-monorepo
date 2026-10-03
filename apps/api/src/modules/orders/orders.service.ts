@@ -50,6 +50,7 @@ import type {
 } from "@lucreii/types";
 import { orderExportQuerySchema } from "@lucreii/validation";
 import { and, asc, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
+import type { Column, SQL } from "drizzle-orm";
 import { utils, write } from "xlsx";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
@@ -471,7 +472,7 @@ function buildSaleIdWhere(needle: string) {
 function buildExactMercadoLivreGroupedOrderWhere(displayOrderId: string) {
   return sql`(
     ${externalOrders.externalOrderId} = ${displayOrderId}
-    or coalesce(${externalOrders.metadata}->>'operationId', '') = ${displayOrderId}
+    or coalesce(${buildSaleOperationIdSql(externalOrders.metadata)}, '') = ${displayOrderId}
     or coalesce(${externalOrders.metadata}->>'packId', '') = ${displayOrderId}
   )`;
 }
@@ -481,7 +482,7 @@ function buildLogicalOrderGroupKeySql() {
     when ${externalOrders.provider} = 'mercadolivre'
       then coalesce(
         nullif(${externalOrders.metadata}->>'packId', ''),
-        nullif(${externalOrders.metadata}->>'operationId', ''),
+        ${buildSaleOperationIdSql(externalOrders.metadata)},
         ${externalOrders.externalOrderId}
       )
     else ${externalOrders.id}::text
@@ -1010,16 +1011,38 @@ function getDisplayOrderId(
     order.metadata && typeof order.metadata === "object"
       ? (order.metadata as Record<string, unknown>)
       : null;
-  const packId = readMercadoLivrePackId(metadata);
+  return (
+    readMercadoLivrePackId(metadata) ??
+    readMercadoLivreSaleOperationId(metadata) ??
+    order.externalOrderId
+  );
+}
+
+/**
+ * Billing `operation_id` is either the sale number (16 digits, e.g.
+ * 2000013650735359) or the MercadoPago payment id (up to 15 digits, e.g.
+ * 180143884367). Only the former is a valid sale id for display and grouping.
+ */
+const MERCADO_LIVRE_PAYMENT_OPERATION_ID_SQL_PATTERN = "^[0-9]{1,15}$";
+const MERCADO_LIVRE_PAYMENT_OPERATION_ID_PATTERN = new RegExp(
+  MERCADO_LIVRE_PAYMENT_OPERATION_ID_SQL_PATTERN,
+);
+
+function readMercadoLivreSaleOperationId(
+  metadata: Record<string, unknown> | null | undefined,
+) {
   const operationId = readMercadoLivreOperationId(metadata);
 
-  if (packId) {
-    return packId;
-  }
-
-  return operationId && operationId.length > 0
+  return operationId &&
+    !MERCADO_LIVRE_PAYMENT_OPERATION_ID_PATTERN.test(operationId)
     ? operationId
-    : order.externalOrderId;
+    : null;
+}
+
+function buildSaleOperationIdSql(metadata: Column | SQL) {
+  return sql<
+    string | null
+  >`nullif(case when ${metadata}->>'operationId' ~ ${MERCADO_LIVRE_PAYMENT_OPERATION_ID_SQL_PATTERN} then '' else ${metadata}->>'operationId' end, '')`;
 }
 
 function readMercadoLivrePackId(
@@ -2514,7 +2537,7 @@ export class OrdersService {
                             eq(table.provider, "mercadolivre"),
                             sql`(
                               ${table.externalOrderId} = ${group.logicalGroupKey}
-                              or coalesce(${table.metadata}->>'operationId', '') = ${group.logicalGroupKey}
+                              or coalesce(${buildSaleOperationIdSql(table.metadata)}, '') = ${group.logicalGroupKey}
                               or coalesce(${table.metadata}->>'packId', '') = ${group.logicalGroupKey}
                             )`,
                           )
