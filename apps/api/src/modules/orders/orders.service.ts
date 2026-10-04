@@ -1039,10 +1039,10 @@ function readMercadoLivreSaleOperationId(
     : null;
 }
 
+// The pattern is inlined as a literal (not a bind parameter) so Postgres can
+// match the SELECT expression with the GROUP BY expression.
 function buildSaleOperationIdSql(metadata: Column | SQL) {
-  return sql<
-    string | null
-  >`nullif(case when ${metadata}->>'operationId' ~ ${MERCADO_LIVRE_PAYMENT_OPERATION_ID_SQL_PATTERN} then '' else ${metadata}->>'operationId' end, '')`;
+  return sql<string | null>`nullif(case when ${metadata}->>'operationId' ~ ${sql.raw(`'${MERCADO_LIVRE_PAYMENT_OPERATION_ID_SQL_PATTERN}'`)} then '' else ${metadata}->>'operationId' end, '')`;
 }
 
 function readMercadoLivrePackId(
