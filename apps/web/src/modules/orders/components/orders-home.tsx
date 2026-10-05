@@ -1685,10 +1685,11 @@ function OrdersHomeContent({
                   <OrderSortableHeader
                     column="contributionMarginPercent"
                     align="right"
+                    minWidth="250px"
                     onSort={handleSort}
                     sortConfig={sortConfig}
                   >
-                    Margem Contribuição
+                    Margem de Contribuição
                   </OrderSortableHeader>
                   <OrderSortableHeader
                     column="totalProfitAmount"

@@ -248,6 +248,14 @@ function resolveProductLabels(
   return { parentName: rowDisplayName || rowName || "Produto", variationName: null };
 }
 
+function getSignedColorClass(value: number | null | undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value) || value === 0) {
+    return "text-foreground";
+  }
+
+  return value > 0 ? "text-success" : "text-error";
+}
+
 /**
  * Profit and margin after advertising, derived from the values shown in the
  * LUCRO TOTAL, PUBLICIDADE and FATURAMENTO columns. Returns `null` for rows
@@ -603,26 +611,50 @@ export function ProductTable({
           <span className="text-sm text-foreground">{formatMoney(sellingPrice)}</span>
         </td>
         <td className="px-3 py-3 text-right">
-          <span className="text-sm text-foreground">{formatPercent(contributionMarginRatio, { digits: 2 })}</span>
+          <span
+            className={cn(
+              "text-sm font-semibold tabular-nums",
+              getSignedColorClass(contributionMarginRatio),
+            )}
+          >
+            {formatPercent(contributionMarginRatio, { digits: 2 })}
+          </span>
         </td>
         <td className="px-3 py-3 text-right">
-          <span className="text-sm text-foreground">{formatMoney(totalProfit)}</span>
+          <span
+            className={cn(
+              "text-sm font-semibold tabular-nums",
+              getSignedColorClass(totalProfit),
+            )}
+          >
+            {formatMoney(totalProfit)}
+          </span>
         </td>
         {/* Advertising lives on the listing: variation rows show "--". */}
         <td className="px-3 py-3 text-right">
-          <span className="text-sm text-foreground">
+          <span className="text-sm font-semibold tabular-nums text-warning">
             {row.advertising === null ? "--" : formatMoney(row.advertising)}
           </span>
         </td>
         <td className="px-3 py-3 text-right">
-          <span className="text-sm text-foreground">
+          <span
+            className={cn(
+              "text-sm font-semibold tabular-nums",
+              getSignedColorClass(advertisingResult?.marginPercent),
+            )}
+          >
             {advertisingResult === null
               ? "--"
               : formatPercentPtBr(advertisingResult.marginPercent, { digits: 2 })}
           </span>
         </td>
         <td className="px-3 py-3 text-right">
-          <span className="text-sm text-foreground">
+          <span
+            className={cn(
+              "text-sm font-semibold tabular-nums",
+              getSignedColorClass(advertisingResult?.profit),
+            )}
+          >
             {advertisingResult === null ? "--" : formatMoney(advertisingResult.profit)}
           </span>
         </td>
