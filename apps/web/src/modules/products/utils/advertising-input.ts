@@ -1,37 +1,26 @@
 /**
  * Helpers for the BRL amount typed into the listing advertising field. The
- * field behaves like a cash register: typed digits are read as cents, so
- * "12345" shows as "123,45".
+ * user types naturally ("1700" or "1700,9") and the amount is always shown
+ * with two decimals once the field is committed ("1.700,00" / "1.700,90").
  */
 
-const CURRENCY_FORMAT = new Intl.NumberFormat("pt-BR", {
-  maximumFractionDigits: 2,
-  minimumFractionDigits: 2,
-});
+import {
+  formatBrlAmount,
+  sanitizeBrlAmountInput,
+  toBrlDecimalString,
+} from "@/lib/brl-amount";
 
 /** Formats a stored amount for the input, e.g. 1234.5 -> "1.234,50". */
 export function formatAdvertisingInput(value: number): string {
-  return CURRENCY_FORMAT.format(Number.isFinite(value) ? value : 0);
+  return formatBrlAmount(value);
 }
 
-/** Re-masks whatever the user typed or pasted as a cents-based amount. */
+/** Filters what the user typed or pasted down to a valid BRL amount draft. */
 export function maskAdvertisingInput(raw: string): string {
-  const digits = raw.replace(/\D/g, "");
-
-  if (digits.length === 0) {
-    return formatAdvertisingInput(0);
-  }
-
-  return formatAdvertisingInput(Number.parseInt(digits, 10) / 100);
+  return sanitizeBrlAmountInput(raw);
 }
 
-/** Converts a masked input into the decimal string the API expects ("1234.50"). */
-export function parseAdvertisingInput(masked: string): string {
-  const digits = masked.replace(/\D/g, "");
-
-  if (digits.length === 0) {
-    return "0.00";
-  }
-
-  return (Number.parseInt(digits, 10) / 100).toFixed(2);
+/** Converts a typed amount into the decimal string the API expects ("1234.50"). */
+export function parseAdvertisingInput(typed: string): string {
+  return toBrlDecimalString(typed);
 }

@@ -1,21 +1,13 @@
 import type { Company } from "@lucreii/types";
 
-function parseDigitsToDecimalString(value: string) {
-  const digits = value.replace(/\D/g, "");
-
-  if (digits.length === 0) {
-    return "0.00";
-  }
-
-  const normalized = (Number.parseInt(digits, 10) / 100).toFixed(2);
-  return normalized;
-}
+import {
+  formatBrlAmount,
+  parseBrlAmount,
+  toBrlDecimalString,
+} from "@/lib/brl-amount";
 
 export function formatCurrencyInput(value: number) {
-  return value.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatBrlAmount(value);
 }
 
 export function formatTaxPercentInput(rateDecimal: string) {
@@ -29,14 +21,14 @@ export function formatTaxPercentInput(rateDecimal: string) {
 }
 
 export function parseCurrencyInputToNumber(value: string) {
-  return Number.parseFloat(parseDigitsToDecimalString(value));
+  return parseBrlAmount(value);
 }
 
 export function buildCompanyDefaultsPatch(input: {
   fixedCostInput: string;
   taxPercentInput: string;
 }) {
-  const fixedCostDefault = parseDigitsToDecimalString(input.fixedCostInput);
+  const fixedCostDefault = toBrlDecimalString(input.fixedCostInput);
   const taxPercent = parseCurrencyInputToNumber(input.taxPercentInput);
   const normalizedTaxRate = (taxPercent / 100).toFixed(6);
 

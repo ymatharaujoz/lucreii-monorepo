@@ -126,7 +126,10 @@ export function MarginAuditPanel({
           ? "Σ CUSTOS FIXOS DO MÊS"
           : "CUSTO FIXO PADRÃO DA EMPRESA",
       label: "Custo fixo",
-      value: formatMoney(indicators.fixedCost, { maximumFractionDigits: 2 }),
+      value: formatMoney(indicators.fixedCost, {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      }),
     },
     {
       description: "Lucro total depois do custo fixo.",
@@ -138,7 +141,10 @@ export function MarginAuditPanel({
       description: "Publicidade da performance abatida após o lucro real.",
       formula: "Σ PUBLICIDADE",
       label: "Publicidade",
-      value: formatMoney(indicators.advertising, { maximumFractionDigits: 2 }),
+      value: formatMoney(indicators.advertising, {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+      }),
     },
     {
       description: "Lucro real depois do investimento em publicidade.",

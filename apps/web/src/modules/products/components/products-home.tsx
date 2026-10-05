@@ -783,6 +783,78 @@ type CatalogSortKey =
 
 type CatalogSortDirection = "asc" | "desc" | null;
 
+type CatalogStatusFilter = "all" | "active" | "archived";
+
+const catalogStatusOptions: Array<{
+  label: string;
+  value: CatalogStatusFilter;
+}> = [
+  { value: "all", label: "Todos" },
+  { value: "active", label: "Ativos" },
+  { value: "archived", label: "Arquivados" },
+];
+
+function matchesCatalogStatus(
+  product: ProductListItem,
+  status: CatalogStatusFilter,
+): boolean {
+  if (status === "all") return true;
+  return status === "active" ? product.isActive : !product.isActive;
+}
+
+function CatalogStatusSegmentedControl({
+  counts,
+  onChange,
+  value,
+}: {
+  counts: Record<CatalogStatusFilter, number>;
+  onChange: (value: CatalogStatusFilter) => void;
+  value: CatalogStatusFilter;
+}) {
+  return (
+    <div
+      aria-label="Filtrar por status"
+      className="inline-flex items-center gap-0.5 rounded-[var(--radius-md)] border border-border bg-surface-strong/60 p-0.5"
+      role="group"
+    >
+      {catalogStatusOptions.map((option) => {
+        const isSelected = value === option.value;
+        return (
+          <button
+            aria-pressed={isSelected}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-[calc(var(--radius-md)-2px)] px-3 py-1.5 text-xs font-medium transition-all duration-[var(--transition-fast)]",
+              isSelected
+                ? "bg-background text-foreground shadow-[var(--shadow-xs)] ring-1 ring-border"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            key={option.value}
+            onClick={() => onChange(option.value)}
+            type="button"
+          >
+            {option.value === "active" ? (
+              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+            ) : option.value === "archived" ? (
+              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+            ) : null}
+            {option.label}
+            <span
+              className={cn(
+                "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                isSelected
+                  ? "bg-accent/10 text-accent"
+                  : "bg-foreground/5 text-muted-foreground",
+              )}
+            >
+              {counts[option.value]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const catalogMarketplaceOptions = [
   { value: "mercadolivre", label: "MELI" },
   { value: "shopee", label: "Shopee" },
@@ -1063,6 +1135,7 @@ function CatalogProductsHierarchyTable({
   } | null>(null); 
   const [searchFilter, setSearchFilter] = useState("");
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<CatalogStatusFilter>("all");
   const [showFilters, setShowFilters] = useState(false); 
   const [currentPage, setCurrentPage] = useState(1); 
   const [isExporting, setIsExporting] = useState(false); 
@@ -1092,8 +1165,39 @@ function CatalogProductsHierarchyTable({
     setCurrentPage(1);
   };
 
+  const collapsedProducts = useMemo(
+    () => products.map(collapseSingleVariationParent),
+    [products],
+  );
+
+  const statusCounts = useMemo<Record<CatalogStatusFilter, number>>(() => {
+    const active = collapsedProducts.filter((product) => product.isActive).length;
+    return {
+      all: collapsedProducts.length,
+      active,
+      archived: collapsedProducts.length - active,
+    };
+  }, [collapsedProducts]);
+
   const filteredParents = useMemo(() => {
-    let result = products.map(collapseSingleVariationParent);
+    let result = [...collapsedProducts];
+
+    if (statusFilter !== "all") {
+      result = result.flatMap((product) => {
+        if (product.children.length === 0) {
+          return matchesCatalogStatus(product, statusFilter) ? [product] : [];
+        }
+
+        const children = product.children.filter((child) =>
+          matchesCatalogStatus(child, statusFilter),
+        );
+
+        return matchesCatalogStatus(product, statusFilter) ||
+          children.length > 0
+          ? [{ ...product, children }]
+          : [];
+      });
+    }
 
     if (searchFilter.trim()) {
       const search = searchFilter.toLowerCase().trim();
@@ -1122,7 +1226,7 @@ function CatalogProductsHierarchyTable({
     }
 
     return result;
-  }, [products, searchFilter, selectedMarketplaces, sortConfig]);
+  }, [collapsedProducts, searchFilter, selectedMarketplaces, sortConfig, statusFilter]);
 
   const filteredTotalPages = Math.max(
     1,
@@ -1165,11 +1269,13 @@ function CatalogProductsHierarchyTable({
     }, 0);
   }, [products, selectedProductIds]);
 
-  const hasActiveFilters = searchFilter.trim() || selectedMarketplaces.length > 0; 
+  const hasActiveFilters =
+    searchFilter.trim() || selectedMarketplaces.length > 0 || statusFilter !== "all";
 
   const clearAllFilters = () => {
     setSearchFilter("");
     setSelectedMarketplaces([]);
+    setStatusFilter("all");
     setCurrentPage(1);
   };
 
@@ -1291,7 +1397,16 @@ function CatalogProductsHierarchyTable({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <CatalogStatusSegmentedControl
+              counts={statusCounts}
+              onChange={(value) => {
+                setStatusFilter(value);
+                setCurrentPage(1);
+              }}
+              value={statusFilter}
+            />
+
             <Button
               size="sm"
               variant="secondary"

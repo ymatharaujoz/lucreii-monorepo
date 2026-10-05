@@ -560,7 +560,7 @@ describe("ProductTable", () => {
     )!;
     expect(input.value).toBe("75,00");
 
-    changeInputValue(input, "9000");
+    changeInputValue(input, "90");
     await act(async () => {
       Array.from(document.querySelectorAll("button"))
         .find((button) => button.textContent?.trim() === "Salvar")!

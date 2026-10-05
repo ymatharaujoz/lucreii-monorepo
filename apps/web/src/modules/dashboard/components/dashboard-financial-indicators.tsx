@@ -23,6 +23,12 @@ import {
   formatCurrencyInput,
 } from "./company-finance-defaults";
 import { formatMoney } from "../utils/formatters";
+import { normalizeBrlAmountInput } from "@/lib/brl-amount";
+
+const MONEY_TWO_DECIMALS = {
+  maximumFractionDigits: 2,
+  minimumFractionDigits: 2,
+} as const;
 
 interface DashboardFinancialIndicatorsProps {
   activeCompany: Company | null;
@@ -453,13 +459,10 @@ export function DashboardFinancialIndicators({
                   subValue={
                     <>
                       Custo Fixo:{" "}
-                      {formatMoney(financialIndicators.fixedCost, {
-                        maximumFractionDigits: 2,
-                      })}
+                      {formatMoney(financialIndicators.fixedCost, MONEY_TWO_DECIMALS)}
                       <br />
-                      Publicidade: {formatMoney(displayedAdvertising, {
-                        maximumFractionDigits: 2,
-                      })}
+                      Publicidade:{" "}
+                      {formatMoney(displayedAdvertising, MONEY_TWO_DECIMALS)}
                     </>
                   }
                   trend={{
@@ -560,6 +563,11 @@ export function DashboardFinancialIndicators({
                     <Input
                       className="h-9 flex-1 text-right text-xs"
                       inputMode="decimal"
+                      onBlur={() =>
+                        setFixedCostInput((current) =>
+                          normalizeBrlAmountInput(current),
+                        )
+                      }
                       onChange={(event) =>
                         setFixedCostInput(event.target.value)
                       }
@@ -574,6 +582,11 @@ export function DashboardFinancialIndicators({
                     <Input
                       className="h-9 flex-1 text-right text-xs"
                       inputMode="decimal"
+                      onBlur={() =>
+                        setTaxPercentInput((current) =>
+                          normalizeBrlAmountInput(current),
+                        )
+                      }
                       onChange={(event) =>
                         setTaxPercentInput(event.target.value)
                       }
@@ -586,7 +599,7 @@ export function DashboardFinancialIndicators({
                       Publicidade
                     </span>
                     <span className="text-sm font-semibold tabular-nums text-foreground">
-                      {formatMoney(displayedAdvertising)}
+                      {formatMoney(displayedAdvertising, MONEY_TWO_DECIMALS)}
                     </span>
                   </div>
                 </div>
@@ -624,7 +637,7 @@ export function DashboardFinancialIndicators({
                           Publicidade
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
-                          {formatMoney(displayedAdvertising)}
+                          {formatMoney(displayedAdvertising, MONEY_TWO_DECIMALS)}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -642,7 +655,7 @@ export function DashboardFinancialIndicators({
                           Lucro Após Publicidade
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
-                          {formatMoney(advertisingProfitValue)}
+                          {formatMoney(advertisingProfitValue, MONEY_TWO_DECIMALS)}
                         </span>
                       </div>
                     </>
@@ -654,7 +667,7 @@ export function DashboardFinancialIndicators({
                           Custo Fixo
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
-                          {formatMoney(fixedCostResolved)}
+                          {formatMoney(fixedCostResolved, MONEY_TWO_DECIMALS)}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -672,7 +685,7 @@ export function DashboardFinancialIndicators({
                           Publicidade
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
-                          {formatMoney(displayedAdvertising)}
+                          {formatMoney(displayedAdvertising, MONEY_TWO_DECIMALS)}
                         </span>
                       </div>
                     </>

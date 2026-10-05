@@ -82,7 +82,19 @@ export function ProductAdvertisingField({
             aria-label="Publicidade em reais"
             className="h-10 w-full rounded-[var(--radius-md)] border border-border bg-background pl-9 pr-3 text-right text-lg font-bold tabular-nums text-foreground transition-all duration-[var(--transition-fast)] hover:border-border-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSaving}
-            inputMode="numeric"
+            inputMode="decimal"
+            onBlur={() => {
+              if (draft === null) {
+                return;
+              }
+
+              // Commit the typed value with two decimals ("1700" -> "1.700,00").
+              setDraft(
+                parseAdvertisingInput(draft) === baseline
+                  ? null
+                  : formatAdvertisingInput(Number.parseFloat(parseAdvertisingInput(draft))),
+              );
+            }}
             onChange={(event) => setDraft(maskAdvertisingInput(event.target.value))}
             onKeyDown={(event) => {
               if (event.key === "Enter") {

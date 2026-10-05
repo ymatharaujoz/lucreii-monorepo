@@ -536,7 +536,7 @@ describe("DashboardFinancialIndicators", () => {
 
     const text = document.body.textContent ?? "";
     expect(text).not.toContain("Publicidade rateada");
-    expect(text).toMatch(/PublicidadeR\$\s*1\.481(?!,)/);
+    expect(text).toMatch(/PublicidadeR\$\s*1\.481,33/);
     view.unmount();
   });
 

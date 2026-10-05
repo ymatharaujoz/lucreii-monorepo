@@ -181,9 +181,9 @@ describe("ProductDetailsModal", () => {
 
     expect(findButton("Salvar")).toBeUndefined();
 
-    changeInputValue(input, "20000");
+    changeInputValue(input, "200");
 
-    expect(input.value).toBe("200,00");
+    expect(input.value).toBe("200");
 
     await act(async () => {
       findButton("Salvar")!.dispatchEvent(
@@ -220,7 +220,7 @@ describe("ProductDetailsModal", () => {
     expect(document.querySelector('[role="alert"]')?.textContent).toBe(
       "Não foi possível salvar a publicidade.",
     );
-    expect(input.value).toBe("5,00");
+    expect(input.value).toBe("500");
 
     view.unmount();
   });

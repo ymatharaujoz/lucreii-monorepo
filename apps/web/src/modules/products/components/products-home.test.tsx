@@ -362,6 +362,25 @@ describe("ProductsHome catalog modal", () => {
     view.unmount(); 
   }); 
 
+  it("filters the catalog by active and archived status", () => {
+    const view = renderProductsHome();
+    const statusButton = (label: string) =>
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>(
+          '[aria-label="Filtrar por status"] button',
+        ),
+      ).find((button) => button.textContent?.includes(label))!;
+
+    click(statusButton("Arquivados"));
+    expect(document.body.textContent).toContain("Nenhum produto encontrado");
+    expect(document.body.textContent).not.toContain("Kit Mercado Livre");
+
+    click(statusButton("Ativos"));
+    expect(document.body.textContent).toContain("Kit Mercado Livre");
+
+    view.unmount();
+  });
+
   it("exports filtered catalog rows as xlsx using current search and marketplace filters", async () => {
     apiClientMocks.download.mockResolvedValue(new Blob(["xlsx"]));
 
