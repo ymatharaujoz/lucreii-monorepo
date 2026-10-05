@@ -2814,9 +2814,19 @@ export class ProductsService {
       productsList,
       syncedProducts,
     );
-    const performanceRows = this.deduplicatePerformanceRows(
-      this.buildPerformanceRows(catalogProducts, monthlyPerformanceDisplayRows),
+    const soldPerformanceRows = this.buildPerformanceRows(
+      catalogProducts,
+      monthlyPerformanceDisplayRows,
     );
+    const performanceRows = this.deduplicatePerformanceRows([
+      ...soldPerformanceRows,
+      ...this.buildActiveCatalogPerformanceRows(
+        catalogProducts,
+        soldPerformanceRows,
+        syncedProducts,
+        scope.referenceMonth,
+      ),
+    ]);
     const eligibleOrderIds = new Set(
       externalOrderRows
         .filter(
@@ -3812,6 +3822,94 @@ export class ProductsService {
       const groupedRows = rowsByGroupKey.get(row.catalogGroupKey) ?? [row];
       return this.applyWeightedCompositionUnitsToParentRow(row, groupedRows);
     });
+  }
+
+  /**
+   * Performance rows are materialized from orders, so active catalog products
+   * with no sales or returns in the month would otherwise be missing. Emits a
+   * zeroed row per marketplace the product is linked to when no row exists.
+   */
+  private buildActiveCatalogPerformanceRows(
+    catalogProducts: ProductListItem[],
+    existingRows: ProductPerformanceRow[],
+    syncedProducts: SyncedProductRecord[],
+    referenceMonth: string,
+  ): ProductPerformanceRow[] {
+    const coveredKeys = new Set<string>();
+    for (const row of existingRows) {
+      if (row.productId) {
+        coveredKeys.add(`${row.channel}::${row.productId}`);
+      }
+      const normalizedSku = normalizeComparableSku(row.sku);
+      if (normalizedSku) {
+        coveredKeys.add(`${row.channel}::${normalizedSku}`);
+      }
+    }
+
+    const providersByProductId = new Map<string, Set<string>>();
+    for (const syncedProduct of syncedProducts) {
+      const linkedProductId = syncedProduct.linkedProduct?.id;
+      if (!linkedProductId) {
+        continue;
+      }
+      const providers = providersByProductId.get(linkedProductId) ?? new Set();
+      providers.add(syncedProduct.provider);
+      providersByProductId.set(linkedProductId, providers);
+    }
+
+    const rows: ProductPerformanceRow[] = [];
+    const visit = (product: ProductListItem) => {
+      if (product.children.length > 0) {
+        product.children.forEach(visit);
+        return;
+      }
+
+      if (!product.isActive || product.isSyntheticParent) {
+        return;
+      }
+
+      const providers = new Set(providersByProductId.get(product.id));
+      if (product.derivedFromProvider) {
+        providers.add(product.derivedFromProvider);
+      }
+
+      const normalizedSku = normalizeComparableSku(product.sku);
+      for (const channel of providers) {
+        if (
+          coveredKeys.has(`${channel}::${product.id}`) ||
+          (normalizedSku && coveredKeys.has(`${channel}::${normalizedSku}`))
+        ) {
+          continue;
+        }
+
+        rows.push(
+          this.toPerformanceRow(
+            {
+              advertisingCost: product.financeDefaults?.advertisingCost ?? "0",
+              channel,
+              commissionRate: "0",
+              id: `catalog:${product.id}:${channel}:${referenceMonth}`,
+              packagingCost: product.financeDefaults?.packagingCost ?? "0",
+              productId: product.id,
+              productName: product.name,
+              referenceMonth,
+              returnsQuantity: 0,
+              salePrice: product.sellingPrice,
+              salesQuantity: 0,
+              shippingFee: "0",
+              sku: product.sku ?? product.id,
+              unitCost: product.latestCost?.amount ?? "0",
+            },
+            product,
+            [],
+          ),
+        );
+      }
+    };
+
+    catalogProducts.forEach(visit);
+
+    return rows;
   }
 
   private toPerformanceRow(

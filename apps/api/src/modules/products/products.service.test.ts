@@ -5749,6 +5749,97 @@ describe("ProductsService", () => {
     ]);
   });
 
+  it("lists active linked products without sales and skips inactive ones", async () => {
+    const { db, financeService, service, syncService } = createService();
+    const linked = (id: string) => ({
+      externalProductId: `MLB-${id}`,
+      linkedProduct: { id },
+      marketplaceCommission: "0",
+      fixedFee: "0",
+      shippingCost: "0",
+      metadata: {},
+      provider: "mercadolivre",
+      sku: null,
+      unitsSold: 0,
+    });
+
+    vi.mocked(listSyncedProductsReadModel).mockImplementation(
+      async ({ providerSlug }) =>
+        (providerSlug === "mercadolivre"
+          ? [linked("product_1"), linked("product_2"), linked("product_3")]
+          : []) as never,
+    );
+    db.query.companies.findMany.mockResolvedValue([
+      { id: "company_1", isActive: true, taxRateDefault: "0.000000" },
+    ]);
+    const productRows = [
+      buildCatalogProductRow({ id: "product_1", name: "Vendido", sku: "SOLD" }),
+      buildCatalogProductRow({ id: "product_2", name: "Parado", sku: "IDLE" }),
+      buildCatalogProductRow({
+        id: "product_3",
+        isActive: false,
+        name: "Inativo",
+        sku: "OFF",
+      }),
+    ];
+    db.query.products.findMany.mockResolvedValue(productRows);
+    db.query.productCosts.findMany.mockResolvedValue([]);
+    db.query.adCosts.findMany.mockResolvedValue([]);
+    db.query.manualExpenses.findMany.mockResolvedValue([]);
+    db.query.productMonthlyPerformance.findMany.mockResolvedValue([
+      {
+        advertisingCost: "0.00",
+        channel: "mercadolivre",
+        commissionRate: "0.100000",
+        companyId: "company_1",
+        createdAt: new Date("2026-05-01T10:00:00.000Z"),
+        id: "perf_1",
+        notes: null,
+        organizationId: "org_1",
+        packagingCost: "0.00",
+        productId: "product_1",
+        productName: "Vendido",
+        referenceMonth: "2026-05-01",
+        returnsQuantity: 0,
+        salePrice: "120.00",
+        salesQuantity: 1,
+        shippingFee: "0.00",
+        sku: "SOLD",
+        unitCost: "0.00",
+        updatedAt: new Date("2026-05-01T10:00:00.000Z"),
+        userId: "user_1",
+      },
+    ]);
+    db.query.externalOrders.findMany.mockResolvedValue([]);
+    financeService.buildFinanceSnapshot.mockResolvedValue({
+      adCosts: [],
+      manualExpenses: [],
+      orders: [],
+      products: [],
+    });
+    syncService.getStatus.mockResolvedValue({} as never);
+
+    const response = await service.listPerformanceRows(
+      { organizationId: "org_1", userId: "user_1" },
+      { page: 1, pageSize: 10, referenceMonth: "2026-05-01" },
+    );
+
+    expect(response.items.map((item) => item.productId).sort()).toEqual([
+      "product_1",
+      "product_2",
+    ]);
+    expect(
+      response.items.find((item) => item.productId === "product_2"),
+    ).toEqual(
+      expect.objectContaining({
+        channelLabel: "mercadolivre",
+        isActive: true,
+        returns: 0,
+        sales: 0,
+      }),
+    );
+  });
+
   it("exposes the saved listing advertising on performance rows", async () => {
     const { db, financeService, service, syncService } = createService();
 
