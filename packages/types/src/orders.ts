@@ -163,6 +163,12 @@ export type OrderComposition = {
   shippingOrFixedFeeAmount: string;
   refundBonusAmount: string;
   packagingCostAmount: string;
+  /** User-informed share of revenue (0-100) charged as other variable costs. */
+  otherVariableCostPercent?: string;
+  /** User-informed fixed amount (R$) charged as other variable costs. */
+  otherVariableCostAmount?: string;
+  /** Percent share applied to revenue plus the fixed amount. */
+  otherVariableCostTotalAmount?: string;
   hasIncompleteCostData: boolean;
   missingLinkedItemsCount: number;
   missingCostItemsCount: number;
@@ -183,6 +189,8 @@ export type OrderCompositionUpdateInput = {
   marketplaceCommissionAmount?: string;
   shippingOrFixedFeeAmount?: string;
   packagingCostAmount?: string;
+  otherVariableCostPercent?: string;
+  otherVariableCostAmount?: string;
 };
 
 export type OrderProductCostBulkUpdateInput = {

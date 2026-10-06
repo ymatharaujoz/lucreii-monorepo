@@ -215,6 +215,13 @@ export const orderCompositionSchema = z.object({
   shippingOrFixedFeeAmount: decimalField("Shipping or fixed fee amount"),
   refundBonusAmount: decimalField("Refund bonus amount"),
   packagingCostAmount: decimalField("Packaging cost amount"),
+  otherVariableCostPercent: decimalField(
+    "Other variable cost percent",
+  ).optional(),
+  otherVariableCostAmount: decimalField("Other variable cost amount").optional(),
+  otherVariableCostTotalAmount: decimalField(
+    "Other variable cost total amount",
+  ).optional(),
   hasIncompleteCostData: z.boolean(),
   missingLinkedItemsCount: z.number().int().min(0),
   missingCostItemsCount: z.number().int().min(0),
@@ -248,6 +255,26 @@ export const orderCompositionUpdateSchema = z.object({
     "Shipping or fixed fee amount",
   ).optional(),
   packagingCostAmount: decimalField("Packaging cost amount").optional(),
+  otherVariableCostPercent: z
+    .string()
+    .trim()
+    .regex(
+      nonNegativeMoneyPattern,
+      "Other variable cost percent must be zero or a positive number with up to 2 places.",
+    )
+    .refine(
+      (value) => Number(value) <= 100,
+      "Other variable cost percent must be at most 100.",
+    )
+    .optional(),
+  otherVariableCostAmount: z
+    .string()
+    .trim()
+    .regex(
+      nonNegativeMoneyPattern,
+      "Other variable cost amount must be zero or a positive amount with up to 2 places.",
+    )
+    .optional(),
 }).refine(
   (value) => Object.values(value).some((entry) => entry !== undefined),
   "At least one composition field is required.",

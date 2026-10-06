@@ -202,6 +202,8 @@ type OrderCompositionOverrides = Partial<
     | "marketplaceCommissionAmount"
     | "shippingOrFixedFeeAmount"
     | "packagingCostAmount"
+    | "otherVariableCostPercent"
+    | "otherVariableCostAmount"
   >
 >;
 
@@ -949,13 +951,28 @@ export function buildOrderFinancialMetrics(
     packagingCostAmount,
   );
 
+  const otherVariableCostPercent = readOverrideMoney(
+    compositionOverrides.otherVariableCostPercent,
+    0,
+  );
+  const otherVariableCostAmount = readOverrideMoney(
+    compositionOverrides.otherVariableCostAmount,
+    0,
+  );
+  const otherVariableCostTotalAmount =
+    (revenueAmount * otherVariableCostPercent) / 100 + otherVariableCostAmount;
+
   const hasIncompleteCostData =
     missingLinkedItemsCount > 0 ||
     missingCostItemsCount > 0 ||
     pendingFinancialFields.length > 0;
   const totalProfitAmount = hasIncompleteCostData
     ? null
-    : netRevenueAmount - productCostAmount - packagingCostAmount - taxAmount;
+    : netRevenueAmount -
+      productCostAmount -
+      packagingCostAmount -
+      taxAmount -
+      otherVariableCostTotalAmount;
   const contributionMarginPercent =
     totalProfitAmount === null || revenueAmount <= 0
       ? null
@@ -969,6 +986,9 @@ export function buildOrderFinancialMetrics(
       missingCostItemsCount,
       missingLinkedItemsCount,
       netRevenueAmount: netRevenueAmount.toFixed(2),
+      otherVariableCostAmount: otherVariableCostAmount.toFixed(2),
+      otherVariableCostPercent: otherVariableCostPercent.toFixed(2),
+      otherVariableCostTotalAmount: otherVariableCostTotalAmount.toFixed(2),
       packagingCostAmount: packagingCostAmount.toFixed(2),
       productCostAmount: productCostAmount.toFixed(2),
       refundBonusAmount: refundBonusAmount.toFixed(2),
@@ -1210,6 +1230,14 @@ function readOrderCompositionOverrides(
       typeof rawOverrides.marketplaceCommissionAmount === "string"
         ? rawOverrides.marketplaceCommissionAmount
         : undefined,
+    otherVariableCostAmount:
+      typeof rawOverrides.otherVariableCostAmount === "string"
+        ? rawOverrides.otherVariableCostAmount
+        : undefined,
+    otherVariableCostPercent:
+      typeof rawOverrides.otherVariableCostPercent === "string"
+        ? rawOverrides.otherVariableCostPercent
+        : undefined,
     packagingCostAmount:
       typeof rawOverrides.packagingCostAmount === "string"
         ? rawOverrides.packagingCostAmount
@@ -1428,6 +1456,16 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
   const refundBonusTotalCents = parseMoneyToCents(
     baseMetrics.refundBonusAmount.toFixed(2),
   );
+  const otherVariableCostOverrides = readOrderCompositionOverrides(
+    (order.metadata ?? {}) as Record<string, unknown>,
+  );
+  const otherVariableCostPercent = toNumber(
+    otherVariableCostOverrides.otherVariableCostPercent,
+  );
+  const otherVariableCostAllocations = allocateCentsByWeights(
+    parseMoneyToCents(otherVariableCostOverrides.otherVariableCostAmount),
+    itemTotalsCents,
+  );
   const commissionAllocations = allocateCentsByWeights(
     commissionTotalCents,
     itemTotalsCents,
@@ -1463,9 +1501,15 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
         : latestCostAmount === null
           ? null
           : parseMoneyToCents(latestCostAmount) * BigInt(item.quantity);
+    const otherVariableCostCents =
+      (otherVariableCostAllocations[index] ?? 0n) +
+      BigInt(Math.round((Number(revenueCents) * otherVariableCostPercent) / 100));
     const totalProfitCents =
       linkedProduct && productCostCents !== null
-        ? netRevenueCents - productCostCents - packagingCostCents
+        ? netRevenueCents -
+          productCostCents -
+          packagingCostCents -
+          otherVariableCostCents
         : null;
 
     return {
@@ -1544,7 +1588,8 @@ function deriveOrderProfitMetricsFromComposition(
     : toNumber(composition.netRevenueAmount) -
       toNumber(composition.productCostAmount) -
       toNumber(composition.packagingCostAmount) -
-      toNumber(composition.taxAmount);
+      toNumber(composition.taxAmount) -
+      toNumber(composition.otherVariableCostTotalAmount);
   const contributionMarginPercent =
     totalProfitAmount === null || revenueAmount <= 0
       ? null
@@ -1708,6 +1753,18 @@ function aggregateOrderComposition(
       0,
     ),
     netRevenueAmount,
+    otherVariableCostAmount: sumMoneyStrings(
+      compositions.map((composition) => composition.otherVariableCostAmount),
+    ),
+    otherVariableCostPercent:
+      compositions.find(
+        (composition) => toNumber(composition.otherVariableCostPercent) > 0,
+      )?.otherVariableCostPercent ?? "0.00",
+    otherVariableCostTotalAmount: sumMoneyStrings(
+      compositions.map(
+        (composition) => composition.otherVariableCostTotalAmount,
+      ),
+    ),
     packagingCostAmount: sumMoneyStrings(
       compositions.map((composition) => composition.packagingCostAmount),
     ),
@@ -1964,6 +2021,7 @@ type MonthlyMarginRollupInput = {
 type MonthlyOrderProductFinancialLine = {
   channel: string;
   marketplaceCommissionAmount: string;
+  otherVariableCostAmount?: string;
   packagingCostAmount: string;
   productCostAmount: string;
   productId: string | null;
@@ -2014,6 +2072,12 @@ function buildMonthlyOrderProductFinancials(
       absoluteCents(parseMoneyToCents(composition.taxAmount)),
       allocationWeights,
     );
+    const otherVariableCostAllocations = allocateCentsByWeights(
+      absoluteCents(
+        parseMoneyToCents(composition.otherVariableCostTotalAmount),
+      ),
+      allocationWeights,
+    );
     const packagingAllocations = allocateCentsByWeights(
       absoluteCents(parseMoneyToCents(composition.packagingCostAmount)),
       quantityWeights,
@@ -2027,6 +2091,9 @@ function buildMonthlyOrderProductFinancials(
       channel: item.channel,
       marketplaceCommissionAmount: formatCents(
         commissionAllocations[index] ?? 0n,
+      ),
+      otherVariableCostAmount: formatCents(
+        otherVariableCostAllocations[index] ?? 0n,
       ),
       packagingCostAmount: formatCents(packagingAllocations[index] ?? 0n),
       productCostAmount: formatCents(productCostAllocations[index] ?? 0n),
@@ -2071,6 +2138,7 @@ export function calculateMonthlyMarginFinancials(
   let taxCents = 0n;
   let packagingCents = 0n;
   let productCostCents = 0n;
+  let otherVariableCostCents = 0n;
 
   for (const performanceLine of input.performance.lines) {
     if (performanceLine.sales <= 0) {
@@ -2104,6 +2172,9 @@ export function calculateMonthlyMarginFinancials(
       productCostCents += absoluteCents(
         parseMoneyToCents(orderProductFinancial.productCostAmount),
       );
+      otherVariableCostCents += absoluteCents(
+        parseMoneyToCents(orderProductFinancial.otherVariableCostAmount),
+      );
     }
   }
 
@@ -2113,7 +2184,8 @@ export function calculateMonthlyMarginFinancials(
     shippingOrFixedFeeCents -
     taxCents -
     packagingCents -
-    productCostCents;
+    productCostCents -
+    otherVariableCostCents;
   const aggregateRevenueCents =
     BigInt(Math.max(0, Math.trunc(input.performance.netLiquidSalesTotal))) *
     parseMoneyToCents(input.performance.unitPdvTotal);
@@ -2152,6 +2224,7 @@ function calculateLegacyOrderDetailMarginFinancials(
   let shippingOrFixedFeeCents = 0n;
   let taxCents = 0n;
   let packagingCents = 0n;
+  let otherVariableCostCents = 0n;
 
   for (const logicalOrder of logicalOrders) {
     for (const row of logicalOrder.rows) {
@@ -2203,6 +2276,9 @@ function calculateLegacyOrderDetailMarginFinancials(
     taxCents += absoluteCents(
       parseMoneyToCents(logicalOrder.composition.taxAmount),
     );
+    otherVariableCostCents += absoluteCents(
+      parseMoneyToCents(logicalOrder.composition.otherVariableCostTotalAmount),
+    );
   }
 
   const totalProfitCents =
@@ -2211,7 +2287,8 @@ function calculateLegacyOrderDetailMarginFinancials(
     shippingOrFixedFeeCents -
     taxCents -
     packagingCents -
-    productCostCents;
+    productCostCents -
+    otherVariableCostCents;
 
   return {
     marginRevenue: formatCents(marginRevenueCents),
@@ -3151,6 +3228,13 @@ export class OrdersService {
               buildPositiveAllocationWeights(quantityWeights),
             )
           : null;
+      const groupedOtherVariableCostAllocations =
+        target.grouped && input.otherVariableCostAmount !== undefined
+          ? allocateCentsByWeights(
+              parseMoneyToCents(input.otherVariableCostAmount),
+              buildPositiveAllocationWeights(quantityWeights),
+            )
+          : null;
 
       return target.rows.map((row, index) => {
         const metadata =
@@ -3169,10 +3253,23 @@ export class OrdersService {
             continue;
           }
 
-          compositionOverrides[field] =
-            field === "productCostAmount" && groupedProductCostAllocations
-              ? formatCents(groupedProductCostAllocations[index] ?? 0n)
-              : value;
+          if (
+            field === "productCostAmount" &&
+            groupedProductCostAllocations
+          ) {
+            compositionOverrides[field] = formatCents(
+              groupedProductCostAllocations[index] ?? 0n,
+            );
+          } else if (
+            field === "otherVariableCostAmount" &&
+            groupedOtherVariableCostAllocations
+          ) {
+            compositionOverrides[field] = formatCents(
+              groupedOtherVariableCostAllocations[index] ?? 0n,
+            );
+          } else {
+            compositionOverrides[field] = value;
+          }
         }
 
         if (

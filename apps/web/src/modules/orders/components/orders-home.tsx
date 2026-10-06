@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -610,6 +610,162 @@ function CompositionMetric({
   );
 }
 
+type OtherVariableCostField =
+  | "otherVariableCostAmount"
+  | "otherVariableCostPercent";
+
+type OtherVariableCostEditor = {
+  draft: string;
+  editingField: OtherVariableCostField | null;
+  error: string | null;
+  isSaving: boolean;
+  savedField: OtherVariableCostField | null;
+  onCancel: () => void;
+  onChangeDraft: (value: string) => void;
+  onEdit: (field: OtherVariableCostField) => void;
+  onSave: () => void;
+};
+
+function OtherVariableCostPopover({
+  draft,
+  error,
+  helpText,
+  id,
+  isSaving,
+  label,
+  onCancel,
+  onChangeDraft,
+  onSave,
+  prefix,
+}: {
+  draft: string;
+  error: string | null;
+  helpText: string;
+  id: string;
+  isSaving: boolean;
+  label: string;
+  onCancel: () => void;
+  onChangeDraft: (value: string) => void;
+  onSave: () => void;
+  prefix: string;
+}) {
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+      }
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !popoverRef.current?.contains(event.target)
+      ) {
+        onCancel();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [onCancel]);
+
+  return (
+    <div
+      aria-label={label}
+      className="absolute left-0 right-0 top-full mt-2 rounded-xl border border-border bg-white p-4 shadow-[var(--shadow-lg)]"
+      id={`${id}-popover`}
+      ref={popoverRef}
+      role="dialog"
+    >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave();
+        }}
+      >
+        <label
+          className="text-xs font-semibold text-foreground"
+          htmlFor={`${id}-input`}
+        >
+          {label}
+        </label>
+        <div className="relative mt-2">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            {prefix}
+          </span>
+          <input
+            aria-describedby={`${id}-help`}
+            aria-invalid={error ? "true" : "false"}
+            autoComplete="off"
+            className="h-10 w-full rounded-[var(--radius-md)] border border-border bg-surface-strong pl-9 pr-3.5 text-sm text-foreground focus:border-border-focus focus:outline-2 focus:outline-accent/20"
+            disabled={isSaving}
+            id={`${id}-input`}
+            inputMode="decimal"
+            onChange={(event) =>
+              onChangeDraft(filterProductCostInput(event.target.value))
+            }
+            onKeyDown={(event) => {
+              if (
+                event.key.length === 1 &&
+                !/[\d.,]/.test(event.key) &&
+                !event.metaKey &&
+                !event.ctrlKey
+              ) {
+                event.preventDefault();
+              }
+            }}
+            ref={inputRef}
+            type="text"
+            value={draft}
+          />
+        </div>
+        <p
+          className="mt-2 text-[11px] leading-snug text-muted-foreground"
+          id={`${id}-help`}
+        >
+          {helpText}
+        </p>
+        {error ? (
+          <p className="mt-2 text-xs text-red-600" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button
+            disabled={isSaving}
+            onClick={onCancel}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Cancelar
+          </Button>
+          <Button
+            disabled={isSaving}
+            loading={isSaving}
+            size="sm"
+            type="submit"
+          >
+            Salvar
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function CompositionTab({
   composition,
   isEditingProductCost,
@@ -621,8 +777,10 @@ function CompositionTab({
   onChangeProductCostDraft,
   onEditProductCost,
   onSaveProductCost,
+  otherVariableCostEditor,
 }: {
   composition: OrderComposition;
+  otherVariableCostEditor: OtherVariableCostEditor;
   isEditingProductCost: boolean;
   isSavingProductCost: boolean;
   productCostDraft: string;
@@ -893,6 +1051,81 @@ function CompositionTab({
             </span>
           }
         />
+        {(
+          [
+            {
+              field: "otherVariableCostPercent",
+              helpText:
+                "Percentual sobre o faturamento, aplicado somente a este pedido.",
+              label: "Outros custos variáveis (%)",
+              popoverLabel: "Novo percentual de outros custos variáveis",
+              prefix: "%",
+              value: formatPercentage(
+                Number(composition.otherVariableCostPercent ?? 0),
+              ),
+            },
+            {
+              field: "otherVariableCostAmount",
+              helpText: "Valor fixo em reais, aplicado somente a este pedido.",
+              label: "Outros custos variáveis (R$)",
+              popoverLabel: "Novo valor de outros custos variáveis",
+              prefix: "R$",
+              value: formatMoney(composition.otherVariableCostAmount ?? "0"),
+            },
+          ] as const
+        ).map(({ field, helpText, label, popoverLabel, prefix, value }) => {
+          const popoverId = `${field}-edit`;
+          const isEditing = otherVariableCostEditor.editingField === field;
+
+          return (
+            <CompositionMetric
+              headerAction={
+                <div className="flex items-center gap-1">
+                  {otherVariableCostEditor.savedField === field ? (
+                    <span
+                      className="text-[10px] font-semibold text-accent"
+                      role="status"
+                    >
+                      Salvo
+                    </span>
+                  ) : null}
+                  <button
+                    aria-controls={`${popoverId}-popover`}
+                    aria-expanded={isEditing}
+                    aria-label={`Editar ${label.toLowerCase()}`}
+                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/10 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    onClick={() => otherVariableCostEditor.onEdit(field)}
+                    title={`Editar ${label.toLowerCase()}`}
+                    type="button"
+                  >
+                    <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              }
+              icon={<Percent className="h-4 w-4" />}
+              key={field}
+              label={label}
+              negative
+              overlay={
+                isEditing ? (
+                  <OtherVariableCostPopover
+                    draft={otherVariableCostEditor.draft}
+                    error={otherVariableCostEditor.error}
+                    helpText={helpText}
+                    id={popoverId}
+                    isSaving={otherVariableCostEditor.isSaving}
+                    label={popoverLabel}
+                    onCancel={otherVariableCostEditor.onCancel}
+                    onChangeDraft={otherVariableCostEditor.onChangeDraft}
+                    onSave={otherVariableCostEditor.onSave}
+                    prefix={prefix}
+                  />
+                ) : null
+              }
+              value={value}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -975,6 +1208,12 @@ function OrdersHomeContent({
   const [productCostDraft, setProductCostDraft] = useState("");
   const [productCostError, setProductCostError] = useState<string | null>(null);
   const [productCostSaved, setProductCostSaved] = useState(false);
+  const [editingOtherCostField, setEditingOtherCostField] =
+    useState<OtherVariableCostField | null>(null);
+  const [otherCostDraft, setOtherCostDraft] = useState("");
+  const [otherCostError, setOtherCostError] = useState<string | null>(null);
+  const [savedOtherCostField, setSavedOtherCostField] =
+    useState<OtherVariableCostField | null>(null);
   const [syncOrderFeedback, setSyncOrderFeedback] = useState<{
     message: string;
     type: "error" | "success";
@@ -1058,6 +1297,62 @@ function OrdersHomeContent({
     }
   };
 
+  const handleEditOtherCost = (field: OtherVariableCostField) => {
+    if (!detailQuery.data) {
+      return;
+    }
+
+    const currentValue =
+      field === "otherVariableCostPercent"
+        ? detailQuery.data.composition.otherVariableCostPercent
+        : detailQuery.data.composition.otherVariableCostAmount;
+
+    setOtherCostDraft(formatEditableMoney(currentValue));
+    setOtherCostError(null);
+    setSavedOtherCostField(null);
+    setIsEditingProductCost(false);
+    setEditingOtherCostField(field);
+  };
+
+  const handleCancelOtherCost = useCallback(() => {
+    setEditingOtherCostField(null);
+    setOtherCostError(null);
+  }, []);
+
+  const handleSaveOtherCost = async () => {
+    if (!selectedOrderId || !editingOtherCostField) {
+      return;
+    }
+
+    const parsedValue = parseCurrencyValue(otherCostDraft.trim());
+    const isPercent = editingOtherCostField === "otherVariableCostPercent";
+    if (
+      !isValidProductCostInput(parsedValue) ||
+      (isPercent && Number(parsedValue) > 100)
+    ) {
+      setOtherCostError(
+        isPercent
+          ? "Informe um percentual entre 0 e 100 com até duas casas decimais."
+          : "Informe um valor zero ou positivo com até duas casas decimais.",
+      );
+      return;
+    }
+
+    setOtherCostError(null);
+    try {
+      await updateOrderCompositionMutation.mutateAsync({
+        orderId: selectedOrderId,
+        values: { [editingOtherCostField]: Number(parsedValue).toFixed(2) },
+      });
+      setSavedOtherCostField(editingOtherCostField);
+      setEditingOtherCostField(null);
+    } catch {
+      setOtherCostError(
+        "Não foi possível salvar o valor. Tente novamente sem fechar o pedido.",
+      );
+    }
+  };
+
   const handleSyncOrder = async () => {
     if (
       !selectedOrderId ||
@@ -1089,6 +1384,9 @@ function OrdersHomeContent({
     setIsEditingProductCost(false);
     setProductCostError(null);
     setProductCostSaved(false);
+    setEditingOtherCostField(null);
+    setOtherCostError(null);
+    setSavedOtherCostField(null);
   };
 
   const handleOpenBulkProductCostModal = () => {
@@ -1973,6 +2271,22 @@ function OrdersHomeContent({
                           setProductCostError(null);
                         }}
                         onEditProductCost={handleEditProductCost}
+                        otherVariableCostEditor={{
+                          draft: otherCostDraft,
+                          editingField: editingOtherCostField,
+                          error: otherCostError,
+                          isSaving: updateOrderCompositionMutation.isPending,
+                          onCancel: handleCancelOtherCost,
+                          onChangeDraft: (value) => {
+                            setOtherCostDraft(value);
+                            setOtherCostError(null);
+                          },
+                          onEdit: handleEditOtherCost,
+                          onSave: () => {
+                            void handleSaveOtherCost();
+                          },
+                          savedField: savedOtherCostField,
+                        }}
                         onSaveProductCost={() => {
                           void handleSaveProductCost();
                         }}

@@ -127,6 +127,58 @@ describe("OrdersService", () => {
     );
   });
 
+  it("subtracts other variable costs (percent and fixed) from total profit", () => {
+    const buildOrder = (compositionOverrides: Record<string, string>) =>
+      ({
+        fees: [],
+        items: [
+          {
+            externalProduct: {
+              linkedProductId: "product_1",
+              sku: "SKU-1",
+              linkedProduct: {
+                financeDefaults: { packagingCost: "0.00" },
+                productCosts: [],
+              },
+            },
+            quantity: 1,
+            totalPrice: "100.00",
+          },
+        ],
+        metadata: {
+          compositionOverrides: {
+            productCostAmount: "20.00",
+            ...compositionOverrides,
+          },
+        },
+        orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+        provider: "shopee",
+        refundBonusAmount: null,
+        refundBonusStatus: null,
+        status: "paid",
+        totalAmount: "100.00",
+      }) as never;
+
+    const base = buildOrderFinancialMetrics(buildOrder({}), "0");
+    const withOtherCosts = buildOrderFinancialMetrics(
+      buildOrder({
+        otherVariableCostAmount: "3.00",
+        otherVariableCostPercent: "5.00",
+      }),
+      "0",
+    );
+
+    expect(base.totalProfitAmount).toBe("80.00");
+    expect(withOtherCosts.composition).toEqual(
+      expect.objectContaining({
+        otherVariableCostAmount: "3.00",
+        otherVariableCostPercent: "5.00",
+        otherVariableCostTotalAmount: "8.00",
+      }),
+    );
+    expect(withOtherCosts.totalProfitAmount).toBe("72.00");
+  });
+
   it("returns zero margin financials without monthly orders", () => {
     expect(
       calculateMonthlyMarginFinancials({
@@ -3666,6 +3718,9 @@ describe("OrdersService", () => {
           missingCostItemsCount: 1,
           missingLinkedItemsCount: 1,
           netRevenueAmount: "180.00",
+          otherVariableCostAmount: "0.00",
+          otherVariableCostPercent: "0.00",
+          otherVariableCostTotalAmount: "0.00",
           packagingCostAmount: "8.00",
           productCostAmount: "43.00",
           refundBonusAmount: "0.00",
