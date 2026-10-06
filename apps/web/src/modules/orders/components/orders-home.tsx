@@ -684,7 +684,7 @@ function OtherVariableCostPopover({
   return (
     <div
       aria-label={label}
-      className="absolute left-0 right-0 top-full mt-2 rounded-xl border border-border bg-white p-4 shadow-[var(--shadow-lg)]"
+      className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-border bg-white p-4 shadow-[var(--shadow-lg)]"
       id={`${id}-popover`}
       ref={popoverRef}
       role="dialog"
@@ -1057,6 +1057,7 @@ function CompositionTab({
               field: "otherVariableCostPercent",
               helpText:
                 "Percentual sobre o faturamento, aplicado somente a este pedido.",
+              icon: <Percent className="h-4 w-4" />,
               label: "Outros custos variáveis (%)",
               popoverLabel: "Novo percentual de outros custos variáveis",
               prefix: "%",
@@ -1067,65 +1068,68 @@ function CompositionTab({
             {
               field: "otherVariableCostAmount",
               helpText: "Valor fixo em reais, aplicado somente a este pedido.",
+              icon: <DollarSign className="h-4 w-4" />,
               label: "Outros custos variáveis (R$)",
               popoverLabel: "Novo valor de outros custos variáveis",
               prefix: "R$",
               value: formatMoney(composition.otherVariableCostAmount ?? "0"),
             },
           ] as const
-        ).map(({ field, helpText, label, popoverLabel, prefix, value }) => {
-          const popoverId = `${field}-edit`;
-          const isEditing = otherVariableCostEditor.editingField === field;
+        ).map(
+          ({ field, helpText, icon, label, popoverLabel, prefix, value }) => {
+            const popoverId = `${field}-edit`;
+            const isEditing = otherVariableCostEditor.editingField === field;
 
-          return (
-            <CompositionMetric
-              headerAction={
-                <div className="flex items-center gap-1">
-                  {otherVariableCostEditor.savedField === field ? (
-                    <span
-                      className="text-[10px] font-semibold text-accent"
-                      role="status"
+            return (
+              <CompositionMetric
+                headerAction={
+                  <div className="flex items-center gap-1">
+                    {otherVariableCostEditor.savedField === field ? (
+                      <span
+                        className="text-[10px] font-semibold text-accent"
+                        role="status"
+                      >
+                        Salvo
+                      </span>
+                    ) : null}
+                    <button
+                      aria-controls={`${popoverId}-popover`}
+                      aria-expanded={isEditing}
+                      aria-label={`Editar ${label.toLowerCase()}`}
+                      className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/10 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                      onClick={() => otherVariableCostEditor.onEdit(field)}
+                      title={`Editar ${label.toLowerCase()}`}
+                      type="button"
                     >
-                      Salvo
-                    </span>
-                  ) : null}
-                  <button
-                    aria-controls={`${popoverId}-popover`}
-                    aria-expanded={isEditing}
-                    aria-label={`Editar ${label.toLowerCase()}`}
-                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/10 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                    onClick={() => otherVariableCostEditor.onEdit(field)}
-                    title={`Editar ${label.toLowerCase()}`}
-                    type="button"
-                  >
-                    <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              }
-              icon={<Percent className="h-4 w-4" />}
-              key={field}
-              label={label}
-              negative
-              overlay={
-                isEditing ? (
-                  <OtherVariableCostPopover
-                    draft={otherVariableCostEditor.draft}
-                    error={otherVariableCostEditor.error}
-                    helpText={helpText}
-                    id={popoverId}
-                    isSaving={otherVariableCostEditor.isSaving}
-                    label={popoverLabel}
-                    onCancel={otherVariableCostEditor.onCancel}
-                    onChangeDraft={otherVariableCostEditor.onChangeDraft}
-                    onSave={otherVariableCostEditor.onSave}
-                    prefix={prefix}
-                  />
-                ) : null
-              }
-              value={value}
-            />
-          );
-        })}
+                      <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                }
+                icon={icon}
+                key={field}
+                label={label}
+                negative
+                overlay={
+                  isEditing ? (
+                    <OtherVariableCostPopover
+                      draft={otherVariableCostEditor.draft}
+                      error={otherVariableCostEditor.error}
+                      helpText={helpText}
+                      id={popoverId}
+                      isSaving={otherVariableCostEditor.isSaving}
+                      label={popoverLabel}
+                      onCancel={otherVariableCostEditor.onCancel}
+                      onChangeDraft={otherVariableCostEditor.onChangeDraft}
+                      onSave={otherVariableCostEditor.onSave}
+                      prefix={prefix}
+                    />
+                  ) : null
+                }
+                value={value}
+              />
+            );
+          },
+        )}
       </div>
     </div>
   );
