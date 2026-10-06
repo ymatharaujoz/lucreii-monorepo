@@ -320,6 +320,35 @@ export function DashboardFinancialIndicators({
               variant="error"
             />
             <IndicatorCard
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Custo & Imposto"
+              subValue={
+                <>
+                  Custo:{" "}
+                  {formatExpenseMoney(displayedCost)}
+                  <br />
+                  Imposto:{" "}
+                  {formatExpenseMoney(displayedTax)}
+                </>
+              }
+              value={formatExpenseMoney(displayedCostAndTax)}
+              variant="error"
+            />
+            <IndicatorCard
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Tarifa de Venda"
+              subValue="Comissões de marketplace"
+              value={formatExpenseMoney(displayedMarketplaceCommission)}
+              variant="error"
+            />
+            <IndicatorCard
+              icon={<TrendingDown className="h-4 w-4" />}
+              label="Frete Total"
+              subValue="Frete dos pedidos"
+              value={formatExpenseMoney(displayedShipping)}
+              variant="error"
+            />
+            <IndicatorCard
               icon={<Percent className="h-4 w-4" />}
               label="Margem Contribuição"
               subValue={formatMoney(contributionProfit, {
@@ -348,35 +377,6 @@ export function DashboardFinancialIndicators({
                     ? "error"
                     : "warning"
               }
-            />
-            <IndicatorCard
-              icon={<DollarSign className="h-4 w-4" />}
-              label="Custo & Imposto"
-              subValue={
-                <>
-                  Custo:{" "}
-                  {formatExpenseMoney(displayedCost)}
-                  <br />
-                  Imposto:{" "}
-                  {formatExpenseMoney(displayedTax)}
-                </>
-              }
-              value={formatExpenseMoney(displayedCostAndTax)}
-              variant="error"
-            />
-            <IndicatorCard
-              icon={<DollarSign className="h-4 w-4" />}
-              label="Tarifa de Venda"
-              subValue="Comissões de marketplace"
-              value={formatExpenseMoney(displayedMarketplaceCommission)}
-              variant="error"
-            />
-            <IndicatorCard
-              icon={<TrendingDown className="h-4 w-4" />}
-              label="Frete Total"
-              subValue="Frete dos pedidos"
-              value={formatExpenseMoney(displayedShipping)}
-              variant="error"
             />
           </>
         ) : (

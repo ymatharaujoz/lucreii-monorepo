@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Badge, Card, EmptyState, cn } from "@lucreii/ui";
+import { CopyButton } from "@/components/ui-premium/copy-button";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { slideInUpVariants } from "@/lib/animations";
 import { ProductDetailsModal } from "./product-details-modal";
@@ -599,7 +600,10 @@ export function ProductTable({
           </div>
         </td>
         <td className="px-3 py-3 text-left">
-          <span className="text-xs font-mono text-muted-foreground">{row.sku || "\u2014"}</span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-xs font-mono text-muted-foreground">{row.sku || "\u2014"}</span>
+            {row.sku ? <CopyButton label="SKU" value={row.sku} /> : null}
+          </span>
         </td>
         <td className="px-2 py-3 text-right">
           <span className="text-sm text-foreground">{formatNumber(row.sales)}</span>

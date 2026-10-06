@@ -31,6 +31,7 @@ import {
   Modal,
   cn,
 } from "@lucreii/ui";
+import { CopyButton } from "@/components/ui-premium/copy-button";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { StatusBadge } from "@/components/ui-premium/status-badge";
 import { slideInUpVariants } from "@/lib/animations";
@@ -1773,8 +1774,14 @@ function OrdersHomeContent({
                       </td>
                       <td className="px-3 py-3 text-left">
                         <div className="flex flex-col gap-1">
-                          <span className="font-mono text-sm font-medium text-foreground">
-                            {row.displayOrderId}
+                          <span className="flex items-center gap-1.5">
+                            <span className="font-mono text-sm font-medium text-foreground">
+                              {row.displayOrderId}
+                            </span>
+                            <CopyButton
+                              label="ID da venda"
+                              value={row.displayOrderId}
+                            />
                           </span>
                           {(row.skus ?? []).length > 0 ? (
                             (row.skus ?? []).map((sku) => (
@@ -1854,6 +1861,10 @@ function OrdersHomeContent({
                 <h2 className="text-lg font-semibold text-foreground">
                   Venda #{detailQuery.data.order.displayOrderId}
                 </h2>
+                <CopyButton
+                  label="ID da venda"
+                  value={detailQuery.data.order.displayOrderId}
+                />
                 <StatusBadge
                   status={getOrderStatusTypeForRow(detailQuery.data.order)}
                   label={detailQuery.data.order.statusLabel}
@@ -2046,8 +2057,14 @@ function OrdersHomeContent({
                                         <p className="break-words text-sm font-medium text-foreground">
                                           {item.displayName}
                                         </p>
-                                        <p className="break-words text-[11px] text-muted-foreground">
+                                        <p className="flex items-center gap-1.5 break-words text-[11px] text-muted-foreground">
                                           {item.sku ?? "SKU não informado"}
+                                          {item.sku ? (
+                                            <CopyButton
+                                              label="SKU"
+                                              value={item.sku}
+                                            />
+                                          ) : null}
                                         </p>
                                       </div>
                                     </div>

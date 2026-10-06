@@ -181,10 +181,10 @@ describe("DashboardFinancialIndicators", () => {
     const indicatorIndexes = [
       "Faturamento",
       "Devoluções",
-      "Margem Contribuição",
       "Custo & Imposto",
       "Tarifa de Venda",
       "Frete Total",
+      "Margem Contribuição",
     ].map((label) => text.indexOf(label));
     expect(
       indicatorIndexes.every(
