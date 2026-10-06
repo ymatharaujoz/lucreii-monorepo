@@ -1787,9 +1787,12 @@ function OrdersHomeContent({
                             (row.skus ?? []).map((sku) => (
                               <span
                                 key={`${row.id}-${sku}`}
-                                className="font-mono text-[11px] text-muted-foreground"
+                                className="flex items-center gap-1.5"
                               >
-                                {sku}
+                                <span className="font-mono text-[11px] text-muted-foreground">
+                                  {sku}
+                                </span>
+                                <CopyButton label="SKU" value={sku} />
                               </span>
                             ))
                           ) : (
