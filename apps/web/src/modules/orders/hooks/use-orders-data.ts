@@ -6,6 +6,7 @@ import type {
   OrderDetails,
   OrderExportFilters,
   OrderListFilters,
+  OrderOtherVariableCostsBulkUpdateInput,
   OrderProductCostBulkUpdateInput,
   OrderProductCostBulkUpdateResult,
   OrdersListResponse,
@@ -168,6 +169,19 @@ export async function updateOrderProductCostBulk(
   return response.data;
 }
 
+export async function updateOrderOtherVariableCostsBulk(
+  values: OrderOtherVariableCostsBulkUpdateInput,
+): Promise<OrderProductCostBulkUpdateResult> {
+  const response = await apiClient.patch<{
+    data: OrderProductCostBulkUpdateResult;
+    error: null;
+  }>("/orders/composition/other-variable-costs/batch", {
+    body: values,
+  });
+
+  return response.data;
+}
+
 export function useOrdersList(filters: OrderListFilters = {}) {
   const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
 
@@ -234,6 +248,17 @@ export function useUpdateOrderProductCostBulk() {
 
   return useMutation({
     mutationFn: updateOrderProductCostBulk,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
+    },
+  });
+}
+
+export function useUpdateOrderOtherVariableCostsBulk() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: updateOrderOtherVariableCostsBulk,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
     },

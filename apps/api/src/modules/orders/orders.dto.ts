@@ -2,12 +2,15 @@ import {
   orderCompositionUpdateSchema,
   orderExportQuerySchema,
   orderListFiltersSchema,
+  orderOtherVariableCostsBulkUpdateSchema,
   orderProductCostBulkUpdateSchema,
 } from "@lucreii/validation";
 import type {
   OrderCanonicalStatus,
   OrderCompositionUpdateInput,
   OrderExportFilters,
+  OrderOtherVariableCostsBulkUpdateInput,
+  OrderOtherVariableCostsPeriod,
   OrderProductCostBulkUpdateInput,
 } from "@lucreii/types";
 
@@ -56,6 +59,17 @@ export class UpdateOrderProductCostBulkDto
 
   orderIds!: string[];
   productCostAmount!: string;
+}
+
+export class UpdateOrderOtherVariableCostsBulkDto
+  implements OrderOtherVariableCostsBulkUpdateInput
+{
+  static schema = orderOtherVariableCostsBulkUpdateSchema;
+
+  orderIds?: string[];
+  period?: OrderOtherVariableCostsPeriod;
+  otherVariableCostPercent?: string;
+  otherVariableCostAmount?: string;
 }
 
 export class OrderExportQueryDto implements OrderExportFilters {

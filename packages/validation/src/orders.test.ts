@@ -3,6 +3,7 @@ import {
   orderDetailsApiResponseSchema,
   orderCompositionUpdateSchema,
   orderExportQuerySchema,
+  orderOtherVariableCostsBulkUpdateSchema,
   orderProductCostBulkUpdateSchema,
   ordersListSummarySchema,
   ordersListApiResponseSchema,
@@ -217,6 +218,47 @@ describe("orders validation schemas", () => {
       orderProductCostBulkUpdateSchema.parse({
         orderIds: [],
         productCostAmount: "-1.00",
+      }),
+    ).toThrow();
+  });
+
+  it("validates other variable costs bulk updates by selection or period", () => {
+    expect(
+      orderOtherVariableCostsBulkUpdateSchema.parse({
+        orderIds: ["order_1"],
+        otherVariableCostPercent: "2.50",
+      }),
+    ).toEqual({ orderIds: ["order_1"], otherVariableCostPercent: "2.50" });
+    expect(
+      orderOtherVariableCostsBulkUpdateSchema.parse({
+        otherVariableCostAmount: "3.00",
+        period: { orderedFrom: "2026-10-01", orderedTo: "2026-10-31" },
+      }),
+    ).toEqual({
+      otherVariableCostAmount: "3.00",
+      period: { orderedFrom: "2026-10-01", orderedTo: "2026-10-31" },
+    });
+
+    const period = { orderedFrom: "2026-10-01", orderedTo: "2026-10-31" };
+    expect(() =>
+      orderOtherVariableCostsBulkUpdateSchema.parse({
+        otherVariableCostPercent: "2.50",
+      }),
+    ).toThrow();
+    expect(() =>
+      orderOtherVariableCostsBulkUpdateSchema.parse({
+        orderIds: ["order_1"],
+        otherVariableCostPercent: "2.50",
+        period,
+      }),
+    ).toThrow();
+    expect(() =>
+      orderOtherVariableCostsBulkUpdateSchema.parse({ orderIds: ["order_1"] }),
+    ).toThrow();
+    expect(() =>
+      orderOtherVariableCostsBulkUpdateSchema.parse({
+        otherVariableCostPercent: "100.01",
+        period,
       }),
     ).toThrow();
   });

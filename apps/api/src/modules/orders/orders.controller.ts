@@ -21,6 +21,7 @@ import {
   OrderExportQueryDto,
   OrderListFiltersDto,
   UpdateOrderCompositionDto,
+  UpdateOrderOtherVariableCostsBulkDto,
   UpdateOrderProductCostBulkDto,
 } from "./orders.dto";
 import { OrdersService } from "./orders.service";
@@ -94,6 +95,24 @@ export class OrdersController {
   ) {
     return {
       data: await this.ordersService.updateOrderProductCostBulk(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        body,
+      ),
+      error: null,
+    };
+  }
+
+  @Patch("composition/other-variable-costs/batch")
+  async updateOrderOtherVariableCostsBulk(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Body() body: UpdateOrderOtherVariableCostsBulkDto,
+  ) {
+    return {
+      data: await this.ordersService.updateOrderOtherVariableCostsBulk(
         {
           organizationId: authContext.organization!.id,
           selectedCompanyId: authContext.selectedCompanyId ?? null,

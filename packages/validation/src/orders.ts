@@ -238,6 +238,25 @@ export const orderDetailsSchema = z.object({
   tags: z.array(orderImportTagSchema),
 });
 
+const otherVariableCostPercentField = z
+  .string()
+  .trim()
+  .regex(
+    nonNegativeMoneyPattern,
+    "Other variable cost percent must be zero or a positive number with up to 2 places.",
+  )
+  .refine(
+    (value) => Number(value) <= 100,
+    "Other variable cost percent must be at most 100.",
+  );
+const otherVariableCostAmountField = z
+  .string()
+  .trim()
+  .regex(
+    nonNegativeMoneyPattern,
+    "Other variable cost amount must be zero or a positive amount with up to 2 places.",
+  );
+
 export const orderCompositionUpdateSchema = z.object({
   refundBonusAmount: decimalField("Refund bonus amount").optional(),
   productCostAmount: z
@@ -255,26 +274,8 @@ export const orderCompositionUpdateSchema = z.object({
     "Shipping or fixed fee amount",
   ).optional(),
   packagingCostAmount: decimalField("Packaging cost amount").optional(),
-  otherVariableCostPercent: z
-    .string()
-    .trim()
-    .regex(
-      nonNegativeMoneyPattern,
-      "Other variable cost percent must be zero or a positive number with up to 2 places.",
-    )
-    .refine(
-      (value) => Number(value) <= 100,
-      "Other variable cost percent must be at most 100.",
-    )
-    .optional(),
-  otherVariableCostAmount: z
-    .string()
-    .trim()
-    .regex(
-      nonNegativeMoneyPattern,
-      "Other variable cost amount must be zero or a positive amount with up to 2 places.",
-    )
-    .optional(),
+  otherVariableCostPercent: otherVariableCostPercentField.optional(),
+  otherVariableCostAmount: otherVariableCostAmountField.optional(),
 }).refine(
   (value) => Object.values(value).some((entry) => entry !== undefined),
   "At least one composition field is required.",
@@ -297,6 +298,40 @@ export const orderProductCostBulkUpdateSchema = z.object({
     ),
 });
 
+export const orderOtherVariableCostsBulkUpdateSchema = z
+  .object({
+    orderIds: z
+      .array(z.string().trim().min(1))
+      .min(1, "At least one order is required.")
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        "Order ids must be unique.",
+      )
+      .optional(),
+    period: z
+      .object({
+        orderedFrom: isoDateField("Ordered from"),
+        orderedTo: isoDateField("Ordered to"),
+        saleId: z.string().trim().min(1).optional(),
+        sku: z.string().trim().min(1).optional(),
+        provider: integrationProviderSchema.optional(),
+        status: orderCanonicalStatusSchema.optional(),
+      })
+      .optional(),
+    otherVariableCostPercent: otherVariableCostPercentField.optional(),
+    otherVariableCostAmount: otherVariableCostAmountField.optional(),
+  })
+  .refine(
+    (value) => (value.orderIds === undefined) !== (value.period === undefined),
+    "Provide either selected orders or a period.",
+  )
+  .refine(
+    (value) =>
+      value.otherVariableCostPercent !== undefined ||
+      value.otherVariableCostAmount !== undefined,
+    "At least one other variable cost field is required.",
+  );
+
 export const ordersListApiResponseSchema = createApiSuccessResponseSchema(
   ordersListResponseSchema,
 );
@@ -310,4 +345,7 @@ export type OrderCompositionUpdateInput = z.infer<
 >;
 export type OrderProductCostBulkUpdateInput = z.infer<
   typeof orderProductCostBulkUpdateSchema
+>;
+export type OrderOtherVariableCostsBulkUpdateInput = z.infer<
+  typeof orderOtherVariableCostsBulkUpdateSchema
 >;

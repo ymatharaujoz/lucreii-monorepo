@@ -15,6 +15,7 @@ const useOrderDetailsMock = vi.hoisted(() => vi.fn());
 const useSyncOrderMock = vi.hoisted(() => vi.fn());
 const useUpdateOrderCompositionMock = vi.hoisted(() => vi.fn());
 const useUpdateOrderProductCostBulkMock = vi.hoisted(() => vi.fn());
+const useUpdateOrderOtherVariableCostsBulkMock = vi.hoisted(() => vi.fn());
 const downloadOrdersExportMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../hooks/use-orders-data", () => ({
@@ -23,6 +24,8 @@ vi.mock("../hooks/use-orders-data", () => ({
   useOrdersList: useOrdersListMock,
   useSyncOrder: useSyncOrderMock,
   useUpdateOrderComposition: useUpdateOrderCompositionMock,
+  useUpdateOrderOtherVariableCostsBulk:
+    useUpdateOrderOtherVariableCostsBulkMock,
   useUpdateOrderProductCostBulk: useUpdateOrderProductCostBulkMock,
 }));
 
@@ -239,6 +242,11 @@ describe("OrdersHome", () => {
     });
     useUpdateOrderProductCostBulkMock.mockReset();
     useUpdateOrderProductCostBulkMock.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn().mockResolvedValue({ updatedCount: 1 }),
+    });
+    useUpdateOrderOtherVariableCostsBulkMock.mockReset();
+    useUpdateOrderOtherVariableCostsBulkMock.mockReturnValue({
       isPending: false,
       mutateAsync: vi.fn().mockResolvedValue({ updatedCount: 1 }),
     });

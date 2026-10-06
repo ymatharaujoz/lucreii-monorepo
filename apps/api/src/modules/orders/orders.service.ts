@@ -41,6 +41,7 @@ import type {
   IntegrationProviderSlug,
   OrdersMarginAudit,
   OrderListItem,
+  OrderOtherVariableCostsBulkUpdateInput,
   OrderProductCostBulkUpdateInput,
   OrderProductCostBulkUpdateResult,
   OrdersListSummary,
@@ -3140,6 +3141,101 @@ export class OrdersService {
         input: { productCostAmount: input.productCostAmount },
         target,
       })),
+    );
+
+    return { updatedCount: targets.length };
+  }
+
+  async updateOrderOtherVariableCostsBulk(
+    authContext: TenantContext,
+    input: OrderOtherVariableCostsBulkUpdateInput,
+  ): Promise<OrderProductCostBulkUpdateResult> {
+    const companyId = this.requireSelectedCompanyId(authContext);
+    const values: OrderCompositionUpdateInput = {
+      ...(input.otherVariableCostPercent !== undefined
+        ? { otherVariableCostPercent: input.otherVariableCostPercent }
+        : {}),
+      ...(input.otherVariableCostAmount !== undefined
+        ? { otherVariableCostAmount: input.otherVariableCostAmount }
+        : {}),
+    };
+    if (Object.keys(values).length === 0) {
+      throw new BadRequestException(
+        "At least one other variable cost field is required.",
+      );
+    }
+
+    if (
+      values.otherVariableCostPercent !== undefined &&
+      (!hasValidProductCostOverride(values.otherVariableCostPercent) ||
+        Number(values.otherVariableCostPercent) > 100)
+    ) {
+      throw new BadRequestException(
+        "Other variable cost percent must be between 0 and 100 with up to two decimals.",
+      );
+    }
+
+    if (
+      values.otherVariableCostAmount !== undefined &&
+      !hasValidProductCostOverride(values.otherVariableCostAmount)
+    ) {
+      throw new BadRequestException(
+        "Other variable cost amount must be zero or a positive amount with up to two decimals.",
+      );
+    }
+
+    const targets: CompositionUpdateTarget[] = [];
+
+    if (input.period) {
+      const logicalOrders = await this.readLogicalOrdersForExport(
+        authContext,
+        input.period,
+      );
+      for (const logicalOrder of logicalOrders) {
+        targets.push({
+          grouped:
+            readMercadoLivreGroupedDisplayOrderId(logicalOrder.order.id) !==
+            null,
+          rows: logicalOrder.rows,
+        });
+      }
+    } else {
+      const orderIds = input.orderIds ?? [];
+      if (orderIds.length === 0) {
+        throw new BadRequestException("At least one order is required.");
+      }
+
+      if (new Set(orderIds).size !== orderIds.length) {
+        throw new BadRequestException("Order ids must be unique.");
+      }
+
+      const updatedRowIds = new Set<string>();
+      for (const orderRecordId of orderIds) {
+        const target = await this.readCompositionUpdateTarget(
+          authContext,
+          companyId,
+          orderRecordId,
+        );
+
+        for (const row of target.rows) {
+          if (updatedRowIds.has(row.id)) {
+            throw new BadRequestException("Selected orders cannot overlap.");
+          }
+          updatedRowIds.add(row.id);
+        }
+
+        targets.push(target);
+      }
+    }
+
+    if (targets.length === 0) {
+      return { updatedCount: 0 };
+    }
+
+    await this.persistCompositionUpdates(
+      authContext,
+      companyId,
+      targets.map((target) => ({ input: values, target })),
     );
 
     return { updatedCount: targets.length };

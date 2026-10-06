@@ -3311,6 +3311,101 @@ describe("OrdersService", () => {
     );
   });
 
+  it("updates other variable costs for selected orders in one transaction", async () => {
+    const setMock = vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    });
+    const transactionMock = vi.fn(async (callback) =>
+      callback({
+        update: vi.fn().mockReturnValue({ set: setMock }),
+      }),
+    );
+    const db = {
+      query: {
+        externalOrders: {
+          findFirst: vi
+            .fn()
+            .mockResolvedValueOnce({
+              id: "order_row_1",
+              items: [{ quantity: 1 }],
+              metadata: {
+                compositionOverrides: { productCostAmount: "5.00" },
+              },
+              provider: "shopee",
+            })
+            .mockResolvedValueOnce({
+              id: "order_row_2",
+              items: [{ quantity: 2 }],
+              metadata: {},
+              provider: "shein",
+            }),
+        },
+      },
+      transaction: transactionMock,
+    };
+    const service = new OrdersService(db as never);
+
+    await expect(
+      service.updateOrderOtherVariableCostsBulk(
+        {
+          organizationId: "org_123",
+          selectedCompanyId: "company_123",
+          userId: "user_123",
+        },
+        {
+          orderIds: ["order_row_1", "order_row_2"],
+          otherVariableCostAmount: "3.00",
+          otherVariableCostPercent: "2.50",
+        },
+      ),
+    ).resolves.toEqual({ updatedCount: 2 });
+
+    expect(transactionMock).toHaveBeenCalledTimes(1);
+    expect(setMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        metadata: {
+          compositionOverrides: {
+            otherVariableCostAmount: "3.00",
+            otherVariableCostPercent: "2.50",
+            productCostAmount: "5.00",
+          },
+        },
+      }),
+    );
+    expect(setMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        metadata: {
+          compositionOverrides: {
+            otherVariableCostAmount: "3.00",
+            otherVariableCostPercent: "2.50",
+          },
+        },
+      }),
+    );
+  });
+
+  it("rejects other variable costs bulk updates with an invalid percent", async () => {
+    const transactionMock = vi.fn();
+    const service = new OrdersService({
+      query: { externalOrders: { findFirst: vi.fn() } },
+      transaction: transactionMock,
+    } as never);
+
+    await expect(
+      service.updateOrderOtherVariableCostsBulk(
+        {
+          organizationId: "org_123",
+          selectedCompanyId: "company_123",
+          userId: "user_123",
+        },
+        { orderIds: ["order_row_1"], otherVariableCostPercent: "100.50" },
+      ),
+    ).rejects.toThrow("between 0 and 100");
+    expect(transactionMock).not.toHaveBeenCalled();
+  });
+
   it("does not start a transaction when a selected order is unavailable", async () => {
     const transactionMock = vi.fn();
     const db = {

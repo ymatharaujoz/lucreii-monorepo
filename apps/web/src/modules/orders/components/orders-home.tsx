@@ -55,6 +55,7 @@ import {
   useOrdersList,
   useSyncOrder,
   useUpdateOrderComposition,
+  useUpdateOrderOtherVariableCostsBulk,
   useUpdateOrderProductCostBulk,
 } from "../hooks/use-orders-data";
 
@@ -129,6 +130,95 @@ function isValidProductCostInput(value: string) {
 
 function filterProductCostInput(raw: string) {
   return raw.replace(/[^\d.,]/g, "");
+}
+
+type OtherCostsBulkScope = "selection" | "period";
+
+function formatIsoDateBr(value: string) {
+  const [year, month, day] = value.split("-");
+  return year && month && day ? `${day}/${month}/${year}` : value;
+}
+
+interface BulkCostFieldProps {
+  disabled: boolean;
+  help: string;
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  symbol: string;
+  symbolPosition: "prefix" | "suffix";
+  value: string;
+}
+
+function BulkCostField({
+  disabled,
+  help,
+  id,
+  label,
+  onChange,
+  placeholder,
+  symbol,
+  symbolPosition,
+  value,
+}: BulkCostFieldProps) {
+  const symbolNode = (
+    <span
+      className={cn(
+        "flex w-12 shrink-0 items-center justify-center bg-foreground/[0.025] text-sm font-semibold text-muted-foreground",
+        symbolPosition === "prefix"
+          ? "border-r border-border/80"
+          : "border-l border-border/80",
+      )}
+    >
+      {symbol}
+    </span>
+  );
+
+  return (
+    <div>
+      <label
+        className="text-[11px] font-bold uppercase tracking-[0.1em] text-foreground"
+        htmlFor={id}
+      >
+        {label}
+      </label>
+      <div className="mt-2 flex h-12 overflow-hidden rounded-[var(--radius-md)] border border-border-strong bg-surface-elevated shadow-[var(--shadow-xs)] transition-[border-color,box-shadow] duration-[var(--transition-fast)] focus-within:border-accent/60 focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
+        {symbolPosition === "prefix" ? symbolNode : null}
+        <input
+          aria-describedby={`${id}-help`}
+          autoComplete="off"
+          className="min-w-0 flex-1 bg-transparent px-4 text-lg font-semibold tracking-tight text-foreground outline-none placeholder:text-muted-foreground/50 disabled:cursor-not-allowed"
+          disabled={disabled}
+          id={id}
+          inputMode="decimal"
+          onChange={(event) =>
+            onChange(filterProductCostInput(event.target.value))
+          }
+          onKeyDown={(event) => {
+            if (
+              event.key.length === 1 &&
+              !/[\d.,]/.test(event.key) &&
+              !event.metaKey &&
+              !event.ctrlKey
+            ) {
+              event.preventDefault();
+            }
+          }}
+          placeholder={placeholder}
+          type="text"
+          value={value}
+        />
+        {symbolPosition === "suffix" ? symbolNode : null}
+      </div>
+      <p
+        className="mt-1.5 text-[11px] leading-snug text-muted-foreground"
+        id={`${id}-help`}
+      >
+        {help}
+      </p>
+    </div>
+  );
 }
 
 function formatTaxRate(value: string | null | undefined) {
@@ -1228,6 +1318,13 @@ function OrdersHomeContent({
   const [bulkProductCostError, setBulkProductCostError] = useState<
     string | null
   >(null);
+  const [otherCostsBulkScope, setOtherCostsBulkScope] =
+    useState<OtherCostsBulkScope | null>(null);
+  const [bulkPercentDraft, setBulkPercentDraft] = useState("");
+  const [bulkAmountDraft, setBulkAmountDraft] = useState("");
+  const [bulkOtherCostsError, setBulkOtherCostsError] = useState<
+    string | null
+  >(null);
 
   const listQuery = useOrdersList({
     includeSummary: false,
@@ -1251,6 +1348,8 @@ function OrdersHomeContent({
   const syncOrderMutation = useSyncOrder();
   const updateOrderCompositionMutation = useUpdateOrderComposition();
   const updateOrderProductCostBulkMutation = useUpdateOrderProductCostBulk();
+  const updateOrderOtherVariableCostsBulkMutation =
+    useUpdateOrderOtherVariableCostsBulk();
 
   const handleEditProductCost = () => {
     if (!detailQuery.data) {
@@ -1437,6 +1536,89 @@ function OrdersHomeContent({
     }
   };
 
+  const handleOpenOtherCostsBulkModal = (scope: OtherCostsBulkScope) => {
+    setBulkPercentDraft("");
+    setBulkAmountDraft("");
+    setBulkOtherCostsError(null);
+    setOtherCostsBulkScope(scope);
+  };
+
+  const handleCloseOtherCostsBulkModal = () => {
+    if (updateOrderOtherVariableCostsBulkMutation.isPending) {
+      return;
+    }
+
+    setOtherCostsBulkScope(null);
+    setBulkOtherCostsError(null);
+  };
+
+  const handleSaveOtherCostsBulk = async () => {
+    if (!otherCostsBulkScope) {
+      return;
+    }
+
+    const percentValue = parseCurrencyValue(bulkPercentDraft.trim());
+    const amountValue = parseCurrencyValue(bulkAmountDraft.trim());
+    const hasPercent = bulkPercentDraft.trim().length > 0;
+    const hasAmount = bulkAmountDraft.trim().length > 0;
+
+    if (!hasPercent && !hasAmount) {
+      setBulkOtherCostsError("Preencha ao menos um dos campos para aplicar.");
+      return;
+    }
+
+    if (
+      hasPercent &&
+      (!isValidProductCostInput(percentValue) || Number(percentValue) > 100)
+    ) {
+      setBulkOtherCostsError(
+        "Informe um percentual entre 0 e 100 com até duas casas decimais.",
+      );
+      return;
+    }
+
+    if (hasAmount && !isValidProductCostInput(amountValue)) {
+      setBulkOtherCostsError(
+        "Informe um valor zero ou positivo com até duas casas decimais.",
+      );
+      return;
+    }
+
+    setBulkOtherCostsError(null);
+    try {
+      await updateOrderOtherVariableCostsBulkMutation.mutateAsync({
+        ...(otherCostsBulkScope === "selection"
+          ? { orderIds: selectedOrderIds }
+          : {
+              period: {
+                orderedFrom: dateRange.dateFrom,
+                orderedTo: dateRange.dateTo,
+                ...(provider ? { provider } : {}),
+                ...(saleId ? { saleId } : {}),
+                ...(sku ? { sku } : {}),
+                ...(selectedStatus ? { status: selectedStatus } : {}),
+              },
+            }),
+        ...(hasPercent
+          ? { otherVariableCostPercent: Number(percentValue).toFixed(2) }
+          : {}),
+        ...(hasAmount
+          ? { otherVariableCostAmount: Number(amountValue).toFixed(2) }
+          : {}),
+      });
+      if (otherCostsBulkScope === "selection") {
+        setSelectedOrderIds([]);
+      }
+      setOtherCostsBulkScope(null);
+      setBulkPercentDraft("");
+      setBulkAmountDraft("");
+    } catch {
+      setBulkOtherCostsError(
+        "Não foi possível salvar os custos. Tente novamente sem fechar a edição.",
+      );
+    }
+  };
+
   const rows = useMemo(
     () => listQuery.data?.items ?? [],
     [listQuery.data?.items],
@@ -1451,6 +1633,11 @@ function OrdersHomeContent({
   const allVisibleSelected =
     visibleOrderIds.length > 0 &&
     selectedVisibleCount === visibleOrderIds.length;
+
+  const otherCostsBulkTargetCount =
+    otherCostsBulkScope === "period"
+      ? (listQuery.data?.totalItems ?? rows.length)
+      : selectedOrderIds.length;
 
   const hasActiveFilters =
     saleId.trim().length > 0 ||
@@ -1901,6 +2088,19 @@ function OrdersHomeContent({
 
                   <Button
                     className="h-8 gap-1.5 rounded-[var(--radius-sm)] border border-accent/30 bg-background px-3 text-xs font-semibold text-accent hover:bg-accent/10"
+                    disabled={
+                      updateOrderOtherVariableCostsBulkMutation.isPending
+                    }
+                    onClick={() => handleOpenOtherCostsBulkModal("selection")}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    <Percent className="h-3.5 w-3.5" />
+                    Editar Custos Variáveis
+                  </Button>
+
+                  <Button
+                    className="h-8 gap-1.5 rounded-[var(--radius-sm)] border border-accent/30 bg-background px-3 text-xs font-semibold text-accent hover:bg-accent/10"
                     disabled={updateOrderProductCostBulkMutation.isPending}
                     onClick={handleOpenBulkProductCostModal}
                     size="sm"
@@ -1935,6 +2135,19 @@ function OrdersHomeContent({
               {rows.length === 1 ? "pedido exibido" : "pedidos exibidos"} na
               página atual
             </span>
+            <Button
+              className="h-8 gap-1.5 rounded-[var(--radius-sm)] border border-border-strong bg-background px-3 text-xs font-semibold text-foreground hover:border-accent/40 hover:bg-accent/5 hover:text-accent"
+              disabled={
+                rows.length === 0 ||
+                updateOrderOtherVariableCostsBulkMutation.isPending
+              }
+              onClick={() => handleOpenOtherCostsBulkModal("period")}
+              size="sm"
+              variant="ghost"
+            >
+              <Percent className="h-3.5 w-3.5" />
+              Editar Custos Variáveis
+            </Button>
           </div>
 
           <div className="max-h-[600px] min-h-0 flex-1 overflow-auto">
@@ -2519,6 +2732,115 @@ function OrdersHomeContent({
                 className="shadow-[0_5px_14px_rgba(14,122,111,0.18)] active:translate-y-px"
                 disabled={updateOrderProductCostBulkMutation.isPending}
                 loading={updateOrderProductCostBulkMutation.isPending}
+                size="sm"
+                type="submit"
+              >
+                Salvar alterações
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        className="!max-w-lg"
+        onClose={handleCloseOtherCostsBulkModal}
+        open={otherCostsBulkScope !== null}
+        title="Editar Custos Variáveis"
+      >
+        <form
+          className="space-y-0"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void handleSaveOtherCostsBulk();
+          }}
+        >
+          <div className="flex items-start justify-between gap-6 border-b border-border/70 pb-5">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-accent">
+                {otherCostsBulkScope === "period"
+                  ? "Alteração por período"
+                  : "Alteração em lote"}
+              </p>
+              <p className="mt-2 text-sm font-medium leading-snug text-foreground">
+                {otherCostsBulkScope === "period"
+                  ? `Aplicado a todos os pedidos de ${formatIsoDateBr(dateRange.dateFrom)} a ${formatIsoDateBr(dateRange.dateTo)}${hasActiveFilters || provider ? " que respeitam os filtros ativos" : ""}.`
+                  : "Mesmos valores serão aplicados a cada pedido selecionado."}
+              </p>
+            </div>
+            <div className="shrink-0 border-l border-border/70 pl-4 text-right">
+              <p className="font-mono text-xl font-semibold leading-none tabular-nums text-foreground">
+                {otherCostsBulkTargetCount}
+              </p>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                {otherCostsBulkTargetCount === 1 ? "pedido" : "pedidos"}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-5 py-6">
+            <BulkCostField
+              disabled={updateOrderOtherVariableCostsBulkMutation.isPending}
+              help="Percentual sobre o faturamento de cada pedido."
+              id="bulk-other-cost-percent-input"
+              label="Outros impostos variáveis (%)"
+              onChange={(value) => {
+                setBulkPercentDraft(value);
+                setBulkOtherCostsError(null);
+              }}
+              placeholder="0,00"
+              symbol="%"
+              symbolPosition="suffix"
+              value={bulkPercentDraft}
+            />
+            <BulkCostField
+              disabled={updateOrderOtherVariableCostsBulkMutation.isPending}
+              help="Valor fixo por pedido; em pedidos agrupados é rateado entre as vendas."
+              id="bulk-other-cost-amount-input"
+              label="Outros impostos variáveis (R$)"
+              onChange={(value) => {
+                setBulkAmountDraft(value);
+                setBulkOtherCostsError(null);
+              }}
+              placeholder="0,00"
+              symbol="R$"
+              symbolPosition="prefix"
+              value={bulkAmountDraft}
+            />
+            <p className="rounded-[var(--radius-md)] border border-border/70 bg-foreground/[0.025] px-3 py-2 text-[11px] leading-snug text-muted-foreground">
+              Deixe um campo vazio para manter o valor atual. Lucro e margem
+              serão recalculados automaticamente.
+            </p>
+            {bulkOtherCostsError ? (
+              <p className="text-xs text-red-600" role="alert">
+                {bulkOtherCostsError}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col-reverse gap-4 border-t border-border/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-accent">
+                Somente pedidos
+              </p>
+              <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                Valores existentes nos pedidos serão substituídos.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                disabled={updateOrderOtherVariableCostsBulkMutation.isPending}
+                onClick={handleCloseOtherCostsBulkModal}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="shadow-[0_5px_14px_rgba(14,122,111,0.18)] active:translate-y-px"
+                disabled={updateOrderOtherVariableCostsBulkMutation.isPending}
+                loading={updateOrderOtherVariableCostsBulkMutation.isPending}
                 size="sm"
                 type="submit"
               >

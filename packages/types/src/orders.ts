@@ -201,3 +201,20 @@ export type OrderProductCostBulkUpdateInput = {
 export type OrderProductCostBulkUpdateResult = {
   updatedCount: number;
 };
+
+export type OrderOtherVariableCostsPeriod = {
+  orderedFrom: string;
+  orderedTo: string;
+  saleId?: string;
+  sku?: string;
+  provider?: IntegrationProviderSlug;
+  status?: OrderCanonicalStatus;
+};
+
+/** Targets either explicit `orderIds` or every order inside `period`. */
+export type OrderOtherVariableCostsBulkUpdateInput = {
+  orderIds?: string[];
+  period?: OrderOtherVariableCostsPeriod;
+  otherVariableCostPercent?: string;
+  otherVariableCostAmount?: string;
+};
