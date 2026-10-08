@@ -24,6 +24,46 @@ function createInsertMock(queue: unknown[]) {
   }));
 }
 
+function createMercadoLivreConnection(
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    accessToken: "token",
+    companyId: "company_123",
+    createdAt: new Date("2026-05-01T11:00:00.000Z"),
+    externalAccountId: "seller_123",
+    id: "conn_123",
+    lastSyncedAt: null,
+    metadata: {},
+    organizationId: "org_123",
+    provider: "mercadolivre",
+    refreshToken: "refresh",
+    status: "connected",
+    tokenExpiresAt: new Date("2030-05-03T11:00:00.000Z"),
+    updatedAt: new Date("2026-05-01T11:00:00.000Z"),
+    ...overrides,
+  } as never;
+}
+
+function createSyncRun(overrides: Record<string, unknown> = {}) {
+  return {
+    companyId: "company_123",
+    createdAt: new Date("2026-05-01T12:00:00.000Z"),
+    errorSummary: null,
+    finishedAt: null,
+    id: "sync_processing",
+    marketplaceConnectionId: "conn_123",
+    metadata: {},
+    organizationId: "org_123",
+    provider: "mercadolivre",
+    startedAt: new Date("2026-05-01T12:00:00.000Z"),
+    status: "processing",
+    updatedAt: new Date("2026-05-01T12:00:00.000Z"),
+    windowKey: null,
+    ...overrides,
+  };
+}
+
 function createService(envOverrides: Record<string, unknown> = {}) {
   const db = {
     delete: vi.fn().mockReturnValue({
@@ -1002,6 +1042,7 @@ describe("SyncService", () => {
   });
 
   it("marks a pending automatic rerun when a Mercado Livre sync is already processing", async () => {
+    vi.setSystemTime(new Date("2026-05-01T12:10:00.000Z"));
     const { db, service } = createService();
 
     db.query.marketplaceConnections.findFirst
@@ -1070,6 +1111,153 @@ describe("SyncService", () => {
     );
 
     expect(db.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("expires a stale processing run instead of treating it as active", async () => {
+    vi.setSystemTime(new Date("2026-05-01T13:00:00.000Z"));
+    const { db, service } = createService();
+    const setMock = vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    });
+
+    db.query.marketplaceConnections.findFirst.mockResolvedValue(
+      createMercadoLivreConnection(),
+    );
+    db.query.syncRuns.findFirst
+      .mockResolvedValueOnce(
+        createSyncRun({
+          id: "sync_stuck",
+          startedAt: new Date("2026-05-01T12:00:00.000Z"),
+          status: "processing",
+        }),
+      )
+      .mockResolvedValueOnce(null);
+    db.update.mockReturnValue({ set: setMock });
+
+    const status = await service.getStatus(
+      "org_123",
+      "company_123",
+      "mercadolivre",
+    );
+
+    expect(status.activeRun).toBeNull();
+    expect(status.availability.reason).toBe("available");
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
+
+  it("keeps a recent processing run active", async () => {
+    vi.setSystemTime(new Date("2026-05-01T12:10:00.000Z"));
+    const { db, service } = createService();
+
+    db.query.marketplaceConnections.findFirst.mockResolvedValue(
+      createMercadoLivreConnection(),
+    );
+    db.query.syncRuns.findFirst
+      .mockResolvedValueOnce(
+        createSyncRun({
+          startedAt: new Date("2026-05-01T12:01:00.000Z"),
+          status: "processing",
+        }),
+      )
+      .mockResolvedValueOnce(null);
+
+    const status = await service.getStatus(
+      "org_123",
+      "company_123",
+      "mercadolivre",
+    );
+
+    expect(status.availability.reason).toBe("sync_in_progress");
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it("runs the queued automatic rerun as a full incremental sweep", async () => {
+    const { db, service } = createService();
+    const executeSync = vi
+      .spyOn(service as never as { executeSync: () => Promise<unknown> }, "executeSync")
+      .mockResolvedValue({} as never);
+
+    db.query.marketplaceConnections.findFirst.mockResolvedValue(
+      createMercadoLivreConnection({
+        metadata: {
+          automaticRerunPending: true,
+          lastAutomaticNotification: {
+            resource: "/orders/999",
+            topic: "orders_v2",
+          },
+        },
+      }),
+    );
+    db.query.syncRuns.findFirst.mockResolvedValue(null);
+    db.update.mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+
+    await (
+      service as never as {
+        flushAutomaticRerunIfNeeded: (...args: string[]) => Promise<void>;
+      }
+    ).flushAutomaticRerunIfNeeded(
+      "conn_123",
+      "company_123",
+      "org_123",
+      "mercadolivre",
+    );
+
+    expect(executeSync).toHaveBeenCalledWith(
+      expect.objectContaining({ notification: null, triggerOrigin: "automatic" }),
+    );
+  });
+
+  it("reconciles a Mercado Livre connection with an incremental sweep", async () => {
+    const { db, service } = createService();
+    const executeSync = vi
+      .spyOn(service as never as { executeSync: () => Promise<unknown> }, "executeSync")
+      .mockResolvedValue({} as never);
+    db.query.syncRuns.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.reconcileMercadoLivreConnection(createMercadoLivreConnection()),
+    ).resolves.toBe(true);
+    expect(executeSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notification: null,
+        triggerMetadata: { reconciliation: true },
+      }),
+    );
+  });
+
+  it("skips reconciliation while a sync is running or the token needs reconnect", async () => {
+    vi.setSystemTime(new Date("2026-05-01T12:10:00.000Z"));
+    const { db, mercadoLivreTokenRefreshService, service } = createService();
+    const executeSync = vi
+      .spyOn(service as never as { executeSync: () => Promise<unknown> }, "executeSync")
+      .mockResolvedValue({} as never);
+    db.query.syncRuns.findFirst.mockResolvedValueOnce(
+      createSyncRun({
+        startedAt: new Date("2026-05-01T12:05:00.000Z"),
+        status: "processing",
+      }),
+    );
+
+    await expect(
+      service.reconcileMercadoLivreConnection(createMercadoLivreConnection()),
+    ).resolves.toBe(false);
+
+    mercadoLivreTokenRefreshService.refreshIfNeeded.mockResolvedValueOnce({
+      connection: createMercadoLivreConnection(),
+      needsReconnect: true,
+      refreshed: false,
+      wasExpired: true,
+    });
+    await expect(
+      service.reconcileMercadoLivreConnection(createMercadoLivreConnection()),
+    ).resolves.toBe(false);
+    expect(executeSync).not.toHaveBeenCalled();
   });
 
   it("links variant order items to matching external products during persistence", async () => {

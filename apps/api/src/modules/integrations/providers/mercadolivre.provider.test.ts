@@ -4108,6 +4108,83 @@ describe("MercadoLivreProvider", () => {
     expect(result.cursor).toBeNull();
   });
 
+  it("searches incremental sync with an overlap window and advances cursor by date_created", async () => {
+    const provider = createProvider();
+    const buildOrder = (id: number, dateCreated: string, dateClosed: string) => ({
+      currency_id: "BRL",
+      date_closed: dateClosed,
+      date_created: dateCreated,
+      id,
+      order_items: [
+        {
+          item: { id: `MLB${id}`, seller_sku: `SKU-${id}`, title: `Produto ${id}` },
+          quantity: 1,
+          sale_fee: 10,
+          unit_price: 100,
+        },
+      ],
+      payments: [{ fee_amount: 3, id: 7654321, shipping_cost: 5 }],
+      total_amount: 100,
+    });
+    const fetchMock = vi.fn().mockImplementation(async (input) => {
+      const url = String(input);
+
+      if (url.includes("/orders/search")) {
+        return createJsonResponse({
+          paging: { limit: 50, offset: 0, total: 2 },
+          results: [
+            // Closed later than the newer order, but created earlier.
+            buildOrder(1, "2026-10-06T09:00:00.000-03:00", "2026-10-07T23:00:00.000-03:00"),
+            buildOrder(2, "2026-10-07T10:00:00.000-03:00", "2026-10-07T10:05:00.000-03:00"),
+          ],
+        });
+      }
+
+      if (url.includes("api.mercadopago.com/v1/payments/7654321")) {
+        return createJsonResponse({ charges_details: [], id: 7654321 });
+      }
+
+      if (url.includes("/billing/integration/group/ML/order/details")) {
+        const orderId = new URL(url).searchParams.get("order_ids");
+        return createJsonResponse({
+          results: [
+            { order_id: orderId, sale_fee: { gross: 10, net: 10, rebate: 0 } },
+          ],
+        });
+      }
+
+      if (url.includes("/billing/integration/periods/")) {
+        return createJsonResponse({ limit: 1000, offset: 0, results: [], total: 0 });
+      }
+
+      throw new Error(`Unexpected fetch call in test: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await provider.syncOrders({
+      connection: createSyncConnection(),
+      cursor: { orderedAfter: "2026-10-05T12:00:00.000Z" },
+      mode: "incremental",
+      notification: null,
+      organizationId: "org_1",
+    });
+
+    const searchUrl = new URL(
+      String(
+        fetchMock.mock.calls.find((call) =>
+          String(call[0]).includes("/orders/search"),
+        )?.[0],
+      ),
+    );
+    expect(searchUrl.searchParams.get("order.date_created.from")).toBe(
+      "2026-10-05T06:00:00.000-00:00",
+    );
+    expect(result.orders).toHaveLength(2);
+    expect(result.cursor).toEqual({
+      orderedAfter: "2026-10-07T10:00:00.000-03:00",
+    });
+  });
+
   it("includes manual sync orders created before range when they close within range", async () => {
     const provider = createProvider();
 
@@ -4411,9 +4488,7 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders).toHaveLength(1);
     expect(result.orders[0]?.externalOrderId).toBe(orderId);
     expect(result.orders[0]?.metadata).toMatchObject({ packId });
-    expect(result.cursor).toEqual({
-      orderedAfter: "2026-05-15T10:00:00.000Z",
-    });
+    expect(result.cursor).toBeNull();
   });
 
   it("fails automatic sync when notified order is not available yet", async () => {

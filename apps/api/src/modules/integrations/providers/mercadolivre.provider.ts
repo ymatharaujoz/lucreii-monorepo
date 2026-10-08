@@ -501,6 +501,7 @@ function dedupeProducts(products: IntegrationSyncProduct[]) {
   return Array.from(unique.values());
 }
 
+const MERCADOLIVRE_INCREMENTAL_OVERLAP_MS = 6 * 60 * 60 * 1000;
 const MERCADOLIVRE_MAX_RATE_LIMIT_RETRIES = 6;
 const MERCADOLIVRE_RATE_LIMIT_BASE_DELAY_MS = 500;
 const MERCADOLIVRE_RATE_LIMIT_MAX_DELAY_MS = 15_000;
@@ -1546,6 +1547,42 @@ function toTimestamp(value: string | null | undefined) {
   return Number.isNaN(timestamp) ? null : timestamp;
 }
 
+function maxIsoTimestamp(
+  ...values: Array<string | null | undefined>
+): string | null {
+  let latest: string | null = null;
+  let latestTimestamp: number | null = null;
+
+  for (const value of values) {
+    const timestamp = toTimestamp(value);
+    if (
+      timestamp !== null &&
+      (latestTimestamp === null || timestamp > latestTimestamp)
+    ) {
+      latest = value ?? null;
+      latestTimestamp = timestamp;
+    }
+  }
+
+  return latest;
+}
+
+/**
+ * Lower bound for the incremental order search: the cursor minus an overlap
+ * window, so late-indexed or previously missed orders are re-fetched (upserts
+ * are idempotent). Formatted as ML expects (`-00:00` offset).
+ */
+function resolveIncrementalSearchFrom(cursor: string | null) {
+  const cursorTimestamp = toTimestamp(cursor);
+  if (cursorTimestamp === null) {
+    return null;
+  }
+
+  return new Date(cursorTimestamp - MERCADOLIVRE_INCREMENTAL_OVERLAP_MS)
+    .toISOString()
+    .replace("Z", "-00:00");
+}
+
 function extractMercadoLivreOrderIdFromNotification(
   notification: IntegrationSyncNotification | null | undefined,
 ) {
@@ -2146,22 +2183,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
             })),
         ),
       );
-      const nextOrderedAfter = orders.reduce<string | null>((latest, entry) => {
-        if (!entry.orderedAt) {
-          return latest;
-        }
-
-        return latest === null || entry.orderedAt > latest
-          ? entry.orderedAt
-          : latest;
-      }, incrementalOrderedAfter);
-
+      // A single notified order must never move the incremental cursor:
+      // earlier orders whose webhooks were dropped would fall behind it forever.
       return {
-        cursor: nextOrderedAfter
-          ? {
-              orderedAfter: nextOrderedAfter,
-            }
-          : input.cursor,
+        cursor: input.cursor,
         orders,
         products,
       };
@@ -2181,7 +2206,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
           mode: "incremental",
           orderedAfter: incrementalOrderedAfter,
         });
-    const { metadata, orders } = orderFetchResult;
+    const { maxDateCreated, metadata, orders } = orderFetchResult;
 
     const products = dedupeProducts(
       orders.flatMap((order) =>
@@ -2199,17 +2224,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
       ),
     );
 
+    // Cursor tracks `date_created`, the same field the incremental search filters on.
     const nextOrderedAfter = isManualRange
       ? null
-      : orders.reduce<string | null>((latest, order) => {
-          if (!order.orderedAt) {
-            return latest;
-          }
-
-          return latest === null || order.orderedAt > latest
-            ? order.orderedAt
-            : latest;
-        }, incrementalOrderedAfter);
+      : maxIsoTimestamp(incrementalOrderedAfter, maxDateCreated);
 
     return {
       cursor: nextOrderedAfter
@@ -2953,6 +2971,11 @@ export class MercadoLivreProvider implements IntegrationProvider {
     let pageCount = 0;
     let rawOrderCount = 0;
     let total = Number.POSITIVE_INFINITY;
+    let maxDateCreated: string | null = null;
+    const incrementalSearchFrom =
+      input.mode === "incremental"
+        ? resolveIncrementalSearchFrom(input.orderedAfter)
+        : null;
 
     while (offset < total) {
       const url = new URL("https://api.mercadolibre.com/orders/search");
@@ -2961,8 +2984,8 @@ export class MercadoLivreProvider implements IntegrationProvider {
       url.searchParams.set("seller", input.accountId);
       url.searchParams.set("sort", "date_desc");
 
-      if (input.mode === "incremental" && input.orderedAfter) {
-        url.searchParams.set("order.date_created.from", input.orderedAfter);
+      if (incrementalSearchFrom) {
+        url.searchParams.set("order.date_created.from", incrementalSearchFrom);
       }
       if (input.mode === "manual_range") {
         url.searchParams.set("order.date_created.to", input.rangeEndAt);
@@ -2987,6 +3010,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
       }
 
       const rawPageOrders = payload.results ?? [];
+      maxDateCreated = maxIsoTimestamp(
+        maxDateCreated,
+        ...rawPageOrders.map((order) => order.date_created),
+      );
       await this.prefetchBillingOrderDetails({
         accessToken: input.accessToken,
         orderIds: rawPageOrders
@@ -3028,6 +3055,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
     }
 
     return {
+      maxDateCreated,
       metadata:
         input.mode === "manual_range"
           ? {

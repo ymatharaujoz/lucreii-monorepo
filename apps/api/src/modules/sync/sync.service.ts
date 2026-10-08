@@ -48,6 +48,8 @@ import {
 import { SyncPerformanceMaterializerService } from "./sync-performance-materializer.service";
 import { MercadoLivreTokenRefreshService } from "./mercadolivre-token-refresh.service";
 
+const SYNC_RUN_STALE_MS = 30 * 60 * 1000;
+
 function toIsoString(value: Date | string | null | undefined) {
   if (!value) {
     return null;
@@ -438,12 +440,45 @@ export class SyncService {
   }
 
   async recoverMercadoLivreConnection(connection: MarketplaceConnection) {
+    await this.runMercadoLivreSweep(connection, { recovery: "token_refresh" });
+  }
+
+  /**
+   * Safety net for dropped/failed webhooks: periodic incremental sweep.
+   * Returns whether a sync actually ran.
+   */
+  async reconcileMercadoLivreConnection(
+    connection: MarketplaceConnection,
+  ): Promise<boolean> {
     if (
       connection.provider !== "mercadolivre" ||
       connection.status !== "connected" ||
       !connection.accessToken
     ) {
-      return;
+      return false;
+    }
+
+    const refreshResult =
+      await this.mercadoLivreTokenRefreshService.refreshIfNeeded(connection);
+    if (refreshResult.needsReconnect || !refreshResult.connection.accessToken) {
+      return false;
+    }
+
+    return this.runMercadoLivreSweep(refreshResult.connection, {
+      reconciliation: true,
+    });
+  }
+
+  private async runMercadoLivreSweep(
+    connection: MarketplaceConnection,
+    triggerMetadata: Record<string, unknown>,
+  ): Promise<boolean> {
+    if (
+      connection.provider !== "mercadolivre" ||
+      connection.status !== "connected" ||
+      !connection.accessToken
+    ) {
+      return false;
     }
 
     const activeRun = await this.findLatestRun(
@@ -453,7 +488,7 @@ export class SyncService {
       "processing",
     );
     if (activeRun) {
-      return;
+      return false;
     }
 
     await this.executeSync({
@@ -463,10 +498,12 @@ export class SyncService {
       notification: null,
       organizationId: connection.organizationId,
       providerSlug: "mercadolivre",
-      triggerMetadata: { recovery: "token_refresh" },
+      triggerMetadata,
       triggerOrigin: "automatic",
       userId: null,
     });
+
+    return true;
   }
 
   async runSync(
@@ -1264,13 +1301,13 @@ export class SyncService {
       `Running queued ${providerSlug} automatic rerun for org ${organizationId} after previous sync finished.`,
     );
 
+    // Several notifications may have collapsed into this single rerun flag, so
+    // run a full incremental sweep instead of replaying only the last one.
     await this.executeSync({
       connection,
       companyId,
       manualRange: null,
-      notification: notificationSummary
-        ? this.toIntegrationNotification(notificationSummary)
-        : null,
+      notification: null,
       organizationId,
       providerSlug,
       triggerMetadata: {
@@ -2001,7 +2038,7 @@ export class SyncService {
     providerSlug: IntegrationProviderSlug,
     status: string,
   ) {
-    return (
+    const run =
       (await this.db.query.syncRuns.findFirst({
         orderBy: (table) => [desc(table.createdAt)],
         where: (table) =>
@@ -2011,8 +2048,47 @@ export class SyncService {
             eq(table.provider, providerSlug),
             eq(table.status, status),
           ),
-      })) ?? null
+      })) ?? null;
+
+    if (run && status === "processing" && this.isStaleProcessingRun(run)) {
+      await this.expireStaleProcessingRun(run);
+      return null;
+    }
+
+    return run;
+  }
+
+  private isStaleProcessingRun(run: SyncRun) {
+    const startedAt = run.startedAt ?? run.createdAt;
+    if (!startedAt) {
+      return false;
+    }
+
+    const startedAtMs = new Date(startedAt).getTime();
+    return (
+      Number.isFinite(startedAtMs) &&
+      Date.now() - startedAtMs > SYNC_RUN_STALE_MS
     );
+  }
+
+  /**
+   * A run left in `processing` (e.g. API restarted mid-sync) would otherwise
+   * block every webhook and manual sync for this connection forever.
+   */
+  private async expireStaleProcessingRun(run: SyncRun) {
+    this.logger.warn(
+      `Expiring stale ${run.provider} sync run ${run.id} for org ${run.organizationId}.`,
+    );
+
+    await this.db
+      .update(syncRuns)
+      .set({
+        errorSummary: "Sync interrupted before finishing (stale run).",
+        finishedAt: new Date(),
+        status: "failed",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(syncRuns.id, run.id), eq(syncRuns.status, "processing")));
   }
 
   private readCursorFromRun(run: SyncRun | null): IntegrationSyncCursor {
