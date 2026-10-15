@@ -6,6 +6,8 @@ import type { ProductAnalyticsSnapshot } from "@lucreii/types";
 import { productAnalyticsSnapshotApiResponseSchema } from "@lucreii/validation";
 import { ApiClientError, apiClient } from "@/lib/api/client";
 import { useReferenceMonth } from "@/lib/reference-month-context";
+import { ordersQueryKey } from "@/modules/orders/hooks/use-orders-data";
+import { productPerformanceQueryKey } from "./use-product-performance-data";
 import type { ProductCatalogData, PaginationState } from "../types/products";
 import {
   buildCatalogStats,
@@ -117,7 +119,13 @@ export function useProductData() {
 
   const refresh = useCallback(
     async (message?: string) => {
-      await queryClient.invalidateQueries({ queryKey: productCatalogQueryKey });
+      // Catalog costs feed order profit and performance margins, so refresh
+      // those views as well as the catalog itself.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: productCatalogQueryKey }),
+        queryClient.invalidateQueries({ queryKey: ordersQueryKey }),
+        queryClient.invalidateQueries({ queryKey: productPerformanceQueryKey }),
+      ]);
       return message;
     },
     [queryClient],

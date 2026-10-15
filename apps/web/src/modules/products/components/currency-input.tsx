@@ -22,6 +22,7 @@ export function CurrencyInput({
   id,
   name,
   disabled,
+  prefix = "R$",
 }: {
   value: string;
   onChange: (val: string) => void;
@@ -30,6 +31,7 @@ export function CurrencyInput({
   id?: string;
   name?: string;
   disabled?: boolean;
+  prefix?: string;
 }) {
   const [text, setText] = useState(() =>
     value
@@ -67,7 +69,7 @@ export function CurrencyInput({
   return (
     <div className="relative">
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground select-none">
-        R$
+        {prefix}
       </span>
       <input
         id={id}

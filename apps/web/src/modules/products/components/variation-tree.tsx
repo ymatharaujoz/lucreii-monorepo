@@ -4,19 +4,24 @@ import { cn } from "@lucreii/ui";
 interface VariationToggleProps {
   count: number;
   expanded: boolean;
+  /** Singular/plural noun for the children. Defaults to "variação"/"variações". */
+  noun?: { plural: string; singular: string };
   onToggle: () => void;
 }
+
+const DEFAULT_NOUN = { plural: "variações", singular: "variação" };
 
 /** "N variações" button with chevron, shown under a parent product name. */
 export function VariationToggle({
   count,
   expanded,
+  noun = DEFAULT_NOUN,
   onToggle,
 }: VariationToggleProps) {
   return (
     <button
       aria-expanded={expanded}
-      aria-label={`${expanded ? "Recolher" : "Expandir"} variações`}
+      aria-label={`${expanded ? "Recolher" : "Expandir"} ${noun.plural}`}
       className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground transition-colors hover:text-foreground"
       onClick={(event) => {
         event.stopPropagation();
@@ -26,7 +31,7 @@ export function VariationToggle({
       type="button"
     >
       <span>
-        {count} {count === 1 ? "variação" : "variações"}
+        {count} {count === 1 ? noun.singular : noun.plural}
       </span>
       <ChevronDown
         className={cn(

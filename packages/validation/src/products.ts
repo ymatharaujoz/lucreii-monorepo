@@ -101,8 +101,22 @@ export const productManualCreateSchema = z.object({
   }),
 });
 
+const catalogOtherVariableCostPercentField = decimalField(
+  "Other variable cost percent",
+).refine(
+  (value) => Number(value) <= 100,
+  "Other variable cost percent must be at most 100.",
+);
+
 export const productCatalogFinanceUpdateSchema = z.object({
+  otherVariableCostAmount: decimalField("Other variable cost amount").optional(),
+  otherVariableCostPercent: catalogOtherVariableCostPercentField.optional(),
   packagingCost: decimalField("Packaging cost"),
+  /**
+   * Other catalog products that share the same SKU (e.g. several marketplace
+   * listings). The same finance values are applied to all of them.
+   */
+  relatedProductIds: z.array(z.string().uuid()).max(100).optional(),
   unitCost: decimalField("Unit cost"),
 });
 

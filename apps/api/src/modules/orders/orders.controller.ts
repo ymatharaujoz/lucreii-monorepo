@@ -161,6 +161,25 @@ export class OrdersController {
     };
   }
 
+  @Post(":id/recalculate")
+  @HttpCode(200)
+  async recalculateOrder(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Param("id") id: string,
+  ) {
+    return {
+      data: await this.ordersService.recalculateOrder(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        id,
+      ),
+      error: null,
+    };
+  }
+
   @Patch(":id/composition")
   async updateOrderComposition(
     @CurrentAuthContext() authContext: AuthenticatedRequestContext,

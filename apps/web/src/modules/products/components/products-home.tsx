@@ -289,12 +289,115 @@ function formatProductDate(dateIso: string) {
 }
 
 type CatalogFinanceFormValues = {
+  otherVariableCostAmount: string;
+  otherVariableCostPercent: string;
   packagingCost: string;
   unitCost: string;
 };
 
+const EMPTY_CATALOG_FINANCE_FORM: CatalogFinanceFormValues = {
+  otherVariableCostAmount: "",
+  otherVariableCostPercent: "",
+  packagingCost: "",
+  unitCost: "",
+};
+
+const SKU_GROUP_ID_PREFIX = "sku-group:";
+const SKU_LISTING_NOUN = { plural: "anúncios", singular: "anúncio" };
+
+function isSkuGroupRow(product: ProductListItem): boolean {
+  return product.id.startsWith(SKU_GROUP_ID_PREFIX);
+}
+
+function normalizeCatalogSku(sku: string | null | undefined): string | null {
+  const normalized = sku?.trim().toUpperCase();
+  return normalized ? normalized : null;
+}
+
+/**
+ * Several marketplace listings can carry the same SKU. They are shown as one
+ * expandable SKU row, and finance edits made on it apply to every listing.
+ * Only plain products are grouped (not listing parents/variations), and never
+ * across channels.
+ */
+function groupProductsBySku(products: ProductListItem[]): ProductListItem[] {
+  const groupKeyByProductId = new Map<string, string>();
+  const membersByGroupKey = new Map<string, ProductListItem[]>();
+
+  for (const product of products) {
+    const normalizedSku = normalizeCatalogSku(product.sku);
+    if (
+      !normalizedSku ||
+      product.isSyntheticParent ||
+      product.children.length > 0
+    ) {
+      continue;
+    }
+
+    const groupKey = `${product.derivedFromProvider ?? "manual"}:${normalizedSku}`;
+    groupKeyByProductId.set(product.id, groupKey);
+    membersByGroupKey.set(groupKey, [
+      ...(membersByGroupKey.get(groupKey) ?? []),
+      product,
+    ]);
+  }
+
+  const emittedGroupKeys = new Set<string>();
+
+  return products.flatMap((product) => {
+    const groupKey = groupKeyByProductId.get(product.id);
+    const members = groupKey ? membersByGroupKey.get(groupKey) : undefined;
+
+    if (!groupKey || !members || members.length < 2) {
+      return [product];
+    }
+
+    if (emittedGroupKeys.has(groupKey)) {
+      return [];
+    }
+    emittedGroupKeys.add(groupKey);
+
+    const representative =
+      members.find((member) => member.latestCost !== null) ?? members[0]!;
+
+    return [
+      {
+        ...representative,
+        catalogRole: "parent" as const,
+        children: members.map((member) => ({
+          ...member,
+          catalogRole: "child" as const,
+          parentProductId: `${SKU_GROUP_ID_PREFIX}${groupKey}`,
+        })),
+        id: `${SKU_GROUP_ID_PREFIX}${groupKey}`,
+        isSyntheticParent: false,
+        parentProductId: null,
+        variationLabel: null,
+      },
+    ];
+  });
+}
+
+/** Products that share the SKU of `product` (the product itself included). */
+function findSkuMembers(
+  product: ProductListItem,
+  rows: ProductListItem[],
+): ProductListItem[] {
+  if (isSkuGroupRow(product)) {
+    return product.children;
+  }
+
+  const parentGroup = rows.find(
+    (row) => isSkuGroupRow(row) && row.id === product.parentProductId,
+  );
+
+  return parentGroup ? parentGroup.children : [];
+}
+
 function buildCatalogFinanceForm(product: ProductListItem): CatalogFinanceFormValues {
   return {
+    otherVariableCostAmount: product.financeDefaults?.otherVariableCostAmount ?? "",
+    otherVariableCostPercent: product.financeDefaults?.otherVariableCostPercent ?? "",
     packagingCost: product.financeDefaults?.packagingCost ?? "",
     unitCost: product.latestCost?.amount ?? "",
   };
@@ -304,12 +407,14 @@ function readCatalogFinanceFormValues(
   formElement: HTMLFormElement,
 ): CatalogFinanceFormValues {
   const formData = new FormData(formElement);
+  const readCurrency = (field: string) =>
+    parseCurrencyValue(String(formData.get(field) ?? "").trim());
 
   return {
-    packagingCost: parseCurrencyValue(
-      String(formData.get("packagingCost") ?? "").trim(),
-    ),
-    unitCost: parseCurrencyValue(String(formData.get("unitCost") ?? "").trim()),
+    otherVariableCostAmount: readCurrency("otherVariableCostAmount"),
+    otherVariableCostPercent: readCurrency("otherVariableCostPercent"),
+    packagingCost: readCurrency("packagingCost"),
+    unitCost: readCurrency("unitCost"),
   };
 }
 
@@ -354,22 +459,25 @@ function CatalogProductDetailsModal({
   onDeleted,
   onSaved,
   product,
+  skuMembers = [],
 }: {
   onClose: () => void;
   onDeleted: () => Promise<unknown> | unknown;
   onSaved: () => Promise<unknown> | unknown;
   product: ProductListItem | null;
+  /** Listings that share this product's SKU (includes the product itself). */
+  skuMembers?: ProductListItem[];
 }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [form, setForm] = useState<CatalogFinanceFormValues>({
-    packagingCost: "",
-    unitCost: "",
-  });
+  const [form, setForm] = useState<CatalogFinanceFormValues>(
+    EMPTY_CATALOG_FINANCE_FORM,
+  );
   const [heroFailed, setHeroFailed] = useState(false);
+  const isSkuGroup = product ? isSkuGroupRow(product) : false;
 
   useEffect(() => {
     if (!product) {
-      setForm({ packagingCost: "", unitCost: "" });
+      setForm(EMPTY_CATALOG_FINANCE_FORM);
       setErrorMessage(null);
       return;
     }
@@ -391,11 +499,21 @@ function CatalogProductDetailsModal({
         throw new Error("Produto não encontrado.");
       }
 
+      // A SKU group row is virtual: save through its first listing and apply
+      // the same values to the rest of the listings with that SKU.
+      const targetId = isSkuGroup ? (skuMembers[0]?.id ?? product.id) : product.id;
+      const relatedProductIds = skuMembers
+        .map((member) => member.id)
+        .filter((memberId) => memberId !== targetId);
+
       return apiClient.patch<{ data: ProductListItem; error: null }>(
-        `/products/${product.id}/catalog-finance`,
+        `/products/${targetId}/catalog-finance`,
         {
           body: {
+            otherVariableCostAmount: values.otherVariableCostAmount || "0",
+            otherVariableCostPercent: values.otherVariableCostPercent || "0",
             packagingCost: values.packagingCost,
+            ...(relatedProductIds.length > 0 ? { relatedProductIds } : {}),
             unitCost: values.unitCost,
           },
         },
@@ -527,11 +645,13 @@ function CatalogProductDetailsModal({
                     Informações Financeiras
                   </h3>
                   <p className="text-[11px] text-muted-foreground/70">
-                    {product.catalogRole === "parent"
-                      ? "Salvar aqui sobrescreve custo e embalagem de todas as variações."
-                      : product.catalogRole === "child"
-                        ? "Salvar aqui altera apenas esta variação."
-                        : "Preencha os custos do produto"}
+                    {skuMembers.length > 1
+                      ? `Salvar aqui altera os ${skuMembers.length} anúncios com este SKU.`
+                      : product.catalogRole === "parent"
+                        ? "Salvar aqui sobrescreve custo e embalagem de todas as variações."
+                        : product.catalogRole === "child"
+                          ? "Salvar aqui altera apenas esta variação."
+                          : "Preencha os custos do produto"}
                   </p>
                 </div>
               </div>
@@ -578,6 +698,53 @@ function CatalogProductDetailsModal({
                     />
                   </div>
                 </div>
+                <div>
+                  <label
+                    className="text-xs font-medium text-muted-foreground"
+                    htmlFor="catalog-other-variable-cost-percent"
+                  >
+                    Outros custos variáveis (%)
+                  </label>
+                  <div className="mt-2">
+                    <CurrencyInput
+                      disabled={isSyntheticParent}
+                      id="catalog-other-variable-cost-percent"
+                      name="otherVariableCostPercent"
+                      onChange={(val) =>
+                        setForm((curr) => ({
+                          ...curr,
+                          otherVariableCostPercent: val,
+                        }))
+                      }
+                      placeholder="0,00"
+                      prefix="%"
+                      value={form.otherVariableCostPercent}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label
+                    className="text-xs font-medium text-muted-foreground"
+                    htmlFor="catalog-other-variable-cost-amount"
+                  >
+                    Outros custos variáveis (R$)
+                  </label>
+                  <div className="mt-2">
+                    <CurrencyInput
+                      disabled={isSyntheticParent}
+                      id="catalog-other-variable-cost-amount"
+                      name="otherVariableCostAmount"
+                      onChange={(val) =>
+                        setForm((curr) => ({
+                          ...curr,
+                          otherVariableCostAmount: val,
+                        }))
+                      }
+                      placeholder="0,00"
+                      value={form.otherVariableCostAmount}
+                    />
+                  </div>
+                </div>
                 <div className="sm:col-span-2">
                   <label
                     className="text-xs font-medium text-muted-foreground"
@@ -607,7 +774,7 @@ function CatalogProductDetailsModal({
 
             {/* Barra de ações */}
             <div className="mt-2 flex items-center justify-between gap-3 border-t border-border/30 pt-6">
-              {!isSyntheticParent && (
+              {!isSyntheticParent && !isSkuGroup && (
               <Button
                 loading={deleteMutation.isPending}
                 onClick={() => {
@@ -1166,7 +1333,7 @@ function CatalogProductsHierarchyTable({
   };
 
   const collapsedProducts = useMemo(
-    () => products.map(collapseSingleVariationParent),
+    () => groupProductsBySku(products.map(collapseSingleVariationParent)),
     [products],
   );
 
@@ -1204,7 +1371,11 @@ function CatalogProductsHierarchyTable({
       result = result.filter(
         (product) =>
           product.name.toLowerCase().includes(search) ||
-          (product.sku?.toLowerCase().includes(search) ?? false),
+          (product.sku?.toLowerCase().includes(search) ?? false) ||
+          (isSkuGroupRow(product) &&
+            product.children.some((child) =>
+              child.name.toLowerCase().includes(search),
+            )),
       );
     }
 
@@ -1243,7 +1414,8 @@ function CatalogProductsHierarchyTable({
   const selectableVisibleRows = useMemo(
     () =>
       visibleParents.flatMap((product) => {
-        const ownRows = product.isSyntheticParent ? [] : [product.id];
+        const ownRows =
+          product.isSyntheticParent || isSkuGroupRow(product) ? [] : [product.id];
         const childRows = product.children
           .filter((child) => !child.isSyntheticParent)
           .map((child) => child.id);
@@ -1633,7 +1805,7 @@ function CatalogProductsHierarchyTable({
                       <td className="px-3 py-3 text-left">
                         <input
                           type="checkbox"
-                          disabled={product.isSyntheticParent}
+                          disabled={product.isSyntheticParent || isSkuGroupRow(product)}
                           checked={selectedProductIds.includes(product.id)}
                           onChange={(event) => {
                             event.stopPropagation();
@@ -1670,6 +1842,7 @@ function CatalogProductsHierarchyTable({
                               <VariationToggle
                                 count={product.children.length}
                                 expanded={isExpanded}
+                                noun={isSkuGroupRow(product) ? SKU_LISTING_NOUN : undefined}
                                 onToggle={() =>
                                   setExpandedParentIds((current) =>
                                     current.includes(product.id)
@@ -1829,9 +2002,12 @@ function CatalogProductsHierarchyTable({
         onClose={() => { 
           setSelectedProduct(null); 
         }} 
-        onSaved={onRefresh} 
-        product={selectedProduct} 
-      /> 
+        onSaved={onRefresh}
+        product={selectedProduct}
+        skuMembers={
+          selectedProduct ? findSkuMembers(selectedProduct, collapsedProducts) : []
+        }
+      />
     </>
   );
 }

@@ -203,6 +203,8 @@ export type ProductFinanceDefaultsRecord = {
   productId: string;
   packagingCost: DecimalString;
   advertisingCost: DecimalString;
+  otherVariableCostAmount?: DecimalString;
+  otherVariableCostPercent?: DecimalString;
   createdAt: string;
   updatedAt: string;
 };

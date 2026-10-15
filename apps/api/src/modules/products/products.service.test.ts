@@ -1756,21 +1756,22 @@ describe("ProductsService", () => {
         sku: "ML-001",
         updatedAt: new Date("2026-06-17T10:00:00.000Z"),
       });
-    db.query.productCosts.findFirst.mockResolvedValueOnce(null);
-    db.query.productCosts.findMany.mockResolvedValueOnce([
-      {
-        amount: "30.00",
-        costType: "base",
-        createdAt: new Date("2026-06-17T10:00:00.000Z"),
-        currency: "BRL",
-        effectiveFrom: null,
-        id: "cost_1",
-        notes: "Atualizado pelo catálogo",
-        organizationId: "org_1",
-        productId: "product_1",
-        updatedAt: new Date("2026-06-17T10:00:00.000Z"),
-      },
-    ]);
+    db.query.productCosts.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          amount: "30.00",
+          costType: "base",
+          createdAt: new Date("2026-06-17T10:00:00.000Z"),
+          currency: "BRL",
+          effectiveFrom: null,
+          id: "cost_1",
+          notes: "Atualizado pelo catálogo",
+          organizationId: "org_1",
+          productId: "product_1",
+          updatedAt: new Date("2026-06-17T10:00:00.000Z"),
+        },
+      ]);
     db.transaction = vi.fn(async (callback) =>
       callback({
         insert: txInsert,

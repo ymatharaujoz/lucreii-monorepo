@@ -127,7 +127,10 @@ export class UpdateProductCatalogFinanceRequestDto
 {
   static schema = productCatalogFinanceUpdateSchema;
 
+  otherVariableCostAmount?: string;
+  otherVariableCostPercent?: string;
   packagingCost!: string;
+  relatedProductIds?: string[];
   unitCost!: string;
 }
 

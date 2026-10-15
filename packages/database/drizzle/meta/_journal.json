@@ -239,6 +239,13 @@
       "when": 1790121600000,
       "tag": "0033_product_listing_advertising",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790208000000,
+      "tag": "0034_product_other_variable_costs",
+      "breakpoints": true
     }
   ]
 }

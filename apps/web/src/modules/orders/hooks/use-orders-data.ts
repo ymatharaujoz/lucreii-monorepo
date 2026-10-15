@@ -100,6 +100,15 @@ export async function syncOrder(orderId: string): Promise<OrderDetails> {
   return response.data;
 }
 
+/** Drops order-level cost overrides so the order uses current catalog costs. */
+export async function recalculateOrder(orderId: string): Promise<OrderDetails> {
+  const response = await apiClient.post<{ data: OrderDetails; error: null }>(
+    `/orders/${orderId}/recalculate`,
+  );
+
+  return response.data;
+}
+
 export async function downloadOrdersExport(
   filters: OrderExportFilters &
     Partial<Pick<OrderListFilters, "includeSummary" | "page" | "pageSize">> = {},
@@ -261,6 +270,27 @@ export function useUpdateOrderOtherVariableCostsBulk() {
     mutationFn: updateOrderOtherVariableCostsBulk,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ordersQueryKey });
+    },
+  });
+}
+
+export function useRecalculateOrder() {
+  const queryClient = useQueryClient();
+  const selectedCompanyId = readSelectedCompanyIdFromBrowserCookie();
+
+  return useMutation({
+    mutationFn: recalculateOrder,
+    onSuccess: async (data, orderId) => {
+      queryClient.setQueryData(
+        [...ordersQueryKey, selectedCompanyId, "detail", orderId],
+        data,
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ordersQueryKey }),
+        queryClient.invalidateQueries({
+          queryKey: [...ordersQueryKey, selectedCompanyId, "detail", orderId],
+        }),
+      ]);
     },
   });
 }

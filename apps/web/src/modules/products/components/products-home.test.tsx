@@ -524,6 +524,8 @@ describe("ProductsHome catalog modal", () => {
 
     expect(apiClientMocks.patch).toHaveBeenCalledWith("/products/product_1/catalog-finance", {
       body: {
+        otherVariableCostAmount: "0",
+        otherVariableCostPercent: "0",
         packagingCost: "4.50",
         unitCost: "30.00",
       },
@@ -578,6 +580,8 @@ describe("ProductsHome catalog modal", () => {
 
     expect(apiClientMocks.patch).toHaveBeenCalledWith("/products/product_1/catalog-finance", {
       body: {
+        otherVariableCostAmount: "0",
+        otherVariableCostPercent: "0",
         packagingCost: "5.25",
         unitCost: "31.00",
       },
@@ -652,6 +656,8 @@ describe("ProductsHome catalog modal", () => {
 
     expect(apiClientMocks.patch).toHaveBeenCalledWith("/products/product_2/catalog-finance", {
       body: {
+        otherVariableCostAmount: "0",
+        otherVariableCostPercent: "0",
         packagingCost: "2.75",
         unitCost: "21.50",
       },
@@ -733,6 +739,141 @@ describe("ProductsHome catalog modal", () => {
       ),
     ).toBe(false);
     expect(document.body.textContent).toContain("Pai lógico do anúncio");
+
+    view.unmount();
+  });
+
+  it("groups listings that share a SKU and saves finance for all of them", async () => {
+    apiClientMocks.patch.mockResolvedValue({
+      data: { id: "listing_a" },
+      error: null,
+    });
+    const baseListing = {
+      catalogGroupKey: null,
+      catalogRole: "standalone",
+      children: [],
+      companyId: "company_1",
+      coverImageUrl: null,
+      createdAt: "2026-06-17T10:00:00.000Z",
+      derivedFromProvider: "mercadolivre",
+      images: [],
+      isActive: true,
+      isSyntheticParent: false,
+      organizationId: "org_1",
+      parentProductId: null,
+      sellingPrice: "149.90",
+      sku: "ALK-CALÇADEIRA",
+      updatedAt: "2026-06-17T10:00:00.000Z",
+      variationLabel: null,
+    };
+    const useProductData = await import("../hooks/use-product-data");
+    vi.mocked(useProductData.useProductData).mockReturnValue({
+      data: {
+        products: [
+          {
+            ...baseListing,
+            financeDefaults: null,
+            id: "listing_a",
+            latestCost: null,
+            name: "Calçadeira Brinde",
+          },
+          {
+            ...baseListing,
+            financeDefaults: {
+              advertisingCost: "0.00",
+              createdAt: "2026-06-17T10:00:00.000Z",
+              id: "defaults_b",
+              packagingCost: "0.50",
+              productId: "listing_b",
+              updatedAt: "2026-06-17T10:00:00.000Z",
+            },
+            id: "listing_b",
+            latestCost: {
+              amount: "53.50",
+              costType: "base",
+              createdAt: "2026-06-17T10:00:00.000Z",
+              currency: "BRL",
+              effectiveFrom: null,
+              id: "cost_b",
+              notes: null,
+              productId: "listing_b",
+              updatedAt: "2026-06-17T10:00:00.000Z",
+            },
+            name: "Calçadeira Preta",
+          },
+        ],
+        scope: { companyId: null },
+      },
+      error: null,
+      financialState: "ready",
+      goToPage: vi.fn(),
+      isLoading: false,
+      isUnauthorized: false,
+      pagination: { currentPage: 1, pageSize: 10, totalItems: 2, totalPages: 1 },
+      referenceMonth: "2026-06-01",
+      referenceMonthSelectOptions: ["2026-06-01"],
+      refetch: refetchMock,
+      refresh: refreshMock,
+      rows: [],
+      setReferenceMonth: vi.fn(),
+      stats: {
+        activeProducts: 2,
+        archivedProducts: 0,
+        pendingSyncProducts: 0,
+        productsWithCost: 1,
+        productsWithoutCost: 1,
+        syncedProductsTotal: 0,
+        totalAdCosts: 0,
+        totalManualExpenses: 0,
+        totalProductCosts: 0,
+        totalProducts: 2,
+      },
+    } as never);
+
+    const view = renderProductsHome();
+
+    expect(document.querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(document.body.textContent).toContain("2 anúncios");
+
+    click(document.querySelector("tbody tr")!);
+    expect(document.body.textContent).toContain(
+      "Salvar aqui altera os 2 anúncios com este SKU.",
+    );
+    expect(
+      Array.from(document.querySelectorAll("button")).some((button) =>
+        button.textContent?.includes("Excluir produto"),
+      ),
+    ).toBe(false);
+
+    const unitCostInput = document.querySelector(
+      'input[name="unitCost"]',
+    ) as HTMLInputElement;
+    changeInputValue(unitCostInput, "60.00");
+    act(() => {
+      unitCostInput.dispatchEvent(new Event("focusout", { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Salvar"),
+      )!,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(apiClientMocks.patch).toHaveBeenCalledWith(
+      "/products/listing_a/catalog-finance",
+      {
+        body: expect.objectContaining({
+          relatedProductIds: ["listing_b"],
+          unitCost: "60.00",
+        }),
+      },
+    );
 
     view.unmount();
   });

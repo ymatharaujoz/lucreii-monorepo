@@ -13,6 +13,7 @@ import { OrdersHome } from "./orders-home";
 const useOrdersListMock = vi.hoisted(() => vi.fn());
 const useOrderDetailsMock = vi.hoisted(() => vi.fn());
 const useSyncOrderMock = vi.hoisted(() => vi.fn());
+const useRecalculateOrderMock = vi.hoisted(() => vi.fn());
 const useUpdateOrderCompositionMock = vi.hoisted(() => vi.fn());
 const useUpdateOrderProductCostBulkMock = vi.hoisted(() => vi.fn());
 const useUpdateOrderOtherVariableCostsBulkMock = vi.hoisted(() => vi.fn());
@@ -22,6 +23,7 @@ vi.mock("../hooks/use-orders-data", () => ({
   downloadOrdersExport: downloadOrdersExportMock,
   useOrderDetails: useOrderDetailsMock,
   useOrdersList: useOrdersListMock,
+  useRecalculateOrder: useRecalculateOrderMock,
   useSyncOrder: useSyncOrderMock,
   useUpdateOrderComposition: useUpdateOrderCompositionMock,
   useUpdateOrderOtherVariableCostsBulk:
@@ -110,6 +112,11 @@ describe("OrdersHome", () => {
   beforeEach(() => {
     useSyncOrderMock.mockReset();
     useSyncOrderMock.mockReturnValue({
+      isPending: false,
+      mutateAsync: vi.fn().mockResolvedValue({}),
+    });
+    useRecalculateOrderMock.mockReset();
+    useRecalculateOrderMock.mockReturnValue({
       isPending: false,
       mutateAsync: vi.fn().mockResolvedValue({}),
     });
@@ -1018,6 +1025,56 @@ describe("OrdersHome", () => {
     });
     expect(text()).toContain("Pedido sincronizado com sucesso.");
     expect(mutateAsync).toHaveBeenCalledTimes(2);
+
+    view.unmount();
+  });
+
+  it("recalculates the open order for any provider and shows feedback", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    useRecalculateOrderMock.mockReturnValue({ isPending: false, mutateAsync });
+    const view = mount(<OrdersHome />);
+    const orderDetailsResult = useOrderDetailsMock.mock.results.at(-1)
+      ?.value as { data: { order: { provider: string } } };
+    orderDetailsResult.data.order.provider = "shopee";
+    click(document.querySelector('tr[role="button"]')!);
+
+    const recalculateButton = Array.from(
+      document.querySelectorAll("button"),
+    ).find((button) => button.textContent?.includes("Recalcular"))!;
+    expect(recalculateButton).toBeTruthy();
+
+    await act(async () => {
+      recalculateButton.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(mutateAsync).toHaveBeenCalledWith("order_row_1");
+    expect(text()).toContain("Pedido recalculado");
+
+    view.unmount();
+  });
+
+  it("shows an accessible error when recalculating fails", async () => {
+    const mutateAsync = vi.fn().mockRejectedValue(new Error("boom"));
+    useRecalculateOrderMock.mockReturnValue({ isPending: false, mutateAsync });
+    const view = mount(<OrdersHome />);
+    click(document.querySelector('tr[role="button"]')!);
+
+    const recalculateButton = Array.from(
+      document.querySelectorAll("button"),
+    ).find((button) => button.textContent?.includes("Recalcular"))!;
+    await act(async () => {
+      recalculateButton.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      "Não foi possível recalcular o pedido.",
+    );
 
     view.unmount();
   });

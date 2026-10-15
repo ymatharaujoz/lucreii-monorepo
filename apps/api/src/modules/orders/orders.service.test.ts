@@ -179,6 +179,92 @@ describe("OrdersService", () => {
     expect(withOtherCosts.totalProfitAmount).toBe("72.00");
   });
 
+  describe("SKU-level other variable costs and catalog cost", () => {
+    const buildOrder = (
+      compositionOverrides: Record<string, string>,
+      financeDefaults: Record<string, string> = {},
+    ) =>
+      ({
+        fees: [],
+        items: [
+          {
+            externalProduct: {
+              linkedProductId: "product_1",
+              sku: "SKU-1",
+              linkedProduct: {
+                financeDefaults: { packagingCost: "0.00", ...financeDefaults },
+                productCosts: [
+                  {
+                    amount: "50.00",
+                    createdAt: new Date("2026-05-01T00:00:00.000Z"),
+                    effectiveFrom: null,
+                  },
+                ],
+              },
+            },
+            quantity: 2,
+            totalPrice: "200.00",
+          },
+        ],
+        metadata: { compositionOverrides },
+        orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+        provider: "shopee",
+        refundBonusAmount: null,
+        refundBonusStatus: null,
+        status: "paid",
+        totalAmount: "200.00",
+      }) as never;
+
+    it("applies the SKU defaults when the order has no override", () => {
+      const result = buildOrderFinancialMetrics(
+        buildOrder(
+          {},
+          { otherVariableCostAmount: "1.50", otherVariableCostPercent: "5.00" },
+        ),
+        "0",
+      );
+
+      expect(result.composition).toEqual(
+        expect.objectContaining({
+          otherVariableCostAmount: "3.00",
+          otherVariableCostPercent: "5.00",
+          otherVariableCostTotalAmount: "13.00",
+          productCostAmount: "100.00",
+        }),
+      );
+      expect(result.totalProfitAmount).toBe("87.00");
+    });
+
+    it("lets an order override win over the SKU default per field", () => {
+      const result = buildOrderFinancialMetrics(
+        buildOrder(
+          { otherVariableCostPercent: "10.00" },
+          { otherVariableCostAmount: "1.50", otherVariableCostPercent: "5.00" },
+        ),
+        "0",
+      );
+
+      expect(result.composition).toEqual(
+        expect.objectContaining({
+          otherVariableCostAmount: "3.00",
+          otherVariableCostPercent: "10.00",
+          otherVariableCostTotalAmount: "23.00",
+        }),
+      );
+    });
+
+    it("uses the catalog cost once the product cost override is removed", () => {
+      const withOverride = buildOrderFinancialMetrics(
+        buildOrder({ productCostAmount: "20.00" }),
+        "0",
+      );
+      const withoutOverride = buildOrderFinancialMetrics(buildOrder({}), "0");
+
+      expect(withOverride.composition.productCostAmount).toBe("20.00");
+      expect(withoutOverride.composition.productCostAmount).toBe("100.00");
+    });
+  });
+
   it("returns zero margin financials without monthly orders", () => {
     expect(
       calculateMonthlyMarginFinancials({
@@ -3238,6 +3324,71 @@ describe("OrdersService", () => {
           },
         },
       }),
+    );
+  });
+
+  it("recalculates an order by dropping only the catalog-driven cost overrides", async () => {
+    const setMock = vi.fn().mockReturnValue({
+      where: vi.fn().mockResolvedValue(undefined),
+    });
+    const updateMock = vi.fn().mockReturnValue({ set: setMock });
+    const rows = [
+      {
+        id: "order_row_1",
+        items: [{ quantity: 1 }],
+        metadata: {
+          compositionOverrides: {
+            marketplaceCommissionAmount: "10.00",
+            otherVariableCostPercent: "5.00",
+            packagingCostAmount: "2.00",
+            productCostAmount: "80.00",
+          },
+          spreadsheetImportOwnedCompositionOverrides: [
+            "productCostAmount",
+            "marketplaceCommissionAmount",
+          ],
+        },
+        provider: "shopee",
+      },
+    ];
+    const db = {
+      query: {
+        externalOrders: {
+          findFirst: vi.fn().mockResolvedValue(rows[0]),
+        },
+      },
+      transaction: vi.fn(async (callback) => callback({ update: updateMock })),
+    };
+    const service = new OrdersService(db as never);
+    const getOrderDetailsSpy = vi
+      .spyOn(service, "getOrderDetails")
+      .mockResolvedValue({} as never);
+
+    await service.recalculateOrder(
+      {
+        organizationId: "org_123",
+        selectedCompanyId: "company_123",
+        userId: "user_123",
+      },
+      "order_row_1",
+    );
+
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: {
+          compositionOverrides: {
+            marketplaceCommissionAmount: "10.00",
+            otherVariableCostPercent: "5.00",
+          },
+          spreadsheetImportOwnedCompositionOverrides: [
+            "marketplaceCommissionAmount",
+          ],
+        },
+      }),
+    );
+    expect(getOrderDetailsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org_123" }),
+      "order_row_1",
     );
   });
 

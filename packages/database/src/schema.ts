@@ -1216,11 +1216,31 @@ export const productFinanceDefaults = pgTable(
     advertisingCost: numeric("advertising_cost", { precision: 12, scale: 2 })
       .default("0")
       .notNull(),
+    otherVariableCostPercent: numeric("other_variable_cost_percent", {
+      precision: 5,
+      scale: 2,
+    })
+      .default("0")
+      .notNull(),
+    otherVariableCostAmount: numeric("other_variable_cost_amount", {
+      precision: 12,
+      scale: 2,
+    })
+      .default("0")
+      .notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (table) => [
     uniqueIndex("product_finance_defaults_product_id_key").on(table.productId),
+    check(
+      "product_finance_defaults_other_variable_cost_percent_range",
+      sql`${table.otherVariableCostPercent} >= 0 and ${table.otherVariableCostPercent} <= 100`,
+    ),
+    check(
+      "product_finance_defaults_other_variable_cost_amount_non_negative",
+      sql`${table.otherVariableCostAmount} >= 0`,
+    ),
     check(
       "product_finance_defaults_packaging_cost_non_negative",
       sql`${table.packagingCost} >= 0`,

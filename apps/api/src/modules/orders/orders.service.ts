@@ -55,6 +55,7 @@ import type { Column, SQL } from "drizzle-orm";
 import { utils, write } from "xlsx";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
 import { API_RUNTIME_ENV, DATABASE_CLIENT } from "@/common/tokens";
+import { pickLatestProductCost } from "@/modules/products/latest-product-cost";
 import { SyncService } from "@/modules/sync/sync.service";
 import {
   MercadoLivreProvider,
@@ -86,7 +87,15 @@ type LinkedProductRecord = Product & {
 };
 
 export type OrderFinancialLinkedProduct = {
-  financeDefaults?: Pick<ProductFinanceDefaults, "packagingCost"> | null;
+  financeDefaults?:
+    | (Pick<ProductFinanceDefaults, "packagingCost"> &
+        Partial<
+          Pick<
+            ProductFinanceDefaults,
+            "otherVariableCostAmount" | "otherVariableCostPercent"
+          >
+        >)
+    | null;
   latestCost?: Pick<ProductCost, "amount"> | null;
   productCosts?: Array<
     Pick<ProductCost, "amount" | "createdAt" | "effectiveFrom">
@@ -786,15 +795,54 @@ function resolveLatestCostAmount(
     return toNumber(product.latestCost.amount);
   }
 
-  const latestCost =
-    product.productCosts?.slice().sort((left, right) => {
-      const leftDate = toIsoString(left.effectiveFrom ?? left.createdAt) ?? "";
-      const rightDate =
-        toIsoString(right.effectiveFrom ?? right.createdAt) ?? "";
-      return rightDate.localeCompare(leftDate);
-    })[0] ?? null;
+  const latestCost = pickLatestProductCost(product.productCosts);
 
   return latestCost ? toNumber(latestCost.amount) : null;
+}
+
+type OtherVariableCostDefaultsItem = {
+  externalProduct?: {
+    linkedProduct?: {
+      financeDefaults?: {
+        otherVariableCostAmount?: string | number | null;
+        otherVariableCostPercent?: string | number | null;
+      } | null;
+    } | null;
+  } | null;
+  quantity: number;
+  totalPrice: string | number | null;
+};
+
+/**
+ * SKU-level "other variable costs" set in the catalog. They apply to an order
+ * unless the order carries its own manual override for the same field.
+ * The percent is the revenue-weighted average across items; the amount is per
+ * unit sold.
+ */
+function resolveProductDefaultOtherVariableCosts(
+  items: readonly OtherVariableCostDefaultsItem[],
+) {
+  let amount = 0;
+  let weightedPercentSum = 0;
+  let revenueSum = 0;
+
+  for (const item of items) {
+    const defaults = item.externalProduct?.linkedProduct?.financeDefaults;
+    const itemRevenue = toNumber(item.totalPrice);
+    revenueSum += itemRevenue;
+    if (!defaults) {
+      continue;
+    }
+
+    amount += toNumber(defaults.otherVariableCostAmount) * item.quantity;
+    weightedPercentSum +=
+      itemRevenue * toNumber(defaults.otherVariableCostPercent);
+  }
+
+  return {
+    amount,
+    percent: revenueSum > 0 ? weightedPercentSum / revenueSum : 0,
+  };
 }
 
 function buildOrderBaseMetrics(order: OrderFinancialRow) {
@@ -952,13 +1000,15 @@ export function buildOrderFinancialMetrics(
     packagingCostAmount,
   );
 
+  const productDefaultOtherVariableCosts =
+    resolveProductDefaultOtherVariableCosts(order.items);
   const otherVariableCostPercent = readOverrideMoney(
     compositionOverrides.otherVariableCostPercent,
-    0,
+    productDefaultOtherVariableCosts.percent,
   );
   const otherVariableCostAmount = readOverrideMoney(
     compositionOverrides.otherVariableCostAmount,
-    0,
+    productDefaultOtherVariableCosts.amount,
   );
   const otherVariableCostTotalAmount =
     (revenueAmount * otherVariableCostPercent) / 100 + otherVariableCostAmount;
@@ -1460,6 +1510,10 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
   const otherVariableCostOverrides = readOrderCompositionOverrides(
     (order.metadata ?? {}) as Record<string, unknown>,
   );
+  const hasOtherVariableCostPercentOverride =
+    otherVariableCostOverrides.otherVariableCostPercent !== undefined;
+  const hasOtherVariableCostAmountOverride =
+    otherVariableCostOverrides.otherVariableCostAmount !== undefined;
   const otherVariableCostPercent = toNumber(
     otherVariableCostOverrides.otherVariableCostPercent,
   );
@@ -1502,9 +1556,19 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
         : latestCostAmount === null
           ? null
           : parseMoneyToCents(latestCostAmount) * BigInt(item.quantity);
+    const itemFinanceDefaults = linkedProduct?.financeDefaults;
+    const itemOtherVariableCostAmountCents = hasOtherVariableCostAmountOverride
+      ? (otherVariableCostAllocations[index] ?? 0n)
+      : parseMoneyToCents(itemFinanceDefaults?.otherVariableCostAmount) *
+        BigInt(item.quantity);
+    const itemOtherVariableCostPercent = hasOtherVariableCostPercentOverride
+      ? otherVariableCostPercent
+      : toNumber(itemFinanceDefaults?.otherVariableCostPercent);
     const otherVariableCostCents =
-      (otherVariableCostAllocations[index] ?? 0n) +
-      BigInt(Math.round((Number(revenueCents) * otherVariableCostPercent) / 100));
+      itemOtherVariableCostAmountCents +
+      BigInt(
+        Math.round((Number(revenueCents) * itemOtherVariableCostPercent) / 100),
+      );
     const totalProfitCents =
       linkedProduct && productCostCents !== null
         ? netRevenueCents -
@@ -3091,6 +3155,72 @@ export class OrdersService {
     await this.persistCompositionUpdates(authContext, companyId, [
       { input, target },
     ]);
+
+    return this.getOrderDetails(authContext, orderRecordId);
+  }
+
+  /**
+   * Drops the order-level product cost and packaging overrides so the order is
+   * priced again from the current catalog (SKU) values. Other overrides
+   * (commission, shipping, other variable costs, ...) are preserved.
+   */
+  async recalculateOrder(
+    authContext: TenantContext,
+    orderRecordId: string,
+  ): Promise<OrderDetails> {
+    const companyId = this.requireSelectedCompanyId(authContext);
+    const target = await this.readCompositionUpdateTarget(
+      authContext,
+      companyId,
+      orderRecordId,
+    );
+    const catalogDrivenFields = ["productCostAmount", "packagingCostAmount"];
+
+    const rowsToUpdate = target.rows.map((row) => {
+      const metadata =
+        row.metadata && typeof row.metadata === "object"
+          ? { ...(row.metadata as Record<string, unknown>) }
+          : {};
+      const compositionOverrides = {
+        ...(readRawOrderCompositionOverrides(metadata) ?? {}),
+      } as Record<string, unknown>;
+
+      for (const field of catalogDrivenFields) {
+        delete compositionOverrides[field];
+      }
+
+      if (Array.isArray(metadata.spreadsheetImportOwnedCompositionOverrides)) {
+        const importOwnedFields =
+          metadata.spreadsheetImportOwnedCompositionOverrides.filter(
+            (field): field is string =>
+              typeof field === "string" && !catalogDrivenFields.includes(field),
+          );
+        if (importOwnedFields.length > 0) {
+          metadata.spreadsheetImportOwnedCompositionOverrides =
+            importOwnedFields;
+        } else {
+          delete metadata.spreadsheetImportOwnedCompositionOverrides;
+        }
+      }
+
+      metadata.compositionOverrides = compositionOverrides;
+      return { id: row.id, metadata };
+    });
+
+    await this.db.transaction(async (transaction) => {
+      for (const row of rowsToUpdate) {
+        await transaction
+          .update(externalOrders)
+          .set({ metadata: row.metadata, updatedAt: new Date() })
+          .where(
+            and(
+              eq(externalOrders.id, row.id),
+              eq(externalOrders.organizationId, authContext.organizationId),
+              eq(externalOrders.companyId, companyId),
+            ),
+          );
+      }
+    });
 
     return this.getOrderDetails(authContext, orderRecordId);
   }

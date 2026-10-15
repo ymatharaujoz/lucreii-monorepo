@@ -15,6 +15,7 @@ import {
   Package,
   Percent,
   Pencil,
+  Calculator,
   RefreshCw,
   Search,
   SlidersHorizontal,
@@ -53,6 +54,7 @@ import {
   downloadOrdersExport,
   useOrderDetails,
   useOrdersList,
+  useRecalculateOrder,
   useSyncOrder,
   useUpdateOrderComposition,
   useUpdateOrderOtherVariableCostsBulk,
@@ -1346,6 +1348,7 @@ function OrdersHomeContent({
 
   const detailQuery = useOrderDetails(selectedOrderId, modalOpen);
   const syncOrderMutation = useSyncOrder();
+  const recalculateOrderMutation = useRecalculateOrder();
   const updateOrderCompositionMutation = useUpdateOrderComposition();
   const updateOrderProductCostBulkMutation = useUpdateOrderProductCostBulk();
   const updateOrderOtherVariableCostsBulkMutation =
@@ -1474,6 +1477,27 @@ function OrdersHomeContent({
     } catch {
       setSyncOrderFeedback({
         message: "Não foi possível sincronizar o pedido. Tente novamente.",
+        type: "error",
+      });
+    }
+  };
+
+  const handleRecalculateOrder = async () => {
+    if (!selectedOrderId) {
+      return;
+    }
+
+    setSyncOrderFeedback(null);
+    try {
+      await recalculateOrderMutation.mutateAsync(selectedOrderId);
+      setSyncOrderFeedback({
+        message:
+          "Pedido recalculado com os custos atuais do catálogo (SKU).",
+        type: "success",
+      });
+    } catch {
+      setSyncOrderFeedback({
+        message: "Não foi possível recalcular o pedido. Tente novamente.",
         type: "error",
       });
     }
@@ -2407,10 +2431,11 @@ function OrdersHomeContent({
           </div>
         ) : (
           <div className="space-y-4">
-            {detailQuery.data.order.provider === "mercadolivre" ? (
-              <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {detailQuery.data.order.provider === "mercadolivre" ? (
                 <Button
                   className="shrink-0"
+                  disabled={recalculateOrderMutation.isPending}
                   loading={syncOrderMutation.isPending}
                   onClick={() => void handleSyncOrder()}
                   size="sm"
@@ -2426,8 +2451,26 @@ function OrdersHomeContent({
                     </>
                   )}
                 </Button>
-              </div>
-            ) : null}
+              ) : null}
+              <Button
+                className="shrink-0"
+                disabled={syncOrderMutation.isPending}
+                loading={recalculateOrderMutation.isPending}
+                onClick={() => void handleRecalculateOrder()}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                {recalculateOrderMutation.isPending ? (
+                  "Recalculando..."
+                ) : (
+                  <>
+                    <Calculator aria-hidden="true" className="h-4 w-4" />
+                    Recalcular
+                  </>
+                )}
+              </Button>
+            </div>
             {syncOrderFeedback ? (
               <div
                 aria-live={

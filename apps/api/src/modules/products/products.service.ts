@@ -88,11 +88,26 @@ import {
   isPerformanceEligibleOrder,
 } from "@/modules/orders/order-financial-eligibility";
 import { SyncService } from "@/modules/sync/sync.service";
+import { pickLatestProductCost } from "./latest-product-cost";
 import {
   buildListingAdvertisingKey,
   buildListingAdvertisingLookupKey,
   groupPerformanceRows,
 } from "./performance-grouping";
+
+function groupCostsByProductId<T extends { productId: string }>(
+  costRows: readonly T[],
+): Map<string, T[]> {
+  const costsByProductId = new Map<string, T[]>();
+
+  for (const costRow of costRows) {
+    const bucket = costsByProductId.get(costRow.productId) ?? [];
+    bucket.push(costRow);
+    costsByProductId.set(costRow.productId, bucket);
+  }
+
+  return costsByProductId;
+}
 
 type ProductUpdateInput = Partial<ProductFormValues>;
 type ProductCostUpdateInput = Partial<ProductCostFormValues>;
@@ -1145,9 +1160,10 @@ export class ProductsService {
 
     const latestCosts = new Map<string, ProductCostRecord>();
 
-    for (const costRow of productCostRows) {
-      if (!latestCosts.has(costRow.productId)) {
-        latestCosts.set(costRow.productId, this.toProductCostRecord(costRow));
+    for (const [productId, costRows] of groupCostsByProductId(productCostRows)) {
+      const latestCostRow = pickLatestProductCost(costRows);
+      if (latestCostRow) {
+        latestCosts.set(productId, this.toProductCostRecord(latestCostRow));
       }
     }
 
@@ -1989,6 +2005,26 @@ export class ProductsService {
       productId,
       scopedContext?.companyId,
     );
+    const relatedProductIds = [
+      ...new Set(input.relatedProductIds ?? []),
+    ].filter((relatedProductId) => relatedProductId !== productId);
+
+    // Listings that share a SKU share their finance values: apply the edit to
+    // every related product before returning the edited one.
+    for (const relatedProductId of relatedProductIds) {
+      await this.ensureProductAccess(
+        organizationId,
+        relatedProductId,
+        scopedContext?.companyId,
+      );
+      await this.updateCatalogFinanceForGroup(
+        organizationId,
+        scopedContext?.companyId,
+        relatedProductId,
+        input,
+      );
+    }
+
     return this.updateCatalogFinanceForGroup(
       organizationId,
       scopedContext?.companyId,
@@ -4051,9 +4087,12 @@ export class ProductsService {
     );
     const existingCostByProductId = new Map<string, ProductCost>();
 
-    for (const cost of existingCosts ?? []) {
-      if (!existingCostByProductId.has(cost.productId)) {
-        existingCostByProductId.set(cost.productId, cost);
+    for (const [costProductId, costRows] of groupCostsByProductId(
+      existingCosts ?? [],
+    )) {
+      const latestCost = pickLatestProductCost(costRows);
+      if (latestCost) {
+        existingCostByProductId.set(costProductId, latestCost);
       }
     }
 
@@ -4090,7 +4129,7 @@ export class ProductsService {
     input: ProductCatalogFinanceUpdateInput,
     groupedResponse = true,
   ): Promise<ProductListItem> {
-    const [existingProduct, existingCost] = await Promise.all([
+    const [existingProduct, existingCosts] = await Promise.all([
       this.db.query.products.findFirst({
         where: (table) =>
           and(
@@ -4102,7 +4141,7 @@ export class ProductsService {
           financeDefaults: true,
         },
       }),
-      this.db.query.productCosts.findFirst({
+      this.db.query.productCosts.findMany({
         orderBy: (table) => [desc(table.effectiveFrom), desc(table.createdAt)],
         where: (table) =>
           and(
@@ -4120,7 +4159,7 @@ export class ProductsService {
     await this.db.transaction(async (tx) => {
       await this.persistCatalogFinanceForProduct({
         companyId,
-        existingCost: existingCost ?? null,
+        existingCost: pickLatestProductCost(existingCosts ?? []),
         existingProduct,
         input,
         organizationId,
@@ -4246,11 +4285,21 @@ export class ProductsService {
         .returning();
     }
 
+    const otherVariableCostValues = {
+      ...(input.input.otherVariableCostAmount !== undefined
+        ? { otherVariableCostAmount: input.input.otherVariableCostAmount }
+        : {}),
+      ...(input.input.otherVariableCostPercent !== undefined
+        ? { otherVariableCostPercent: input.input.otherVariableCostPercent }
+        : {}),
+    };
+
     if (input.existingProduct.financeDefaults) {
       await input.tx
         .update(productFinanceDefaults)
         .set({
           packagingCost: input.input.packagingCost,
+          ...otherVariableCostValues,
         })
         .where(
           eq(
@@ -4266,6 +4315,7 @@ export class ProductsService {
           advertisingCost: "0",
           packagingCost: input.input.packagingCost,
           productId: input.existingProduct.id,
+          ...otherVariableCostValues,
         })
         .returning();
     }
@@ -4756,10 +4806,10 @@ export class ProductsService {
       ...this.toProductRecord(productRow, productRow.images),
       derivedFromProvider,
       isSyntheticParent: false,
-      latestCost:
-        productCostRows.length > 0
-          ? this.toProductCostRecord(productCostRows[0]!)
-          : null,
+      latestCost: (() => {
+        const latestCostRow = pickLatestProductCost(productCostRows);
+        return latestCostRow ? this.toProductCostRecord(latestCostRow) : null;
+      })(),
       financeDefaults: productRow.financeDefaults
         ? this.toProductFinanceDefaultsRecord(productRow.financeDefaults)
         : null,
@@ -4820,6 +4870,8 @@ export class ProductsService {
       advertisingCost: String(row.advertisingCost),
       createdAt: row.createdAt.toISOString(),
       id: row.id,
+      otherVariableCostAmount: String(row.otherVariableCostAmount ?? "0"),
+      otherVariableCostPercent: String(row.otherVariableCostPercent ?? "0"),
       packagingCost: String(row.packagingCost),
       productId: row.productId,
       updatedAt: row.updatedAt.toISOString(),
