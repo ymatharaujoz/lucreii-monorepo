@@ -190,7 +190,7 @@ function MarketplaceMarks() {
           <span className="w-full truncate text-[9px] font-medium text-foreground-soft">
             {name}
           </span>
-          {(name === "TikTok Shop" || name === "Shein") && (
+          {(name === "Shopee" || name === "TikTok Shop" || name === "Shein") && (
             <span className="text-[8px] text-muted-foreground">Em breve</span>
           )}
         </div>

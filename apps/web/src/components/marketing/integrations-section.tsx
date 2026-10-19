@@ -75,7 +75,7 @@ const integrationCards = [
     description:
       "Centralize seus dados da Shopee na Lucreii e acompanhe o resultado real da sua operação.",
     icon: <ShopeeIcon className="h-16 w-16" />,
-    status: "available" as const,
+    status: "coming-soon" as const,
     features: [
       "Pedidos e vendas",
       "Produtos e SKUs",

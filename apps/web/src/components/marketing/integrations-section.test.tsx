@@ -83,9 +83,9 @@ describe("IntegrationsSection", () => {
       expect(markup).toContain(marketplace);
     }
 
-    expect((markup.match(/Disponível/g) ?? []).length).toBe(2);
-    expect((markup.match(/Em breve/g) ?? []).length).toBe(2);
-    expect((markup.match(/href=\"#demo\"/g) ?? []).length).toBe(2);
+    expect((markup.match(/Disponível/g) ?? []).length).toBe(1);
+    expect((markup.match(/Em breve/g) ?? []).length).toBe(3);
+    expect((markup.match(/href=\"#demo\"/g) ?? []).length).toBe(3);
     expect(markup).toContain('href="/sign-in"');
   });
 

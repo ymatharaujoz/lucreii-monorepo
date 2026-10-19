@@ -80,7 +80,7 @@ const featureCards = [
 
 const marketplaceCards = [
   { name: "Mercado Livre", icon: MercadoLivreMiniIcon, comingSoon: false },
-  { name: "Shopee", icon: ShopeeMiniIcon, comingSoon: false },
+  { name: "Shopee", icon: ShopeeMiniIcon, comingSoon: true },
   { name: "TikTok Shop", icon: TiktokMiniIcon, comingSoon: true },
   { name: "Shein", icon: SheinMiniIcon, comingSoon: true },
 ] as const;
