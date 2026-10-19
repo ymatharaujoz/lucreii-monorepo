@@ -3160,67 +3160,22 @@ export class OrdersService {
   }
 
   /**
-   * Drops the order-level product cost and packaging overrides so the order is
-   * priced again from the current catalog (SKU) values. Other overrides
-   * (commission, shipping, other variable costs, ...) are preserved.
+   * Recomputes the order's derived columns (net revenue, tax, profit, margin,
+   * per-item profit) from the current composition and catalog data. Manual
+   * composition overrides (product cost, packaging, commission, ...) are kept
+   * exactly as the user filled them; nothing is persisted or cleared.
    */
   async recalculateOrder(
     authContext: TenantContext,
     orderRecordId: string,
   ): Promise<OrderDetails> {
     const companyId = this.requireSelectedCompanyId(authContext);
-    const target = await this.readCompositionUpdateTarget(
+    // Throws NotFoundException when the order does not belong to the company.
+    await this.readCompositionUpdateTarget(
       authContext,
       companyId,
       orderRecordId,
     );
-    const catalogDrivenFields = ["productCostAmount", "packagingCostAmount"];
-
-    const rowsToUpdate = target.rows.map((row) => {
-      const metadata =
-        row.metadata && typeof row.metadata === "object"
-          ? { ...(row.metadata as Record<string, unknown>) }
-          : {};
-      const compositionOverrides = {
-        ...(readRawOrderCompositionOverrides(metadata) ?? {}),
-      } as Record<string, unknown>;
-
-      for (const field of catalogDrivenFields) {
-        delete compositionOverrides[field];
-      }
-
-      if (Array.isArray(metadata.spreadsheetImportOwnedCompositionOverrides)) {
-        const importOwnedFields =
-          metadata.spreadsheetImportOwnedCompositionOverrides.filter(
-            (field): field is string =>
-              typeof field === "string" && !catalogDrivenFields.includes(field),
-          );
-        if (importOwnedFields.length > 0) {
-          metadata.spreadsheetImportOwnedCompositionOverrides =
-            importOwnedFields;
-        } else {
-          delete metadata.spreadsheetImportOwnedCompositionOverrides;
-        }
-      }
-
-      metadata.compositionOverrides = compositionOverrides;
-      return { id: row.id, metadata };
-    });
-
-    await this.db.transaction(async (transaction) => {
-      for (const row of rowsToUpdate) {
-        await transaction
-          .update(externalOrders)
-          .set({ metadata: row.metadata, updatedAt: new Date() })
-          .where(
-            and(
-              eq(externalOrders.id, row.id),
-              eq(externalOrders.organizationId, authContext.organizationId),
-              eq(externalOrders.companyId, companyId),
-            ),
-          );
-      }
-    });
 
     return this.getOrderDetails(authContext, orderRecordId);
   }

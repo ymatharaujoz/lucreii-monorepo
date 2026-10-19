@@ -3327,44 +3327,33 @@ describe("OrdersService", () => {
     );
   });
 
-  it("recalculates an order by dropping only the catalog-driven cost overrides", async () => {
-    const setMock = vi.fn().mockReturnValue({
-      where: vi.fn().mockResolvedValue(undefined),
-    });
-    const updateMock = vi.fn().mockReturnValue({ set: setMock });
-    const rows = [
-      {
-        id: "order_row_1",
-        items: [{ quantity: 1 }],
-        metadata: {
-          compositionOverrides: {
-            marketplaceCommissionAmount: "10.00",
-            otherVariableCostPercent: "5.00",
-            packagingCostAmount: "2.00",
-            productCostAmount: "80.00",
-          },
-          spreadsheetImportOwnedCompositionOverrides: [
-            "productCostAmount",
-            "marketplaceCommissionAmount",
-          ],
-        },
-        provider: "shopee",
-      },
-    ];
+  it("recalculates an order without touching the manual composition overrides", async () => {
+    const updateMock = vi.fn();
     const db = {
       query: {
         externalOrders: {
-          findFirst: vi.fn().mockResolvedValue(rows[0]),
+          findFirst: vi.fn().mockResolvedValue({
+            id: "order_row_1",
+            items: [{ quantity: 1 }],
+            metadata: {
+              compositionOverrides: {
+                packagingCostAmount: "2.00",
+                productCostAmount: "80.00",
+              },
+            },
+            provider: "shopee",
+          }),
         },
       },
       transaction: vi.fn(async (callback) => callback({ update: updateMock })),
     };
     const service = new OrdersService(db as never);
+    const details = { composition: { productCostAmount: "80.00" } };
     const getOrderDetailsSpy = vi
       .spyOn(service, "getOrderDetails")
-      .mockResolvedValue({} as never);
+      .mockResolvedValue(details as never);
 
-    await service.recalculateOrder(
+    const result = await service.recalculateOrder(
       {
         organizationId: "org_123",
         selectedCompanyId: "company_123",
@@ -3373,23 +3362,13 @@ describe("OrdersService", () => {
       "order_row_1",
     );
 
-    expect(setMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        metadata: {
-          compositionOverrides: {
-            marketplaceCommissionAmount: "10.00",
-            otherVariableCostPercent: "5.00",
-          },
-          spreadsheetImportOwnedCompositionOverrides: [
-            "marketplaceCommissionAmount",
-          ],
-        },
-      }),
-    );
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(db.transaction).not.toHaveBeenCalled();
     expect(getOrderDetailsSpy).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org_123" }),
       "order_row_1",
     );
+    expect(result).toBe(details);
   });
 
   it("updates selected orders product costs in one transaction", async () => {

@@ -1491,8 +1491,7 @@ function OrdersHomeContent({
     try {
       await recalculateOrderMutation.mutateAsync(selectedOrderId);
       setSyncOrderFeedback({
-        message:
-          "Pedido recalculado com os custos atuais do catálogo (SKU).",
+        message: "Pedido recalculado com os dados de Composição.",
         type: "success",
       });
     } catch {

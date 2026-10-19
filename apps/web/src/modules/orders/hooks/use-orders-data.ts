@@ -100,7 +100,7 @@ export async function syncOrder(orderId: string): Promise<OrderDetails> {
   return response.data;
 }
 
-/** Drops order-level cost overrides so the order uses current catalog costs. */
+/** Recomputes the order derived columns, keeping manual composition overrides. */
 export async function recalculateOrder(orderId: string): Promise<OrderDetails> {
   const response = await apiClient.post<{ data: OrderDetails; error: null }>(
     `/orders/${orderId}/recalculate`,
