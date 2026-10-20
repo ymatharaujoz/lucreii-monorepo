@@ -82,7 +82,7 @@ describe("OrdersService", () => {
     });
   });
 
-  it("uses a product cost override without hiding other financial pendencies", () => {
+  it("uses a product cost override even when an item is not linked to the catalog", () => {
     const result = buildOrderFinancialMetrics(
       {
         fees: [],
@@ -119,12 +119,41 @@ describe("OrdersService", () => {
 
     expect(result.composition).toEqual(
       expect.objectContaining({
-        hasIncompleteCostData: true,
+        hasIncompleteCostData: false,
         missingCostItemsCount: 0,
         missingLinkedItemsCount: 1,
         productCostAmount: "20.00",
       }),
     );
+    expect(result.totalProfitAmount).not.toBeNull();
+  });
+
+  it("keeps profit empty for unlinked items until a product cost is informed", () => {
+    const buildOrder = (compositionOverrides: Record<string, string>) =>
+      ({
+        fees: [],
+        id: "order_1",
+        items: [
+          { externalProduct: null, quantity: 1, totalPrice: "100.00" },
+        ],
+        metadata: { compositionOverrides },
+        orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+        provider: "shopee",
+        refundBonusAmount: null,
+        refundBonusStatus: null,
+        status: "paid",
+        totalAmount: "100.00",
+      }) as never;
+
+    expect(
+      buildOrderFinancialMetrics(buildOrder({}), "0").totalProfitAmount,
+    ).toBeNull();
+    expect(
+      buildOrderFinancialMetrics(
+        buildOrder({ productCostAmount: "20.00" }),
+        "0",
+      ).totalProfitAmount,
+    ).toBe("80.00");
   });
 
   it("subtracts other variable costs (percent and fixed) from total profit", () => {

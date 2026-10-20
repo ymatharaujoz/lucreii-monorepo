@@ -1013,8 +1013,10 @@ export function buildOrderFinancialMetrics(
   const otherVariableCostTotalAmount =
     (revenueAmount * otherVariableCostPercent) / 100 + otherVariableCostAmount;
 
+  // A manual product cost covers the whole order, so unlinked/uncosted items
+  // no longer block the profit calculation once the user has informed it.
   const hasIncompleteCostData =
-    missingLinkedItemsCount > 0 ||
+    (missingLinkedItemsCount > 0 && !hasProductCostOverride) ||
     missingCostItemsCount > 0 ||
     pendingFinancialFields.length > 0;
   const totalProfitAmount = hasIncompleteCostData
@@ -1570,7 +1572,7 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
         Math.round((Number(revenueCents) * itemOtherVariableCostPercent) / 100),
       );
     const totalProfitCents =
-      linkedProduct && productCostCents !== null
+      (linkedProduct || hasProductCostOverride) && productCostCents !== null
         ? netRevenueCents -
           productCostCents -
           packagingCostCents -
