@@ -136,7 +136,13 @@ type MercadoLivreOrderSearchResponse = {
   results?: MercadoLivreOrderResponse[];
 };
 
+type MercadoLivreOrderCoupon = {
+  amount?: number | string | null;
+  id?: number | string | null;
+};
+
 type MercadoLivreOrderResponse = {
+  coupon?: MercadoLivreOrderCoupon | null;
   currency_id?: string;
   date_closed?: string;
   date_created?: string;
@@ -144,6 +150,8 @@ type MercadoLivreOrderResponse = {
   order_items?: MercadoLivreOrderItemResponse[];
   pack_id?: number | string;
   payments?: Array<{
+    coupon_amount?: number | string | null;
+    coupon_id?: number | string | null;
     fee_amount?: number;
     id?: number | string;
     marketplace_fee?: number;
@@ -209,12 +217,35 @@ type MercadoLivrePaymentFinancialDetail = {
 
 type MercadoLivrePaymentResponse = {
   charges_details?: MercadoLivrePaymentFinancialDetail[];
+  coupon_amount?: number | string | null;
+  coupon_code?: string | null;
+  coupon_id?: number | string | null;
   fee_details?: MercadoLivrePaymentFinancialDetail[];
   id?: number | string;
   net_received_amount?: number | string;
   transaction_details?: {
     net_received_amount?: number | string;
   };
+};
+
+type MercadoLivreSellerCouponCampaignResponse = {
+  code?: string | null;
+  coupon_code?: string | null;
+  name?: string | null;
+};
+
+type MercadoLivreSellerCouponCampaign = {
+  code: string | null;
+  name: string | null;
+};
+
+type MercadoLivreCouponDiscountResolution = {
+  amount: number;
+  couponCode: string | null;
+  couponId: string | null;
+  couponName: string | null;
+  /** "seller" when payment fee details confirm the seller funded it. */
+  fundedBy: "seller" | "unknown";
 };
 
 export type MercadoLivreShippingCostResolution = {
@@ -1661,6 +1692,10 @@ export class MercadoLivreProvider implements IntegrationProvider {
   private readonly shipmentDetailCache = new Map<
     string,
     Promise<MercadoLivreShipmentResponse | null>
+  >();
+  private readonly sellerCouponCampaignCache = new Map<
+    string,
+    Promise<MercadoLivreSellerCouponCampaign | null>
   >();
 
   constructor(private readonly env: ApiRuntimeEnv) {}
@@ -3166,7 +3201,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
     const refundBonusAmount = financialAdjustment
       ? toDecimalString(financialAdjustment.amount)
       : "0.00";
-    const orderFees = financialAdjustment
+    const orderFees: IntegrationSyncFee[] = financialAdjustment
       ? [
           ...fees,
           {
@@ -3195,6 +3230,26 @@ export class MercadoLivreProvider implements IntegrationProvider {
           },
         ]
       : fees;
+    const couponDiscount = await this.resolveOrderCouponDiscount({
+      accessToken: input.accessToken,
+      order: resolvedOrder,
+    });
+
+    if (couponDiscount) {
+      orderFees.push({
+        amount: toDecimalString(couponDiscount.amount),
+        currency: resolvedOrder.currency_id ?? "BRL",
+        feeType: "seller_coupon_discount",
+        metadata: {
+          couponCode: couponDiscount.couponCode,
+          couponId: couponDiscount.couponId,
+          couponName: couponDiscount.couponName,
+          fundedBy: couponDiscount.fundedBy,
+          source: "mercadolivre_payment",
+        },
+      });
+    }
+
     const mercadoLivreBillingTotalAmount =
       readMercadoLivreBillingTotalAmountFromFees(orderFees);
 
@@ -3532,6 +3587,7 @@ export class MercadoLivreProvider implements IntegrationProvider {
   ): MercadoLivreOrderResponse {
     return {
       ...order,
+      coupon: detailedOrder.coupon ?? order.coupon,
       currency_id: detailedOrder.currency_id ?? order.currency_id,
       date_closed: detailedOrder.date_closed ?? order.date_closed,
       date_created: detailedOrder.date_created ?? order.date_created,
@@ -4433,6 +4489,140 @@ export class MercadoLivreProvider implements IntegrationProvider {
     }
 
     return null;
+  }
+
+  /**
+   * Resolves the seller-funded share of a coupon applied to the order.
+   * Mercado Pago marks it as a `coupon_fee` fee detail paid by the collector
+   * (the seller); coupons funded by Mercado Livre are ignored.
+   */
+  private async resolveOrderCouponDiscount(input: {
+    accessToken: string;
+    order: MercadoLivreOrderResponse;
+  }): Promise<MercadoLivreCouponDiscountResolution | null> {
+    const payments = input.order.payments ?? [];
+    const declaredAmount =
+      readPositiveBillingNumber(input.order.coupon?.amount) ??
+      payments.reduce(
+        (sum, payment) =>
+          sum + (readPositiveBillingNumber(payment.coupon_amount) ?? 0),
+        0,
+      );
+
+    if (declaredAmount <= 0) {
+      return null;
+    }
+
+    let couponId =
+      toOptionalString(input.order.coupon?.id) ??
+      payments
+        .map((payment) => toOptionalString(payment.coupon_id))
+        .find((id) => id !== null) ??
+      null;
+    let couponCode: string | null = null;
+    let sellerAmount = 0;
+    let confirmedByPayment = false;
+
+    for (const payment of payments) {
+      if (payment.id === undefined || payment.id === null) {
+        continue;
+      }
+
+      const paymentDetail = await this.fetchPaymentDetails({
+        accessToken: input.accessToken,
+        paymentId: String(payment.id),
+      });
+
+      if (!paymentDetail) {
+        continue;
+      }
+
+      couponId ??= toOptionalString(paymentDetail.coupon_id);
+      couponCode ??= paymentDetail.coupon_code?.trim() || null;
+
+      const couponFees = (paymentDetail.fee_details ?? []).filter(
+        (fee) => fee.type === "coupon_fee",
+      );
+
+      if (couponFees.length === 0) {
+        continue;
+      }
+
+      confirmedByPayment = true;
+      sellerAmount += couponFees
+        .filter((fee) => fee.fee_payer === "collector")
+        .reduce(
+          (sum, fee) => sum + (readPositiveBillingNumber(fee.amount) ?? 0),
+          0,
+        );
+    }
+
+    const amount = roundMoneyNumber(
+      confirmedByPayment ? sellerAmount : declaredAmount,
+    );
+
+    if (amount <= 0) {
+      return null;
+    }
+
+    const campaign = couponId
+      ? await this.fetchSellerCouponCampaign({
+          accessToken: input.accessToken,
+          campaignId: couponId,
+        })
+      : null;
+
+    return {
+      amount,
+      couponCode: couponCode ?? campaign?.code ?? null,
+      couponId,
+      couponName: campaign?.name ?? null,
+      fundedBy: confirmedByPayment ? "seller" : "unknown",
+    };
+  }
+
+  /** Best-effort lookup of a seller coupon campaign name/code. */
+  private async fetchSellerCouponCampaign(input: {
+    accessToken: string;
+    campaignId: string;
+  }) {
+    let payloadPromise = this.sellerCouponCampaignCache.get(input.campaignId);
+
+    if (!payloadPromise) {
+      payloadPromise = (async () => {
+        try {
+          const response = await this.fetchWithRetry(
+            `https://api.mercadolibre.com/seller-promotions/promotions/${encodeURIComponent(input.campaignId)}?promotion_type=SELLER_COUPON_CAMPAIGN&app_version=v2`,
+            {
+              headers: {
+                Authorization: `Bearer ${input.accessToken}`,
+                accept: "application/json",
+              },
+              method: "GET",
+            },
+          );
+          const payload = (await parseProviderResponse(response)) as
+            | MercadoLivreSellerCouponCampaignResponse
+            | string
+            | null;
+
+          if (!response.ok || !payload || typeof payload !== "object") {
+            return null;
+          }
+
+          const name = payload.name?.trim() || null;
+          const code =
+            payload.coupon_code?.trim() || payload.code?.trim() || null;
+
+          return name || code ? { code, name } : null;
+        } catch {
+          return null;
+        }
+      })();
+      this.sellerCouponCampaignCache.set(input.campaignId, payloadPromise);
+    }
+
+    return payloadPromise;
   }
 
   private async fetchPaymentDetails(input: {

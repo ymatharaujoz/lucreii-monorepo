@@ -208,6 +208,68 @@ describe("OrdersService", () => {
     expect(withOtherCosts.totalProfitAmount).toBe("72.00");
   });
 
+  it("deducts seller-funded coupon discounts from profit and tax base", () => {
+    const result = buildOrderFinancialMetrics(
+      {
+        fees: [
+          { amount: "2.77", feeType: "marketplace_commission", metadata: {} },
+          { amount: "6.85", feeType: "shipping_cost", metadata: {} },
+          {
+            amount: "1.04",
+            feeType: "seller_coupon_discount",
+            metadata: {
+              couponCode: "SAPATO5",
+              couponId: "123",
+              couponName: "Cupom Outubro",
+              fundedBy: "seller",
+            },
+          },
+        ],
+        id: "order_1",
+        items: [
+          {
+            externalProduct: {
+              linkedProductId: "product_1",
+              sku: "SKU-1",
+              linkedProduct: {
+                financeDefaults: { packagingCost: "0.50" },
+                productCosts: [],
+              },
+            },
+            quantity: 1,
+            totalPrice: "20.80",
+          },
+        ],
+        metadata: { compositionOverrides: { productCostAmount: "2.14" } },
+        orderedAt: new Date("2026-10-19T10:15:00.000Z"),
+        provider: "mercadolivre",
+        refundBonusAmount: null,
+        refundBonusStatus: null,
+        status: "paid",
+        totalAmount: "20.80",
+      } as never,
+      "0.04",
+    );
+
+    expect(result.composition).toEqual(
+      expect.objectContaining({
+        couponDiscountAmount: "1.04",
+        couponDiscountBreakdown: [
+          {
+            amount: "1.04",
+            code: "SAPATO5",
+            id: "123",
+            name: "Cupom Outubro",
+          },
+        ],
+        netRevenueAmount: "10.14",
+        revenueAmount: "20.80",
+        taxAmount: "0.79",
+      }),
+    );
+    expect(result.totalProfitAmount).toBe("6.71");
+  });
+
   describe("SKU-level other variable costs and catalog cost", () => {
     const buildOrder = (
       compositionOverrides: Record<string, string>,
@@ -7299,6 +7361,7 @@ describe("OrdersService", () => {
     );
 
     expect(summary).toEqual({
+      couponDiscount: "0.00",
       excludedRevenue: "90.00",
       excludedSales: 2,
       grossSales: 5,

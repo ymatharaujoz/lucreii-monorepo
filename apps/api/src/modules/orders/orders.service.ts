@@ -32,6 +32,7 @@ import type {
   OrderCanonicalStatus,
   OrderComposition,
   OrderCompositionUpdateInput,
+  OrderCouponDiscount,
   OrderDetails,
   OrderExportFilters,
   OrderImportPendingFinancialField,
@@ -161,6 +162,7 @@ type CompositionUpdateTarget = {
 };
 
 export type ExportedOrderFinancialSummary = {
+  couponDiscount: string;
   excludedRevenue: string;
   excludedSales: number;
   grossSales: number;
@@ -320,6 +322,7 @@ function summarizeExportedOrderFinancials(
   ExportedOrderFinancialSummary,
   "excludedRevenue" | "excludedSales" | "grossSales"
 > {
+  let couponDiscount = 0n;
   let marketplaceCommission = 0n;
   let netSales = 0;
   let packagingCost = 0n;
@@ -332,6 +335,7 @@ function summarizeExportedOrderFinancials(
 
   for (const logicalOrder of logicalOrders) {
     const composition = logicalOrder.composition;
+    couponDiscount += parseMoneyToCents(composition.couponDiscountAmount);
     marketplaceCommission += parseMoneyToCents(
       composition.marketplaceCommissionAmount,
     );
@@ -348,6 +352,7 @@ function summarizeExportedOrderFinancials(
   }
 
   return {
+    couponDiscount: formatCents(couponDiscount),
     marketplaceCommission: formatCents(marketplaceCommission),
     netSales,
     packagingCost: formatCents(packagingCost),
@@ -744,6 +749,40 @@ function buildOrderShippingBreakdown(
   };
 }
 
+const SELLER_COUPON_DISCOUNT_FEE_TYPE = "seller_coupon_discount";
+
+function readMetadataText(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function buildOrderCouponDiscountBreakdown(
+  fees: ExternalFee[],
+): OrderCouponDiscount[] {
+  return fees
+    .filter((fee) => fee.feeType === SELLER_COUPON_DISCOUNT_FEE_TYPE)
+    .map((fee) => {
+      const metadata =
+        fee.metadata && typeof fee.metadata === "object"
+          ? (fee.metadata as Record<string, unknown>)
+          : {};
+
+      return {
+        amount: toNumber(fee.amount).toFixed(2),
+        code: readMetadataText(metadata, "couponCode"),
+        id: readMetadataText(metadata, "couponId"),
+        name: readMetadataText(metadata, "couponName"),
+      };
+    })
+    .filter((coupon) => toNumber(coupon.amount) > 0);
+}
+
 function toCatalogGroupKey(itemId: string) {
   return `mercadolivre:${itemId}`;
 }
@@ -883,8 +922,16 @@ function buildOrderBaseMetrics(order: OrderFinancialRow) {
             order.fees,
             (fee) => fee.feeType === "refund_bonus",
           );
+  const couponDiscountAmount = sumFeesByPredicate(
+    order.fees,
+    (fee) => fee.feeType === SELLER_COUPON_DISCOUNT_FEE_TYPE,
+  );
   const totalFees =
-    shippingAmount + tariffAmount + fixedCostAmount - refundBonusAmount;
+    shippingAmount +
+    tariffAmount +
+    fixedCostAmount +
+    couponDiscountAmount -
+    refundBonusAmount;
   const totalWithoutFees = Math.max(0, totalWithFees - totalFees);
   const itemsSold = order.items.reduce(
     (total, item) => total + item.quantity,
@@ -898,6 +945,7 @@ function buildOrderBaseMetrics(order: OrderFinancialRow) {
 
   return {
     canonicalStatus,
+    couponDiscountAmount,
     fixedCostAmount,
     itemsSold,
     metadata,
@@ -944,11 +992,18 @@ export function buildOrderFinancialMetrics(
       : compositionOverrides.refundBonusAmount,
     baseMetrics.refundBonusAmount,
   );
+  const couponDiscountAmount = baseMetrics.couponDiscountAmount;
   const netRevenueAmount =
     revenueAmount -
     marketplaceCommissionAmount -
     shippingOrFixedFeeAmount +
-    refundBonusAmount;
+    refundBonusAmount -
+    couponDiscountAmount;
+  // Seller-funded coupons lower the invoiced amount, so tax uses the net price.
+  const taxableRevenueAmount = Math.max(
+    0,
+    revenueAmount - couponDiscountAmount,
+  );
   const parsedTaxRate = toNumber(taxRateDefault);
   const taxRateValue = Number.isFinite(parsedTaxRate) ? parsedTaxRate : 0;
   const pendingFinancialFields = readOrderPendingFinancialFields(order);
@@ -961,7 +1016,7 @@ export function buildOrderFinancialMetrics(
       ? toNumber(importedTaxAmount)
       : pendingFinancialFields.includes("taxAmount")
         ? 0
-        : revenueAmount * taxRateValue;
+        : taxableRevenueAmount * taxRateValue;
 
   let productCostAmount = 0;
   let packagingCostAmount = 0;
@@ -1031,9 +1086,16 @@ export function buildOrderFinancialMetrics(
       ? null
       : (totalProfitAmount / revenueAmount) * 100;
   const shippingBreakdown = buildOrderShippingBreakdown(order.fees);
+  const couponDiscountBreakdown = buildOrderCouponDiscountBreakdown(order.fees);
 
   return {
     composition: {
+      ...(couponDiscountAmount > 0
+        ? {
+            couponDiscountAmount: couponDiscountAmount.toFixed(2),
+            couponDiscountBreakdown,
+          }
+        : {}),
       hasIncompleteCostData,
       marketplaceCommissionAmount: marketplaceCommissionAmount.toFixed(2),
       missingCostItemsCount,
@@ -1535,6 +1597,10 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
     refundBonusTotalCents,
     itemTotalsCents,
   );
+  const couponDiscountAllocations = allocateCentsByWeights(
+    parseMoneyToCents(baseMetrics.couponDiscountAmount.toFixed(2)),
+    itemTotalsCents,
+  );
 
   return order.items.map((item, index) => {
     const linkedProduct = item.externalProduct?.linkedProduct;
@@ -1542,11 +1608,13 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
     const commissionCents = commissionAllocations[index] ?? 0n;
     const shippingOrFixedFeeCents = shippingOrFixedFeeAllocations[index] ?? 0n;
     const refundBonusCents = refundBonusAllocations[index] ?? 0n;
+    const couponDiscountCents = couponDiscountAllocations[index] ?? 0n;
     const netRevenueCents =
       revenueCents -
       commissionCents -
       shippingOrFixedFeeCents +
-      refundBonusCents;
+      refundBonusCents -
+      couponDiscountCents;
     const packagingCostCents = linkedProduct
       ? parseMoneyToCents(linkedProduct.financeDefaults?.packagingCost) *
         BigInt(item.quantity)
@@ -1792,11 +1860,20 @@ function aggregateOrderComposition(
     compositions.map((composition) => composition.revenueAmount),
   );
   const shippingOrFixedFeeAmount = shippingAmount.toFixed(2);
+  const couponDiscountAmount = toNumber(
+    sumMoneyStrings(
+      compositions.map((composition) => composition.couponDiscountAmount),
+    ),
+  );
+  const couponDiscountBreakdown = compositions.flatMap(
+    (composition) => composition.couponDiscountBreakdown ?? [],
+  );
   const netRevenueAmount = (
     toNumber(revenueAmount) -
     toNumber(marketplaceCommissionAmount) -
     shippingAmount +
-    toNumber(refundBonusAmount)
+    toNumber(refundBonusAmount) -
+    couponDiscountAmount
   ).toFixed(2);
   const pendingFinancialFields = Array.from(
     new Set(
@@ -1807,6 +1884,12 @@ function aggregateOrderComposition(
   ) as OrderImportPendingFinancialField[];
 
   return {
+    ...(couponDiscountAmount > 0
+      ? {
+          couponDiscountAmount: couponDiscountAmount.toFixed(2),
+          couponDiscountBreakdown,
+        }
+      : {}),
     hasIncompleteCostData: compositions.some(
       (composition) => composition.hasIncompleteCostData,
     ),
@@ -1985,10 +2068,15 @@ function buildLogicalOrder(
         0),
     0,
   );
+  const totalCouponDiscountAmount = baseMetricsByRow.reduce(
+    (total, metrics) => total + metrics.couponDiscountAmount,
+    0,
+  );
   const totalFeesAmount =
     totalShippingAmount +
     totalTariffAmount +
-    totalFixedCostAmount -
+    totalFixedCostAmount +
+    totalCouponDiscountAmount -
     totalRefundBonusAmount;
   const totalWithoutFeesAmount = Math.max(
     0,
@@ -2907,6 +2995,7 @@ export class OrdersService {
         SKUs: item.skus.join("\n"),
         Status: item.statusLabel,
         "Estornos/Bônus": toNumber(composition.refundBonusAmount),
+        "Descontos/Cupons": toNumber(composition.couponDiscountAmount),
         "Custo Produto":
           composition.missingCostItemsCount > 0
             ? ""
@@ -2929,6 +3018,7 @@ export class OrdersService {
       "Faturamento",
       "Lucro Total",
       "Estornos/Bônus",
+      "Descontos/Cupons",
       "Custo Produto",
       "Comissão em R$",
       "Frete/Taxa Fixa",

@@ -634,10 +634,98 @@ describe("OrdersHome", () => {
       )!,
     );
 
-    const content = text();
-    expect(content).toContain("Frete / Taxa Fixa");
-    expect(content).toContain("-R$ 5,65");
-    expect(content).toContain("R$ 10,99");
+    expect(text()).toContain("Frete / Taxa Fixa");
+    expect(text()).toContain("-R$ 5,65");
+    expect(text()).not.toContain("R$ 10,99");
+
+    const toggle = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Exibir detalhes de frete / taxa fixa"]',
+    )!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    click(toggle);
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(text()).toContain("Frete pago pelo comprador");
+    expect(text()).toContain("R$ 10,99");
+
+    view.unmount();
+  });
+
+  it("shows seller coupon discounts in composition tab", () => {
+    useOrderDetailsMock.mockReturnValue({
+      data: {
+        composition: {
+          couponDiscountAmount: "1.04",
+          couponDiscountBreakdown: [
+            {
+              amount: "1.04",
+              code: "SAPATO5",
+              id: "123",
+              name: "Cupom Outubro",
+            },
+          ],
+          hasIncompleteCostData: true,
+          marketplaceCommissionAmount: "2.77",
+          missingCostItemsCount: 0,
+          missingLinkedItemsCount: 0,
+          netRevenueAmount: "10.14",
+          packagingCostAmount: "0.50",
+          productCostAmount: "2.14",
+          refundBonusAmount: "0.00",
+          revenueAmount: "20.80",
+          shippingOrFixedFeeAmount: "6.85",
+          taxAmount: "0.79",
+          taxRateDefault: "0.040000",
+        },
+        items: [],
+        order: {
+          contributionMarginPercent: null,
+          createdAt: "2026-10-19T12:00:00.000Z",
+          currency: "BRL",
+          displayOrderId: "2000015607234385",
+          fixedCostAmount: "0.00",
+          id: "order_row_1",
+          itemsSold: 1,
+          orderDate: "2026-10-19",
+          orderId: "2000015607234385",
+          orderedAt: "2026-10-19T10:15:00.000Z",
+          provider: "mercadolivre",
+          skus: [],
+          shippingAmount: "6.85",
+          sourceStatus: "paid",
+          status: "paid",
+          statusLabel: "Pagamento aprovado",
+          tariffAmount: "2.77",
+          totalFees: "10.66",
+          totalProfitAmount: null,
+          totalWithFees: "20.80",
+          totalWithoutFees: "10.14",
+        },
+      },
+      error: null,
+      isLoading: false,
+    });
+
+    const view = mount(<OrdersHome />);
+
+    click(document.querySelector('tr[role="button"]')!);
+    click(
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes("Compos"),
+      )!,
+    );
+
+    expect(text()).toContain("Descontos / Cupons");
+    expect(text()).toContain("-R$ 1,04");
+    expect(text()).not.toContain("Cupom Outubro");
+
+    click(
+      document.querySelector<HTMLButtonElement>(
+        'button[aria-label="Exibir detalhes de descontos / cupons"]',
+      )!,
+    );
+
+    expect(text()).toContain("Cupom Outubro · SAPATO5");
 
     view.unmount();
   });

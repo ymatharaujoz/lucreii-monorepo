@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -20,6 +27,7 @@ import {
   Search,
   SlidersHorizontal,
   Sparkles,
+  Ticket,
   Truck,
   X,
 } from "lucide-react";
@@ -637,6 +645,7 @@ function CompositionMetric({
   label: string;
   value: ReactNode;
   details?: Array<{
+    key?: string;
     label: string;
     negative?: boolean;
     value: string;
@@ -646,6 +655,10 @@ function CompositionMetric({
   negative?: boolean;
   variant?: "default" | "highlight";
 }) {
+  const detailsId = useId();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const hasDetails = Boolean(details && details.length > 0);
+
   return (
     <div
       className={cn(
@@ -665,21 +678,45 @@ function CompositionMetric({
         </div>
         {headerAction}
       </div>
-      <div
-        className={cn(
-          "flex items-baseline gap-1.5 text-xl font-semibold tabular-nums",
-          negative ? "text-red-600" : "text-foreground",
-        )}
-      >
-        {negative ? <span>-</span> : null}
-        {value}
+      <div className="flex items-center justify-between gap-2">
+        <div
+          className={cn(
+            "flex items-baseline gap-1.5 text-xl font-semibold tabular-nums",
+            negative ? "text-red-600" : "text-foreground",
+          )}
+        >
+          {negative ? <span>-</span> : null}
+          {value}
+        </div>
+        {hasDetails ? (
+          <button
+            aria-controls={detailsId}
+            aria-expanded={detailsOpen}
+            aria-label={`${detailsOpen ? "Ocultar" : "Exibir"} detalhes de ${label.toLowerCase()}`}
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/10 hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            onClick={() => setDetailsOpen((open) => !open)}
+            title={detailsOpen ? "Ocultar detalhes" : "Exibir detalhes"}
+            type="button"
+          >
+            <ChevronDown
+              aria-hidden="true"
+              className={cn(
+                "h-4 w-4 transition-transform",
+                detailsOpen ? "rotate-180" : undefined,
+              )}
+            />
+          </button>
+        ) : null}
       </div>
-      {details && details.length > 0 ? (
-        <div className="mt-3 space-y-2 border-t border-border/40 pt-3">
+      {details && hasDetails && detailsOpen ? (
+        <div
+          className="mt-3 space-y-2 border-t border-border/40 pt-3"
+          id={detailsId}
+        >
           {details.map((detail) => (
             <div
               className="flex items-start justify-between gap-3 text-xs leading-snug"
-              key={detail.label}
+              key={detail.key ?? detail.label}
             >
               <span className="max-w-[70%] text-muted-foreground">
                 {detail.label}
@@ -948,7 +985,7 @@ function CompositionTab({
           Livre estiver disponível.
         </div>
       ) : null}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <CompositionMetric
           icon={<DollarSign className="h-4 w-4" />}
           label="Faturamento"
@@ -959,6 +996,22 @@ function CompositionTab({
           icon={<Percent className="h-4 w-4" />}
           label="Estornos / Bônus"
           value={formatMoney(composition.refundBonusAmount)}
+        />
+        <CompositionMetric
+          details={composition.couponDiscountBreakdown?.map(
+            (coupon, index) => ({
+              key: `${coupon.id ?? "coupon"}-${index}`,
+              label:
+                [coupon.name, coupon.code].filter(Boolean).join(" · ") ||
+                (coupon.id ? `Cupom #${coupon.id}` : "Cupom"),
+              negative: true,
+              value: coupon.amount,
+            }),
+          )}
+          icon={<Ticket className="h-4 w-4" />}
+          label="Descontos / Cupons"
+          negative={Number(composition.couponDiscountAmount ?? 0) > 0}
+          value={formatMoney(composition.couponDiscountAmount ?? "0")}
         />
         <CompositionMetric
           icon={<Package className="h-4 w-4" />}

@@ -204,6 +204,13 @@ export const orderShippingBreakdownSchema = z.object({
   source: z.string().trim().min(1).nullable(),
 });
 
+export const orderCouponDiscountSchema = z.object({
+  id: z.string().trim().min(1).nullable(),
+  name: z.string().trim().min(1).nullable(),
+  code: z.string().trim().min(1).nullable(),
+  amount: decimalField("Coupon discount amount"),
+});
+
 export const orderCompositionSchema = z.object({
   revenueAmount: decimalField("Revenue amount"),
   netRevenueAmount: decimalField("Net revenue amount"),
@@ -214,6 +221,11 @@ export const orderCompositionSchema = z.object({
   shippingBreakdown: orderShippingBreakdownSchema.nullable().optional(),
   shippingOrFixedFeeAmount: decimalField("Shipping or fixed fee amount"),
   refundBonusAmount: decimalField("Refund bonus amount"),
+  couponDiscountAmount: decimalField("Coupon discount amount").optional(),
+  couponDiscountBreakdown: z
+    .array(orderCouponDiscountSchema)
+    .nullable()
+    .optional(),
   packagingCostAmount: decimalField("Packaging cost amount"),
   otherVariableCostPercent: decimalField(
     "Other variable cost percent",

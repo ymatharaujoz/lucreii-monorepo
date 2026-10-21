@@ -86,6 +86,7 @@ export class FinancialIndicatorsService {
     );
     const result = calculateFinancialIndicatorsFromTotals({
       advertising,
+      couponDiscount: ordersSummary.couponDiscount,
       fixedCost,
       marketplaceCommission: ordersSummary.marketplaceCommission,
       monthlyAdvertising,

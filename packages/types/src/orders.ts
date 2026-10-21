@@ -152,6 +152,15 @@ export type OrderShippingBreakdown = {
   source: string | null;
 };
 
+export type OrderCouponDiscount = {
+  /** Marketplace coupon identifier, when informed. */
+  id: string | null;
+  name: string | null;
+  code: string | null;
+  /** Seller-funded share of the coupon, in BRL. */
+  amount: string;
+};
+
 export type OrderComposition = {
   revenueAmount: string;
   netRevenueAmount: string;
@@ -162,6 +171,9 @@ export type OrderComposition = {
   shippingBreakdown?: OrderShippingBreakdown | null;
   shippingOrFixedFeeAmount: string;
   refundBonusAmount: string;
+  /** Seller-funded coupon discounts deducted from the sale. */
+  couponDiscountAmount?: string;
+  couponDiscountBreakdown?: OrderCouponDiscount[] | null;
   packagingCostAmount: string;
   /** User-informed share of revenue (0-100) charged as other variable costs. */
   otherVariableCostPercent?: string;

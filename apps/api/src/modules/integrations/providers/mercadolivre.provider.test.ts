@@ -149,6 +149,114 @@ describe("MercadoLivreProvider", () => {
     vi.unstubAllGlobals();
   });
 
+  describe("seller coupon discounts", () => {
+    type CouponResolver = {
+      resolveOrderCouponDiscount(input: {
+        accessToken: string;
+        order: unknown;
+      }): Promise<{
+        amount: number;
+        couponCode: string | null;
+        couponId: string | null;
+        couponName: string | null;
+        fundedBy: string;
+      } | null>;
+    };
+
+    const couponOrder = {
+      coupon: { amount: 1.04, id: 987 },
+      id: "2000015607234385",
+      payments: [{ coupon_amount: 1.04, id: 555 }],
+    };
+
+    function stubCouponFetch(input: {
+      campaign?: { payload: unknown; status?: number };
+      payment: unknown;
+    }) {
+      const fetchMock = vi.fn(async (url: string | URL) => {
+        const target = String(url);
+        if (target.includes("/v1/payments/555")) {
+          return createJsonResponse(input.payment);
+        }
+        if (target.includes("/seller-promotions/promotions/987")) {
+          return input.campaign
+            ? createJsonResponse(
+                input.campaign.payload,
+                input.campaign.status ?? 200,
+              )
+            : createJsonResponse({ message: "not found" }, 404);
+        }
+        throw new Error(`Unexpected fetch ${target}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      return fetchMock;
+    }
+
+    function resolve(order: unknown) {
+      return (
+        createProvider() as unknown as CouponResolver
+      ).resolveOrderCouponDiscount({ accessToken: "token_123", order });
+    }
+
+    it("returns null without fetching when the order has no coupon", async () => {
+      const fetchMock = stubCouponFetch({ payment: {} });
+
+      await expect(
+        resolve({ coupon: { amount: 0, id: null }, payments: [{ id: 555 }] }),
+      ).resolves.toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("reads the seller-funded coupon amount and campaign name", async () => {
+      stubCouponFetch({
+        campaign: {
+          payload: { coupon_code: "SAPATO5", name: "Cupom Outubro" },
+        },
+        payment: {
+          fee_details: [
+            { amount: 1.04, fee_payer: "collector", type: "coupon_fee" },
+            { amount: 2.77, fee_payer: "collector", type: "mercadopago_fee" },
+          ],
+        },
+      });
+
+      await expect(resolve(couponOrder)).resolves.toEqual({
+        amount: 1.04,
+        couponCode: "SAPATO5",
+        couponId: "987",
+        couponName: "Cupom Outubro",
+        fundedBy: "seller",
+      });
+    });
+
+    it("ignores coupons funded by Mercado Livre", async () => {
+      stubCouponFetch({
+        payment: {
+          fee_details: [
+            { amount: 1.04, fee_payer: "payer", type: "coupon_fee" },
+          ],
+        },
+      });
+
+      await expect(resolve(couponOrder)).resolves.toBeNull();
+    });
+
+    it("keeps the coupon when the campaign lookup fails", async () => {
+      stubCouponFetch({
+        campaign: { payload: { message: "forbidden" }, status: 403 },
+        payment: {},
+      });
+
+      await expect(resolve(couponOrder)).resolves.toEqual({
+        amount: 1.04,
+        couponCode: null,
+        couponId: "987",
+        couponName: null,
+        fundedBy: "unknown",
+      });
+    });
+  });
+
   it("reads billing shipping seller fee from charge_info CFFE details", () => {
     const result = readMercadoLivreBillingOrderShippingCost({
       orderId: "2000013564480079",

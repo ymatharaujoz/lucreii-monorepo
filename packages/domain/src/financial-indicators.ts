@@ -36,6 +36,7 @@ export type FinancialIndicatorCalculationResult = {
 
 export type FinancialIndicatorTotalsInput = {
   advertising: string | number | null | undefined;
+  couponDiscount?: string | number | null | undefined;
   fixedCost: string | number | null | undefined;
   marketplaceCommission: string | number | null | undefined;
   monthlyAdvertising?: string | number | null | undefined;
@@ -213,6 +214,7 @@ export function calculateFinancialIndicatorsFromTotals(
   const packagingCost = parseDecimalCents(input.packagingCost);
   const productCost = parseDecimalCents(input.productCost);
   const refundBonus = parseDecimalCents(input.refundBonus);
+  const couponDiscount = parseDecimalCents(input.couponDiscount);
   const revenue = parseDecimalCents(input.revenue);
   const shippingCost = parseDecimalCents(input.shippingCost);
   const taxAmount = parseDecimalCents(input.taxAmount);
@@ -221,7 +223,8 @@ export function calculateFinancialIndicatorsFromTotals(
     shippingCost +
     taxAmount +
     packagingCost +
-    productCost -
+    productCost +
+    couponDiscount -
     refundBonus;
   const totalProfit =
     input.totalProfit === null || input.totalProfit === undefined
