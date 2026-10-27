@@ -312,7 +312,7 @@ export const dashboardFinancialIndicatorsResponseSchema = z.object({
   breakEvenRevenue: decimalField("Break-even revenue"),
   fixedCost: decimalField("Fixed cost"),
   fixedCostSource: z.enum(["monthly", "monthly_override", "company_default"]),
-  taxRate: decimalField("Tax rate"),
+  taxRate: decimalRateField("Tax rate"),
   excludedRevenue: decimalField("Excluded revenue"),
   excludedSales: z.number().int().min(0),
   grossSales: z.number().int().min(0),

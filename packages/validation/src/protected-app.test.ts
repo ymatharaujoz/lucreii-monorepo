@@ -42,6 +42,15 @@ describe("@lucreii/validation protected app schemas", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts tax rates with the database's six decimal places", () => {
+    const result = dashboardFinancialIndicatorsApiResponseSchema.safeParse({
+      data: { ...financialIndicatorsData, taxRate: "0.040000" },
+      error: null,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it("requires gross sales in the financial indicator contract", () => {
     const result = dashboardFinancialIndicatorsApiResponseSchema.safeParse({
       data: { ...financialIndicatorsData, grossSales: undefined },
