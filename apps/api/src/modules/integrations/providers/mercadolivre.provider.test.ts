@@ -160,6 +160,7 @@ describe("MercadoLivreProvider", () => {
         couponId: string | null;
         couponName: string | null;
         fundedBy: string;
+        source: string;
       } | null>;
     };
 
@@ -171,10 +172,19 @@ describe("MercadoLivreProvider", () => {
 
     function stubCouponFetch(input: {
       campaign?: { payload: unknown; status?: number };
+      discounts?: { payload: unknown; status?: number };
       payment: unknown;
     }) {
       const fetchMock = vi.fn(async (url: string | URL) => {
         const target = String(url);
+        if (target.includes("/orders/2000015607234385/discounts")) {
+          return input.discounts
+            ? createJsonResponse(
+                input.discounts.payload,
+                input.discounts.status ?? 200,
+              )
+            : createJsonResponse({ message: "not found" }, 404);
+        }
         if (target.includes("/v1/payments/555")) {
           return createJsonResponse(input.payment);
         }
@@ -226,6 +236,7 @@ describe("MercadoLivreProvider", () => {
         couponId: "987",
         couponName: "Cupom Outubro",
         fundedBy: "seller",
+        source: "mercadolivre_payment",
       });
     });
 
@@ -253,6 +264,100 @@ describe("MercadoLivreProvider", () => {
         couponId: "987",
         couponName: null,
         fundedBy: "unknown",
+        source: "mercadolivre_payment",
+      });
+    });
+
+    describe("from the order discounts endpoint", () => {
+      const orderWithoutCouponFields = {
+        coupon: { amount: 0, id: null },
+        id: "2000015607234385",
+        payments: [{ coupon_amount: 0, id: 555 }],
+      };
+
+      function couponDetail(seller: number, total = 1.04) {
+        return {
+          coupon: { id: 987 },
+          items: [
+            { amounts: { seller, total }, id: "MLB123", quantity: 1 },
+          ],
+          supplier: { meli_campaign: null },
+          type: "coupon",
+        };
+      }
+
+      it("reads the seller share even when the order coupon fields are empty", async () => {
+        const fetchMock = stubCouponFetch({
+          campaign: { payload: { name: "Cupom Outubro" } },
+          discounts: { payload: { details: [couponDetail(1.04)] } },
+          payment: {},
+        });
+
+        await expect(resolve(orderWithoutCouponFields)).resolves.toEqual({
+          amount: 1.04,
+          couponCode: null,
+          couponId: "987",
+          couponName: "Cupom Outubro",
+          fundedBy: "seller",
+          source: "mercadolivre_order_discounts",
+        });
+        expect(
+          fetchMock.mock.calls.some(([url]) =>
+            String(url).includes("/v1/payments/"),
+          ),
+        ).toBe(false);
+      });
+
+      it("sums the seller share across coupon items", async () => {
+        stubCouponFetch({
+          discounts: {
+            payload: {
+              details: [
+                {
+                  ...couponDetail(0),
+                  items: [
+                    { amounts: { seller: 0.6, total: 0.6 }, id: "MLB1" },
+                    { amounts: { seller: "0.44", total: 0.44 }, id: "MLB2" },
+                  ],
+                },
+              ],
+            },
+          },
+          payment: {},
+        });
+
+        await expect(resolve(orderWithoutCouponFields)).resolves.toMatchObject({
+          amount: 1.04,
+          source: "mercadolivre_order_discounts",
+        });
+      });
+
+      it("ignores coupons fully funded by Mercado Livre", async () => {
+        stubCouponFetch({
+          discounts: { payload: { details: [couponDetail(0)] } },
+          payment: {},
+        });
+
+        await expect(resolve(couponOrder)).resolves.toBeNull();
+      });
+
+      it("does not count price discounts as coupons", async () => {
+        stubCouponFetch({
+          discounts: {
+            payload: {
+              details: [
+                {
+                  items: [{ amounts: { seller: 3, total: 3 }, id: "MLB123" }],
+                  supplier: { funding_mode: "sale_fee", offer_id: "OFFER-1" },
+                  type: "discount",
+                },
+              ],
+            },
+          },
+          payment: {},
+        });
+
+        await expect(resolve(orderWithoutCouponFields)).resolves.toBeNull();
       });
     });
   });
@@ -2690,7 +2795,7 @@ describe("MercadoLivreProvider", () => {
     expect(result.orders[0]?.metadata).toMatchObject({
       refundBonusAmount: "0.00",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain(
       "/billing/integration/periods/key/2026-05-01/group/ML/details",
     );
@@ -3869,7 +3974,7 @@ describe("MercadoLivreProvider", () => {
         }),
       }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(String(fetchMock.mock.calls[4]?.[0])).toContain(
       "/sites/MLB/listing_prices",
     );
@@ -4568,7 +4673,8 @@ describe("MercadoLivreProvider", () => {
           results: [],
           total: 0,
         }),
-      );
+      )
+      .mockResolvedValueOnce(createJsonResponse({ details: [] }));
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -4583,7 +4689,7 @@ describe("MercadoLivreProvider", () => {
       organizationId: "org_1",
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
       `/orders/${orderId}`,
     );
@@ -4760,7 +4866,8 @@ describe("MercadoLivreProvider", () => {
             status: 200,
           },
         ),
-      );
+      )
+      .mockResolvedValueOnce(createJsonResponse({ details: [] }));
 
     vi.stubGlobal("fetch", fetchMock);
 
@@ -4800,7 +4907,7 @@ describe("MercadoLivreProvider", () => {
         variationId: "456",
       }),
     ]);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/orders/123");
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/billing/integration/group/ML/order/details",
@@ -4933,7 +5040,7 @@ describe("MercadoLivreProvider", () => {
       operationId: "2000013674359901",
       refundBonusAmount: "0.00",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
   it("keeps zero refund bonus when net total is unavailable", async () => {
@@ -5167,7 +5274,7 @@ describe("MercadoLivreProvider", () => {
       operationId: "2000013674359901",
       packId: "2000013607301987",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain("from_id=0");
     expect(String(fetchMock.mock.calls[4]?.[0])).toContain("from_id=cursor-1");
     expect(String(fetchMock.mock.calls[5]?.[0])).toContain("from_id=cursor-2");
