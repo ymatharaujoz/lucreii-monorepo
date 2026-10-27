@@ -3574,7 +3574,12 @@ export class ProductsService {
         companyId: query.companyId,
         companyRequired: false,
         referenceMonth,
-        taxRateDefault: String(company.taxRateDefault),
+        taxRateDefault: await this.resolveMonthlyTaxRate(
+          context,
+          query.companyId,
+          referenceMonth,
+          String(company.taxRateDefault),
+        ),
       };
     }
 
@@ -3596,12 +3601,40 @@ export class ProductsService {
           )
         : null) ?? companies.find((company) => company.isActive);
 
+    const companyTaxRateDefault = String(selectedCompany?.taxRateDefault ?? "0");
+
     return {
       companyId: selectedCompany?.id ?? null,
       companyRequired: activeCompanyCount === 0,
       referenceMonth,
-      taxRateDefault: String(selectedCompany?.taxRateDefault ?? "0"),
+      taxRateDefault: selectedCompany
+        ? await this.resolveMonthlyTaxRate(
+            context,
+            selectedCompany.id,
+            referenceMonth,
+            companyTaxRateDefault,
+          )
+        : companyTaxRateDefault,
     };
+  }
+
+  /** Month-specific tax rate when saved, otherwise the company default. */
+  private async resolveMonthlyTaxRate(
+    context: TenantContext,
+    companyId: string,
+    referenceMonth: string,
+    companyTaxRateDefault: string,
+  ): Promise<string> {
+    const monthly = await this.db.query.companyMonthlyFinance?.findFirst({
+      where: (table) =>
+        and(
+          eq(table.organizationId, context.organizationId),
+          eq(table.companyId, companyId),
+          eq(table.referenceMonth, referenceMonth),
+        ),
+    });
+
+    return monthly?.taxRate ?? companyTaxRateDefault;
   }
 
   private async ensureCompanyAccess(

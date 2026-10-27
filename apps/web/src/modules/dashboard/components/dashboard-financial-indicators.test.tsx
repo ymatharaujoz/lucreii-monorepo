@@ -55,6 +55,7 @@ const indicators: DashboardFinancialIndicatorsData = {
   excludedSales: 12,
   fixedCost: "200.00",
   fixedCostSource: "monthly",
+  taxRate: "0.10",
   grossSales: 40,
   marketplaceCommission: "7000.00",
   monthlyAdvertising: "1481.33",
@@ -94,6 +95,7 @@ describe("DashboardFinancialIndicators", () => {
   it("exibe os seis indicadores financeiros em uma grade responsiva", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={indicators}
       />,
@@ -156,6 +158,7 @@ describe("DashboardFinancialIndicators", () => {
   it("exibe custos operacionais separados em Marketplaces", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={indicators}
         indicatorMode="marketplace"
@@ -235,6 +238,7 @@ describe("DashboardFinancialIndicators", () => {
   it("mantém os indicadores operacionais ao filtrar um Marketplace", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={indicators}
         indicatorMode="marketplace"
@@ -266,6 +270,7 @@ describe("DashboardFinancialIndicators", () => {
   it("não exibe sinal negativo quando valores de custo são zero", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={{
           ...indicators,
@@ -289,6 +294,7 @@ describe("DashboardFinancialIndicators", () => {
   it("exibe margem de contribuição zero quando faturamento é zero", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={{
           ...indicators,
@@ -310,6 +316,7 @@ describe("DashboardFinancialIndicators", () => {
   it("preserva margem de contribuição negativa sem subtrair custo fixo", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={{
           ...indicators,
@@ -331,6 +338,7 @@ describe("DashboardFinancialIndicators", () => {
   it("calcula margem líquida usando valores exibidos no dashboard", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={{
           ...indicators,
@@ -353,6 +361,7 @@ describe("DashboardFinancialIndicators", () => {
   it("oculta indicadores consolidados quando marketplace específico está selecionado", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={indicators}
         showCompanyWideIndicators={false}
@@ -384,6 +393,7 @@ describe("DashboardFinancialIndicators", () => {
   it("oculta apenas a linha de edição consolidada quando solicitado", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={indicators}
         showCompanyDefaultsEditor={false}
@@ -399,6 +409,7 @@ describe("DashboardFinancialIndicators", () => {
   it("preserva prejuízo e margem líquida negativa", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={{
           ...indicators,
@@ -429,6 +440,7 @@ describe("DashboardFinancialIndicators", () => {
   it("exibe estado neutro quando lucro total cobre exatamente o custo fixo", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={{
           ...indicators,
@@ -450,6 +462,7 @@ describe("DashboardFinancialIndicators", () => {
   it("exibe margem zero quando faturamento é zero", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={{
           ...indicators,
@@ -466,14 +479,20 @@ describe("DashboardFinancialIndicators", () => {
     view.unmount();
   });
 
-  it("refaz a leitura dos indicadores após salvar os padrões da empresa", async () => {
+  it("refaz a leitura dos indicadores após salvar os valores do mês", async () => {
     const onDefaultsSaved = vi.fn();
     vi.mocked(apiClient.patch).mockResolvedValue({
-      data: company,
+      data: {
+        companyId: "company-1",
+        fixedCost: "2987.71",
+        referenceMonth: "2026-10-01",
+        taxRate: "0.100000",
+      },
       error: null,
     });
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={indicators}
         onDefaultsSaved={onDefaultsSaved}
@@ -494,9 +513,16 @@ describe("DashboardFinancialIndicators", () => {
       await Promise.resolve();
     });
 
-    expect(apiClient.patch).toHaveBeenCalledWith("/companies/company-1", {
-      body: { fixedCostDefault: "2987.71", taxRateDefault: "0.100000" },
-    });
+    expect(apiClient.patch).toHaveBeenCalledWith(
+      "/companies/company-1/monthly-finance",
+      {
+        body: {
+          fixedCost: "200.00",
+          referenceMonth: "2026-10-01",
+          taxRate: "0.100000",
+        },
+      },
+    );
     expect(onDefaultsSaved).toHaveBeenCalledOnce();
     view.unmount();
   });
@@ -504,6 +530,7 @@ describe("DashboardFinancialIndicators", () => {
   it("exibe a publicidade do marketplace somente leitura, sem botão Editar", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={indicators}
         showCompanyWideIndicators={false}
@@ -528,6 +555,7 @@ describe("DashboardFinancialIndicators", () => {
   it("usa a publicidade do mês cheio nos cálculos do marketplace", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={indicators}
         showCompanyWideIndicators={false}
@@ -543,6 +571,7 @@ describe("DashboardFinancialIndicators", () => {
   it("mantém o rótulo Custo Fixo durante a edição", () => {
     const view = mount(
       <DashboardFinancialIndicators
+        referenceMonth="2026-10-01"
         activeCompany={company}
         financialIndicators={indicators}
       />,

@@ -83,7 +83,16 @@ export const companyUpdateSchema = z
   "At least one company field must be provided.",
 );
 
-export const performanceFiltersSchema = z.object({
+export const companyMonthlyFinanceSchema = z.object({
+  fixedCost: moneyField("Fixed cost").optional(),
+  referenceMonth: z
+    .string()
+    .trim()
+    .regex(referenceMonthPattern, "Reference month must be the first day of the month."),
+  taxRate: rateField("Tax rate").optional(),
+});
+
+export const performanceFiltersSchema =z.object({
   channel: z.string().trim().min(2).max(120).optional(),
   companyId: z.string().uuid(),
   referenceMonth: z
@@ -161,7 +170,8 @@ export const fixedCostUpdateSchema = fixedCostFormSchema.partial().refine(
 
 export type CompanyFormInput = z.infer<typeof companyFormSchema>;
 export type CompanyUpdateInput = z.infer<typeof companyUpdateSchema>;
-export type PerformanceFiltersInput = z.infer<typeof performanceFiltersSchema>;
+export type CompanyMonthlyFinanceInput = z.infer<typeof companyMonthlyFinanceSchema>;
+export type PerformanceFiltersInput =z.infer<typeof performanceFiltersSchema>;
 export type ProductMonthlyPerformanceFormInput = z.infer<typeof performanceFormSchema>;
 export type ProductMonthlyPerformanceUpdateInput = z.infer<typeof performanceUpdateSchema>;
 export type FixedCostFiltersInput = z.infer<typeof fixedCostFiltersSchema>;

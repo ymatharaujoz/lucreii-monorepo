@@ -120,7 +120,8 @@ export type DashboardFinancialIndicators = {
   averageMarginPercent: DecimalString;
   breakEvenRevenue: DecimalString;
   fixedCost: DecimalString;
-  fixedCostSource: "monthly" | "company_default";
+  fixedCostSource: "monthly" | "monthly_override" | "company_default";
+  taxRate: DecimalString;
   excludedRevenue: DecimalString;
   excludedSales: number;
   grossSales: number;

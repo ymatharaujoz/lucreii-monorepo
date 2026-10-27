@@ -13,13 +13,14 @@ import {
 } from "lucide-react";
 import type {
   Company,
+  CompanyMonthlyFinance,
   DashboardFinancialIndicators as DashboardFinancialIndicatorsData,
 } from "@lucreii/types";
 import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, itemVariants } from "@/lib/animations";
 import { Button, Card, Input } from "@lucreii/ui";
 import {
-  buildCompanyDefaultsPatch,
+  buildMonthlyFinancePayload,
   formatCurrencyInput,
 } from "./company-finance-defaults";
 import { formatMoney } from "../utils/formatters";
@@ -35,6 +36,7 @@ interface DashboardFinancialIndicatorsProps {
   financialIndicators: DashboardFinancialIndicatorsData;
   indicatorMode?: "dashboard" | "marketplace";
   onDefaultsSaved?: () => void;
+  referenceMonth: string;
   showCompanyDefaultsEditor?: boolean;
   showCompanyWideIndicators?: boolean;
 }
@@ -158,31 +160,22 @@ export function DashboardFinancialIndicators({
   financialIndicators,
   indicatorMode = "dashboard",
   onDefaultsSaved,
+  referenceMonth,
   showCompanyDefaultsEditor = true,
   showCompanyWideIndicators = true,
 }: DashboardFinancialIndicatorsProps) {
-  const [savedDefaults, setSavedDefaults] = useState<{
-    companyId: string;
-    fixedCost: number;
-    taxPercent: number;
-  } | null>(null);
   const [fixedCostInput, setFixedCostInput] = useState("0,00");
   const [taxPercentInput, setTaxPercentInput] = useState("0,00");
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
-  const companyDefaults =
-    activeCompany && savedDefaults?.companyId === activeCompany.id
-      ? savedDefaults
-      : {
-          companyId: activeCompany?.id ?? "",
-          fixedCost:
-            Number.parseFloat(activeCompany?.fixedCostDefault ?? "0") || 0,
-          taxPercent:
-            (Number.parseFloat(activeCompany?.taxRateDefault ?? "0") || 0) *
-            100,
-        };
+  // Fixed cost and tax are resolved per reference month by the API (monthly
+  // value when saved, company default otherwise).
+  const monthlyFinance = {
+    fixedCost: normalizeNumber(financialIndicators.fixedCost),
+    taxPercent: normalizeNumber(financialIndicators.taxRate) * 100,
+  };
 
   const isMarketplaceView = !showCompanyWideIndicators;
   const isMarketplaceIndicatorMode = indicatorMode === "marketplace";
@@ -238,11 +231,11 @@ export function DashboardFinancialIndicators({
   });
 
   const cancelEditing = useCallback(() => {
-    setFixedCostInput(formatCurrencyInput(companyDefaults.fixedCost));
-    setTaxPercentInput(formatCurrencyInput(companyDefaults.taxPercent));
+    setFixedCostInput(formatCurrencyInput(monthlyFinance.fixedCost));
+    setTaxPercentInput(formatCurrencyInput(monthlyFinance.taxPercent));
     setFeedbackMessage(null);
     setIsEditing(false);
-  }, [companyDefaults.fixedCost, companyDefaults.taxPercent]);
+  }, [monthlyFinance.fixedCost, monthlyFinance.taxPercent]);
 
   const saveFinancialInputs = useCallback(async () => {
     if (!activeCompany) {
@@ -255,24 +248,20 @@ export function DashboardFinancialIndicators({
     setFeedbackMessage(null);
 
     try {
-      const patch = buildCompanyDefaultsPatch({
+      const payload = buildMonthlyFinancePayload({
         fixedCostInput,
+        referenceMonth,
         taxPercentInput,
       });
-      const response = await apiClient.patch<{ data: Company; error: null }>(
-        `/companies/${activeCompany.id}`,
-        { body: patch },
-      );
+      const response = await apiClient.patch<{
+        data: CompanyMonthlyFinance;
+        error: null;
+      }>(`/companies/${activeCompany.id}/monthly-finance`, { body: payload });
       const nextFixedCost =
-        Number.parseFloat(response.data.fixedCostDefault) || 0;
+        Number.parseFloat(response.data.fixedCost ?? "0") || 0;
       const nextTaxPercent =
-        (Number.parseFloat(response.data.taxRateDefault) || 0) * 100;
+        (Number.parseFloat(response.data.taxRate ?? "0") || 0) * 100;
 
-      setSavedDefaults({
-        companyId: activeCompany.id,
-        fixedCost: nextFixedCost,
-        taxPercent: nextTaxPercent,
-      });
       setFixedCostInput(formatCurrencyInput(nextFixedCost));
       setTaxPercentInput(formatCurrencyInput(nextTaxPercent));
       setFeedbackMessage("Valores salvos.");
@@ -284,12 +273,18 @@ export function DashboardFinancialIndicators({
           ? error.message
           : error instanceof Error
             ? error.message
-            : "Não foi possível salvar os valores da empresa",
+            : "Não foi possível salvar os valores do mês",
       );
     } finally {
       setIsSaving(false);
     }
-  }, [activeCompany, fixedCostInput, onDefaultsSaved, taxPercentInput]);
+  }, [
+    activeCompany,
+    fixedCostInput,
+    onDefaultsSaved,
+    referenceMonth,
+    taxPercentInput,
+  ]);
 
   return (
     <motion.div
@@ -676,7 +671,7 @@ export function DashboardFinancialIndicators({
                           Imposto
                         </span>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
-                          {formatCurrencyInput(companyDefaults.taxPercent)}%
+                          {formatCurrencyInput(monthlyFinance.taxPercent)}%
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -697,10 +692,10 @@ export function DashboardFinancialIndicators({
                     onClick={() => {
                       setFeedbackMessage(null);
                       setFixedCostInput(
-                        formatCurrencyInput(companyDefaults.fixedCost),
+                        formatCurrencyInput(monthlyFinance.fixedCost),
                       );
                       setTaxPercentInput(
-                        formatCurrencyInput(companyDefaults.taxPercent),
+                        formatCurrencyInput(monthlyFinance.taxPercent),
                       );
                       setIsEditing(true);
                     }}

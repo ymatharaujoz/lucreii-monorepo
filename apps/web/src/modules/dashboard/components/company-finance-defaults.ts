@@ -38,6 +38,20 @@ export function buildCompanyDefaultsPatch(input: {
   };
 }
 
+export function buildMonthlyFinancePayload(input: {
+  fixedCostInput: string;
+  referenceMonth: string;
+  taxPercentInput: string;
+}) {
+  const { fixedCostDefault, taxRateDefault } = buildCompanyDefaultsPatch(input);
+
+  return {
+    fixedCost: fixedCostDefault,
+    referenceMonth: input.referenceMonth,
+    taxRate: taxRateDefault,
+  };
+}
+
 export function getActiveCompany(companies: Company[]) {
   return (
     companies.find((company) => company.isSelected && company.isActive) ??

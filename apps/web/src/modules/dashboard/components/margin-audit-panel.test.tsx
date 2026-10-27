@@ -11,6 +11,7 @@ const indicators: DashboardFinancialIndicators = {
   excludedSales: 0,
   fixedCost: "2987.71",
   fixedCostSource: "monthly",
+  taxRate: "0.04",
   grossSales: 101,
   marketplaceCommission: "7000.00",
   monthlyAdvertising: "1481.33",

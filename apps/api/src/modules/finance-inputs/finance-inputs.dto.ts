@@ -1,5 +1,6 @@
 import {
   companyFormSchema,
+  companyMonthlyFinanceSchema,
   companyUpdateSchema,
   fixedCostFiltersSchema,
   fixedCostFormSchema,
@@ -10,6 +11,7 @@ import {
 } from "@lucreii/validation";
 import type {
   CompanyFormInput,
+  CompanyMonthlyFinanceInput,
   CompanyUpdateInput,
   FixedCostFiltersInput,
   FixedCostFormInput,
@@ -37,6 +39,14 @@ export class UpdateCompanyRequestDto implements CompanyUpdateInput {
   isActive?: boolean;
   razaoSocial?: string;
   taxRateDefault?: string;
+}
+
+export class UpsertCompanyMonthlyFinanceRequestDto implements CompanyMonthlyFinanceInput {
+  static schema = companyMonthlyFinanceSchema;
+
+  fixedCost?: string;
+  referenceMonth!: string;
+  taxRate?: string;
 }
 
 export class ListPerformanceQueryDto implements PerformanceFiltersInput {

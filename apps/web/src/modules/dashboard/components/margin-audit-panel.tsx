@@ -118,13 +118,17 @@ export function MarginAuditPanel({
     },
     {
       description:
-        indicators.fixedCostSource === "monthly"
-          ? "Soma dos lançamentos de custo fixo do mês selecionado."
-          : "Sem lançamentos no mês; aplicado o padrão cadastrado na empresa.",
+        indicators.fixedCostSource === "monthly_override"
+          ? "Valor de custo fixo definido para o mês selecionado."
+          : indicators.fixedCostSource === "monthly"
+            ? "Soma dos lançamentos de custo fixo do mês selecionado."
+            : "Sem lançamentos no mês; aplicado o padrão cadastrado na empresa.",
       formula:
-        indicators.fixedCostSource === "monthly"
-          ? "Σ CUSTOS FIXOS DO MÊS"
-          : "CUSTO FIXO PADRÃO DA EMPRESA",
+        indicators.fixedCostSource === "monthly_override"
+          ? "CUSTO FIXO DEFINIDO PARA O MÊS"
+          : indicators.fixedCostSource === "monthly"
+            ? "Σ CUSTOS FIXOS DO MÊS"
+            : "CUSTO FIXO PADRÃO DA EMPRESA",
       label: "Custo fixo",
       value: formatMoney(indicators.fixedCost, {
         maximumFractionDigits: 2,

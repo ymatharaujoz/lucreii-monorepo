@@ -52,10 +52,29 @@ export class FinancialIndicatorsService {
           eq(table.referenceMonth, referenceMonth),
         ),
     });
+    const monthlyFinance = await this.db.query.companyMonthlyFinance?.findFirst({
+      where: (table) =>
+        and(
+          eq(table.organizationId, organizationId),
+          eq(table.companyId, companyId),
+          eq(table.referenceMonth, referenceMonth),
+        ),
+    });
     const hasMonthlyFixedCosts = monthlyFixedCosts.length > 0;
-    const fixedCost = hasMonthlyFixedCosts
-      ? sumMoneyValues(monthlyFixedCosts.map((row) => row.amount))
-      : company.fixedCostDefault;
+    const fixedCostOverride = monthlyFinance?.fixedCost ?? null;
+    const fixedCost =
+      fixedCostOverride !== null
+        ? fixedCostOverride
+        : hasMonthlyFixedCosts
+          ? sumMoneyValues(monthlyFixedCosts.map((row) => row.amount))
+          : company.fixedCostDefault;
+    const taxRate = monthlyFinance?.taxRate ?? company.taxRateDefault;
+    const fixedCostSource =
+      fixedCostOverride !== null
+        ? "monthly_override"
+        : hasMonthlyFixedCosts
+          ? "monthly"
+          : "company_default";
     // Advertising is entered per listing on the products performance screen;
     // the dashboard always uses the full month, regardless of the date range.
     const savedListingAdvertising =
@@ -104,9 +123,10 @@ export class FinancialIndicatorsService {
       ...result,
       excludedRevenue: ordersSummary.excludedRevenue,
       excludedSales: ordersSummary.excludedSales,
-      fixedCostSource: hasMonthlyFixedCosts ? "monthly" : "company_default",
+      fixedCostSource,
       grossSales: ordersSummary.grossSales,
       monthlyAdvertising,
+      taxRate: String(taxRate),
     };
   }
 }

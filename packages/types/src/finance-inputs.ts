@@ -23,6 +23,19 @@ export type CreateCompanyInput = {
 
 export type UpdateCompanyInput = Partial<CreateCompanyInput>;
 
+export type CompanyMonthlyFinanceInput = {
+  referenceMonth: string;
+  fixedCost?: DecimalString;
+  taxRate?: DecimalString;
+};
+
+export type CompanyMonthlyFinance = {
+  companyId: string;
+  referenceMonth: string;
+  fixedCost: DecimalString | null;
+  taxRate: DecimalString | null;
+};
+
 export type ProductMonthlyPerformanceInput = {
   companyId: string;
   referenceMonth: string;

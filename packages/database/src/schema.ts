@@ -491,6 +491,51 @@ export const productListingAdvertising = pgTable(
   ],
 );
 
+export const companyMonthlyFinance = pgTable(
+  "company_monthly_finance",
+  {
+    id: id(),
+    organizationId: organizationId().references(() => organizations.id, {
+      onDelete: "cascade",
+    }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    companyId: companyId().references(() => companies.id, {
+      onDelete: "cascade",
+    }),
+    referenceMonth: date("reference_month").notNull(),
+    fixedCost: numeric("fixed_cost", { precision: 12, scale: 2 }),
+    taxRate: numeric("tax_rate", { precision: 8, scale: 6 }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check(
+      "company_monthly_finance_reference_month_first_day",
+      sql`${table.referenceMonth} = date_trunc('month', ${table.referenceMonth})::date`,
+    ),
+    check(
+      "company_monthly_finance_fixed_cost_non_negative",
+      sql`${table.fixedCost} IS NULL OR ${table.fixedCost} >= 0`,
+    ),
+    check(
+      "company_monthly_finance_tax_rate_range",
+      sql`${table.taxRate} IS NULL OR (${table.taxRate} >= 0 AND ${table.taxRate} <= 1)`,
+    ),
+    index("company_monthly_finance_organization_id_idx").on(
+      table.organizationId,
+    ),
+    index("company_monthly_finance_user_id_idx").on(table.userId),
+    index("company_monthly_finance_company_id_idx").on(table.companyId),
+    uniqueIndex("company_monthly_finance_company_month_key").on(
+      table.organizationId,
+      table.companyId,
+      table.referenceMonth,
+    ),
+  ],
+);
+
 export const pricingSimulations = pgTable(
   "pricing_simulations",
   {
@@ -1747,6 +1792,24 @@ export const productListingAdvertisingRelations = relations(
     }),
     company: one(companies, {
       fields: [productListingAdvertising.companyId],
+      references: [companies.id],
+    }),
+  }),
+);
+
+export const companyMonthlyFinanceRelations = relations(
+  companyMonthlyFinance,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [companyMonthlyFinance.organizationId],
+      references: [organizations.id],
+    }),
+    user: one(users, {
+      fields: [companyMonthlyFinance.userId],
+      references: [users.id],
+    }),
+    company: one(companies, {
+      fields: [companyMonthlyFinance.companyId],
       references: [companies.id],
     }),
   }),

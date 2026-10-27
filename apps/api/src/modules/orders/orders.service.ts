@@ -51,7 +51,18 @@ import type {
   OrderStatusOption,
 } from "@lucreii/types";
 import { orderExportQuerySchema } from "@lucreii/validation";
-import { and, asc, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
 import { utils, write } from "xlsx";
 import type { ApiRuntimeEnv } from "@/common/config/api-env";
@@ -958,10 +969,60 @@ function buildOrderBaseMetrics(order: OrderFinancialRow) {
   };
 }
 
+type TaxRateValue = string | number | null | undefined;
+/** Tax rate as a fixed value, or resolved per order from the order's month. */
+export type OrderTaxRateSource =
+  | TaxRateValue
+  | ((orderedAt: Date | string | null | undefined) => TaxRateValue);
+
+function resolveOrderTaxRate(
+  source: OrderTaxRateSource,
+  orderedAt: Date | string | null | undefined,
+): TaxRateValue {
+  return typeof source === "function" ? source(orderedAt) : source;
+}
+
+/**
+ * Builds a resolver that picks the month-specific tax rate saved for the order's
+ * month (UTC) and falls back to the company default.
+ */
+export function buildMonthlyTaxRateResolver(
+  companyDefault: TaxRateValue,
+  monthlyRates: ReadonlyArray<{
+    referenceMonth: string;
+    taxRate: string | null;
+  }>,
+): OrderTaxRateSource {
+  const ratesByMonth = new Map<string, string>();
+  for (const row of monthlyRates) {
+    if (row.taxRate !== null) {
+      ratesByMonth.set(row.referenceMonth.slice(0, 7), row.taxRate);
+    }
+  }
+
+  if (ratesByMonth.size === 0) {
+    return companyDefault;
+  }
+
+  return (orderedAt) => {
+    if (!orderedAt) {
+      return companyDefault;
+    }
+    const date = orderedAt instanceof Date ? orderedAt : new Date(orderedAt);
+    if (Number.isNaN(date.getTime())) {
+      return companyDefault;
+    }
+    return (
+      ratesByMonth.get(date.toISOString().slice(0, 7)) ?? companyDefault
+    );
+  };
+}
+
 export function buildOrderFinancialMetrics(
   order: OrderFinancialRow,
-  taxRateDefault: string | number | null | undefined,
+  taxRateSource: OrderTaxRateSource,
 ) {
+  const taxRateDefault = resolveOrderTaxRate(taxRateSource, order.orderedAt);
   const baseMetrics = buildOrderBaseMetrics(order);
   const revenueAmount =
     readSpreadsheetProductRevenueAmount(order) ?? baseMetrics.totalWithFees;
@@ -1678,7 +1739,7 @@ function toOrderLineItems(order: OrderRow): OrderLineItem[] {
 
 function buildOrderComposition(
   order: OrderRow,
-  taxRateDefault: string | number | null | undefined,
+  taxRateDefault: OrderTaxRateSource,
 ): OrderComposition {
   return buildOrderFinancialMetrics(order, taxRateDefault).composition;
 }
@@ -2002,7 +2063,7 @@ function sumUniqueRefundBonusMovements(
 
 function buildLogicalOrder(
   rows: OrderRow[],
-  taxRateDefault: string | number | null | undefined,
+  taxRateDefault: OrderTaxRateSource,
 ): LogicalOrder {
   const [firstRow] = rows;
   if (!firstRow) {
@@ -2123,7 +2184,7 @@ function buildLogicalOrder(
 
 function buildLogicalOrders(
   rows: OrderRow[],
-  taxRateDefault: string | number | null | undefined,
+  taxRateDefault: OrderTaxRateSource,
 ) {
   const groupedRows = new Map<string, OrderRow[]>();
 
@@ -2701,6 +2762,11 @@ export class OrdersService {
           ),
       }),
     ]);
+    const taxRateSource = await this.resolveCompanyTaxRate(
+      authContext,
+      companyId,
+      company?.taxRateDefault,
+    );
 
     if (
       canPageInDatabase &&
@@ -2810,7 +2876,7 @@ export class OrdersService {
         shippingRatioBackfilledRows,
       );
       const hydratedLogicalOrdersById = new Map(
-        buildLogicalOrders(hydratedRows, company?.taxRateDefault).map(
+        buildLogicalOrders(hydratedRows, taxRateSource).map(
           (logicalOrder) => [logicalOrder.order.id, logicalOrder] as const,
         ),
       );
@@ -2835,7 +2901,7 @@ export class OrdersService {
           ? await this.buildOrdersSummaryForFilters(
               authContext,
               companyId,
-              company?.taxRateDefault,
+              taxRateSource,
               filters,
             )
           : buildEmptyOrdersSummary(),
@@ -2880,7 +2946,7 @@ export class OrdersService {
     );
     const mapped = buildLogicalOrders(
       hydratedRows,
-      company?.taxRateDefault,
+      taxRateSource,
     ).filter(({ order: item }) => {
       if (filters.search && !matchesOrderSearch(item, filters.search)) {
         return false;
@@ -3133,7 +3199,11 @@ export class OrdersService {
     );
     const logicalOrders = buildLogicalOrders(
       hydratedRows,
-      company?.taxRateDefault,
+      await this.resolveCompanyTaxRate(
+        authContext,
+        companyId,
+        company?.taxRateDefault,
+      ),
     );
     const logicalOrder = groupedDisplayOrderId
       ? (logicalOrders.find(
@@ -3652,7 +3722,11 @@ export class OrdersService {
     const selectedIds = new Set(normalizedFilters.ids ?? []);
     const logicalOrders = buildLogicalOrders(
       hydratedRows,
-      company?.taxRateDefault,
+      await this.resolveCompanyTaxRate(
+        authContext,
+        companyId,
+        company?.taxRateDefault,
+      ),
     ).filter(({ order: item }) => {
       if (selectedIds.size > 0 && !selectedIds.has(item.id)) {
         return false;
@@ -3740,10 +3814,28 @@ export class OrdersService {
     return buildOrdersSummary(logicalOrders, monthlyMargin);
   }
 
+  private async resolveCompanyTaxRate(
+    authContext: TenantContext,
+    companyId: string,
+    companyTaxRateDefault: string | number | null | undefined,
+  ): Promise<OrderTaxRateSource> {
+    const monthlyRates =
+      (await this.db.query.companyMonthlyFinance?.findMany({
+        where: (table) =>
+          and(
+            eq(table.organizationId, authContext.organizationId),
+            eq(table.companyId, companyId),
+            isNotNull(table.taxRate),
+          ),
+      })) ?? [];
+
+    return buildMonthlyTaxRateResolver(companyTaxRateDefault, monthlyRates);
+  }
+
   private async buildOrdersSummaryForFilters(
     authContext: TenantContext,
     companyId: string,
-    taxRateDefault: string | number | null | undefined,
+    taxRateDefault: OrderTaxRateSource,
     filters: OrderListFilters,
   ) {
     const rows = await this.db.query.externalOrders.findMany({

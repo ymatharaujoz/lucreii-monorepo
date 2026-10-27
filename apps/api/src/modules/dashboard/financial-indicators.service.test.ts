@@ -6,6 +6,7 @@ function buildDb() {
     insert: vi.fn(),
     query: {
       companies: { findFirst: vi.fn() },
+      companyMonthlyFinance: { findFirst: vi.fn() },
       fixedCosts: { findMany: vi.fn() },
       productListingAdvertising: { findMany: vi.fn() },
     },
@@ -52,6 +53,52 @@ const company = {
 };
 
 describe("FinancialIndicatorsService", () => {
+  it("prefers the month override and keeps other months on the company default", async () => {
+    const db = buildDb();
+    db.query.companies.findFirst.mockResolvedValue(company);
+    db.query.fixedCosts.findMany.mockResolvedValue([]);
+    db.query.productListingAdvertising.findMany.mockResolvedValue([]);
+    db.query.companyMonthlyFinance.findFirst.mockImplementation(
+      async (args: { where: (table: unknown) => unknown }) => {
+        void args;
+        return undefined;
+      },
+    );
+    db.query.companyMonthlyFinance.findFirst
+      .mockResolvedValueOnce({ fixedCost: "250.00", taxRate: "0.040000" })
+      .mockResolvedValueOnce(undefined);
+    const service = new FinancialIndicatorsService(
+      db as never,
+      buildOrdersService() as never,
+    );
+
+    const october = await service.read(
+      "org-1",
+      "user-1",
+      "company-1",
+      undefined,
+      "2026-10-01",
+    );
+    const september = await service.read(
+      "org-1",
+      "user-1",
+      "company-1",
+      undefined,
+      "2026-09-01",
+    );
+
+    expect(october).toMatchObject({
+      fixedCost: "250.00",
+      fixedCostSource: "monthly_override",
+      taxRate: "0.040000",
+    });
+    expect(september).toMatchObject({
+      fixedCost: "100.00",
+      fixedCostSource: "company_default",
+      taxRate: "0.10",
+    });
+  });
+
   it("uses the company fixed-cost fallback when the month has no launches", async () => {
     const db = buildDb();
     db.query.companies.findFirst.mockResolvedValue(company);

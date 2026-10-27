@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Inject,
@@ -8,6 +9,7 @@ import {
 import { randomUUID } from "node:crypto";
 import {
   companies,
+  companyMonthlyFinance,
   fixedCosts,
   productMonthlyPerformance,
   type Company as CompanyRow,
@@ -18,6 +20,8 @@ import {
 import { BILLING_PLAN_BY_CODE, isBillingPlanCode } from "@lucreii/types";
 import type {
   Company,
+  CompanyMonthlyFinance,
+  CompanyMonthlyFinanceInput,
   CreateCompanyInput,
   FixedCostInput,
   FixedCostRow,
@@ -149,6 +153,49 @@ export class FinanceInputsService {
 
       throw error;
     }
+  }
+
+  async upsertCompanyMonthlyFinance(
+    context: TenantContext,
+    companyId: string,
+    input: CompanyMonthlyFinanceInput,
+  ): Promise<CompanyMonthlyFinance> {
+    await this.ensureCompanyAccess(context, companyId);
+
+    if (input.fixedCost === undefined && input.taxRate === undefined) {
+      throw new BadRequestException("Informe custo fixo ou imposto.");
+    }
+
+    const values = {
+      ...(input.fixedCost !== undefined ? { fixedCost: input.fixedCost } : {}),
+      ...(input.taxRate !== undefined ? { taxRate: input.taxRate } : {}),
+    };
+
+    const [saved] = await this.db
+      .insert(companyMonthlyFinance)
+      .values({
+        companyId,
+        organizationId: context.organizationId,
+        referenceMonth: input.referenceMonth,
+        userId: context.userId,
+        ...values,
+      })
+      .onConflictDoUpdate({
+        set: { ...values, updatedAt: new Date() },
+        target: [
+          companyMonthlyFinance.organizationId,
+          companyMonthlyFinance.companyId,
+          companyMonthlyFinance.referenceMonth,
+        ],
+      })
+      .returning();
+
+    return {
+      companyId: saved.companyId,
+      fixedCost: saved.fixedCost,
+      referenceMonth: saved.referenceMonth,
+      taxRate: saved.taxRate,
+    };
   }
 
   async selectCompany(context: TenantContext, companyId: string): Promise<Company> {

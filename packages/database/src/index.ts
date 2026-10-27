@@ -57,6 +57,10 @@ export type ProductListingAdvertising =
   typeof schema.productListingAdvertising.$inferSelect;
 export type NewProductListingAdvertising =
   typeof schema.productListingAdvertising.$inferInsert;
+export type CompanyMonthlyFinance =
+  typeof schema.companyMonthlyFinance.$inferSelect;
+export type NewCompanyMonthlyFinance =
+  typeof schema.companyMonthlyFinance.$inferInsert;
 export type Product = typeof schema.products.$inferSelect;
 export type NewProduct = typeof schema.products.$inferInsert;
 export type ProductImage = typeof schema.productImages.$inferSelect;

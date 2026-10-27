@@ -275,6 +275,7 @@ export function DashboardHome({
             key={`${providerFilter ?? "all"}:${referenceMonth}:${dateRange.dateFrom}:${dateRange.dateTo}`}
             indicatorMode={indicatorMode}
             onDefaultsSaved={refetchAll}
+            referenceMonth={referenceMonth}
             showCompanyDefaultsEditor={showCompanyDefaultsEditor}
             showCompanyWideIndicators={providerFilter === null}
           />

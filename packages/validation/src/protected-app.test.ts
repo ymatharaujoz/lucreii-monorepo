@@ -15,6 +15,7 @@ const financialIndicatorsData = {
   excludedSales: 90,
   fixedCost: "3138.54",
   fixedCostSource: "monthly",
+  taxRate: "0.04",
   grossSales: 12,
   marketplaceCommission: "100.00",
   monthlyAdvertising: "10.00",

@@ -241,6 +241,7 @@ describe("dashboard controller", () => {
       excludedSales: 90,
       fixedCost: "2987.71",
       fixedCostSource: "monthly",
+      taxRate: "0.04",
       grossSales: 125,
       marketplaceCommission: "5000.00",
       monthlyAdvertising: "1481.33",

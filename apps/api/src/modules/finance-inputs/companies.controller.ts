@@ -3,7 +3,11 @@ import { AuthGuard } from "@/modules/auth/auth.guard";
 import { CurrentAuthContext } from "@/modules/auth/current-auth-context";
 import type { AuthenticatedRequestContext } from "@/modules/auth/auth.types";
 import { EntitlementGuard } from "@/modules/billing/entitlement.guard";
-import { CreateCompanyRequestDto, UpdateCompanyRequestDto } from "./finance-inputs.dto";
+import {
+  CreateCompanyRequestDto,
+  UpdateCompanyRequestDto,
+  UpsertCompanyMonthlyFinanceRequestDto,
+} from "./finance-inputs.dto";
 import { FinanceInputsService } from "./finance-inputs.service";
 
 @Controller("companies")
@@ -52,6 +56,26 @@ export class CompaniesController {
   ) {
     return {
       data: await this.financeInputsService.updateCompany(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        companyId,
+        body,
+      ),
+      error: null,
+    };
+  }
+
+  @Patch(":id/monthly-finance")
+  async upsertMonthlyFinance(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Param("id") companyId: string,
+    @Body() body: UpsertCompanyMonthlyFinanceRequestDto,
+  ) {
+    return {
+      data: await this.financeInputsService.upsertCompanyMonthlyFinance(
         {
           organizationId: authContext.organization!.id,
           selectedCompanyId: authContext.selectedCompanyId ?? null,
