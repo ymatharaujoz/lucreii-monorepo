@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { OnboardingPanel } from "@/components/onboarding/onboarding-panel";
+import { hasSubscriptionForProtectedApp } from "@/lib/protected-app-route";
 import { readServerAuthState } from "@/lib/server-auth";
 import { readServerBillingState } from "@/lib/server-billing";
 import { hasActiveCompany, readServerCompanies } from "@/lib/server-companies";
@@ -20,6 +21,10 @@ export default async function OnboardingPage() {
 
   if (!authState.organization) {
     return <OnboardingPanel stage="organization" userName={authState.user.name} />;
+  }
+
+  if (!hasSubscriptionForProtectedApp(billingState)) {
+    redirect("/app/billing");
   }
 
   const companies = await readServerCompanies();

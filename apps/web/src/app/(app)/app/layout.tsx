@@ -30,7 +30,10 @@ export default async function ProtectedAppLayout({
   }
 
   const hasSubscription = hasSubscriptionForProtectedApp(billingState);
-  const companies = authState.organization ? await readServerCompanies() : [];
+  // A API responde 402 em /companies sem entitlement; sem este guard o layout quebra
+  // todas as rotas /app, inclusive /app/billing, onde o usuário regulariza o plano.
+  const companies =
+    authState.organization && hasSubscription ? await readServerCompanies() : [];
   const hasOnboarded = !!authState.organization && hasActiveCompany(companies);
   const appVersion = await readServerAppVersion();
   const planCode =
