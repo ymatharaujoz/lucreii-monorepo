@@ -36,7 +36,6 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
           canManageBilling={canManageBilling}
           checkoutSessionId={resolvedSearchParams?.session_id ?? null}
           checkoutState={resolvedSearchParams?.checkout ?? null}
-          organizationName={authState.organization?.name ?? authState.user.name}
           trial={billingState?.trial ?? null}
         />
       </div>

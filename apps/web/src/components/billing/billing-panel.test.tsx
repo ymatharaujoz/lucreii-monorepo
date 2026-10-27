@@ -21,7 +21,6 @@ describe("BillingPanel", () => {
         checkoutSessionId: null,
         checkoutState: null,
         canManageBilling: true,
-        organizationName: "Lucreii",
         trial: {
           endsAt: "2030-01-08T12:00:00.000Z",
           organizationId: "org_123",
@@ -50,7 +49,6 @@ describe("BillingPanel", () => {
         checkoutSessionId: null,
         checkoutState: null,
         canManageBilling: true,
-        organizationName: "Lucreii",
         trial: {
           endsAt: "2030-01-08T12:00:00.000Z",
           organizationId: "org_123",

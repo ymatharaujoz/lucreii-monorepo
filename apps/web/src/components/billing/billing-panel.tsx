@@ -26,7 +26,6 @@ type BillingPanelProps = {
   canManageBilling: boolean;
   checkoutSessionId: string | null;
   checkoutState: string | null;
-  organizationName: string;
   trial: ServerBillingState["trial"];
 };
 
@@ -67,7 +66,6 @@ export function BillingPanel({
   canManageBilling,
   checkoutSessionId,
   checkoutState,
-  organizationName,
   trial,
 }: BillingPanelProps) {
   const router = useRouter();
@@ -160,9 +158,6 @@ export function BillingPanel({
         <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted-foreground">
           {subtitle}
         </p>
-        <p className="mt-3 text-xs font-medium text-muted-foreground">
-          Workspace <span className="text-foreground">{organizationName}</span>
-        </p>
       </header>
 
       {message ? (
@@ -189,7 +184,7 @@ export function BillingPanel({
 
       <ul className="mt-8 grid gap-4 rounded-2xl border border-border/80 bg-surface/70 p-5 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border/80 sm:p-0">
         {TRUST_ITEMS.map(({ description, icon: Icon, title: itemTitle }) => (
-          <li className="flex items-center gap-3 sm:px-5 sm:py-4" key={itemTitle}>
+          <li className="flex items-center justify-center gap-3 sm:px-5 sm:py-4" key={itemTitle}>
             <Icon aria-hidden className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.8} />
             <div>
               <p className="text-sm font-semibold leading-5 text-foreground">{itemTitle}</p>
