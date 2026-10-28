@@ -4398,6 +4398,131 @@ describe("MercadoLivreProvider", () => {
     });
   });
 
+  describe("seller coupon discounts during bulk sync", () => {
+    const couponOrderId = "2000015607234385";
+    const couponOrder = {
+      coupon: { amount: 0, id: null },
+      currency_id: "BRL",
+      date_closed: "2026-10-19T19:33:00.000-03:00",
+      date_created: "2026-10-19T19:33:00.000-03:00",
+      id: Number(couponOrderId),
+      order_items: [
+        {
+          item: { id: "MLB123", seller_sku: "KIT-2", title: "Kit 2 Calçadeiras" },
+          quantity: 1,
+          sale_fee: 2.77,
+          unit_price: 20.8,
+        },
+      ],
+      payments: [{ coupon_amount: 0, id: 555 }],
+      total_amount: 20.8,
+    };
+
+    function stubBulkCouponFetch() {
+      const fetchMock = vi.fn(async (input: string | URL) => {
+        const url = String(input);
+
+        if (url.includes("/orders/search")) {
+          return createJsonResponse({
+            paging: { limit: 50, offset: 0, total: 1 },
+            results: url.includes("offset=0") ? [couponOrder] : [],
+          });
+        }
+
+        if (url.includes(`/orders/${couponOrderId}/discounts`)) {
+          return createJsonResponse({
+            details: [
+              {
+                coupon: { id: 987 },
+                items: [
+                  { amounts: { seller: 1.04, total: 1.04 }, id: "MLB123", quantity: 1 },
+                ],
+                type: "coupon",
+              },
+            ],
+          });
+        }
+
+        if (url.endsWith(`/orders/${couponOrderId}`)) {
+          return createJsonResponse(couponOrder);
+        }
+
+        if (url.includes("api.mercadopago.com/v1/payments/555")) {
+          return createJsonResponse({ charges_details: [], id: 555 });
+        }
+
+        if (url.includes("/billing/integration/periods/")) {
+          return createJsonResponse({ limit: 1000, offset: 0, results: [], total: 0 });
+        }
+
+        return createJsonResponse({ message: "not found" }, 404);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      return fetchMock;
+    }
+
+    const expectedCouponFee = expect.objectContaining({
+      amount: "1.04",
+      feeType: "seller_coupon_discount",
+      metadata: expect.objectContaining({
+        couponId: "987",
+        fundedBy: "seller",
+        source: "mercadolivre_order_discounts",
+      }),
+    });
+
+    it("adds the coupon on automatic incremental sync", async () => {
+      stubBulkCouponFetch();
+
+      const result = await createProvider().syncOrders({
+        connection: createSyncConnection(),
+        cursor: null,
+        mode: "incremental",
+        notification: null,
+        organizationId: "org_1",
+      });
+
+      expect(result.orders).toHaveLength(1);
+      expect(result.orders[0]?.fees).toContainEqual(expectedCouponFee);
+    });
+
+    it("adds the coupon on manual range sync", async () => {
+      stubBulkCouponFetch();
+
+      const result = await createProvider().syncOrders({
+        connection: createSyncConnection(),
+        mode: "manual_range",
+        organizationId: "org_1",
+        range: {
+          endAt: "2026-10-31T23:59:59.999Z",
+          startAt: "2026-10-01T00:00:00.000Z",
+        },
+      });
+
+      expect(result.orders).toHaveLength(1);
+      expect(result.orders[0]?.fees).toContainEqual(expectedCouponFee);
+    });
+
+    it("adds the coupon on webhook-triggered sync", async () => {
+      stubBulkCouponFetch();
+
+      const result = await createProvider().syncOrders({
+        connection: createSyncConnection(),
+        cursor: null,
+        mode: "incremental",
+        notification: {
+          notificationId: "180371319768",
+          resource: `/orders/${couponOrderId}`,
+          topic: "orders_v2",
+        },
+        organizationId: "org_1",
+      });
+
+      expect(result.orders).toHaveLength(1);
+      expect(result.orders[0]?.fees).toContainEqual(expectedCouponFee);
+    });
+  });
+
   it("includes manual sync orders created before range when they close within range", async () => {
     const provider = createProvider();
 
