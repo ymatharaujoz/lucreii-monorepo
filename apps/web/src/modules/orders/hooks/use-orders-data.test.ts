@@ -154,6 +154,56 @@ describe("orders protected fetchers", () => {
     );
   });
 
+  it("sends refund and coupon flags only when enabled", async () => {
+    apiClientMock.getValidatedData.mockResolvedValue({
+      summary: {
+        averageMargin: "0.00",
+        grossProfit: "0.00",
+        grossRevenue: "0.00",
+        marginRevenue: "0.00",
+        ordersCount: 0,
+        unitsSold: 0,
+      },
+      availableStatuses: [],
+      items: [],
+      page: 1,
+      pageSize: 20,
+      totalItems: 0,
+      totalPages: 1,
+    });
+
+    await fetchOrders({
+      hasCouponDiscount: true,
+      hasRefundBonus: true,
+      page: 1,
+    });
+    await fetchOrders({ hasCouponDiscount: false, page: 1 });
+
+    expect(apiClientMock.getValidatedData).toHaveBeenNthCalledWith(
+      1,
+      "/orders?page=1&hasRefundBonus=true&hasCouponDiscount=true",
+      expect.any(Object),
+    );
+    expect(apiClientMock.getValidatedData).toHaveBeenNthCalledWith(
+      2,
+      "/orders?page=1",
+      expect.any(Object),
+    );
+  });
+
+  it("downloads orders export using refund and coupon flags", async () => {
+    apiClientMock.download.mockResolvedValue(new Blob(["xlsx"]));
+
+    await downloadOrdersExport({
+      hasCouponDiscount: true,
+      hasRefundBonus: true,
+    });
+
+    expect(apiClientMock.download).toHaveBeenCalledWith(
+      "/orders/export?hasRefundBonus=true&hasCouponDiscount=true",
+    );
+  });
+
   it("downloads orders export using filters", async () => {
     apiClientMock.download.mockResolvedValue(new Blob(["xlsx"]));
 
@@ -496,6 +546,8 @@ describe("orders protected fetchers", () => {
           "",
           "",
           "",
+          false,
+          false,
         ],
       }),
     );
@@ -539,6 +591,8 @@ describe("orders protected fetchers", () => {
           "2026-06-30",
           "",
           "",
+          false,
+          false,
         ],
       }),
     );
@@ -582,6 +636,53 @@ describe("orders protected fetchers", () => {
           "",
           "SALE-9001",
           "SKU-2",
+          false,
+          false,
+        ],
+      }),
+    );
+
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+    });
+  });
+
+  it("keys order list queries by refund and coupon flags", () => {
+    const originalDocument = globalThis.document;
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: {
+        cookie: "lucreii_selected_company_id=company_123",
+      },
+    });
+
+    useOrdersList({
+      hasCouponDiscount: true,
+      hasRefundBonus: true,
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(useQueryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: [
+          "orders",
+          "company_123",
+          1,
+          20,
+          "",
+          "",
+          "",
+          "",
+          "",
+          true,
+          "",
+          "",
+          "",
+          "",
+          true,
+          true,
         ],
       }),
     );

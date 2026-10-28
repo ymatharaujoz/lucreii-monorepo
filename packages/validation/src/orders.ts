@@ -47,6 +47,12 @@ const orderImportPendingFinancialFieldSchema = z.enum([
   "taxAmount",
 ]);
 
+// Accepts query strings and already-parsed booleans (export re-parses its input).
+// z.coerce.boolean() is avoided because it turns "false" into true.
+const queryBooleanFlagSchema = z
+  .union([z.boolean(), z.enum(["true", "false"])])
+  .transform((value) => value === true || value === "true");
+
 export const orderListFiltersSchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
@@ -55,6 +61,8 @@ export const orderListFiltersSchema = z.object({
   sku: z.string().trim().min(1).optional(),
   provider: integrationProviderSchema.optional(),
   status: orderCanonicalStatusSchema.optional(),
+  hasRefundBonus: queryBooleanFlagSchema.optional(),
+  hasCouponDiscount: queryBooleanFlagSchema.optional(),
   orderedFrom: isoDateField("Ordered from").optional(),
   orderedTo: isoDateField("Ordered to").optional(),
   sortBy: z

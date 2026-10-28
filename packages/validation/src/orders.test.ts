@@ -3,6 +3,7 @@ import {
   orderDetailsApiResponseSchema,
   orderCompositionUpdateSchema,
   orderExportQuerySchema,
+  orderListFiltersSchema,
   orderOtherVariableCostsBulkUpdateSchema,
   orderProductCostBulkUpdateSchema,
   ordersListSummarySchema,
@@ -10,6 +11,22 @@ import {
 } from "./orders";
 
 describe("orders validation schemas", () => {
+  it("parses refund and coupon flags from query strings and booleans", () => {
+    expect(
+      orderListFiltersSchema.parse({
+        hasCouponDiscount: "false",
+        hasRefundBonus: "true",
+      }),
+    ).toEqual({ hasCouponDiscount: false, hasRefundBonus: true });
+    expect(
+      orderExportQuerySchema.parse({ hasRefundBonus: true }).hasRefundBonus,
+    ).toBe(true);
+    expect(orderListFiltersSchema.parse({}).hasRefundBonus).toBeUndefined();
+    expect(() =>
+      orderListFiltersSchema.parse({ hasRefundBonus: "maybe" }),
+    ).toThrow();
+  });
+
   it("accepts paginated orders list responses", () => {
     const result = ordersListApiResponseSchema.parse({
       data: {

@@ -487,6 +487,19 @@ function matchesSkuFilter(order: Pick<OrderListItem, "skus">, needle: string) {
   return order.skus.some((sku) => includesIgnoreCase(sku, needle));
 }
 
+function matchesFinancialFlagFilters(
+  composition: Pick<OrderComposition, "couponDiscountAmount" | "refundBonusAmount">,
+  filters: Pick<OrderListFilters, "hasCouponDiscount" | "hasRefundBonus">,
+) {
+  if (filters.hasRefundBonus && toNumber(composition.refundBonusAmount) <= 0) {
+    return false;
+  }
+
+  return !(
+    filters.hasCouponDiscount && toNumber(composition.couponDiscountAmount) <= 0
+  );
+}
+
 function buildSaleIdWhere(needle: string) {
   const pattern = `%${needle}%`;
 
@@ -2752,6 +2765,8 @@ export class OrdersService {
       !saleIdNeedle &&
       !skuNeedle &&
       !filters.status &&
+      !filters.hasRefundBonus &&
+      !filters.hasCouponDiscount &&
       ["orderedAt", "provider"].includes(sortBy);
     const [company] = await Promise.all([
       this.db.query.companies.findFirst({
@@ -2947,7 +2962,7 @@ export class OrdersService {
     const mapped = buildLogicalOrders(
       hydratedRows,
       taxRateSource,
-    ).filter(({ order: item }) => {
+    ).filter(({ composition, order: item }) => {
       if (filters.search && !matchesOrderSearch(item, filters.search)) {
         return false;
       }
@@ -2961,6 +2976,10 @@ export class OrdersService {
       }
 
       if (filters.status && item.status !== filters.status) {
+        return false;
+      }
+
+      if (!matchesFinancialFlagFilters(composition, filters)) {
         return false;
       }
 
@@ -3727,7 +3746,7 @@ export class OrdersService {
         companyId,
         company?.taxRateDefault,
       ),
-    ).filter(({ order: item }) => {
+    ).filter(({ composition, order: item }) => {
       if (selectedIds.size > 0 && !selectedIds.has(item.id)) {
         return false;
       }
@@ -3760,6 +3779,10 @@ export class OrdersService {
         return false;
       }
 
+      if (!matchesFinancialFlagFilters(composition, normalizedFilters)) {
+        return false;
+      }
+
       return !(
         (normalizedFilters.orderedFrom || normalizedFilters.orderedTo) &&
         !isOrderWithinRange(
@@ -3787,7 +3810,9 @@ export class OrdersService {
       !filters.search?.trim() &&
       !filters.saleId?.trim() &&
       !filters.sku?.trim() &&
-      !filters.status;
+      !filters.status &&
+      !filters.hasRefundBonus &&
+      !filters.hasCouponDiscount;
 
     if (
       !canUsePerformanceRollup ||
@@ -3868,7 +3893,7 @@ export class OrdersService {
     const filteredLogicalOrders = buildLogicalOrders(
       hydratedRows,
       taxRateDefault,
-    ).filter(({ order: listItem }) => {
+    ).filter(({ composition, order: listItem }) => {
       if (filters.search && !matchesOrderSearch(listItem, filters.search)) {
         return false;
       }
@@ -3882,6 +3907,10 @@ export class OrdersService {
       }
 
       if (filters.status && listItem.status !== filters.status) {
+        return false;
+      }
+
+      if (!matchesFinancialFlagFilters(composition, filters)) {
         return false;
       }
 

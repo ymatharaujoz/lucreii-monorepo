@@ -64,6 +64,14 @@ export async function fetchOrders(
     params.set("status", filters.status);
   }
 
+  if (filters.hasRefundBonus) {
+    params.set("hasRefundBonus", "true");
+  }
+
+  if (filters.hasCouponDiscount) {
+    params.set("hasCouponDiscount", "true");
+  }
+
   if (filters.orderedFrom) {
     params.set("orderedFrom", filters.orderedFrom);
   }
@@ -139,6 +147,14 @@ export async function downloadOrdersExport(
     params.set("status", filters.status);
   }
 
+  if (filters.hasRefundBonus) {
+    params.set("hasRefundBonus", "true");
+  }
+
+  if (filters.hasCouponDiscount) {
+    params.set("hasCouponDiscount", "true");
+  }
+
   if (filters.orderedFrom) {
     params.set("orderedFrom", filters.orderedFrom);
   }
@@ -211,6 +227,8 @@ export function useOrdersList(filters: OrderListFilters = {}) {
       filters.orderedTo ?? "",
       filters.saleId ?? "",
       filters.sku ?? "",
+      filters.hasRefundBonus ?? false,
+      filters.hasCouponDiscount ?? false,
     ],
   });
 }

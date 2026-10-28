@@ -38,6 +38,8 @@ export type OrderListFilters = {
   sku?: string;
   provider?: IntegrationProviderSlug;
   status?: OrderCanonicalStatus;
+  hasRefundBonus?: boolean;
+  hasCouponDiscount?: boolean;
   orderedFrom?: string;
   orderedTo?: string;
   sortBy?:

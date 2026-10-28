@@ -6042,6 +6042,101 @@ describe("OrdersService", () => {
     expect(result.items[0]?.skus).toEqual(["SKU-1", "SKU-2"]);
   });
 
+  describe("refund/bonus and coupon filters", () => {
+    const tenant = {
+      organizationId: "org_123",
+      selectedCompanyId: "company_123",
+      userId: "user_123",
+    };
+    const buildRow = (
+      id: string,
+      fees: Array<{ amount: string; feeType: string }>,
+    ) => ({
+      id,
+      companyId: "company_123",
+      createdAt: new Date("2026-06-20T12:00:00.000Z"),
+      currency: "BRL",
+      externalOrderId: id,
+      metadata: {},
+      orderedAt: new Date("2026-06-20T10:15:00.000Z"),
+      organizationId: "org_123",
+      provider: "shopee",
+      status: "paid",
+      syncRunId: null,
+      updatedAt: new Date("2026-06-20T12:00:00.000Z"),
+      totalAmount: "100.00",
+      items: [],
+      fees: fees.map((fee, index) => ({
+        ...fee,
+        id: `${id}_fee_${index}`,
+        metadata: {},
+      })),
+    });
+    const buildService = () =>
+      new OrdersService({
+        query: {
+          companies: {
+            findFirst: vi.fn().mockResolvedValue({
+              id: "company_123",
+              taxRateDefault: "0.120000",
+            }),
+          },
+          products: { findMany: vi.fn().mockResolvedValue([]) },
+          externalOrders: {
+            findMany: vi.fn().mockResolvedValue([
+              buildRow("SHP-PLAIN", []),
+              buildRow("SHP-REFUND", [
+                { amount: "5.00", feeType: "refund_bonus" },
+              ]),
+              buildRow("SHP-COUPON", [
+                { amount: "7.00", feeType: "seller_coupon_discount" },
+              ]),
+              buildRow("SHP-BOTH", [
+                { amount: "5.00", feeType: "refund_bonus" },
+                { amount: "7.00", feeType: "seller_coupon_discount" },
+              ]),
+            ]),
+          },
+        },
+      } as never);
+
+    const listIds = async (filters: {
+      hasCouponDiscount?: boolean;
+      hasRefundBonus?: boolean;
+    }) => {
+      const result = await buildService().listOrders(tenant, filters);
+      return result.items.map((item) => item.orderId).sort();
+    };
+
+    it("returns only orders with refund/bonus", async () => {
+      expect(await listIds({ hasRefundBonus: true })).toEqual([
+        "SHP-BOTH",
+        "SHP-REFUND",
+      ]);
+    });
+
+    it("returns only orders with coupon discounts", async () => {
+      expect(await listIds({ hasCouponDiscount: true })).toEqual([
+        "SHP-BOTH",
+        "SHP-COUPON",
+      ]);
+    });
+
+    it("combines both flags with AND and keeps totals coherent", async () => {
+      const result = await buildService().listOrders(tenant, {
+        hasCouponDiscount: true,
+        hasRefundBonus: true,
+      });
+
+      expect(result.items.map((item) => item.orderId)).toEqual(["SHP-BOTH"]);
+      expect(result.totalItems).toBe(1);
+    });
+
+    it("ignores flags explicitly set to false", async () => {
+      expect(await listIds({ hasRefundBonus: false })).toHaveLength(4);
+    });
+  });
+
   it("exports filtered orders as xlsx rows and restricts export to selected ids", async () => {
     const db = {
       query: {

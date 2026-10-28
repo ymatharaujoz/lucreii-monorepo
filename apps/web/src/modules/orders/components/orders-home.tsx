@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowUpDown,
+  Check,
   CheckCheck,
   ChevronDown,
   ChevronUp,
@@ -29,6 +30,7 @@ import {
   Sparkles,
   Ticket,
   Truck,
+  Undo2,
   X,
 } from "lucide-react";
 import {
@@ -1296,6 +1298,43 @@ function buildStatusDropdownItems(
   ];
 }
 
+function FilterToggle({
+  active,
+  icon: Icon,
+  label,
+  onToggle,
+}: {
+  active: boolean;
+  icon: typeof Undo2;
+  label: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onToggle}
+      className={cn(
+        "inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-[var(--radius-md)] border pl-2.5 pr-2.5 text-xs font-medium transition-all duration-[var(--transition-fast)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/25",
+        active
+          ? "border-accent/40 bg-accent/5 text-foreground ring-1 ring-inset ring-accent/15"
+          : "border-border bg-background text-foreground hover:border-border-strong",
+      )}
+    >
+      <Icon
+        className={cn(
+          "h-3.5 w-3.5 shrink-0 transition-colors",
+          active ? "text-accent" : "text-muted-foreground/70",
+        )}
+      />
+      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/70">
+        {label}
+      </span>
+      {active ? <Check className="h-3.5 w-3.5 shrink-0 text-accent" /> : null}
+    </button>
+  );
+}
+
 export function OrdersHome({
   dateRange: providedDateRange,
   provider = null,
@@ -1339,6 +1378,8 @@ function OrdersHomeContent({
   const [skuDraft, setSkuDraft] = useState("");
   const [selectedStatus, setSelectedStatus] =
     useState<OrderCanonicalStatus | null>(null);
+  const [hasRefundBonus, setHasRefundBonus] = useState(false);
+  const [hasCouponDiscount, setHasCouponDiscount] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1389,6 +1430,8 @@ function OrdersHomeContent({
     ...(sku ? { sku } : {}),
     ...(provider ? { provider } : {}),
     ...(selectedStatus ? { status: selectedStatus } : {}),
+    ...(hasRefundBonus ? { hasRefundBonus } : {}),
+    ...(hasCouponDiscount ? { hasCouponDiscount } : {}),
     ...(sortConfig?.direction
       ? {
           sortBy: sortConfig.key,
@@ -1718,10 +1761,16 @@ function OrdersHomeContent({
   const hasActiveFilters =
     saleId.trim().length > 0 ||
     sku.trim().length > 0 ||
-    selectedStatus !== null;
+    selectedStatus !== null ||
+    hasRefundBonus ||
+    hasCouponDiscount;
 
   const activeFilterCount =
-    (saleId.trim() ? 1 : 0) + (sku.trim() ? 1 : 0) + (selectedStatus ? 1 : 0);
+    (saleId.trim() ? 1 : 0) +
+    (sku.trim() ? 1 : 0) +
+    (selectedStatus ? 1 : 0) +
+    (hasRefundBonus ? 1 : 0) +
+    (hasCouponDiscount ? 1 : 0);
 
   const clearAllFilters = () => {
     setSaleId("");
@@ -1729,6 +1778,8 @@ function OrdersHomeContent({
     setSku("");
     setSkuDraft("");
     setSelectedStatus(null);
+    setHasRefundBonus(false);
+    setHasCouponDiscount(false);
     setPage(1);
   };
 
@@ -1766,6 +1817,8 @@ function OrdersHomeContent({
               saleId: saleId || undefined,
               sku: sku || undefined,
               status: selectedStatus ?? undefined,
+              hasRefundBonus: hasRefundBonus || undefined,
+              hasCouponDiscount: hasCouponDiscount || undefined,
             },
       );
       if (blob instanceof Blob) {
@@ -1983,6 +2036,26 @@ function OrdersHomeContent({
                     }
                   />
 
+                  <FilterToggle
+                    active={hasRefundBonus}
+                    icon={Undo2}
+                    label="Estornos / Bônus"
+                    onToggle={() => {
+                      setHasRefundBonus((current) => !current);
+                      setPage(1);
+                    }}
+                  />
+
+                  <FilterToggle
+                    active={hasCouponDiscount}
+                    icon={Ticket}
+                    label="Descontos / Cupons"
+                    onToggle={() => {
+                      setHasCouponDiscount((current) => !current);
+                      setPage(1);
+                    }}
+                  />
+
                   {hasActiveFilters ? (
                     <button
                       type="button"
@@ -2061,6 +2134,46 @@ function OrdersHomeContent({
                       type="button"
                       onClick={() => {
                         setSelectedStatus(null);
+                        setPage(1);
+                      }}
+                      className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+
+                {hasRefundBonus && (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">
+                      Estornos / Bônus:
+                    </span>
+                    <span>Somente com</span>
+                    <button
+                      type="button"
+                      aria-label="Remover filtro de estornos e bônus"
+                      onClick={() => {
+                        setHasRefundBonus(false);
+                        setPage(1);
+                      }}
+                      className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+
+                {hasCouponDiscount && (
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-accent/5 border border-accent/15 px-2.5 py-0.5 text-xs text-foreground font-medium">
+                    <span className="text-muted-foreground text-[10px] uppercase font-semibold">
+                      Descontos / Cupons:
+                    </span>
+                    <span>Somente com</span>
+                    <button
+                      type="button"
+                      aria-label="Remover filtro de descontos e cupons"
+                      onClick={() => {
+                        setHasCouponDiscount(false);
                         setPage(1);
                       }}
                       className="hover:bg-accent/10 rounded-full p-0.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"

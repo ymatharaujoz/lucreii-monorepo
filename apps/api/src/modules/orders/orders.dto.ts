@@ -24,6 +24,8 @@ export class OrderListFiltersDto {
   sku?: string;
   provider?: "mercadolivre" | "shopee" | "shein";
   status?: OrderCanonicalStatus;
+  hasRefundBonus?: boolean;
+  hasCouponDiscount?: boolean;
   orderedFrom?: string;
   orderedTo?: string;
   sortBy?:
@@ -81,6 +83,8 @@ export class OrderExportQueryDto implements OrderExportFilters {
   sku?: string;
   provider?: "mercadolivre" | "shopee" | "shein";
   status?: OrderCanonicalStatus;
+  hasRefundBonus?: boolean;
+  hasCouponDiscount?: boolean;
   orderedFrom?: string;
   orderedTo?: string;
 }

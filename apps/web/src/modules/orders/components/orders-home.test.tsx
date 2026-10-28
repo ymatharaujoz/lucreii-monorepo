@@ -1472,6 +1472,53 @@ describe("OrdersHome", () => {
     view.unmount();
   });
 
+  it("toggles refund and coupon filters, shows chips and clears them", async () => {
+    const view = mount(<OrdersHome />);
+    const findButton = (text: string) =>
+      Array.from(document.querySelectorAll("button")).find((button) =>
+        button.textContent?.includes(text),
+      )!;
+
+    click(findButton("Filtros"));
+    click(findButton("Estornos / Bônus"));
+    click(findButton("Descontos / Cupons"));
+
+    expect(useOrdersListMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        hasCouponDiscount: true,
+        hasRefundBonus: true,
+        page: 1,
+      }),
+    );
+    expect(
+      findButton("Estornos / Bônus").getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(document.body.textContent).toContain("Filtros ativos:");
+
+    await act(async () => {
+      click(findButton("Exportar"));
+      await Promise.resolve();
+    });
+
+    expect(downloadOrdersExportMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hasCouponDiscount: true,
+        hasRefundBonus: true,
+      }),
+    );
+
+    click(findButton("Limpar todos"));
+
+    expect(useOrdersListMock).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ hasRefundBonus: true }),
+    );
+    expect(
+      findButton("Estornos / Bônus").getAttribute("aria-pressed"),
+    ).toBe("false");
+
+    view.unmount();
+  });
+
   it("changes to page 2 when pagination is used", () => {
     useOrdersListMock.mockImplementation((filters?: { page?: number }) => ({
       data: {
