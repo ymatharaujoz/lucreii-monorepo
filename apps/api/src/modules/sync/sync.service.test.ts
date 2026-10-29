@@ -680,9 +680,10 @@ describe("SyncService", () => {
         connection: expect.objectContaining({ id: "conn_123" }),
         mode: "manual_range",
         organizationId: "org_123",
+        // Whole São Paulo days (UTC-3).
         range: {
-          endAt: "2026-06-20T23:59:59.999Z",
-          startAt: "2026-06-10T00:00:00.000Z",
+          endAt: "2026-06-21T02:59:59.999Z",
+          startAt: "2026-06-10T03:00:00.000Z",
         },
       }),
     );

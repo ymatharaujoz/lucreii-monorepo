@@ -12,6 +12,13 @@ describe("getManualSyncDateBounds", () => {
       minDate: "2026-05-03",
     });
   });
+
+  it("uses the São Paulo date when UTC has already rolled over", () => {
+    expect(getManualSyncDateBounds("2026-10-20T01:30:00.000Z")).toEqual({
+      maxDate: "2026-10-19",
+      minDate: "2026-08-20",
+    });
+  });
 });
 
 describe("validateManualSyncRange", () => {

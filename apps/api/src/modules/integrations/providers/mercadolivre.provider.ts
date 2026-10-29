@@ -555,6 +555,9 @@ function dedupeProducts(products: IntegrationSyncProduct[]) {
 }
 
 const MERCADOLIVRE_INCREMENTAL_OVERLAP_MS = 6 * 60 * 60 * 1000;
+// Manual ranges filter on the sale date (`date_closed`), which can trail
+// `date_created`; search this far back so late-closing orders still match.
+const MERCADOLIVRE_MANUAL_RANGE_CREATED_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 const MERCADOLIVRE_MAX_RATE_LIMIT_RETRIES = 6;
 const MERCADOLIVRE_RATE_LIMIT_BASE_DELAY_MS = 500;
 const MERCADOLIVRE_RATE_LIMIT_MAX_DELAY_MS = 15_000;
@@ -1620,10 +1623,15 @@ function maxIsoTimestamp(
   return latest;
 }
 
+/** Formats an instant for `/orders/search` date filters (ML expects a `-00:00` offset). */
+function toMercadoLivreSearchDate(timestamp: number) {
+  return new Date(timestamp).toISOString().replace("Z", "-00:00");
+}
+
 /**
  * Lower bound for the incremental order search: the cursor minus an overlap
  * window, so late-indexed or previously missed orders are re-fetched (upserts
- * are idempotent). Formatted as ML expects (`-00:00` offset).
+ * are idempotent).
  */
 function resolveIncrementalSearchFrom(cursor: string | null) {
   const cursorTimestamp = toTimestamp(cursor);
@@ -1631,9 +1639,28 @@ function resolveIncrementalSearchFrom(cursor: string | null) {
     return null;
   }
 
-  return new Date(cursorTimestamp - MERCADOLIVRE_INCREMENTAL_OVERLAP_MS)
-    .toISOString()
-    .replace("Z", "-00:00");
+  return toMercadoLivreSearchDate(
+    cursorTimestamp - MERCADOLIVRE_INCREMENTAL_OVERLAP_MS,
+  );
+}
+
+/** `date_created` bounds for a manual range search; null when the range is unparsable. */
+function resolveManualRangeSearchBounds(range: {
+  endAt: string;
+  startAt: string;
+}) {
+  const startTimestamp = toTimestamp(range.startAt);
+  const endTimestamp = toTimestamp(range.endAt);
+  if (startTimestamp === null || endTimestamp === null) {
+    return null;
+  }
+
+  return {
+    from: toMercadoLivreSearchDate(
+      startTimestamp - MERCADOLIVRE_MANUAL_RANGE_CREATED_LOOKBACK_MS,
+    ),
+    to: toMercadoLivreSearchDate(endTimestamp),
+  };
 }
 
 function extractMercadoLivreOrderIdFromNotification(
@@ -2993,13 +3020,13 @@ export class MercadoLivreProvider implements IntegrationProvider {
   }
 
   private isManualRangeOrderWithinRange(
-    order: IntegrationSyncOrder,
+    saleTimestamp: string | null | undefined,
     range: {
       endAt: string;
       startAt: string;
     },
   ) {
-    const orderedAt = toTimestamp(order.orderedAt);
+    const orderedAt = toTimestamp(saleTimestamp);
     const startAt = toTimestamp(range.startAt);
     const endAt = toTimestamp(range.endAt);
 
@@ -3033,10 +3060,23 @@ export class MercadoLivreProvider implements IntegrationProvider {
     let rawOrderCount = 0;
     let total = Number.POSITIVE_INFINITY;
     let maxDateCreated: string | null = null;
-    const incrementalSearchFrom =
+    const manualRange =
+      input.mode === "manual_range"
+        ? { endAt: input.rangeEndAt, startAt: input.rangeStartAt }
+        : null;
+    const manualRangeSearchBounds = manualRange
+      ? resolveManualRangeSearchBounds(manualRange)
+      : null;
+    if (manualRange && !manualRangeSearchBounds) {
+      throw new IntegrationProviderError(
+        "Mercado Livre manual sync range is invalid.",
+        "remote_request_failed",
+      );
+    }
+    const searchFrom =
       input.mode === "incremental"
         ? resolveIncrementalSearchFrom(input.orderedAfter)
-        : null;
+        : (manualRangeSearchBounds?.from ?? null);
 
     while (offset < total) {
       const url = new URL("https://api.mercadolibre.com/orders/search");
@@ -3045,11 +3085,11 @@ export class MercadoLivreProvider implements IntegrationProvider {
       url.searchParams.set("seller", input.accountId);
       url.searchParams.set("sort", "date_desc");
 
-      if (incrementalSearchFrom) {
-        url.searchParams.set("order.date_created.from", incrementalSearchFrom);
+      if (searchFrom) {
+        url.searchParams.set("order.date_created.from", searchFrom);
       }
-      if (input.mode === "manual_range") {
-        url.searchParams.set("order.date_created.to", input.rangeEndAt);
+      if (manualRangeSearchBounds) {
+        url.searchParams.set("order.date_created.to", manualRangeSearchBounds.to);
       }
 
       const response = await fetch(url, {
@@ -3075,9 +3115,19 @@ export class MercadoLivreProvider implements IntegrationProvider {
         maxDateCreated,
         ...rawPageOrders.map((order) => order.date_created),
       );
+      // Normalizing costs several API calls per order, so skip search hits whose
+      // sale date already falls outside the manual range. Orders without
+      // `date_closed` in the search payload are kept and checked after hydration.
+      const candidateOrders = manualRange
+        ? rawPageOrders.filter(
+            (order) =>
+              !order.date_closed ||
+              this.isManualRangeOrderWithinRange(order.date_closed, manualRange),
+          )
+        : rawPageOrders;
       await this.prefetchBillingOrderDetails({
         accessToken: input.accessToken,
-        orderIds: rawPageOrders
+        orderIds: candidateOrders
           .map((order) =>
             order.id !== undefined && order.id !== null
               ? String(order.id)
@@ -3087,30 +3137,27 @@ export class MercadoLivreProvider implements IntegrationProvider {
       });
 
       const pageOrders = await Promise.all(
-        rawPageOrders.map((order) =>
+        candidateOrders.map((order) =>
           this.normalizeOrder(order, {
             accessToken: input.accessToken,
             sellerAccountId: input.accountId,
           }),
         ),
       );
-      rawOrderCount += pageOrders.length;
+      rawOrderCount += rawPageOrders.length;
 
       collected.push(
         ...pageOrders.filter((order) =>
-          input.mode === "manual_range"
-            ? this.isManualRangeOrderWithinRange(order, {
-                endAt: input.rangeEndAt,
-                startAt: input.rangeStartAt,
-              })
+          manualRange
+            ? this.isManualRangeOrderWithinRange(order.orderedAt, manualRange)
             : true,
         ),
       );
-      total = payload.paging?.total ?? pageOrders.length;
+      total = payload.paging?.total ?? rawPageOrders.length;
       offset += payload.paging?.limit ?? limit;
       pageCount += 1;
 
-      if (pageOrders.length === 0) {
+      if (rawPageOrders.length === 0) {
         break;
       }
     }
@@ -3126,6 +3173,9 @@ export class MercadoLivreProvider implements IntegrationProvider {
               rangeEndAt: input.rangeEndAt,
               rangeStartAt: input.rangeStartAt,
               saleDateField: "date_closed_or_date_created",
+              searchFrom: manualRangeSearchBounds?.from ?? null,
+              searchLowerBoundField: "order.date_created.from",
+              searchTo: manualRangeSearchBounds?.to ?? null,
               searchUpperBoundField: "order.date_created.to",
             }
           : undefined,

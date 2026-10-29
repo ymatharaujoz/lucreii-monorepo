@@ -1,4 +1,5 @@
 import type { IntegrationProviderSlug, RunSyncRequest } from "@lucreii/types";
+import { getSaoPauloCurrentDate } from "@/lib/reference-month";
 
 export type ManualSyncFormValues = {
   startDate: string;
@@ -64,18 +65,11 @@ function formatUtcDate(value: Date) {
 export function getManualSyncDateBounds(
   nowIso: string = new Date().toISOString(),
 ): ManualSyncDateBounds {
-  const now = new Date(nowIso);
-  const todayStart = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      0,
-      0,
-      0,
-      0,
-    ),
-  );
+  // "Today" follows São Paulo time, matching how the API resolves the range.
+  const todayStart = parseUtcDate(getSaoPauloCurrentDate(new Date(nowIso)));
+  if (!todayStart) {
+    throw new Error("Unable to resolve the current São Paulo date.");
+  }
 
   return {
     maxDate: formatUtcDate(todayStart),

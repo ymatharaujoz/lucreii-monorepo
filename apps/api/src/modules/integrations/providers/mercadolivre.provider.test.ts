@@ -4296,10 +4296,15 @@ describe("MercadoLivreProvider", () => {
 
     const firstRequestUrl = fetchMock.mock.calls[0]?.[0].toString() ?? "";
 
-    expect(firstRequestUrl).toContain(
-      "order.date_created.to=2026-05-20T23%3A59%3A59.999Z",
+    const firstSearchParams = new URL(firstRequestUrl).searchParams;
+    expect(firstSearchParams.get("order.date_created.to")).toBe(
+      "2026-05-20T23:59:59.999-00:00",
     );
-    expect(firstRequestUrl).not.toContain("order.date_created.from=");
+    // Lower bound reaches back 30 days so orders created before the range
+    // but closed within it are still found.
+    expect(firstSearchParams.get("order.date_created.from")).toBe(
+      "2026-04-01T00:00:00.000-00:00",
+    );
     expect(
       fetchMock.mock.calls.filter((call) =>
         String(call[0]).includes("/orders/search"),
@@ -4418,9 +4423,15 @@ describe("MercadoLivreProvider", () => {
       total_amount: 20.8,
     };
 
-    function stubBulkCouponFetch() {
+    function stubBulkCouponFetch(
+      override?: (url: string) => Response | null,
+    ) {
       const fetchMock = vi.fn(async (input: string | URL) => {
         const url = String(input);
+        const overridden = override?.(url);
+        if (overridden) {
+          return overridden;
+        }
 
         if (url.includes("/orders/search")) {
           return createJsonResponse({
@@ -4501,6 +4512,47 @@ describe("MercadoLivreProvider", () => {
 
       expect(result.orders).toHaveLength(1);
       expect(result.orders[0]?.fees).toContainEqual(expectedCouponFee);
+    });
+
+    it("imports coupon and refund bonus for a São Paulo day range", async () => {
+      const fetchMock = stubBulkCouponFetch((url) =>
+        url.includes("/billing/integration/group/ML/order/details")
+          ? createJsonResponse({
+              results: [
+                {
+                  order_id: Number(couponOrderId),
+                  sale_fee: { gross: 2.77, net: 2.27, rebate: 0.5 },
+                },
+              ],
+            })
+          : null,
+      );
+
+      const result = await createProvider().syncOrders({
+        connection: createSyncConnection(),
+        mode: "manual_range",
+        organizationId: "org_1",
+        range: {
+          endAt: "2026-10-20T02:59:59.999Z",
+          startAt: "2026-10-19T03:00:00.000Z",
+        },
+      });
+
+      const searchUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+      expect(searchUrl.searchParams.get("order.date_created.from")).toBe(
+        "2026-09-19T03:00:00.000-00:00",
+      );
+      expect(searchUrl.searchParams.get("order.date_created.to")).toBe(
+        "2026-10-20T02:59:59.999-00:00",
+      );
+      expect(result.orders).toHaveLength(1);
+      expect(result.orders[0]?.fees).toContainEqual(expectedCouponFee);
+      expect(result.orders[0]?.fees).toContainEqual(
+        expect.objectContaining({ amount: "0.50", feeType: "refund_bonus" }),
+      );
+      expect(result.orders[0]?.metadata).toMatchObject({
+        refundBonusAmount: "0.50",
+      });
     });
 
     it("adds the coupon on webhook-triggered sync", async () => {
@@ -4635,11 +4687,19 @@ describe("MercadoLivreProvider", () => {
       },
     });
 
-    expect(fetchMock.mock.calls[0]?.[0].toString()).toContain(
-      "order.date_created.to=2026-05-20T23%3A59%3A59.999Z",
-    );
+    expect(
+      new URL(String(fetchMock.mock.calls[0]?.[0])).searchParams.get(
+        "order.date_created.to",
+      ),
+    ).toBe("2026-05-20T23:59:59.999-00:00");
     expect(result.orders).toHaveLength(1);
     expect(result.orders[0]?.externalOrderId).toBe("123");
+    // Order 124 closes after the range, so it is never hydrated.
+    expect(
+      fetchMock.mock.calls.some((call) =>
+        String(call[0]).includes("/v1/payments/7654322"),
+      ),
+    ).toBe(false);
     expect(result.cursor).toBeNull();
   });
 

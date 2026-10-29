@@ -42,6 +42,8 @@ import {
   type IntegrationSyncResult,
 } from "@/modules/integrations/integrations.types";
 import {
+  readSaoPauloDateKey,
+  resolveSaoPauloDayRange,
   resolveSyncWindowState,
   resolveSyncWindowStateAtNextOpenHour,
 } from "./sync-window";
@@ -1401,18 +1403,9 @@ export class SyncService {
       throw new BadRequestException(MANUAL_SYNC_MAX_RANGE_ERROR);
     }
 
-    const now = new Date();
-    const todayStart = new Date(
-      Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate(),
-        0,
-        0,
-        0,
-        0,
-      ),
-    );
+    // Dates are calendar days chosen by a Brazilian seller, so "today" and the
+    // returned instants follow São Paulo time rather than UTC.
+    const todayStart = parseDateOnlyAsUtc(readSaoPauloDateKey());
     const oldestAllowedStart = addUtcDays(todayStart, -60);
     const newestAllowedEnd = endOfUtcDay(todayStart);
 
@@ -1423,10 +1416,7 @@ export class SyncService {
       throw new BadRequestException(MANUAL_SYNC_OUTSIDE_WINDOW_ERROR);
     }
 
-    return {
-      endAt: endAtDate.toISOString(),
-      startAt: startAtDate.toISOString(),
-    };
+    return resolveSaoPauloDayRange(input.startDate, input.endDate);
   }
 
   private async findLatestCursorSourceRun(

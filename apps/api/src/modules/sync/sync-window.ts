@@ -64,6 +64,19 @@ function toSaoPauloIso(
   ).toISOString();
 }
 
+/** Calendar date (`YYYY-MM-DD`) of `now` in {@link SYNC_TIME_ZONE}. */
+export function readSaoPauloDateKey(now: Date = new Date()) {
+  return formatDateKey(readLocalDateParts(now));
+}
+
+/** Instants covering whole São Paulo days, from the start of `startDateKey` to the end of `endDateKey`. */
+export function resolveSaoPauloDayRange(startDateKey: string, endDateKey: string) {
+  return {
+    endAt: new Date(`${endDateKey}T23:59:59.999-03:00`).toISOString(),
+    startAt: new Date(`${startDateKey}T00:00:00.000-03:00`).toISOString(),
+  };
+}
+
 function buildWindowState(
   parts: LocalDateParts,
   slot: SyncWindowName,
