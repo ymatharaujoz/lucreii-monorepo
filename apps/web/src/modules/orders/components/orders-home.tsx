@@ -668,7 +668,7 @@ function CompositionMetric({
         overlay ? "z-30" : undefined,
         variant === "highlight"
           ? "border-accent/20 bg-accent/5"
-          : "border-border/30 bg-white",
+          : "border-border/30 bg-background-elevated",
       )}
     >
       <div className="mb-2 flex items-center justify-between gap-2 text-muted-foreground">
@@ -815,7 +815,7 @@ function OtherVariableCostPopover({
   return (
     <div
       aria-label={label}
-      className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-border bg-white p-4 shadow-[var(--shadow-lg)]"
+      className="absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-border bg-background-elevated p-4 shadow-[var(--shadow-lg)]"
       id={`${id}-popover`}
       ref={popoverRef}
       role="dialog"
@@ -1046,7 +1046,7 @@ function CompositionTab({
             isEditingProductCost ? (
               <div
                 aria-label="Editar custo do produto"
-                className="absolute left-0 right-0 top-full mt-2 rounded-xl border border-border bg-white p-4 shadow-[var(--shadow-lg)]"
+                className="absolute left-0 right-0 top-full mt-2 rounded-xl border border-border bg-background-elevated p-4 shadow-[var(--shadow-lg)]"
                 id="product-cost-popover"
                 ref={productCostPopoverRef}
                 role="dialog"
