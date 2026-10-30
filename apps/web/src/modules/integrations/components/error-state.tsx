@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { RefreshCw, AlertCircle } from "lucide-react";
 import { Card, Button } from "@lucreii/ui";
 import { ApiClientError } from "@/lib/api/client";
+import { SessionExpiredRedirect } from "@/components/session-expired-redirect";
 
 interface ErrorStateProps {
   error: Error;
@@ -12,7 +12,9 @@ interface ErrorStateProps {
 }
 
 export function ErrorState({ error, onRetry }: ErrorStateProps) {
-  const isUnauthorized = error instanceof ApiClientError && error.status === 401;
+  if (error instanceof ApiClientError && error.status === 401) {
+    return <SessionExpiredRedirect />;
+  }
 
   return (
     <motion.div
@@ -25,25 +27,15 @@ export function ErrorState({ error, onRetry }: ErrorStateProps) {
           <AlertCircle className="h-6 w-6 text-error" />
         </div>
         <h3 className="mb-2 text-lg font-semibold text-foreground">
-          {isUnauthorized ? "Sessão expirada" : "Erro ao carregar dados"}
+          Erro ao carregar dados
         </h3>
         <p className="mb-6 text-sm text-muted-foreground">
-          {isUnauthorized
-            ? "Sua sessão expirou. Por favor, faça login novamente para continuar."
-            : "Não foi possível carregar os dados de integrações. Tente novamente."}
+          Não foi possível carregar os dados de integrações. Tente novamente.
         </p>
-        {isUnauthorized ? (
-          <Button asChild>
-            <Link href="/auth/session-expired" prefetch={false}>
-              Fazer login
-            </Link>
-          </Button>
-        ) : (
-          <Button onClick={onRetry}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Tentar novamente
-          </Button>
-        )}
+        <Button onClick={onRetry}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Tentar novamente
+        </Button>
       </Card>
     </motion.div>
   );

@@ -200,6 +200,24 @@ body {
   --shadow-glow: 0 0 40px rgba(26, 188, 156, 0.20);
 }
 
+/* ─── App sidebar - Deep teal surface (same in light and dark themes) ─── */
+.app-sidebar {
+  --background: #163b3b;
+  --foreground: #f2f8f6;
+  --foreground-soft: #cfe3de;
+  --muted-foreground: rgba(214, 232, 228, 0.72);
+  --surface: #163b3b;
+  --surface-strong: rgba(255, 255, 255, 0.07);
+  --surface-elevated: #13302f;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --accent: #5fe0c6;
+  --accent-strong: #ffffff;
+  --accent-soft: #14796b;
+  background: linear-gradient(180deg, #13302f 0%, #0d2425 100%);
+  color: var(--foreground);
+}
+
 /* Em @layer base para não sobrescrever utilitários (ex.: text-accent-foreground em <Link asChild / Button>) */
 @layer base {
   a {

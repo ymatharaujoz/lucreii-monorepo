@@ -1,12 +1,12 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
-import Link from "next/link";
 import type { BillingTrial, Company } from "@lucreii/types";
 import { ReferenceMonthProvider } from "@/lib/reference-month-context";
 import { AppSidebar } from "./app-sidebar";
 import { AppTopBar } from "./app-top-bar";
 import { MinimalHeader } from "./minimal-header";
+import { TrialBanner } from "./trial-banner";
 
 type AppLayoutClientProps = {
   children: ReactNode;
@@ -106,23 +106,10 @@ export function AppLayoutClient({
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <AppTopBar onMenuToggle={() => setMobileOpen(true)} />
         {trial?.status === "active" ? (
-          <div className="border-b border-accent/20 bg-accent/10 px-6 py-3 sm:px-8 md:px-10 lg:px-12 xl:px-14">
-            <div className="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-4 text-sm">
-              <p className="font-medium text-foreground">
-                {trial.remainingDays === 0
-                  ? "Seu teste termina hoje."
-                  : `Seu teste termina em ${trial.remainingDays} ${trial.remainingDays === 1 ? "dia" : "dias"}.`}
-              </p>
-              {canManageBilling ? (
-                <Link
-                  className="shrink-0 font-semibold text-accent hover:underline"
-                  href="/app/billing"
-                >
-                  Ver planos
-                </Link>
-              ) : null}
-            </div>
-          </div>
+          <TrialBanner
+            trial={trial}
+            canManageBilling={canManageBilling}
+          />
         ) : null}
         <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto py-6 md:py-8">
           <div className="mx-auto w-full max-w-[min(100%,1440px)] px-6 sm:px-8 md:px-10 lg:px-12 xl:px-14">

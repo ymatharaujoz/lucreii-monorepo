@@ -42,6 +42,7 @@ import { CurrencyInput, parseCurrencyValue } from "./currency-input";
 import { ApiClientError, apiClient } from "@/lib/api/client";
 import { containerVariants, fadeInVariants } from "@/lib/animations";
 import { SkeletonGrid } from "@/components/ui-premium/skeleton-grid";
+import { SessionExpiredRedirect } from "@/components/session-expired-redirect";
 import { Pagination } from "@/components/ui-premium/pagination";
 import { ProductHeader } from "./product-header";
 
@@ -85,8 +86,9 @@ function LoadingState() {
 }
 
 function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
-  const isUnauthorized =
-    error instanceof ApiClientError && error.status === 401;
+  if (error instanceof ApiClientError && error.status === 401) {
+    return <SessionExpiredRedirect />;
+  }
 
   return (
     <motion.div
@@ -99,25 +101,15 @@ function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
           <AlertCircle className="h-6 w-6 text-error" />
         </div>
         <h3 className="mb-2 text-lg font-semibold text-foreground">
-          {isUnauthorized ? "Sessão expirada" : "Erro ao carregar dados"}
+          Erro ao carregar dados
         </h3>
         <p className="mb-6 text-sm text-muted-foreground">
-          {isUnauthorized
-            ? "Sua sessão expirou. Por favor, faça login novamente para continuar."
-            : "Não foi possível carregar o catálogo de produtos. Tente novamente."}
+          Não foi possível carregar o catálogo de produtos. Tente novamente.
         </p>
-        {isUnauthorized ? (
-          <Button asChild>
-            <Link href="/auth/session-expired" prefetch={false}>
-              Fazer login
-            </Link>
-          </Button>
-        ) : (
-          <Button onClick={onRetry}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Tentar novamente
-          </Button>
-        )}
+        <Button onClick={onRetry}>
+          <RefreshCw className="mr-2 h-4 w-4" />
+          Tentar novamente
+        </Button>
       </Card>
     </motion.div>
   );

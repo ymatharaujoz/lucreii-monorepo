@@ -429,7 +429,7 @@ export function AppSidebar({
   return (
     <aside
       className={cn(
-        "relative flex h-full flex-col border-r border-border bg-surface-strong/95 backdrop-blur-xl",
+        "app-sidebar relative flex h-full flex-col border-r border-border",
         "transition-all duration-[var(--transition-normal)] ease-out",
         collapsed ? "w-[68px]" : "w-[240px]",
       )}
@@ -509,8 +509,8 @@ export function AppSidebar({
                       ? "text-accent-strong"
                       : "text-muted-foreground hover:text-foreground",
                     collapsed && "justify-center px-2",
-                    !collapsed && parentActive && "bg-accent-soft/50",
-                    !collapsed && !parentActive && "hover:bg-foreground/[0.03]",
+                    !collapsed && parentActive && "bg-accent-soft shadow-[0_6px_18px_-8px_rgba(0,0,0,0.45)]",
+                    !collapsed && !parentActive && "hover:bg-foreground/[0.06]",
                   )}
                   onClick={(e) => {
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
@@ -539,7 +539,7 @@ export function AppSidebar({
                     className={cn(
                       "flex h-5 w-5 shrink-0 items-center justify-center transition-colors",
                       parentActive
-                        ? "text-accent"
+                        ? "text-accent-strong"
                         : "text-muted-foreground group-hover:text-foreground",
                     )}
                   >
