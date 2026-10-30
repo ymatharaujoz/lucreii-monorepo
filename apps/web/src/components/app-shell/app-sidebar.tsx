@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, X, ChevronDown } from "lucide-react";
-import { BrandLogo } from "@/components/brand-logo";
+import { BrandLogoDark } from "@/components/brand-logo-dark";
 import { BrandName } from "@/components/brand-name";
 import { CompanySwitcher } from "./company-switcher";
 import type { Company } from "@lucreii/types";
@@ -451,7 +451,7 @@ export function AppSidebar({
           aria-label="Alternar menu lateral"
         >
           <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <BrandLogo className="h-14 w-auto" />
+            <BrandLogoDark className="h-14 w-auto" />
           </motion.div>
           <AnimatePresence>
             {!collapsed && (
@@ -460,9 +460,9 @@ export function AppSidebar({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
                 transition={{ duration: 0.2 }}
-                className="text-sm font-bold tracking-tight"
+                className="text-xl font-black tracking-tight text-white"
               >
-                <BrandName />
+                <BrandName tone="inverse" />
               </motion.span>
             )}
           </AnimatePresence>

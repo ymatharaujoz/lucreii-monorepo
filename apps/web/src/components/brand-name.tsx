@@ -2,13 +2,15 @@ import { PUBLIC_BRAND } from "@/lib/public-branding";
 
 type BrandNameProps = {
   className?: string;
+  /** "inverse" renders the whole name in the inherited color (e.g. white on dark surfaces). */
+  tone?: "brand" | "inverse";
 };
 
-export function BrandName({ className }: BrandNameProps) {
+export function BrandName({ className, tone = "brand" }: BrandNameProps) {
   const name = PUBLIC_BRAND.name;
 
   // Keeps the brand suffix ("ii") colored like the logo icon on both themes.
-  if (name.endsWith("ii")) {
+  if (tone === "brand" && name.endsWith("ii")) {
     return (
       <span className={className}>
         <span className="text-foreground">{name.slice(0, -2)}</span>
