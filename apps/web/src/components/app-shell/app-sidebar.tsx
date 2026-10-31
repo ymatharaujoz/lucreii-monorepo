@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FC } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -408,6 +408,10 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (collapsed) setExpandedMenus([]);
+  }, [collapsed]);
 
   function isActive(href: string) {
     if (href === "/app") return pathname === "/app";
