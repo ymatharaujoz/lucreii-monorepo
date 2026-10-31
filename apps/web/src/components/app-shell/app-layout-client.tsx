@@ -97,6 +97,7 @@ export function AppLayoutClient({
         ref={desktopSidebarRef}
         className="relative z-30 hidden w-[68px] shrink-0 lg:block"
         onMouseEnter={() => setCollapsed(false)}
+        onMouseLeave={() => setCollapsed(true)}
       >
         <div
           className={`absolute inset-y-0 left-0 transition-shadow duration-[var(--transition-normal)] ease-out ${
