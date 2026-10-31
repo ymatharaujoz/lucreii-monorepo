@@ -328,14 +328,16 @@ function MetricCard({
   }[tone];
 
   return (
-    <div className={`h-[104px] min-w-0 rounded-[14px] border p-3 ${toneClass}`}>
+    <div
+      className={`h-full min-h-[104px] min-w-0 rounded-[14px] border p-3 ${toneClass}`}
+    >
       <div className="flex items-start gap-2">
         <Icon
           className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${tone === "rose" ? "text-[#ef777d]" : "text-accent"}`}
           strokeWidth={2}
           aria-hidden="true"
         />
-        <p className="truncate text-[8px] font-semibold uppercase tracking-[0.05em] text-[#677e83]">
+        <p className="min-w-0 text-[8px] font-semibold uppercase leading-[1.2] sm:truncate tracking-[0.05em] text-[#677e83]">
           {label}
         </p>
       </div>
@@ -440,7 +442,7 @@ function FinancialChart({ wide = false }: { wide?: boolean }) {
                 }}
               />
             </svg>
-            <div className="flex justify-between text-[7px] text-[#819398]">
+            <div className="flex justify-between whitespace-nowrap text-[7px] text-[#819398]">
               {[
                 "1 de ago.",
                 "4 de ago.",
@@ -453,8 +455,13 @@ function FinancialChart({ wide = false }: { wide?: boolean }) {
                 "25 de ago.",
                 "28 de ago.",
                 "31 de ago.",
-              ].map((label) => (
-                <span key={label}>{label}</span>
+              ].map((label, index) => (
+                <span
+                  key={label}
+                  className={index % 2 ? "hidden sm:inline" : undefined}
+                >
+                  {label}
+                </span>
               ))}
             </div>
           </div>
@@ -503,14 +510,14 @@ function FinancialChart({ wide = false }: { wide?: boolean }) {
               }}
             />
           </svg>
-          <div className="absolute bottom-0 left-1 right-1 flex justify-between text-[7px] text-[#819398]">
+          <div className="absolute bottom-0 left-1 right-1 flex justify-between whitespace-nowrap text-[7px] text-[#819398]">
             <span>1 de ago.</span>
-            <span>5 de ago.</span>
+            <span className="hidden sm:inline">5 de ago.</span>
             <span>9 de ago.</span>
-            <span>13 de ago.</span>
+            <span className="hidden sm:inline">13 de ago.</span>
             <span>17 de ago.</span>
-            <span>22 de ago.</span>
-            <span>28 de ago.</span>
+            <span className="hidden sm:inline">22 de ago.</span>
+            <span className="hidden sm:inline">28 de ago.</span>
             <span>31 de ago.</span>
           </div>
           <div className="absolute bottom-5 left-0 flex flex-col justify-between text-[7px] text-[#819398]">
@@ -732,16 +739,17 @@ export function DashboardPreview({ wide = false }: { wide?: boolean }) {
                   <span className="hidden uppercase tracking-[0.04em] sm:inline">
                     Mês de referência
                   </span>
-                  <strong className="truncate text-[#334b50]">
+                  <strong className="hidden truncate text-[#334b50] sm:inline">
                     {dashboardMonth}
                   </strong>
+                  <strong className="text-[#334b50] sm:hidden">Set/26</strong>
                   <ChevronDown
                     className="h-3 w-3 shrink-0 text-[#637c81]"
                     aria-hidden="true"
                   />
                 </div>
               )}
-              <div className="ml-auto flex justify-end gap-1.5">
+              <div className="ml-auto flex min-w-0 gap-1.5 overflow-x-auto [scrollbar-width:none]">
                 {[
                   { label: "Todos", active: true },
                   { label: "Mercado Livre", active: false },
@@ -750,7 +758,7 @@ export function DashboardPreview({ wide = false }: { wide?: boolean }) {
                 ].map(({ label, active }) => (
                   <span
                     key={label}
-                    className={`rounded-full px-2.5 py-1 ${active ? "bg-accent font-semibold text-white" : "bg-white"}`}
+                    className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 ${active ? "bg-accent font-semibold text-white" : "bg-white"}`}
                   >
                     {label}
                   </span>
@@ -759,7 +767,7 @@ export function DashboardPreview({ wide = false }: { wide?: boolean }) {
             </div>
 
             <motion.div
-              className={`mt-2 grid items-stretch gap-2 ${wide ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" : "grid-cols-3"}`}
+              className={`mt-2 grid items-stretch gap-2 ${wide ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6" : "grid-cols-2 sm:grid-cols-3"}`}
               initial="hidden"
               animate="visible"
               variants={{
