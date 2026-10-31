@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { BillingTrial, Company } from "@lucreii/types";
 import { ReferenceMonthProvider } from "@/lib/reference-month-context";
 import { AppSidebar } from "./app-sidebar";
@@ -39,8 +39,27 @@ export function AppLayoutClient({
   trial,
   canManageBilling,
 }: AppLayoutClientProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const desktopSidebarRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (collapsed) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (desktopSidebarRef.current?.contains(target)) return;
+      // Popovers/menus renderizados em portal (ex.: seletor de empresa).
+      if (target.closest('[role="dialog"], [role="menu"], [role="listbox"]')) {
+        return;
+      }
+      setCollapsed(true);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [collapsed]);
   const selectedCompanyId =
     companies.find((company) => company.isSelected)?.id ??
     companies.find((company) => company.isActive)?.id ??
@@ -73,7 +92,17 @@ export function AppLayoutClient({
         />
       )}
 
-      <div className="hidden lg:flex">
+      {/* Reserva a largura do rail; a sidebar expande sobreposta ao conteúdo. */}
+      <div
+        ref={desktopSidebarRef}
+        className="relative z-30 hidden w-[68px] shrink-0 lg:block"
+        onMouseEnter={() => setCollapsed(false)}
+      >
+        <div
+          className={`absolute inset-y-0 left-0 transition-shadow duration-[var(--transition-normal)] ease-out ${
+            collapsed ? "shadow-none" : "shadow-[var(--shadow-md)]"
+          }`}
+        >
         <AppSidebar
           collapsed={collapsed}
           companies={companies}
@@ -84,6 +113,7 @@ export function AppLayoutClient({
           organization={organization}
           isMobile={false}
         />
+        </div>
       </div>
 
       <div

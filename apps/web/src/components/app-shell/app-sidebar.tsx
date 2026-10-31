@@ -430,7 +430,7 @@ export function AppSidebar({
     <aside
       className={cn(
         "app-sidebar relative flex h-full flex-col border-r border-border",
-        "transition-all duration-[var(--transition-normal)] ease-out",
+        "transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
         collapsed ? "w-[68px]" : "w-[240px]",
       )}
     >
