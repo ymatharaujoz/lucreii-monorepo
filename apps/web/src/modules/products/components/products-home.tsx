@@ -51,6 +51,7 @@ import { TreeConnector, VariationToggle } from "./variation-tree";
 import { useProductData } from "../hooks/use-product-data";
 import {
   useProductPerformancePage,
+  useSyncListingAdvertising,
   useUpdateListingAdvertising,
 } from "../hooks/use-product-performance-data";
 import { buildMarketplaceSyncNotice } from "../calculations/product-insights";
@@ -2043,6 +2044,7 @@ export function ProductsHome({
     view === "performance",
   );
   const updateListingAdvertising = useUpdateListingAdvertising();
+  const syncListingAdvertising = useSyncListingAdvertising();
   const marketplaceNotice = data ? buildMarketplaceSyncNotice(data) : null;
   const handleAddProduct = () =>
     onAddProduct?.({
@@ -2152,6 +2154,19 @@ export function ProductsHome({
                 advertisingKey: row.advertisingKey,
                 amount,
                 channel: row.channelLabel as "mercadolivre" | "shopee" | "shein",
+                referenceMonth: row.referenceMonth,
+              });
+            }}
+            onSyncAdvertising={(row) => {
+              if (!row.advertisingKey || row.channelLabel !== "mercadolivre") {
+                return Promise.reject(
+                  new Error("Somente anúncios do Mercado Livre podem ser sincronizados."),
+                );
+              }
+
+              return syncListingAdvertising.mutateAsync({
+                advertisingKey: row.advertisingKey,
+                channel: "mercadolivre",
                 referenceMonth: row.referenceMonth,
               });
             }}

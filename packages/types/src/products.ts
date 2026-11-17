@@ -382,6 +382,27 @@ export type ProductListingAdvertising = {
   referenceMonth: string;
 };
 
+/**
+ * Outcome of synchronizing a listing's advertising from Mercado Livre
+ * Product Ads:
+ * - `synced`: the listing was matched by an ad group and `amount` was saved;
+ * - `no_ads`: no ad group promoted the listing in the month (amount untouched);
+ * - `not_advertiser`: the seller has not enabled Product Ads.
+ */
+export type ProductListingAdvertisingSyncStatus =
+  | "synced"
+  | "no_ads"
+  | "not_advertiser";
+
+export type ProductListingAdvertisingSyncResult = {
+  advertisingKey: string;
+  /** Saved amount when `status` is `synced`; otherwise `null`. */
+  amount: string | null;
+  channel: string;
+  referenceMonth: string;
+  status: ProductListingAdvertisingSyncStatus;
+};
+
 export type ProductPerformanceListResponse = {
   items: ProductPerformanceListItem[];
   page: number;

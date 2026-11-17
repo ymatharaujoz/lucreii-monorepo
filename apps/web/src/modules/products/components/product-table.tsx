@@ -14,6 +14,7 @@ import {
   Store,
   X,
 } from "lucide-react";
+import type { ProductListingAdvertisingSyncResult } from "@lucreii/types";
 import { Badge, Card, EmptyState, cn } from "@lucreii/ui";
 import { CopyButton } from "@/components/ui-premium/copy-button";
 import { Pagination } from "@/components/ui-premium/pagination";
@@ -45,6 +46,9 @@ interface ProductTableProps {
     direction: SortDirection;
   } | null;
   onSaveAdvertising?: (row: ProductTableRow, amount: string) => Promise<void>;
+  onSyncAdvertising?: (
+    row: ProductTableRow,
+  ) => Promise<ProductListingAdvertisingSyncResult>;
   onSearchFilterChange?: (value: string) => void;
   onSelectedMarketplacesChange?: (value: string[]) => void;
   onSortChange?: (value: { key: SortKey; direction: SortDirection } | null) => void;
@@ -392,6 +396,7 @@ export function ProductTable({
   serverMode = false,
   sortConfig: controlledSortConfig,
   onSaveAdvertising,
+  onSyncAdvertising,
   onSearchFilterChange,
   onSelectedMarketplacesChange,
   onSortChange,
@@ -963,6 +968,7 @@ export function ProductTable({
       <ProductDetailsModal
         onClose={closeDetails}
         onSaveAdvertising={onSaveAdvertising}
+        onSyncAdvertising={onSyncAdvertising}
         open={selectedRow !== null}
         row={openRow}
       />

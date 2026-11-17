@@ -8,11 +8,13 @@ import {
 } from "@tanstack/react-query";
 import type {
   ProductListingAdvertising,
+  ProductListingAdvertisingSyncResult,
   ProductPerformanceListQuery,
   ProductPerformanceListResponse,
 } from "@lucreii/types";
 import {
   productPerformanceListApiResponseSchema,
+  type ProductListingAdvertisingSyncInput,
   type ProductListingAdvertisingUpdateInput,
 } from "@lucreii/validation";
 import { apiClient } from "@/lib/api/client";
@@ -103,6 +105,28 @@ export async function updateListingAdvertising(
   }>("/products/performance/advertising", { body: input });
 
   return response.data;
+}
+
+export async function syncListingAdvertising(
+  input: ProductListingAdvertisingSyncInput,
+): Promise<ProductListingAdvertisingSyncResult> {
+  const response = await apiClient.post<{
+    data: ProductListingAdvertisingSyncResult;
+    error: null;
+  }>("/products/performance/advertising/sync", { body: input });
+
+  return response.data;
+}
+
+/** Pulls the listing's advertising spend from Mercado Livre Product Ads. */
+export function useSyncListingAdvertising() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: syncListingAdvertising,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: productPerformanceQueryKey }),
+  });
 }
 
 export function useUpdateListingAdvertising() {

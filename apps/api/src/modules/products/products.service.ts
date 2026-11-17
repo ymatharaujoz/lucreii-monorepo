@@ -10,7 +10,7 @@ import {
   buildProductAnalyticsMetrics,
   type FinancialMonthlyPerformanceInput,
 } from "@lucreii/domain";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { read, utils, write } from "xlsx";
 import type {
   ProductCatalogExportQueryInput,
@@ -89,6 +89,7 @@ import {
 } from "@/modules/orders/order-financial-eligibility";
 import { SyncService } from "@/modules/sync/sync.service";
 import { pickLatestProductCost } from "./latest-product-cost";
+import type { ListingAdvertisingTarget } from "./listing-advertising-allocation";
 import {
   buildListingAdvertisingKey,
   buildListingAdvertisingLookupKey,
@@ -252,8 +253,28 @@ export type MonthlyPerformanceMarginRollup = {
   totalPerformanceRows: number;
 };
 
+const MERCADOLIVRE_CATALOG_GROUP_PREFIX = "mercadolivre:";
+const PRODUCT_ADVERTISING_KEY_PREFIX = "product:";
+const SKU_ADVERTISING_KEY_PREFIX = "sku:";
+
 function toCatalogGroupKey(itemId: string) {
-  return `mercadolivre:${itemId}`;
+  return `${MERCADOLIVRE_CATALOG_GROUP_PREFIX}${itemId}`;
+}
+
+function readMercadoLivreLegacyItemId(
+  syncedProduct: Pick<SyncedProductRecord, "metadata">,
+) {
+  const metadata = syncedProduct.metadata;
+  const legacyItemId =
+    metadata &&
+    typeof metadata === "object" &&
+    "legacyItemId" in metadata &&
+    (typeof metadata.legacyItemId === "string" ||
+      typeof metadata.legacyItemId === "number")
+      ? String(metadata.legacyItemId).trim()
+      : "";
+
+  return legacyItemId.length > 0 ? legacyItemId : null;
 }
 
 function buildSyntheticCatalogParentId(groupKey: string) {
@@ -3001,6 +3022,185 @@ export class ProductsService {
       channel: row.provider,
       referenceMonth: row.referenceMonth,
     };
+  }
+
+  /**
+   * Lists the Mercado Livre listings of the performance screen for a month,
+   * with the Mercado Livre ids (item, family and legacy item ids) used to
+   * match them against Product Ads ad groups and their units sold.
+   */
+  async listMercadoLivreAdvertisingTargets(
+    context: TenantContext,
+    referenceMonth: string,
+  ): Promise<{ companyId: string; targets: ListingAdvertisingTarget[] }> {
+    const scope = await this.resolveAnalyticsScope(context, { referenceMonth });
+
+    // The scope falls back to another active company when the selected one is
+    // unavailable; advertising must never be written to a different company
+    // than the marketplace connection it was read from.
+    if (!scope.companyId || scope.companyId !== context.selectedCompanyId) {
+      throw new NotFoundException("Company not found.");
+    }
+
+    const companyId = scope.companyId;
+    const [performance, externalProductRows] = await Promise.all([
+      this.listPerformanceRows(
+        { ...context, selectedCompanyId: companyId },
+        {
+          marketplaces: ["mercadolivre"],
+          page: 1,
+          pageSize: Number.MAX_SAFE_INTEGER,
+          referenceMonth,
+        },
+      ),
+      this.db.query.externalProducts.findMany({
+        columns: {
+          externalProductId: true,
+          linkedProductId: true,
+          metadata: true,
+          sku: true,
+        },
+        where: (table) =>
+          and(
+            eq(table.organizationId, context.organizationId),
+            eq(table.companyId, companyId),
+            eq(table.provider, "mercadolivre"),
+          ),
+      }),
+    ]);
+
+    const idsByItemId = new Map<string, Set<string>>();
+    const idsByProductId = new Map<string, Set<string>>();
+    const idsBySku = new Map<string, Set<string>>();
+    const addIds = (
+      index: Map<string, Set<string>>,
+      key: string,
+      ids: readonly string[],
+    ) => {
+      const current = index.get(key) ?? new Set<string>();
+      ids.forEach((id) => current.add(id));
+      index.set(key, current);
+    };
+
+    for (const externalProduct of externalProductRows) {
+      const itemId =
+        readMercadoLivreSyncMetadata(externalProduct).itemId ??
+        extractMercadoLivreItemId(externalProduct.externalProductId);
+      const legacyItemId = readMercadoLivreLegacyItemId(externalProduct);
+      const ids = [itemId, legacyItemId].filter(
+        (id): id is string => id !== null,
+      );
+
+      if (ids.length === 0) {
+        continue;
+      }
+
+      if (itemId) {
+        addIds(idsByItemId, itemId, ids);
+      }
+
+      if (externalProduct.linkedProductId) {
+        addIds(idsByProductId, externalProduct.linkedProductId, ids);
+      }
+
+      const sku = normalizeComparableSku(externalProduct.sku);
+      if (sku && !externalProduct.linkedProductId) {
+        addIds(idsBySku, sku, ids);
+      }
+    }
+
+    const targetsByKey = new Map<
+      string,
+      { marketplaceIds: Set<string>; sales: number }
+    >();
+
+    for (const row of performance.items) {
+      if (row.channelLabel !== "mercadolivre" || !row.advertisingKey) {
+        continue;
+      }
+
+      const key = row.advertisingKey;
+      const marketplaceIds = new Set<string>();
+
+      if (key.startsWith(MERCADOLIVRE_CATALOG_GROUP_PREFIX)) {
+        const itemId = key.slice(MERCADOLIVRE_CATALOG_GROUP_PREFIX.length);
+        marketplaceIds.add(itemId);
+        idsByItemId.get(itemId)?.forEach((id) => marketplaceIds.add(id));
+      } else if (key.startsWith(PRODUCT_ADVERTISING_KEY_PREFIX)) {
+        idsByProductId
+          .get(key.slice(PRODUCT_ADVERTISING_KEY_PREFIX.length))
+          ?.forEach((id) => marketplaceIds.add(id));
+      } else if (key.startsWith(SKU_ADVERTISING_KEY_PREFIX)) {
+        idsBySku
+          .get(key.slice(SKU_ADVERTISING_KEY_PREFIX.length))
+          ?.forEach((id) => marketplaceIds.add(id));
+      }
+
+      if (marketplaceIds.size === 0) {
+        continue;
+      }
+
+      const current = targetsByKey.get(key) ?? {
+        marketplaceIds: new Set<string>(),
+        sales: 0,
+      };
+      marketplaceIds.forEach((id) => current.marketplaceIds.add(id));
+      current.sales += row.sales;
+      targetsByKey.set(key, current);
+    }
+
+    return {
+      companyId,
+      targets: [...targetsByKey.entries()].map(([advertisingKey, target]) => ({
+        advertisingKey,
+        marketplaceIds: [...target.marketplaceIds],
+        sales: target.sales,
+      })),
+    };
+  }
+
+  /**
+   * Upserts monthly advertising amounts synchronized from a marketplace,
+   * overwriting any amount entered manually for the same listing and month.
+   */
+  async saveSyncedListingAdvertising(input: {
+    amounts: ReadonlyMap<string, string>;
+    channel: IntegrationProviderSlug;
+    companyId: string;
+    organizationId: string;
+    referenceMonth: string;
+    userId: string;
+  }) {
+    if (input.amounts.size === 0) {
+      return;
+    }
+
+    await this.db
+      .insert(productListingAdvertising)
+      .values(
+        [...input.amounts.entries()].map(([listingKey, amount]) => ({
+          amount,
+          companyId: input.companyId,
+          listingKey,
+          organizationId: input.organizationId,
+          provider: input.channel,
+          referenceMonth: input.referenceMonth,
+          userId: input.userId,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          productListingAdvertising.organizationId,
+          productListingAdvertising.companyId,
+          productListingAdvertising.provider,
+          productListingAdvertising.referenceMonth,
+          productListingAdvertising.listingKey,
+        ],
+        set: {
+          amount: sql`excluded.amount`,
+          updatedAt: new Date(),
+        },
+      });
   }
 
   async readMonthlyPerformanceMarginRollup(

@@ -139,6 +139,19 @@ export const productListingAdvertisingUpdateSchema = z.object({
     ),
 });
 
+/** Only Mercado Livre exposes advertising spend through its API today. */
+export const productListingAdvertisingSyncSchema = z.object({
+  advertisingKey: z.string().trim().min(1).max(255),
+  channel: z.literal("mercadolivre"),
+  referenceMonth: z
+    .string()
+    .trim()
+    .regex(
+      /^\d{4}-\d{2}-01$/,
+      "Reference month must be the first day of the month.",
+    ),
+});
+
 export const productCostFormSchema = z.object({
   amount: decimalField("Product cost"),
   costType: z.string().trim().min(1).max(32),
@@ -399,6 +412,9 @@ export type ProductCatalogFinanceUpdateInput = z.infer<
 >;
 export type ProductListingAdvertisingUpdateInput = z.infer<
   typeof productListingAdvertisingUpdateSchema
+>;
+export type ProductListingAdvertisingSyncInput = z.infer<
+  typeof productListingAdvertisingSyncSchema
 >;
 export type ProductCostFormInput = z.infer<typeof productCostFormSchema>;
 export type ProductCostUpdateInput = z.infer<typeof productCostUpdateSchema>;

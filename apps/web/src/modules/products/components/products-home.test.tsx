@@ -55,6 +55,7 @@ vi.mock("../hooks/use-product-data", () => ({
 
 vi.mock("../hooks/use-product-performance-data", () => ({
   useProductPerformancePage: performanceQueryMock,
+  useSyncListingAdvertising: () => ({ mutateAsync: vi.fn() }),
   useUpdateListingAdvertising: () => ({ mutateAsync: vi.fn() }),
 }));
 

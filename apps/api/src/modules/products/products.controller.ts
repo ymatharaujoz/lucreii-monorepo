@@ -19,6 +19,7 @@ import { AuthGuard } from "@/modules/auth/auth.guard";
 import { CurrentAuthContext } from "@/modules/auth/current-auth-context";
 import type { AuthenticatedRequestContext } from "@/modules/auth/auth.types";
 import { EntitlementGuard } from "@/modules/billing/entitlement.guard";
+import { MercadoLivreAdvertisingSyncService } from "./mercadolivre-advertising-sync.service";
 import { ProductsService } from "./products.service";
 import {
   CreateManualProductRequestDto,
@@ -28,6 +29,7 @@ import {
   ProductAnalyticsQueryDto,
   ProductPerformanceListQueryDto,
   UpdateProductCatalogFinanceRequestDto,
+  SyncProductListingAdvertisingRequestDto,
   UpdateProductListingAdvertisingRequestDto,
   UpdateProductRequestDto,
 } from "./products.dto";
@@ -38,6 +40,8 @@ export class ProductsController {
   constructor(
     @Inject(ProductsService)
     private readonly productsService: ProductsService,
+    @Inject(MercadoLivreAdvertisingSyncService)
+    private readonly mercadoLivreAdvertisingSyncService: MercadoLivreAdvertisingSyncService,
   ) {}
 
   @Get()
@@ -95,6 +99,24 @@ export class ProductsController {
   ) {
     return {
       data: await this.productsService.updateListingAdvertising(
+        {
+          organizationId: authContext.organization!.id,
+          selectedCompanyId: authContext.selectedCompanyId ?? null,
+          userId: authContext.user.id,
+        },
+        body,
+      ),
+      error: null,
+    };
+  }
+
+  @Post("performance/advertising/sync")
+  async syncListingAdvertising(
+    @CurrentAuthContext() authContext: AuthenticatedRequestContext,
+    @Body() body: SyncProductListingAdvertisingRequestDto,
+  ) {
+    return {
+      data: await this.mercadoLivreAdvertisingSyncService.syncListing(
         {
           organizationId: authContext.organization!.id,
           selectedCompanyId: authContext.selectedCompanyId ?? null,

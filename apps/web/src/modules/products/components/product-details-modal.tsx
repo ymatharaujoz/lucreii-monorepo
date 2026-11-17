@@ -9,12 +9,15 @@ import {
   Megaphone,
   Package,
   Percent,
+  RefreshCw,
   ShoppingCart,
   TrendingUp,
   Undo2,
   Wallet,
 } from "lucide-react";
-import { Badge, Modal, Tooltip, cn } from "@lucreii/ui";
+import type { ProductListingAdvertisingSyncResult } from "@lucreii/types";
+import { Badge, Button, Modal, Tooltip, cn } from "@lucreii/ui";
+import { ApiClientError } from "@/lib/api/client";
 import { formatReferenceMonthPtBr } from "../hooks/use-product-data";
 import { computeProductRoi, computeRowNetRevenue } from "../calculations/product-insights";
 import type { ProductTableRow } from "../types/products";
@@ -33,9 +36,42 @@ type ProductDetailsModalProps = {
    * advertising card is read-only.
    */
   onSaveAdvertising?: (row: ProductTableRow, amount: string) => Promise<void>;
+  /**
+   * Pulls the listing's advertising spend from Mercado Livre Product Ads.
+   * When omitted the "Sincronizar" button is hidden.
+   */
+  onSyncAdvertising?: (
+    row: ProductTableRow,
+  ) => Promise<ProductListingAdvertisingSyncResult>;
   open: boolean;
   row: ProductTableRow | null;
 };
+
+type SyncFeedback = { message: string; tone: "success" | "info" | "error" };
+
+function describeSyncResult(
+  result: ProductListingAdvertisingSyncResult,
+): SyncFeedback {
+  switch (result.status) {
+    case "synced":
+      return {
+        message: `Publicidade sincronizada com o Mercado Livre: ${formatMoney(Number(result.amount ?? 0))}.`,
+        tone: "success",
+      };
+    case "no_ads":
+      return {
+        message:
+          "Nenhum investimento em Product Ads encontrado para este anúncio no mês. O valor atual foi mantido.",
+        tone: "info",
+      };
+    case "not_advertiser":
+      return {
+        message:
+          "Product Ads não está ativo nesta conta do Mercado Livre. O valor atual foi mantido.",
+        tone: "info",
+      };
+  }
+}
 
 type TabKey = "overview" | "profitability";
 
@@ -285,10 +321,24 @@ function ProductHero({ row }: { row: ProductTableRow }) {
 export function ProductDetailsModal({
   onClose,
   onSaveAdvertising,
+  onSyncAdvertising,
   open,
   row,
 }: ProductDetailsModalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [isSyncingAdvertising, setIsSyncingAdvertising] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<SyncFeedback | null>(null);
+  // Bumped after each successful sync to remount the advertising input, so a
+  // value saved manually earlier in this session does not mask the synced one.
+  const [advertisingVersion, setAdvertisingVersion] = useState(0);
+  const listingIdentity = row ? `${row.performanceId}:${row.referenceMonth}` : null;
+  const [feedbackIdentity, setFeedbackIdentity] = useState(listingIdentity);
+
+  // Sync feedback belongs to one listing: clear it when another one opens.
+  if (feedbackIdentity !== listingIdentity) {
+    setFeedbackIdentity(listingIdentity);
+    setSyncFeedback(null);
+  }
 
   useEffect(() => {
     if (!row) return;
@@ -307,6 +357,38 @@ export function ProductDetailsModal({
     onSaveAdvertising !== undefined &&
     row.advertising !== null &&
     row.advertisingKey !== null;
+  const canSyncAdvertising =
+    onSyncAdvertising !== undefined &&
+    row.channelLabel === "mercadolivre" &&
+    row.advertising !== null &&
+    row.advertisingKey !== null;
+
+  const handleSyncAdvertising = async () => {
+    if (!onSyncAdvertising || isSyncingAdvertising) {
+      return;
+    }
+
+    setIsSyncingAdvertising(true);
+    setSyncFeedback(null);
+
+    try {
+      const result = await onSyncAdvertising(row);
+      setSyncFeedback(describeSyncResult(result));
+      if (result.status === "synced") {
+        setAdvertisingVersion((version) => version + 1);
+      }
+    } catch (error) {
+      setSyncFeedback({
+        message:
+          error instanceof ApiClientError && error.message
+            ? error.message
+            : "Não foi possível sincronizar a publicidade. Tente novamente.",
+        tone: "error",
+      });
+    } finally {
+      setIsSyncingAdvertising(false);
+    }
+  };
 
   return (
     <Modal
@@ -368,8 +450,47 @@ export function ProductDetailsModal({
                   <span className="text-xs text-muted-foreground">
                     {formatReferenceMonthPtBr(row.referenceMonth)}
                   </span>
-                  <ChannelBadge label={row.channelLabel} />
+                  <div className="flex items-center gap-2">
+                    {canSyncAdvertising ? (
+                      <Button
+                        className="shrink-0"
+                        loading={isSyncingAdvertising}
+                        onClick={() => void handleSyncAdvertising()}
+                        size="sm"
+                        title="Buscar no Mercado Livre o valor investido em Product Ads neste mês"
+                        type="button"
+                        variant="secondary"
+                      >
+                        {isSyncingAdvertising ? (
+                          "Sincronizando..."
+                        ) : (
+                          <>
+                            <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                            Sincronizar
+                          </>
+                        )}
+                      </Button>
+                    ) : null}
+                    <ChannelBadge label={row.channelLabel} />
+                  </div>
                 </div>
+
+                {syncFeedback ? (
+                  <p
+                    className={cn(
+                      "rounded-[var(--radius-md)] border px-3 py-2 text-xs font-medium",
+                      syncFeedback.tone === "success" &&
+                        "border-success/20 bg-success/10 text-success",
+                      syncFeedback.tone === "info" &&
+                        "border-border/40 bg-surface/50 text-muted-foreground",
+                      syncFeedback.tone === "error" &&
+                        "border-error/20 bg-error/10 text-error",
+                    )}
+                    role={syncFeedback.tone === "error" ? "alert" : "status"}
+                  >
+                    {syncFeedback.message}
+                  </p>
+                ) : null}
 
                 <SectionCard
                   title="Visão Geral de Vendas"
@@ -413,7 +534,7 @@ export function ProductDetailsModal({
                       control={
                         canEditAdvertising ? (
                           <ProductAdvertisingField
-                            key={`${row.performanceId}:${row.referenceMonth}`}
+                            key={`${listingIdentity}:${advertisingVersion}`}
                             onSave={(amount) => onSaveAdvertising(row, amount)}
                             value={row.advertising ?? 0}
                           />

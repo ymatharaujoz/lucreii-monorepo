@@ -372,4 +372,57 @@ describe("ProductDetailsModal", () => {
 
     view.unmount();
   });
+
+  function findSyncButton() {
+    return Array.from(document.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Sincronizar"),
+    );
+  }
+
+  it("syncs Mercado Livre advertising and reports the synced amount", async () => {
+    const row = buildRow();
+    const onSyncAdvertising = vi.fn().mockResolvedValue({
+      advertisingKey: "product:acc-1",
+      amount: "245.90",
+      channel: "mercadolivre",
+      referenceMonth: "2026-06-01",
+      status: "synced",
+    });
+    const view = renderWithClient(
+      <ProductDetailsModal
+        onClose={() => {}}
+        onSaveAdvertising={vi.fn()}
+        onSyncAdvertising={onSyncAdvertising}
+        open
+        row={row}
+      />,
+    );
+
+    await act(async () => {
+      findSyncButton()!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(onSyncAdvertising).toHaveBeenCalledWith(row);
+    expect(normalizedTextContent()).toContain(
+      "Publicidade sincronizada com o Mercado Livre",
+    );
+
+    view.unmount();
+  });
+
+  it("hides the sync button for listings outside Mercado Livre", () => {
+    const view = renderWithClient(
+      <ProductDetailsModal
+        onClose={() => {}}
+        onSaveAdvertising={vi.fn()}
+        onSyncAdvertising={vi.fn()}
+        open
+        row={buildRow({ channelLabel: "shopee" })}
+      />,
+    );
+
+    expect(findSyncButton()).toBeUndefined();
+
+    view.unmount();
+  });
 });

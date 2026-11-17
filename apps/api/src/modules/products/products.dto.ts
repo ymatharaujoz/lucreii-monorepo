@@ -9,6 +9,7 @@ import {
   productCostUpdateSchema,
   productCatalogExportQuerySchema,
   productFormSchema,
+  productListingAdvertisingSyncSchema,
   productListingAdvertisingUpdateSchema,
   productAnalyticsQuerySchema,
   productPerformanceListQuerySchema,
@@ -26,6 +27,7 @@ import type {
   ProductCostUpdateInput,
   ProductCatalogExportQueryInput,
   ProductAnalyticsQueryInput,
+  ProductListingAdvertisingSyncInput,
   ProductListingAdvertisingUpdateInput,
   ProductPerformanceListQueryInput,
   ProductFormInput,
@@ -103,6 +105,16 @@ export class UpdateProductListingAdvertisingRequestDto
   advertisingKey!: string;
   amount!: string;
   channel!: "mercadolivre" | "shopee" | "shein";
+  referenceMonth!: string;
+}
+
+export class SyncProductListingAdvertisingRequestDto
+  implements ProductListingAdvertisingSyncInput
+{
+  static schema = productListingAdvertisingSyncSchema;
+
+  advertisingKey!: string;
+  channel!: "mercadolivre";
   referenceMonth!: string;
 }
 
